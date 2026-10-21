@@ -108,7 +108,7 @@ grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never)
 1. Push this project to a GitHub repo (private recommended).
 2. Repo → **Settings → Secrets and variables → Actions → Variables** → add `API_BASE` = your server, e.g. `https://chat.yourdomain.com`.
 3. Repo → **Actions → Android APK → Run workflow** (it also runs on every push to `main` that touches `mobile/`).
-4. When it finishes (~10–15 min), open the run → **Artifacts → talvio-android** → install `app-arm64-v8a-release.apk` on most phones (or `app-release.apk`, works on all).
+4. When it finishes (~10–15 min), open the run → **Artifacts → talvio-android** → install `app-arm64-v8a-release.apk` on most phones (`app-armeabi-v7a-release.apk` for very old ones).
 
 The APK is signed with the debug key — fine for testing; set up a release key before publishing on Play Store.
 
