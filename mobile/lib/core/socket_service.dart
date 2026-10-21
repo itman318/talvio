@@ -39,6 +39,16 @@ class SocketService {
     'call:accepted',
     'call:signal',
     'call:ended',
+    'secret:request',
+    'secret:accepted',
+    'secret:taken',
+    'secret:closed',
+    'secret:message',
+    'secret:delivered',
+    'secret:read',
+    'secret:typing',
+    'secret:deleted',
+    'secret:notify',
   ];
 
   void connect() {

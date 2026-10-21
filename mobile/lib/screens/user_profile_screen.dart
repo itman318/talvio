@@ -10,6 +10,7 @@ import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
+import 'secret_screens.dart';
 import 'chat_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -98,6 +99,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       },
                     ),
                       ),
+                      if (context.read<AuthState>().feature('secret_chats')) ...[
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: 'Secret chat',
+                          icon: const Icon(Icons.lock_outline),
+                          onPressed: () => startSecretChat(context, u),
+                        ),
+                      ],
                       if (context.read<AuthState>().feature('calls')) ...[
                         const SizedBox(width: 8),
                         IconButton.filledTonal(

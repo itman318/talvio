@@ -12,6 +12,8 @@ import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'channel_screens.dart';
 import 'calls_screen.dart';
+import 'secret_screens.dart';
+import '../state/secret_store.dart';
 import 'chat_screen.dart';
 import 'folder_support_screens.dart';
 import 'new_chat_screen.dart';
@@ -99,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
     var chats = folder == null ? store.chats : store.chats.where(folder.matches).toList();
     if (q.isNotEmpty) chats = chats.where((c) => c.title.toLowerCase().contains(q)).toList();
     final showStories = q.isEmpty && folder == null && auth.feature('stories');
+    final secrets = q.isEmpty && folder == null ? context.watch<SecretStore>().sortedChats : const <SecretChat>[];
     final showFound = q.length >= 2;
 
     return Scaffold(
@@ -198,10 +201,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: showFound
                         ? _searchResults(chats)
                         : ListView.builder(
-                      itemCount: chats.length + (showStories ? 1 : 0) + (chats.isEmpty ? 1 : 0),
+                      itemCount: chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i) {
                         if (showStories && i == 0) return const Column(children: [StoryBar(), Divider(height: 1)]);
-                        final idx = i - (showStories ? 1 : 0);
+                        final si = i - (showStories ? 1 : 0);
+                        if (si < secrets.length) {
+                          return Column(children: [SecretChatTile(chat: secrets[si]), const Divider(height: 1, indent: 80)]);
+                        }
+                        final idx = si - secrets.length;
                         if (idx >= chats.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 80),

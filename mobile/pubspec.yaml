@@ -46,6 +46,10 @@ dependencies:
   wakelock_plus: ^1.2.8
   flutter_ringtone_player: ^4.0.0+4
 
+  # Batch C: secret chats (end-to-end encryption)
+  cryptography: ^2.7.0
+  no_screenshot: ^0.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

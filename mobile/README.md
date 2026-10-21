@@ -60,6 +60,7 @@ The app runs without Firebase; push is simply off. To enable it:
 | `lib/screens/` | All screens (`channel_screens.dart`, `story_screens.dart`, `folder_support_screens.dart` are Phase 2) |
 | `lib/state/call_manager.dart` | Batch B: WebRTC calls (signaling, ICE restart, mute/speaker/camera) |
 | `lib/screens/call_screen.dart`, `calls_screen.dart` | Call UI, call history, call entries in chats |
+| `lib/core/e2e.dart`, `lib/state/secret_store.dart`, `lib/screens/secret_screens.dart` | Batch C: secret chats — crypto, encrypted local storage, UI |
 | `lib/core/prefs.dart` | Device settings: theme, text size, drafts, app lock |
 | `lib/screens/more_screens.dart` | Batch A: invite links, join requests, contacts sync, appearance, app lock, storage, legal pages, ban appeal |
 | `lib/widgets/` | Message bubble, avatar, media players, report dialog, `extras.dart` (dark-mode chat colours, @mention/link text, location card) |

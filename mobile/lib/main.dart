@@ -13,6 +13,7 @@ import 'screens/home_screen.dart';
 import 'state/auth_state.dart';
 import 'state/call_manager.dart';
 import 'state/chat_store.dart';
+import 'state/secret_store.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -27,7 +28,11 @@ Future<void> main() async {
   calls.onShowCallScreen = () {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
-  auth.onSessionCleared = calls.endLocal;
+  final secrets = SecretStore(services);
+  auth.onSessionCleared = () {
+    calls.endLocal();
+    secrets.wipeAll();
+  };
   services.push.onOpenCall = () {
     if (auth.status == AuthStatus.loggedIn) calls.checkActive();
   };
@@ -49,6 +54,7 @@ Future<void> main() async {
         ChangeNotifierProvider<ChatStore>.value(value: chats),
         ChangeNotifierProvider<AuthState>.value(value: auth),
         ChangeNotifierProvider<CallManager>.value(value: calls),
+        ChangeNotifierProvider<SecretStore>.value(value: secrets),
       ],
       child: const ChatApp(),
     ),
@@ -114,7 +120,10 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
     final auth = context.watch<AuthState>();
     final prefs = context.watch<AppPrefs>();
     if (_lastStatus != auth.status && auth.status == AuthStatus.loggedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => context.read<CallManager>().checkActive());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<CallManager>().checkActive();
+        context.read<SecretStore>().start();
+      });
     }
     if (_lastStatus != null && _lastStatus != auth.status) {
       // Login state changed (e.g. logged out from another device): drop any pushed screens.

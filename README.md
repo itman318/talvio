@@ -67,7 +67,15 @@ call back, delete), call buttons in the chat and profile, rate the call quality,
 14-day charts, call log with filters, force-end), call settings (on/off, video on/off, ring time,
 max length, STUN/TURN servers), calls on the dashboard and user page.
 
+## Batch C — what's included
+
+**Secret chats** — end-to-end encrypted (X25519 + AES-256-GCM with a ratchet), on one phone per person.
+Start from a profile or chat menu; green lock in the chat list; self-destruct timer (5 s … 1 week);
+encrypted photos and files; delete for both; screenshots blocked; no forwarding; encryption-key
+emoji to compare; nothing stays on the server after delivery; closed automatically on logout.
+Admin panel: on/off switch and counts only (content can't be read by anyone but the two phones).
+
 ## Next (remaining batches)
 
-C: secret end-to-end chats · D: bots, channel comments, topics, premium,
+D: bots, channel comments, topics, premium,
 payments (JazzCash/Easypaisa), ads · E: web/desktop + QR login, multiple accounts, Urdu, image editor.

@@ -22,6 +22,7 @@ import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
+import 'secret_screens.dart';
 import 'channel_screens.dart';
 import 'forward_screen.dart';
 import 'group_info_screen.dart';
@@ -460,6 +461,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _chatMenu(String action, Chat chat) async {
     try {
       switch (action) {
+        case 'secret':
+          await startSecretChat(context, chat.peer!);
+          break;
         case 'mute':
           await _store.updateChatSettings(chatId, {'muted_until': chat.isMuted ? null : 'forever'});
           break;
@@ -591,6 +595,8 @@ class _ChatScreenState extends State<ChatScreen> {
               const PopupMenuItem(value: 'clear', child: Text('Clear history')),
               if (chat.canPost) const PopupMenuItem(value: 'scheduled', child: Text('Scheduled messages')),
               if (chat.isMulti && chat.isAdmin) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
+              if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && auth.feature('secret_chats'))
+                const PopupMenuItem(value: 'secret', child: Text('Start secret chat')),
               if (chat.peer != null) PopupMenuItem(value: 'block', child: Text(chat.peer!.blocked ? 'Unblock user' : 'Block user')),
               if (!chat.isSavedMessages) const PopupMenuItem(value: 'report', child: Text('Report')),
               PopupMenuItem(value: 'leave', child: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'))),

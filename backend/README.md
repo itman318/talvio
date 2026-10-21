@@ -33,7 +33,7 @@ createdb chatapp_test
 TEST_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/chatapp_test npm test
 ```
 
-45 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls) cover OTP login &
+49 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls, `test/batchC.test.js` = secret chats) cover OTP login &
 token refresh, profiles & privacy, private chats, receipts, pagination, edit/delete, blocking, groups,
 media access control, forwarding, reports, admin flows, account deletion — plus channels, polls & quizzes,
 reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA — plus pins, mentions, message search, slow mode, join requests,
@@ -154,6 +154,11 @@ Authenticated routes need `Authorization: Bearer <access_token>`.
 | `GET /api/calls?missed=1&before=`, `POST /api/calls/delete` `{ids\|all}` | Call history |
 | `GET /api/calls/active`, `GET /api/calls/ice-servers` | Ringing/ongoing call (after opening a call notification), STUN/TURN list |
 | `PUT /api/me/privacy` `{calls}` | Who can call me: everyone / contacts / nobody |
+| **Batch C — secret chats** (ciphertext only; also over Socket.IO `secret:*`) | |
+| `GET /api/secret-chats`, `GET /api/secret-chats/pending` | This device's secret chats / undelivered encrypted messages |
+| `POST /api/secret-chats` `{user_id, public_key}`, `POST …/:id/accept` `{public_key}`, `POST …/:id/close` | Key exchange, decline / close |
+| `POST /api/secret-chats/:id/messages` `{ciphertext, media_id?, ttl_sec, client_id}` | Relay an encrypted message to the other device |
+| `POST /api/secret-chats/:id/ack` `{message_ids}`, `POST …/:id/read` `{max_id}` | Delivered (server deletes the ciphertext) / read |
 
 Socket.IO events are documented at the top of `src/realtime/socket.js`
 (`message:send` with ack, `message:new`, receipts, typing, presence, `session:revoked`, …).
@@ -226,6 +231,22 @@ Admin panel → *Calls*: live and past calls, answer rate, average length and ra
 Not included yet: group calls (needs an SFU such as LiveKit) and the native iOS CallKit / Android
 full-screen incoming-call UI when the app is closed — today a closed app gets a push notification,
 and tapping it opens the ringing call.
+
+## Secret chats (Batch C)
+
+End-to-end encrypted chats between **one device on each side** (like Telegram):
+
+- Each phone makes a new X25519 key pair for the chat; only the public keys pass through the server.
+- Both phones compute the same secret (X25519 → HKDF-SHA256) and encrypt every message with
+  AES-256-GCM using a fresh key from a hash ratchet, so old messages stay safe even if a key leaks later.
+- The server stores only ciphertext until the other phone confirms delivery, then deletes it
+  (rows are purged after 2 days; undelivered ones after 30 days). Photos/files are encrypted on the
+  phone before upload; the file key travels inside the encrypted message.
+- Self-destruct timer, "delete for both", screenshots blocked, no forwarding, key fingerprint (emoji) to compare.
+- Logging out or revoking the device closes its secret chats for good.
+
+Admins and the server **cannot read secret chats** — the panel only shows counts, and the feature can be
+switched off in Settings → Features. Reports about a secret chat need the user to include what they saw.
 
 ## Scaling later
 
