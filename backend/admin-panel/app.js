@@ -388,6 +388,8 @@
         stat('Messages today', fmtNum(d.messages_today)),
         stat('Calls today', fmtNum(d.calls_today)),
         stat('Calls right now', fmtNum(d.calls_active)),
+        stat('Secret chats', fmtNum(d.secret_chats_active)),
+        stat('Secret messages today', fmtNum(d.secret_messages_today)),
         stat('Total messages', fmtNum(d.messages_total)),
         stat('Groups', fmtNum(d.groups_total)),
         stat('Channels', fmtNum(d.channels_total)),
@@ -778,11 +780,12 @@
     call_ring_timeout_sec: ['Ring for (seconds)', 'After this the call counts as missed.'],
     call_max_minutes: ['Longest call (minutes)', 'Calls are cut off after this.'],
     stun_urls: ['STUN servers', 'One per line, e.g. stun:stun.l.google.com:19302'],
+    feature_secret_chats: ['Secret chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
     turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
   };
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
-    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_secret_chats']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
     ['Security', ['require_admin_2fa', 'blocked_ips']],

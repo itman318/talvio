@@ -41,6 +41,9 @@ const DEFINITIONS = {
   call_max_minutes: { type: 'integer', default: 240, min: 5, max: 1440 },
   stun_urls: { type: 'string_list', default: ['stun:stun.l.google.com:19302'], maxItems: 10, maxLength: 200 },
   turn_urls: { type: 'string_list', default: [], maxItems: 10, maxLength: 200 },
+
+  // ---- Batch C: secret chats
+  feature_secret_chats: { type: 'boolean', default: true },
 };
 
 const FEATURE_KEYS = [
@@ -51,6 +54,7 @@ const FEATURE_KEYS = [
   'feature_location',
   'feature_calls',
   'feature_video_calls',
+  'feature_secret_chats',
 ];
 
 let cache = null;
@@ -151,6 +155,7 @@ async function publicConfig() {
       location: s.feature_location,
       calls: s.feature_calls,
       video_calls: s.feature_calls && s.feature_video_calls,
+      secret_chats: s.feature_secret_chats,
     },
     call_ring_timeout_sec: s.call_ring_timeout_sec,
   };

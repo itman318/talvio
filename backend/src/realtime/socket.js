@@ -11,6 +11,7 @@ const messageService = require('../services/message.service');
 const userService = require('../services/user.service');
 const push = require('../services/push.service');
 const callService = require('../services/call.service');
+const secretService = require('../services/secret.service');
 const rateLimit = require('../utils/rateLimit');
 const { AppError } = require('../utils/errors');
 
@@ -25,6 +26,15 @@ const { AppError } = require('../utils/errors');
    call:decline      { call_id }
    call:hangup       { call_id, reason?: 'hangup'|'failed' }
    call:signal       { call_id, kind: offer|answer|ice|media, sdp?, candidate?, muted?, video_off?, ice_restart? }
+   secret:create     { user_id, public_key }                 → { ok, secret_chat }
+   secret:accept     { secret_chat_id, public_key }          → { ok, secret_chat }
+   secret:close      { secret_chat_id }                      (decline a request or close the chat)
+   secret:send       { secret_chat_id, ciphertext, media_id?, ttl_sec, client_id } → { ok, message:{id, created_at} }
+   secret:ack        { secret_chat_id, message_ids }         (stored on this device → server forgets the ciphertext)
+   secret:read       { secret_chat_id, max_id }
+   secret:typing     { secret_chat_id }
+   secret:delete     { secret_chat_id, message_ids }         (delete for both)
+   secret:notify     { secret_chat_id, kind: 'screenshot' }
 
  Server → client events:
    message:new       { chat_id, message }
@@ -45,6 +55,13 @@ const { AppError } = require('../utils/errors');
    call:accepted     { call_id }     → caller: create the WebRTC offer · callee's other devices: stop ringing
    call:signal       { call_id, kind, sdp?, candidate?, muted?, video_off? }  (only to the device on the call)
    call:ended        { call_id, status, end_reason, duration_sec }
+   secret:request    { secret_chat }   → all of the peer's devices; the first to accept owns the chat
+   secret:accepted   { secret_chat }   → the initiating device (their_key = peer's public key)
+   secret:taken      { secret_chat_id, session_id }  → peer's other devices drop the request
+   secret:closed     { secret_chat_id, reason }
+   secret:message    { message }       → only to the other device of the chat (ciphertext)
+   secret:delivered  { secret_chat_id, message_ids } · secret:read { secret_chat_id, max_id, read_at }
+   secret:typing     { secret_chat_id } · secret:deleted { secret_chat_id, message_ids } · secret:notify { secret_chat_id, kind }
 */
 
 let io = null;
@@ -204,13 +221,16 @@ function wireBus() {
       console.error(err); // eslint-disable-line no-console
     }
   });
-  bus.on('call:emit', ({ event, payload, userIds, sessionIds }) => {
+  const relay = ({ event, payload, userIds, sessionIds }) => {
     if (!io) return;
     if (userIds && userIds.length) emitToUsers(userIds, event, payload);
-    for (const sid of sessionIds || []) io.to(sessionRoom(sid)).emit(event, payload);
-  });
+    for (const sid of sessionIds || []) if (sid) io.to(sessionRoom(sid)).emit(event, payload);
+  };
+  bus.on('call:emit', relay);
+  bus.on('rt:emit', relay);
   bus.on('sessions:revoked', ({ userId, sessionIds, reason }) => {
     (sessionIds ? Promise.all(sessionIds.map((id) => callService.endBySession(id))) : callService.endByUser(userId)).catch(() => {});
+    (sessionIds ? Promise.all(sessionIds.map((id) => secretService.closeBySession(id))) : secretService.closeByUser(userId)).catch(() => {});
     if (!io) return;
     const rooms = sessionIds ? sessionIds.map(sessionRoom) : [userRoom(userId)];
     for (const room of rooms) {
@@ -302,6 +322,16 @@ function init(httpServer) {
     socket.on('call:decline', handler((p) => callService.declineCall(uid, p.call_id)));
     socket.on('call:hangup', handler((p) => callService.hangup(uid, p.call_id, p.reason)));
     socket.on('call:signal', callLimit(handler((p) => callService.relaySignal(uid, sid, p))));
+
+    socket.on('secret:create', handler((p) => secretService.create(uid, sid, p)));
+    socket.on('secret:accept', handler((p) => secretService.accept(uid, sid, p.secret_chat_id, p)));
+    socket.on('secret:close', handler((p) => secretService.close(uid, sid, p.secret_chat_id)));
+    socket.on('secret:send', handler((p) => secretService.send(uid, sid, p)));
+    socket.on('secret:ack', handler((p) => secretService.ack(uid, sid, p)));
+    socket.on('secret:read', handler((p) => secretService.markRead(uid, sid, p)));
+    socket.on('secret:typing', handler((p) => secretService.typing(uid, sid, p)));
+    socket.on('secret:delete', handler((p) => secretService.deleteMessages(uid, sid, p)));
+    socket.on('secret:notify', handler((p) => secretService.notify(uid, sid, p)));
 
     socket.on('disconnect', () => {
       if (presence.remove(uid)) broadcastPresence(uid, false).catch(() => {});

@@ -114,6 +114,10 @@ async function getAccessible(userId, mediaIdRaw) {
          WHERE msg.media_id = m.id AND msg.deleted_at IS NULL AND msg.id > cm.cleared_before_id
        )
        OR EXISTS (SELECT 1 FROM stories s WHERE s.media_id = m.id AND ${storyVisible})
+       OR EXISTS (
+         SELECT 1 FROM secret_messages sm JOIN secret_chats sc ON sc.id = sm.secret_chat_id
+         WHERE sm.media_id = m.id AND sc.status = 'active' AND (sc.initiator_id = $2 OR sc.peer_id = $2)
+       )
      )`,
     [mediaId, userId],
   );

@@ -22,6 +22,7 @@ const announcementService = require('../services/announcement.service');
 const appealService = require('../services/appeal.service');
 const contentService = require('../services/content.service');
 const callService = require('../services/call.service');
+const secretService = require('../services/secret.service');
 const settings = require('../services/settings.service');
 const { randomToken } = require('../utils/crypto');
 const { badRequest } = require('../utils/errors');
@@ -149,6 +150,17 @@ router.post('/calls/:id/accept', h(async (req, res) => res.json(await callServic
 router.post('/calls/:id/decline', h(async (req, res) => res.json(await callService.declineCall(req.userId, req.params.id))));
 router.post('/calls/:id/hangup', h(async (req, res) => res.json(await callService.hangup(req.userId, req.params.id, req.body.reason))));
 router.post('/calls/:id/rate', h(async (req, res) => res.json(await callService.rateCall(req.userId, req.params.id, req.body))));
+// ---- secret chats (also available over Socket.IO; ciphertext only)
+router.get('/secret-chats', h(async (req, res) => res.json(await secretService.list(req.userId, req.sessionId))));
+router.get('/secret-chats/pending', h(async (req, res) => res.json(await secretService.pending(req.userId, req.sessionId))));
+router.post('/secret-chats', h(async (req, res) => res.json(await secretService.create(req.userId, req.sessionId, req.body))));
+router.post('/secret-chats/:id/accept', h(async (req, res) => res.json(await secretService.accept(req.userId, req.sessionId, req.params.id, req.body))));
+router.post('/secret-chats/:id/close', h(async (req, res) => res.json(await secretService.close(req.userId, req.sessionId, req.params.id))));
+router.post('/secret-chats/:id/messages', h(async (req, res) => {
+  res.json(await secretService.send(req.userId, req.sessionId, { ...req.body, secret_chat_id: req.params.id }));
+}));
+router.post('/secret-chats/:id/ack', h(async (req, res) => res.json(await secretService.ack(req.userId, req.sessionId, { ...req.body, secret_chat_id: req.params.id }))));
+router.post('/secret-chats/:id/read', h(async (req, res) => res.json(await secretService.markRead(req.userId, req.sessionId, { ...req.body, secret_chat_id: req.params.id }))));
 router.get('/search/messages', h(async (req, res) => res.json(await messageService.searchMessages(req.userId, req.query))));
 router.put('/chats/:id/username', h(async (req, res) => res.json(await chatService.setChatUsername(req.userId, req.params.id, req.body.username))));
 router.get('/chats/:id/stats', h(async (req, res) => res.json(await chatService.chatStats(req.userId, req.params.id))));

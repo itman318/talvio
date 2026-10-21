@@ -502,3 +502,44 @@ CREATE INDEX IF NOT EXISTS calls_caller_idx ON calls (caller_id, id DESC);
 CREATE INDEX IF NOT EXISTS calls_callee_idx ON calls (callee_id, id DESC);
 CREATE INDEX IF NOT EXISTS calls_active_idx ON calls (status) WHERE status IN ('ringing', 'accepted');
 CREATE INDEX IF NOT EXISTS calls_created_idx ON calls (created_at DESC);
+
+-- =====================================================================
+-- Batch C: secret chats (end-to-end encrypted, device-to-device)
+-- The server only ever sees public keys and ciphertext.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS secret_chats (
+  id                    BIGSERIAL PRIMARY KEY,
+  initiator_id          BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  initiator_session_id  BIGINT       NOT NULL,
+  initiator_key         VARCHAR(100) NOT NULL,
+  peer_id               BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  peer_session_id       BIGINT,
+  peer_key              VARCHAR(100),
+  status                VARCHAR(10)  NOT NULL DEFAULT 'requested'
+                        CHECK (status IN ('requested', 'active', 'closed')),
+  closed_by             BIGINT,
+  close_reason          VARCHAR(20),
+  created_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  accepted_at           TIMESTAMPTZ,
+  closed_at             TIMESTAMPTZ,
+  last_message_at       TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS secret_chats_init_idx ON secret_chats (initiator_session_id) WHERE status <> 'closed';
+CREATE INDEX IF NOT EXISTS secret_chats_peer_idx ON secret_chats (peer_id, status);
+CREATE INDEX IF NOT EXISTS secret_chats_peer_sess_idx ON secret_chats (peer_session_id) WHERE status <> 'closed';
+
+CREATE TABLE IF NOT EXISTS secret_messages (
+  id              BIGSERIAL PRIMARY KEY,
+  secret_chat_id  BIGINT       NOT NULL REFERENCES secret_chats(id) ON DELETE CASCADE,
+  sender_id       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id       VARCHAR(64),
+  ciphertext      TEXT,                 -- NULL once delivered to the other device
+  media_id        BIGINT       REFERENCES media(id) ON DELETE SET NULL,  -- encrypted blob
+  ttl_sec         INTEGER      NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  delivered_at    TIMESTAMPTZ,
+  read_at         TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS secret_messages_chat_idx ON secret_messages (secret_chat_id, id);
+CREATE INDEX IF NOT EXISTS secret_messages_pending_idx ON secret_messages (secret_chat_id) WHERE delivered_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS secret_messages_client_idx ON secret_messages (sender_id, client_id) WHERE client_id IS NOT NULL;

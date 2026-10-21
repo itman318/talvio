@@ -288,6 +288,8 @@ async function dashboard() {
       (SELECT count(*) FROM messages WHERE type NOT IN ('system', 'call') AND created_at >= date_trunc('day', now())) AS messages_today,
       (SELECT count(*) FROM calls WHERE created_at >= date_trunc('day', now())) AS calls_today,
       (SELECT count(*) FROM calls WHERE status IN ('ringing', 'accepted')) AS calls_active,
+      (SELECT count(*) FROM secret_chats WHERE status = 'active') AS secret_chats_active,
+      (SELECT count(*) FROM secret_messages WHERE created_at >= date_trunc('day', now())) AS secret_messages_today,
       (SELECT count(*) FROM chats WHERE type = 'group') AS groups_total,
       (SELECT count(*) FROM chats WHERE type = 'channel') AS channels_total,
       (SELECT count(*) FROM users WHERE restricted_until > now()) AS users_restricted,
