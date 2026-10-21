@@ -33,8 +33,10 @@ const PERMISSIONS = {
     'media',
     'support',
     'users.export',
+    'calls.view',
+    'calls.manage',
   ],
-  support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support'],
+  support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support', 'calls.view'],
 };
 
 // Used to keep login timing constant when the email does not exist.
@@ -282,8 +284,10 @@ async function dashboard() {
       (SELECT count(*) FROM users u WHERE u.status = 'active' AND (u.last_seen_at >= now() - interval '30 days'
          OR EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.last_active_at >= now() - interval '30 days'))) AS users_active_30d,
       (SELECT count(*) FROM users WHERE status = 'banned') AS users_banned,
-      (SELECT count(*) FROM messages WHERE type <> 'system') AS messages_total,
-      (SELECT count(*) FROM messages WHERE type <> 'system' AND created_at >= date_trunc('day', now())) AS messages_today,
+      (SELECT count(*) FROM messages WHERE type NOT IN ('system', 'call')) AS messages_total,
+      (SELECT count(*) FROM messages WHERE type NOT IN ('system', 'call') AND created_at >= date_trunc('day', now())) AS messages_today,
+      (SELECT count(*) FROM calls WHERE created_at >= date_trunc('day', now())) AS calls_today,
+      (SELECT count(*) FROM calls WHERE status IN ('ringing', 'accepted')) AS calls_active,
       (SELECT count(*) FROM chats WHERE type = 'group') AS groups_total,
       (SELECT count(*) FROM chats WHERE type = 'channel') AS channels_total,
       (SELECT count(*) FROM users WHERE restricted_until > now()) AS users_restricted,
@@ -302,7 +306,7 @@ async function dashboard() {
   const messages = await db.many(`
     SELECT to_char(d, 'YYYY-MM-DD') AS day, count(m.id) AS count
     FROM generate_series(current_date - 13, current_date, interval '1 day') AS d
-    LEFT JOIN messages m ON m.created_at >= d AND m.created_at < d + interval '1 day' AND m.type <> 'system'
+    LEFT JOIN messages m ON m.created_at >= d AND m.created_at < d + interval '1 day' AND m.type NOT IN ('system', 'call')
     GROUP BY d ORDER BY d`);
   return { ...c, online_now: presence.onlineCount(), signups_30d: signups, messages_14d: messages };
 }
@@ -349,7 +353,8 @@ async function userDetail(userIdRaw) {
   if (!u) throw notFound('user_not_found', 'User not found');
   const stats = await db.one(
     `SELECT
-       (SELECT count(*) FROM messages WHERE sender_id = $1 AND type <> 'system') AS messages_sent,
+       (SELECT count(*) FROM messages WHERE sender_id = $1 AND type NOT IN ('system', 'call')) AS messages_sent,
+       (SELECT count(*) FROM calls WHERE caller_id = $1 OR callee_id = $1) AS calls,
        (SELECT count(*) FROM chat_members cm JOIN chats c ON c.id = cm.chat_id WHERE cm.user_id = $1 AND c.type = 'group') AS groups,
        (SELECT count(*) FROM blocks WHERE blocked_id = $1) AS blocked_by_count,
        (SELECT count(*) FROM reports r WHERE (r.target_type = 'user' AND r.target_id = $1)
@@ -705,6 +710,7 @@ async function listLogs(query = {}) {
 }
 
 module.exports = {
+  log,
   addNote,
   deleteNote,
   exportUser,

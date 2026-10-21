@@ -299,6 +299,10 @@ class Message {
       meta != null && meta!['location'] is Map ? Map<String, dynamic>.from(meta!['location'] as Map) : null;
   bool get isLocal => id < 0;
 
+  /// {id, video, status, duration_sec, reason} for call log messages.
+  Map<String, dynamic>? get callMeta =>
+      meta != null && meta!['call'] is Map ? Map<String, dynamic>.from(meta!['call'] as Map) : null;
+
   /// Short text used in the chat list and notifications.
   String get preview {
     switch (type) {
@@ -314,9 +318,75 @@ class Message {
         return '📊 $text';
       case 'location':
         return text.isNotEmpty ? '📍 $text' : '📍 Location';
+      case 'call':
+        final c = callMeta ?? const {};
+        final icon = c['video'] == true ? '📹' : '📞';
+        final st = '${c['status'] ?? ''}';
+        if (st == 'missed' || st == 'busy') return '$icon Missed call';
+        if (st == 'declined') return '$icon Declined call';
+        final sec = (c['duration_sec'] as num?)?.toInt() ?? 0;
+        return sec > 0 ? '$icon Call (${formatCallDuration(sec)})' : '$icon Call';
       default:
         return text;
     }
+  }
+}
+
+/// 75 → "1:15", 3725 → "1:02:05".
+String formatCallDuration(int sec) {
+  final h = sec ~/ 3600;
+  final m = (sec % 3600) ~/ 60;
+  final s = (sec % 60).toString().padLeft(2, '0');
+  return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$s' : '$m:$s';
+}
+
+/// A call as the server sends it (history, incoming call, call:start result).
+class CallInfo {
+  final int id;
+  final int? chatId;
+  final bool video;
+  final String status; // ringing | accepted | ended | missed | declined | busy | failed
+  final bool outgoing;
+  final String? endReason;
+  final AppUser? peer;
+  final int peerId;
+  final int durationSec;
+  final DateTime createdAt;
+
+  CallInfo({
+    required this.id,
+    this.chatId,
+    required this.video,
+    required this.status,
+    required this.outgoing,
+    this.endReason,
+    this.peer,
+    required this.peerId,
+    this.durationSec = 0,
+    required this.createdAt,
+  });
+
+  factory CallInfo.fromJson(Map<String, dynamic> j) => CallInfo(
+        id: _int(j['id']),
+        chatId: _intOrNull(j['chat_id']),
+        video: j['video'] == true,
+        status: (j['status'] ?? 'ended') as String,
+        outgoing: j['direction'] == 'outgoing',
+        endReason: j['end_reason'] as String?,
+        peer: j['peer'] == null ? null : AppUser.fromJson(Map<String, dynamic>.from(j['peer'] as Map)),
+        peerId: _int(j['peer_id'] ?? (j['peer'] is Map ? j['peer']['id'] : 0)),
+        durationSec: _int(j['duration_sec'] ?? 0),
+        createdAt: _date(j['created_at']) ?? DateTime.now(),
+      );
+
+  bool get missed => !outgoing && (status == 'missed' || status == 'busy');
+
+  String get label {
+    if (missed) return video ? 'Missed video call' : 'Missed call';
+    if (status == 'declined') return outgoing ? 'Call declined' : 'Declined';
+    if (outgoing && (status == 'missed' || status == 'busy')) return status == 'busy' ? 'Line busy' : 'Cancelled call';
+    if (status == 'failed') return 'Call failed';
+    return outgoing ? (video ? 'Outgoing video call' : 'Outgoing call') : (video ? 'Incoming video call' : 'Incoming call');
   }
 }
 

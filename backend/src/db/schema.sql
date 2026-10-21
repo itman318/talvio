@@ -465,3 +465,40 @@ INSERT INTO content_pages (slug, title, body) VALUES
   ('privacy', 'Privacy Policy', ''),
   ('faq', 'Frequently Asked Questions', '')
 ON CONFLICT (slug) DO NOTHING;
+
+-- =====================================================================
+-- Batch B: voice & video calls
+-- =====================================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_calls VARCHAR(10) NOT NULL DEFAULT 'everyone';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_privacy_calls_check;
+ALTER TABLE users ADD CONSTRAINT users_privacy_calls_check CHECK (privacy_calls IN ('everyone', 'contacts', 'nobody'));
+
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll', 'location', 'call'));
+
+CREATE TABLE IF NOT EXISTS calls (
+  id                BIGSERIAL PRIMARY KEY,
+  chat_id           BIGINT       REFERENCES chats(id) ON DELETE SET NULL,
+  caller_id         BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  callee_id         BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  caller_session_id BIGINT,
+  callee_session_id BIGINT,
+  video             BOOLEAN      NOT NULL DEFAULT FALSE,
+  status            VARCHAR(10)  NOT NULL DEFAULT 'ringing'
+                    CHECK (status IN ('ringing', 'accepted', 'ended', 'missed', 'declined', 'busy', 'failed')),
+  end_reason        VARCHAR(20),
+  ended_by          BIGINT,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  answered_at       TIMESTAMPTZ,
+  ended_at          TIMESTAMPTZ,
+  rating_caller     SMALLINT     CHECK (rating_caller BETWEEN 1 AND 5),
+  rating_callee     SMALLINT     CHECK (rating_callee BETWEEN 1 AND 5),
+  rating_comment    VARCHAR(500),
+  hidden_caller     BOOLEAN      NOT NULL DEFAULT FALSE,
+  hidden_callee     BOOLEAN      NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS calls_caller_idx ON calls (caller_id, id DESC);
+CREATE INDEX IF NOT EXISTS calls_callee_idx ON calls (callee_id, id DESC);
+CREATE INDEX IF NOT EXISTS calls_active_idx ON calls (status) WHERE status IN ('ringing', 'accepted');
+CREATE INDEX IF NOT EXISTS calls_created_idx ON calls (created_at DESC);

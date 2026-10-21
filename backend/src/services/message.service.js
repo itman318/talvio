@@ -407,6 +407,11 @@ async function createSystemMessage(chatId, actorId, meta) {
   return insertMessage({ chatId, senderId: actorId, type: 'system', meta });
 }
 
+/** Call log entry in a private chat (sent "from" the caller; silent — calls have their own notifications). */
+async function createCallMessage(chatId, callerId, meta) {
+  return insertMessage({ chatId, senderId: callerId, type: 'call', meta, silent: true });
+}
+
 /**
  * Sends a message, or schedules it when body.schedule_at is given (returns { scheduled }).
  * internal: { meta, skipRateLimit } — only set by server code, never from request bodies.
@@ -478,7 +483,7 @@ async function forwardMessages(userId, body = {}) {
 
   const rows = await db.many(
     `SELECT m.* FROM messages m
-     WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type NOT IN ('system', 'poll')
+     WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type NOT IN ('system', 'poll', 'call')
        AND ${VISIBLE_SQL.replace(/\$USER/g, '$4')}
      ORDER BY m.id`,
     [from.id, ids, from.cleared_before_id, userId],
@@ -522,7 +527,7 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   if (!m) throw notFound('message_not_found', 'Message not found');
   const chat = await chatService.requireMember(m.chat_id, userId);
   const channelAdmin = chat.type === 'channel' && chatService.ADMIN_ROLES.includes(chat.my_role);
-  if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll', 'location'].includes(m.type) || m.forwarded_from_name) {
+  if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll', 'location', 'call'].includes(m.type) || m.forwarded_from_name) {
     throw forbidden('cannot_edit', 'You can only edit your own messages');
   }
   const hours = await settings.get('message_edit_window_hours');
@@ -949,6 +954,7 @@ module.exports = {
   deleteMessages,
   adminDeleteMessage,
   createSystemMessage,
+  createCallMessage,
   react,
   recordViews,
   vote,

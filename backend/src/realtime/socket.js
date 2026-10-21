@@ -10,6 +10,7 @@ const chatService = require('../services/chat.service');
 const messageService = require('../services/message.service');
 const userService = require('../services/user.service');
 const push = require('../services/push.service');
+const callService = require('../services/call.service');
 const rateLimit = require('../utils/rateLimit');
 const { AppError } = require('../utils/errors');
 
@@ -19,6 +20,11 @@ const { AppError } = require('../utils/errors');
    message:read      { chat_id, message_id }
    message:delivered { chat_id, message_id }
    typing            { chat_id }
+   call:start        { user_id | chat_id, video }            → { ok, call, ice_servers }  (call.status 'busy' = line busy)
+   call:accept       { call_id }                            → { ok, call, ice_servers }
+   call:decline      { call_id }
+   call:hangup       { call_id, reason?: 'hangup'|'failed' }
+   call:signal       { call_id, kind: offer|answer|ice|media, sdp?, candidate?, muted?, video_off?, ice_restart? }
 
  Server → client events:
    message:new       { chat_id, message }
@@ -35,9 +41,14 @@ const { AppError } = require('../utils/errors');
    message:poll      { chat_id, message_id, poll }        (counts only; keep your own my_votes)
    support:updated   { ticket_id }   → an admin replied to your support ticket
    session:revoked   { reason }      → log out locally
+   call:incoming     { call }        → ring (all of the callee's devices)
+   call:accepted     { call_id }     → caller: create the WebRTC offer · callee's other devices: stop ringing
+   call:signal       { call_id, kind, sdp?, candidate?, muted?, video_off? }  (only to the device on the call)
+   call:ended        { call_id, status, end_reason, duration_sec }
 */
 
 let io = null;
+const CALL_GRACE_MS = 15 * 1000;
 
 const userRoom = (id) => `user:${id}`;
 const sessionRoom = (id) => `session:${id}`;
@@ -193,7 +204,13 @@ function wireBus() {
       console.error(err); // eslint-disable-line no-console
     }
   });
+  bus.on('call:emit', ({ event, payload, userIds, sessionIds }) => {
+    if (!io) return;
+    if (userIds && userIds.length) emitToUsers(userIds, event, payload);
+    for (const sid of sessionIds || []) io.to(sessionRoom(sid)).emit(event, payload);
+  });
   bus.on('sessions:revoked', ({ userId, sessionIds, reason }) => {
+    (sessionIds ? Promise.all(sessionIds.map((id) => callService.endBySession(id))) : callService.endByUser(userId)).catch(() => {});
     if (!io) return;
     const rooms = sessionIds ? sessionIds.map(sessionRoom) : [userRoom(userId)];
     for (const room of rooms) {
@@ -272,8 +289,33 @@ function init(httpServer) {
       }
     });
 
+    const callLimit = (fn, limit = 300) => async (p, ack) => {
+      if (!rateLimit.hit(`callsig:${socket.id}`, limit, 10 * 1000).allowed) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'rate_limited', message: 'Slow down' });
+        return;
+      }
+      return fn(p, ack);
+    };
+    const sid = socket.data.sessionId;
+    socket.on('call:start', handler((p) => callService.startCall(uid, sid, p)));
+    socket.on('call:accept', handler((p) => callService.acceptCall(uid, sid, p.call_id)));
+    socket.on('call:decline', handler((p) => callService.declineCall(uid, p.call_id)));
+    socket.on('call:hangup', handler((p) => callService.hangup(uid, p.call_id, p.reason)));
+    socket.on('call:signal', callLimit(handler((p) => callService.relaySignal(uid, sid, p))));
+
     socket.on('disconnect', () => {
       if (presence.remove(uid)) broadcastPresence(uid, false).catch(() => {});
+      // Give a flaky mobile connection a moment to come back before dropping this device's call.
+      const t = setTimeout(async () => {
+        try {
+          if (!io) return;
+          const still = await io.in(sessionRoom(sid)).fetchSockets();
+          if (still.length === 0) await callService.endBySession(sid);
+        } catch (_) {
+          /* ignore */
+        }
+      }, CALL_GRACE_MS);
+      if (t.unref) t.unref();
     });
   });
 

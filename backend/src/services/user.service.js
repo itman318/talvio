@@ -102,6 +102,7 @@ function serialize(u, viewerId, rel) {
       avatar: u.privacy_avatar,
       phone: u.privacy_phone,
       group_add: u.privacy_group_add,
+      calls: u.privacy_calls || 'everyone',
     };
     out.created_at = new Date(u.created_at).toISOString();
   } else {
@@ -192,7 +193,13 @@ async function removeAvatar(userId) {
 }
 
 async function updatePrivacy(userId, body) {
-  const map = { last_seen: 'privacy_last_seen', avatar: 'privacy_avatar', phone: 'privacy_phone', group_add: 'privacy_group_add' };
+  const map = {
+    last_seen: 'privacy_last_seen',
+    avatar: 'privacy_avatar',
+    phone: 'privacy_phone',
+    group_add: 'privacy_group_add',
+    calls: 'privacy_calls',
+  };
   const sets = [];
   const params = [userId];
   for (const [key, col] of Object.entries(map)) {
@@ -389,7 +396,7 @@ async function deleteAccount(userId, { byAdmin = false } = {}) {
 async function exportData(userId) {
   const u = await db.one(
     `SELECT id, phone, username, first_name, last_name, bio, status, is_verified, created_at, last_seen_at,
-            privacy_last_seen, privacy_avatar, privacy_phone, privacy_group_add
+            privacy_last_seen, privacy_avatar, privacy_phone, privacy_group_add, privacy_calls
      FROM users WHERE id = $1`,
     [userId],
   );

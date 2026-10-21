@@ -33,9 +33,25 @@ const DEFINITIONS = {
   feature_polls: { type: 'boolean', default: true },
   feature_voice_messages: { type: 'boolean', default: true },
   feature_location: { type: 'boolean', default: true },
+
+  // ---- Batch B: calls
+  feature_calls: { type: 'boolean', default: true },
+  feature_video_calls: { type: 'boolean', default: true },
+  call_ring_timeout_sec: { type: 'integer', default: 45, min: 15, max: 120 },
+  call_max_minutes: { type: 'integer', default: 240, min: 5, max: 1440 },
+  stun_urls: { type: 'string_list', default: ['stun:stun.l.google.com:19302'], maxItems: 10, maxLength: 200 },
+  turn_urls: { type: 'string_list', default: [], maxItems: 10, maxLength: 200 },
 };
 
-const FEATURE_KEYS = ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location'];
+const FEATURE_KEYS = [
+  'feature_channels',
+  'feature_stories',
+  'feature_polls',
+  'feature_voice_messages',
+  'feature_location',
+  'feature_calls',
+  'feature_video_calls',
+];
 
 let cache = null;
 let cacheAt = 0;
@@ -133,7 +149,10 @@ async function publicConfig() {
       polls: s.feature_polls,
       voice_messages: s.feature_voice_messages,
       location: s.feature_location,
+      calls: s.feature_calls,
+      video_calls: s.feature_calls && s.feature_video_calls,
     },
+    call_ring_timeout_sec: s.call_ring_timeout_sec,
   };
 }
 

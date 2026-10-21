@@ -41,8 +41,9 @@ const INVALID_TOKEN_CODES = new Set([
  * @param {number[]} userIds
  * @param {{title: string, body: string}} notification
  * @param {Record<string,string>} data  string values only
+ * @param {{ttlSec?: number, tag?: string}} options  ttlSec: drop if not delivered in time (incoming calls)
  */
-async function sendToUsers(userIds, notification, data = {}) {
+async function sendToUsers(userIds, notification, data = {}, options = {}) {
   const m = init();
   if (!m || userIds.length === 0) return;
   const rows = await db.many(
@@ -59,8 +60,15 @@ async function sendToUsers(userIds, notification, data = {}) {
         tokens: batch.map((r) => r.fcm_token),
         notification: { title: notification.title.slice(0, 100), body: notification.body.slice(0, 240) },
         data: stringData,
-        android: { priority: 'high', notification: { tag: stringData.chat_id || undefined } },
-        apns: { payload: { aps: { sound: 'default', 'thread-id': stringData.chat_id || '' } } },
+        android: {
+          priority: 'high',
+          ...(options.ttlSec ? { ttl: options.ttlSec * 1000 } : {}),
+          notification: { tag: options.tag || stringData.chat_id || undefined },
+        },
+        apns: {
+          ...(options.ttlSec ? { headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + options.ttlSec) } } : {}),
+          payload: { aps: { sound: 'default', 'thread-id': stringData.chat_id || '' } },
+        },
       });
       const invalid = [];
       res.responses.forEach((r, idx) => {

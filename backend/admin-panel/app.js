@@ -4,8 +4,8 @@
 
   const PERMISSIONS = {
     super_admin: ['*'],
-    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media', 'support', 'users.export'],
-    support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support'],
+    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media', 'support', 'users.export', 'calls.view', 'calls.manage'],
+    support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support', 'calls.view'],
   };
   const NAV = [
     { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
@@ -13,6 +13,7 @@
     { id: 'reports', label: 'Reports', perm: 'reports.view' },
     { id: 'appeals', label: 'Ban appeals', perm: 'users.view' },
     { id: 'groups', label: 'Groups & channels', perm: 'groups.view' },
+    { id: 'calls', label: 'Calls', perm: 'calls.view' },
     { id: 'support', label: 'Support', perm: 'support' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast' },
     { id: 'settings', label: 'Settings', perm: 'settings' },
@@ -385,6 +386,8 @@
         stat('Signups today', fmtNum(d.users_new_today)),
         stat('Signups (7 days)', fmtNum(d.users_new_7d)),
         stat('Messages today', fmtNum(d.messages_today)),
+        stat('Calls today', fmtNum(d.calls_today)),
+        stat('Calls right now', fmtNum(d.calls_active)),
         stat('Total messages', fmtNum(d.messages_total)),
         stat('Groups', fmtNum(d.groups_total)),
         stat('Channels', fmtNum(d.channels_total)),
@@ -522,6 +525,7 @@
           : null)),
       el('section', {}, el('h4', {}, 'Activity'), el('div', { class: 'kv' },
         el('div', {}, 'Messages sent'), el('div', {}, fmtNum(d.stats.messages_sent)),
+        el('div', {}, 'Calls'), el('div', {}, fmtNum(d.stats.calls || 0)),
         el('div', {}, 'Groups'), el('div', {}, fmtNum(d.stats.groups)),
         el('div', {}, 'Blocked by'), el('div', {}, `${fmtNum(d.stats.blocked_by_count)} users`),
         el('div', {}, 'Reports against'), el('div', {}, fmtNum(d.stats.reports_against)))),
@@ -769,10 +773,17 @@
     feature_polls: ['Polls & quizzes', ''],
     feature_voice_messages: ['Voice messages', ''],
     feature_location: ['Location sharing', ''],
+    feature_calls: ['Voice calls', 'One-to-one calls between users.'],
+    feature_video_calls: ['Video calls', 'Needs voice calls to be on.'],
+    call_ring_timeout_sec: ['Ring for (seconds)', 'After this the call counts as missed.'],
+    call_max_minutes: ['Longest call (minutes)', 'Calls are cut off after this.'],
+    stun_urls: ['STUN servers', 'One per line, e.g. stun:stun.l.google.com:19302'],
+    turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
   };
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location']],
+    ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
     ['Security', ['require_admin_2fa', 'blocked_ips']],
   ];
@@ -1077,11 +1088,87 @@
       pager(data, (p) => { logsState.page = p; pageLogs(); }));
   }
 
+  // ------------------------------------------------------------------ calls
+  const CALL_STATUS = { ringing: ['Ringing', 'warn'], accepted: ['On call', 'ok'], ended: ['Ended', ''], missed: ['Missed', 'warn'], declined: ['Declined', ''], busy: ['Busy', ''], failed: ['Failed', 'bad'] };
+  const callsState = { status: '', video: '', user: '', page: 1 };
+  function fmtDur(sec) {
+    const s = Number(sec) || 0;
+    if (!s) return '—';
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+  }
+  async function pageCalls() {
+    main.replaceChildren(head('Calls'), el('div', { class: 'muted' }, 'Loading…'));
+    const query = { page: callsState.page };
+    if (callsState.status) query.status = callsState.status;
+    if (callsState.video) query.video = callsState.video;
+    if (callsState.user) query.user_id = callsState.user;
+    const [st, data] = await Promise.all([
+      action(() => api('GET', '/calls/stats')),
+      action(() => api('GET', `/calls?${new URLSearchParams(query)}`)),
+    ]);
+    if (!st || !data) return;
+    const stat = (label, value) => el('div', { class: 'card stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+    const turnCard = st.turn.urls.length && st.turn.auth !== 'none'
+      ? el('div', { class: 'card', style: 'margin-bottom:12px' }, el('b', {}, 'TURN relay: on'), el('div', { class: 'muted' }, `${st.turn.urls.join(', ')} · ${st.turn.auth === 'secret' ? 'time-limited credentials' : 'fixed username/password'}`))
+      : el('div', { class: 'card', style: 'margin-bottom:12px;border-color:#f0b429;background:#fffbea' },
+        el('b', {}, 'No TURN server configured'),
+        el('div', {}, 'Calls connect directly (STUN only). On many mobile networks 10–20% of calls will fail to connect. Install coturn and set TURN_SECRET + TURN servers — see the backend README.'));
+    const filters = el('div', { class: 'toolbar' },
+      el('select', { onchange: (e) => { callsState.status = e.target.value; callsState.page = 1; pageCalls(); } },
+        el('option', { value: '' }, 'All statuses'),
+        Object.entries(CALL_STATUS).map(([k, [l]]) => el('option', { value: k, selected: callsState.status === k ? true : null }, l))),
+      el('select', { onchange: (e) => { callsState.video = e.target.value; callsState.page = 1; pageCalls(); } },
+        el('option', { value: '' }, 'Voice & video'),
+        el('option', { value: 'false', selected: callsState.video === 'false' ? true : null }, 'Voice only'),
+        el('option', { value: 'true', selected: callsState.video === 'true' ? true : null }, 'Video only')),
+      el('input', { type: 'number', placeholder: 'User ID', value: callsState.user, style: 'width:110px',
+        onchange: (e) => { callsState.user = e.target.value.trim(); callsState.page = 1; pageCalls(); } }));
+    const who = (u) => el('div', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(u.id); } }, u.name),
+      u.username ? el('div', { class: 'muted' }, `@${u.username}`) : null);
+    const rows = data.items.map((c) => {
+      const [label, cls] = CALL_STATUS[c.status] || [c.status, ''];
+      const live = c.status === 'ringing' || c.status === 'accepted';
+      return el('tr', {},
+        el('td', { class: 'num' }, c.id),
+        el('td', {}, who(c.caller)),
+        el('td', {}, who(c.callee)),
+        el('td', {}, c.video ? 'Video' : 'Voice'),
+        el('td', {}, el('span', { class: `chip ${cls}` }, label), c.end_reason && !['hangup', 'declined', c.status].includes(c.end_reason) ? el('div', { class: 'muted' }, c.end_reason.replace(/_/g, ' ')) : null),
+        el('td', { class: 'num' }, fmtDur(c.duration_sec)),
+        el('td', {}, c.rating ? `${'★'.repeat(c.rating.caller || c.rating.callee)}` : '—', c.rating && c.rating.comment ? el('div', { class: 'muted' }, c.rating.comment) : null),
+        el('td', { class: 'muted' }, ago(c.created_at)),
+        el('td', {}, live && can('calls.manage')
+          ? el('button', { class: 'btn small danger', onclick: async () => { if (await action(() => api('POST', `/calls/${c.id}/end`), 'Call ended')) pageCalls(); } }, 'End')
+          : null));
+    });
+    const days = (key) => st.days.map((d) => ({ day: d.day, count: d[key] }));
+    main.replaceChildren(
+      head('Calls', el('button', { class: 'btn', onclick: pageCalls }, 'Refresh')),
+      turnCard,
+      el('div', { class: 'stats' },
+        stat('On calls now', fmtNum(st.active)),
+        stat('Calls today', fmtNum(st.today)),
+        stat('Calls (30 days)', fmtNum(st.last_30d)),
+        stat('Answered', `${st.answer_rate}%`),
+        stat('Avg. length', fmtDur(st.avg_duration_sec)),
+        stat('Avg. rating', st.avg_rating ? `${st.avg_rating} ★` : '—'),
+        stat('Failed (30 days)', fmtNum(st.failed_30d)),
+        stat('Video (30 days)', fmtNum(st.video_30d))),
+      el('div', { class: 'charts' }, barChart('Calls — last 14 days', days('calls')), barChart('Call minutes — last 14 days', days('minutes'))),
+      filters,
+      table(['#', 'Caller', 'Called', 'Type', 'Status', 'Length', 'Rating', 'When', ''], rows, 'No calls yet'),
+      pager(data, (p) => { callsState.page = p; pageCalls(); }));
+  }
+
   const PAGES = {
     dashboard: pageDashboard,
     users: pageUsers,
     reports: pageReports,
     groups: pageGroups,
+    calls: pageCalls,
     settings: pageSettings,
     broadcast: pageBroadcast,
     appeals: pageAppeals,

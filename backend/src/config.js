@@ -64,6 +64,16 @@ const config = {
   uploadHardLimitMb: 2048,
 
   firebaseServiceAccountPath: env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
+
+  // Calls (WebRTC). TURN_SECRET = coturn "static-auth-secret" (time-limited credentials);
+  // or TURN_USERNAME / TURN_PASSWORD for a fixed account. URLs can also be set in the admin panel.
+  turn: {
+    secret: env.TURN_SECRET || '',
+    username: env.TURN_USERNAME || '',
+    password: env.TURN_PASSWORD || '',
+    urls: (env.TURN_URLS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    credentialTtlSec: int('TURN_CREDENTIAL_TTL_SEC', 6 * 3600),
+  },
 };
 
 if (config.isProd && config.otp.devMode) {
