@@ -141,7 +141,7 @@ function previewText(message) {
 }
 
 async function pushNewMessage({ chatId, message, memberIds, senderId }) {
-  if (message.type === 'system' || message.silent) return;
+  if (message.type === 'system' || message.silent || message.thread_id) return;
   const offline = memberIds.filter((id) => id !== senderId && !presence.isOnline(id));
   if (offline.length === 0) return;
   // muted chats still notify people who were @mentioned / replied to

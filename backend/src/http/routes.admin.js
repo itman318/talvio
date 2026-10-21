@@ -8,6 +8,7 @@ const announcements = require('../services/announcement.service');
 const appeals = require('../services/appeal.service');
 const content = require('../services/content.service');
 const calls = require('../services/call.service');
+const bots = require('../services/bot.service');
 const db = require('../db');
 const v = require('../utils/validate');
 const { notFound } = require('../utils/errors');
@@ -23,6 +24,12 @@ router.post('/me/2fa/setup', requireAdmin(), h(async (req, res) => res.json(awai
 router.post('/me/2fa/enable', requireAdmin(), h(async (req, res) => res.json(await admin.twoFactorEnable(req.admin, req.body.code, req.ip))));
 router.post('/me/2fa/disable', requireAdmin(), h(async (req, res) => res.json(await admin.twoFactorDisable(req.admin, req.body, req.ip))));
 
+router.get('/bots', requireAdmin('users.view'), h(async (req, res) => res.json(await bots.adminList(req.query))));
+router.post('/bots/:id/status', requireAdmin('users.ban'), h(async (req, res) => {
+  const r = await bots.adminSetStatus(req.params.id, req.body.active === true, req.body.reason);
+  await admin.log(req.admin.id, req.body.active === true ? 'bot.enable' : 'bot.disable', 'user', parseInt(req.params.id, 10), { reason: req.body.reason || null }, req.ip);
+  res.json(r);
+}));
 router.get('/calls', requireAdmin('calls.view'), h(async (req, res) => res.json(await calls.adminList(req.query))));
 router.get('/calls/stats', requireAdmin('calls.view'), h(async (req, res) => res.json(await calls.adminStats())));
 router.post('/calls/:id/end', requireAdmin('calls.manage'), h(async (req, res) => {

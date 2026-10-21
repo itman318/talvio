@@ -41,6 +41,7 @@ function minimalUser(u) {
     username: u.username,
     avatar_url: u.avatar_url,
     deleted: !!u.deleted,
+    is_bot: !!u.is_bot,
   };
 }
 
@@ -118,7 +119,7 @@ async function serializeRows(viewerId, rows) {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const chatIds = [...new Set(rows.map((r) => r.chat_id))];
-  const chats = await db.many('SELECT id, type, signatures FROM chats WHERE id = ANY($1::bigint[])', [chatIds]);
+  const chats = await db.many('SELECT id, type, signatures, comments_enabled FROM chats WHERE id = ANY($1::bigint[])', [chatIds]);
   const chatMap = new Map(chats.map((c) => [c.id, c]));
 
   const replyIds = [...new Set(rows.map((r) => r.reply_to_id).filter(Boolean))];
@@ -136,10 +137,19 @@ async function serializeRows(viewerId, rows) {
   const polls = await loadPolls(viewerId, rows.filter((r) => r.type === 'poll').map((r) => r.id));
   const reactions = await loadReactions(viewerId, ids);
   const mentionRows = await db.many('SELECT message_id, user_id FROM message_mentions WHERE message_id = ANY($1::bigint[])', [ids]);
+  const postIds = rows.filter((r) => !r.thread_id && (chatMap.get(r.chat_id) || {}).type === 'channel').map((r) => r.id);
+  const commentRows = postIds.length
+    ? await db.many(
+      `SELECT thread_id, count(*)::int AS n FROM messages WHERE thread_id = ANY($1::bigint[]) AND deleted_at IS NULL GROUP BY thread_id`,
+      [postIds],
+    )
+    : [];
+  const commentMap = new Map(commentRows.map((c) => [c.thread_id, c.n]));
 
   return rows.map((m) => {
     const chat = chatMap.get(m.chat_id) || { type: 'private' };
-    const isChannel = chat.type === 'channel';
+    // comments under a channel post are written by people, so they show the real sender
+    const isChannel = chat.type === 'channel' && !m.thread_id;
     const r = m.reply_to_id ? replyMap.get(m.reply_to_id) : null;
     const replyUser = r && r.sender_id ? users.get(r.sender_id) : null;
     const sender = m.sender_id ? users.get(m.sender_id) : null;
@@ -172,6 +182,10 @@ async function serializeRows(viewerId, rows) {
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
+      thread_id: m.thread_id || null,
+      topic_id: m.topic_id || null,
+      comments_count: commentMap.get(m.id) || 0,
+      reply_markup: m.reply_markup || null,
       client_id: m.client_id || null,
       edited_at: iso(m.edited_at),
       created_at: iso(m.created_at),
@@ -193,6 +207,20 @@ async function listMessages(userId, chatIdRaw, query = {}) {
   const lim = v.limit(query.limit, 50, 100);
   const params = [chat.id, chat.cleared_before_id, userId];
   let cond = `m.chat_id = $1 AND m.id > $2 AND ${VISIBLE_SQL.replace(/\$USER/g, '$3')}`;
+  if (query.thread_id) {
+    params.push(v.id(query.thread_id, 'thread_id'));
+    cond += ` AND m.thread_id = $${params.length}`;
+  } else {
+    cond += ' AND m.thread_id IS NULL';
+  }
+  if (chat.is_forum && query.topic_id !== undefined && query.topic_id !== '') {
+    if (query.topic_id === 'general' || query.topic_id === '0') {
+      cond += ' AND m.topic_id IS NULL';
+    } else {
+      params.push(v.id(query.topic_id, 'topic_id'));
+      cond += ` AND m.topic_id = $${params.length}`;
+    }
+  }
   let order = 'DESC';
   if (query.before) {
     params.push(v.id(query.before, 'before'));
@@ -218,9 +246,11 @@ async function getVisibleMessage(userId, messageIdRaw) {
 
 // ------------------------------------------------------------------ sending
 /** Throws if `userId` may not post in `chat` (suspended, channel subscriber, blocked / deleted peer). */
-async function assertCanSend(userId, chat) {
+async function assertCanSend(userId, chat, { comment = false } = {}) {
   if (chat.is_suspended) throw forbidden('chat_suspended', 'This group has been suspended');
-  if (chat.type === 'channel' && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
+  if (chat.type === 'channel' && comment) {
+    if (!chat.comments_enabled) throw forbidden('comments_disabled', 'Comments are turned off in this channel');
+  } else if (chat.type === 'channel' && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
     throw forbidden('not_admin', 'Only channel admins can post');
   }
   if (chat.type === 'private') {
@@ -307,6 +337,25 @@ async function prepareMessage(userId, chat, body) {
     out.mediaId = media.id;
   }
 
+  out.threadId = null;
+  out.topicId = null;
+  if (body.thread_id) {
+    if (chat.type !== 'channel') throw badRequest('invalid_input', 'Comments are only for channel posts');
+    if (type === 'poll') throw badRequest('invalid_input', 'Polls can’t be sent as comments');
+    const root = await db.one(
+      `SELECT id FROM messages WHERE id = $1 AND chat_id = $2 AND thread_id IS NULL AND deleted_at IS NULL AND type <> 'system'`,
+      [v.id(body.thread_id, 'thread_id'), chat.id],
+    );
+    if (!root) throw notFound('post_not_found', 'This post no longer exists');
+    out.threadId = root.id;
+  }
+  if (chat.is_forum && body.topic_id) {
+    const t = await db.one('SELECT id, is_closed FROM chat_topics WHERE id = $1 AND chat_id = $2', [v.id(body.topic_id, 'topic_id'), chat.id]);
+    if (!t) throw notFound('topic_not_found', 'Topic not found');
+    if (t.is_closed && !chatService.ADMIN_ROLES.includes(chat.my_role)) throw forbidden('topic_closed', 'This topic is closed');
+    out.topicId = t.id;
+  }
+
   if (body.reply_to_id) {
     const r = await db.one('SELECT id FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [
       v.id(body.reply_to_id, 'reply_to_id'),
@@ -333,15 +382,20 @@ async function insertMessage({
   poll = null,
   silent = false,
   mentionCandidates = null,
+  threadId = null,
+  topicId = null,
+  replyMarkup = null,
+  viaBotId = null,
 }) {
   let row;
   try {
     row = await db.tx(async (c) => {
       const r = await c.query(
         `INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id,
-                               forwarded_from_user_id, forwarded_from_name, meta, silent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-        [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent],
+                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+        [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent,
+          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId],
       );
       const m = r.rows[0];
       if (mentionCandidates && senderId) {
@@ -373,11 +427,14 @@ async function insertMessage({
           await c.query('INSERT INTO poll_options (poll_id, idx, text) VALUES ($1, $2, $3)', [p.rows[0].id, i, poll.options[i]]);
         }
       }
-      await c.query('UPDATE chats SET last_message_id = $2, last_message_at = $3, updated_at = now() WHERE id = $1', [
-        chatId,
-        m.id,
-        m.created_at,
-      ]);
+      if (!threadId) {
+        await c.query('UPDATE chats SET last_message_id = $2, last_message_at = $3, updated_at = now() WHERE id = $1', [
+          chatId,
+          m.id,
+          m.created_at,
+        ]);
+      }
+      if (topicId) await c.query('UPDATE chat_topics SET last_message_at = $2 WHERE id = $1', [topicId, m.created_at]);
       await c.query('UPDATE chat_members SET is_hidden = FALSE WHERE chat_id = $1 AND is_hidden', [chatId]);
       if (senderId) {
         await c.query(
@@ -419,7 +476,7 @@ async function createCallMessage(chatId, callerId, meta) {
 async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
   if (!internal.skipRateLimit) rateLimit.enforce(`msg:${userId}`, 30, 10 * 1000, 'You are sending messages too fast');
   const chat = await chatService.requireMember(chatIdRaw, userId);
-  await assertCanSend(userId, chat);
+  await assertCanSend(userId, chat, { comment: !!body.thread_id });
   const sender = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
   if (chat.slow_mode_sec > 0 && chat.type === 'group' && !chatService.ADMIN_ROLES.includes(chat.my_role) && !body.schedule_at) {
     const last = await db.one(
@@ -468,6 +525,9 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     meta: internal.meta || prepared.meta || null,
     silent: body.silent === true,
     mentionCandidates,
+    threadId: prepared.threadId,
+    topicId: prepared.topicId,
+    replyMarkup: internal.replyMarkup || null,
   });
   moderation.afterSend(sender, message, flags).catch((err) => console.error('moderation error', err)); // eslint-disable-line no-console
   return message;
@@ -955,6 +1015,9 @@ module.exports = {
   adminDeleteMessage,
   createSystemMessage,
   createCallMessage,
+  insertMessage,
+  assertCanSend,
+  prepareMessage,
   react,
   recordViews,
   vote,

@@ -44,6 +44,12 @@ const DEFINITIONS = {
 
   // ---- Batch C: secret chats
   feature_secret_chats: { type: 'boolean', default: true },
+
+  // ---- Batch D1
+  feature_bots: { type: 'boolean', default: true },
+  max_bots_per_user: { type: 'integer', default: 20, min: 0, max: 1000 },
+  feature_channel_comments: { type: 'boolean', default: true },
+  feature_topics: { type: 'boolean', default: true },
 };
 
 const FEATURE_KEYS = [
@@ -55,6 +61,9 @@ const FEATURE_KEYS = [
   'feature_calls',
   'feature_video_calls',
   'feature_secret_chats',
+  'feature_bots',
+  'feature_channel_comments',
+  'feature_topics',
 ];
 
 let cache = null;
@@ -156,6 +165,9 @@ async function publicConfig() {
       calls: s.feature_calls,
       video_calls: s.feature_calls && s.feature_video_calls,
       secret_chats: s.feature_secret_chats,
+      bots: s.feature_bots,
+      channel_comments: s.feature_channel_comments,
+      topics: s.feature_topics,
     },
     call_ring_timeout_sec: s.call_ring_timeout_sec,
   };

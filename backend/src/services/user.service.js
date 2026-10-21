@@ -90,6 +90,7 @@ function serialize(u, viewerId, rel) {
     username: u.username,
     bio: u.bio,
     is_verified: u.is_verified,
+    is_bot: !!u.is_bot,
     avatar_url: can(u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
     phone: can(u.privacy_phone) ? u.phone : null,
     online: canSeeSeen && presence.isOnline(u.id),

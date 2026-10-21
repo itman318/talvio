@@ -53,7 +53,7 @@ async function emitUpdated(chatId, extraUserIds = []) {
 const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
-       c.slow_mode_sec, c.join_approval,
+       c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum,
        cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread,
        (SELECT count(*) FROM message_mentions mm JOIN messages mmsg ON mmsg.id = mm.message_id
           WHERE mm.user_id = $1 AND mm.chat_id = c.id AND mmsg.deleted_at IS NULL
@@ -67,6 +67,7 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
           WHERE m.chat_id = c.id
             AND m.id > GREATEST(cm.last_read_message_id, cm.cleared_before_id)
             AND m.deleted_at IS NULL
+            AND m.thread_id IS NULL
             AND m.sender_id IS DISTINCT FROM $1
             AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $1 AND h.message_id = m.id)
        ) AS unread_count,
@@ -80,7 +81,7 @@ FROM chat_members cm
 JOIN chats c ON c.id = cm.chat_id
 LEFT JOIN LATERAL (
   SELECT m.id FROM messages m
-  WHERE m.chat_id = c.id AND m.id > cm.cleared_before_id AND m.deleted_at IS NULL
+  WHERE m.chat_id = c.id AND m.id > cm.cleared_before_id AND m.deleted_at IS NULL AND m.thread_id IS NULL
     AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $1 AND h.message_id = m.id)
   ORDER BY m.id DESC LIMIT 1
 ) lm ON TRUE
@@ -96,6 +97,11 @@ async function serializeChats(userId, rows) {
     userId,
     [...new Set([...rows.map((r) => r.last_visible_message_id), ...rows.map((r) => r.pinned_message_id)].filter(Boolean))],
   );
+  const botIds = [...peers.values()].filter((u) => u && u.is_bot).map((u) => u.id);
+  const botRows = botIds.length
+    ? await db.many('SELECT user_id, about, commands, menu_url FROM bots WHERE user_id = ANY($1::bigint[]) AND status = $2', [botIds, 'active'])
+    : [];
+  const botInfo = new Map(botRows.map((b) => [b.user_id, { about: b.about, commands: b.commands || [], menu_url: b.menu_url || null }]));
   const now = new Date();
   return rows.map((r) => {
     const isPrivate = r.type === 'private';
@@ -121,6 +127,10 @@ async function serializeChats(userId, rows) {
       can_post: !r.is_suspended && (r.type !== 'channel' || ADMIN_ROLES.includes(r.my_role)),
       slow_mode_sec: r.slow_mode_sec,
       join_approval: r.join_approval,
+      comments_enabled: r.type === 'channel' && !!r.comments_enabled,
+      is_forum: r.type === 'group' && !!r.is_forum,
+      is_bot: isPrivate && !!(peer && peer.is_bot),
+      bot: isPrivate && peer && peer.is_bot ? botInfo.get(peer.id) || null : null,
       pending_requests: r.pending_requests,
       marked_unread: r.marked_unread,
       unread_mentions: r.unread_mentions,
@@ -268,12 +278,19 @@ async function updateGroup(userId, chatIdRaw, body) {
     if (chat.type !== 'group') throw badRequest('invalid_input', 'Slow mode is for groups');
   }
   const approval = body.join_approval === undefined ? null : v.bool(body.join_approval, 'join_approval');
+  const comments = body.comments_enabled === undefined ? null : v.bool(body.comments_enabled, 'comments_enabled');
+  if (comments) await settings.requireFeature('feature_channel_comments', 'Channel comments');
+  if (comments !== null && chat.type !== 'channel') throw badRequest('invalid_input', 'Comments are for channels');
+  const forum = body.is_forum === undefined ? null : v.bool(body.is_forum, 'is_forum');
+  if (forum) await settings.requireFeature('feature_topics', 'Topics');
+  if (forum !== null && chat.type !== 'group') throw badRequest('invalid_input', 'Topics are for groups');
   await db.query(
     `UPDATE chats SET title = COALESCE($2, title), description = COALESCE($3, description),
        signatures = COALESCE($4, signatures), slow_mode_sec = COALESCE($5, slow_mode_sec),
-       join_approval = COALESCE($6, join_approval), updated_at = now()
+       join_approval = COALESCE($6, join_approval), comments_enabled = COALESCE($7, comments_enabled),
+       is_forum = COALESCE($8, is_forum), updated_at = now()
      WHERE id = $1`,
-    [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures, slow, approval],
+    [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures, slow, approval, comments, forum],
   );
   if (approval === false) await db.query('DELETE FROM chat_join_requests WHERE chat_id = $1', [chat.id]);
   if (title !== undefined && title !== chat.title) {

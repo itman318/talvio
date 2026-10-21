@@ -23,6 +23,8 @@ const appealService = require('../services/appeal.service');
 const contentService = require('../services/content.service');
 const callService = require('../services/call.service');
 const secretService = require('../services/secret.service');
+const botService = require('../services/bot.service');
+const topicService = require('../services/topic.service');
 const settings = require('../services/settings.service');
 const { randomToken } = require('../utils/crypto');
 const { badRequest } = require('../utils/errors');
@@ -150,6 +152,22 @@ router.post('/calls/:id/accept', h(async (req, res) => res.json(await callServic
 router.post('/calls/:id/decline', h(async (req, res) => res.json(await callService.declineCall(req.userId, req.params.id))));
 router.post('/calls/:id/hangup', h(async (req, res) => res.json(await callService.hangup(req.userId, req.params.id, req.body.reason))));
 router.post('/calls/:id/rate', h(async (req, res) => res.json(await callService.rateCall(req.userId, req.params.id, req.body))));
+// ---- bots (my bots) & mini apps
+router.get('/bots', h(async (req, res) => res.json(await botService.listMyBots(req.userId))));
+router.post('/bots', h(async (req, res) => res.json(await botService.createBot(req.userId, req.body))));
+router.patch('/bots/:id', h(async (req, res) => res.json(await botService.updateBot(req.userId, req.params.id, req.body))));
+router.post('/bots/:id/token', h(async (req, res) => res.json(await botService.regenerateToken(req.userId, req.params.id))));
+router.delete('/bots/:id', h(async (req, res) => res.json(await botService.deleteBot(req.userId, req.params.id))));
+router.post('/bots/:id/web-app', h(async (req, res) => res.json(await botService.webAppInit(req.userId, req.params.id, req.body))));
+router.post('/bots/:id/web-app-data', h(async (req, res) => res.json(await botService.webAppData(req.userId, req.params.id, req.body))));
+router.post('/messages/:id/callback', h(async (req, res) => res.json(await botService.pressButton(req.userId, req.params.id, req.body))));
+
+// ---- group topics
+router.get('/chats/:id/topics', h(async (req, res) => res.json(await topicService.list(req.userId, req.params.id))));
+router.post('/chats/:id/topics', h(async (req, res) => res.json(await topicService.create(req.userId, req.params.id, req.body))));
+router.patch('/chats/:id/topics/:topicId', h(async (req, res) => res.json(await topicService.update(req.userId, req.params.id, req.params.topicId, req.body))));
+router.delete('/chats/:id/topics/:topicId', h(async (req, res) => res.json(await topicService.remove(req.userId, req.params.id, req.params.topicId))));
+
 // ---- secret chats (also available over Socket.IO; ciphertext only)
 router.get('/secret-chats', h(async (req, res) => res.json(await secretService.list(req.userId, req.sessionId))));
 router.get('/secret-chats/pending', h(async (req, res) => res.json(await secretService.pending(req.userId, req.sessionId))));
@@ -263,4 +281,4 @@ function sendMedia(res, m, isPublic) {
   );
 }
 
-module.exports = { router, sendMedia };
+module.exports = { router, sendMedia, storage };

@@ -543,3 +543,71 @@ CREATE TABLE IF NOT EXISTS secret_messages (
 CREATE INDEX IF NOT EXISTS secret_messages_chat_idx ON secret_messages (secret_chat_id, id);
 CREATE INDEX IF NOT EXISTS secret_messages_pending_idx ON secret_messages (secret_chat_id) WHERE delivered_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS secret_messages_client_idx ON secret_messages (sender_id, client_id) WHERE client_id IS NOT NULL;
+
+-- =====================================================================
+-- Batch D1: bots & mini apps, channel comments, group topics
+-- =====================================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS bots (
+  user_id         BIGINT        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  owner_id        BIGINT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash      VARCHAR(64)   NOT NULL UNIQUE,
+  about           VARCHAR(512)  NOT NULL DEFAULT '',
+  commands        JSONB         NOT NULL DEFAULT '[]',
+  menu_url        VARCHAR(500),
+  webhook_url     VARCHAR(500),
+  webhook_secret  VARCHAR(256),
+  webhook_error   VARCHAR(300),
+  webhook_error_at TIMESTAMPTZ,
+  group_privacy   BOOLEAN       NOT NULL DEFAULT TRUE,
+  status          VARCHAR(10)   NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  disabled_reason VARCHAR(300),
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  last_used_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots (owner_id);
+
+CREATE TABLE IF NOT EXISTS bot_updates (
+  id          BIGSERIAL    PRIMARY KEY,
+  bot_id      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  payload     JSONB        NOT NULL,
+  attempts    INTEGER      NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bot_updates_bot_idx ON bot_updates (bot_id, id);
+
+CREATE TABLE IF NOT EXISTS bot_callback_queries (
+  id          VARCHAR(32)  PRIMARY KEY,
+  bot_id      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id     BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id  BIGINT       NOT NULL,
+  answered    BOOLEAN      NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_markup JSONB;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS via_bot_id BIGINT;
+
+-- channel comments: replies under a post live in the same chat with thread_id = post id
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS thread_id BIGINT;
+CREATE INDEX IF NOT EXISTS messages_thread_idx ON messages (thread_id, id) WHERE thread_id IS NOT NULL;
+
+-- group topics (forum mode)
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS is_forum BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS chat_topics (
+  id          BIGSERIAL    PRIMARY KEY,
+  chat_id     BIGINT       NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  title       VARCHAR(128) NOT NULL,
+  icon_color  INTEGER      NOT NULL DEFAULT 0,
+  created_by  BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  is_closed   BOOLEAN      NOT NULL DEFAULT FALSE,
+  is_pinned   BOOLEAN      NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  last_message_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS chat_topics_chat_idx ON chat_topics (chat_id);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS topic_id BIGINT REFERENCES chat_topics(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS messages_topic_idx ON messages (topic_id, id) WHERE topic_id IS NOT NULL;

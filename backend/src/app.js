@@ -25,6 +25,9 @@ function createApp() {
     }
   });
 
+  // Bot API (Telegram-style): /bot<token>/<method>
+  app.all('/bot:token/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
+
   app.use('/api/admin', adminRoutes.router);
   app.use('/api', userRoutes.router);
 
