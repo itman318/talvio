@@ -1,8 +1,11 @@
 # ChatApp — Flutter app (Android + iOS)
 
-Phase 1 client: OTP login, profile, 1-to-1 chats, groups, photos/videos/files, voice notes,
+Phase 1: OTP login, profile, 1-to-1 chats, groups, photos/videos/files, voice notes,
 replies, edit, forward, delete (for me / everyone), read receipts, typing & online status,
 mute / pin / archive, privacy settings, block & report, devices, push notifications.
+
+Phase 2: channels, public search & join, polls & quizzes, reactions, scheduled messages
+(hold the send button), chat folders, stories, help & support tickets, announcement banners.
 
 ## First-time setup
 
@@ -54,7 +57,7 @@ The app runs without Firebase; push is simply off. To enable it:
 | `lib/core/media_cache.dart` | Downloads protected media once and caches it |
 | `lib/state/auth_state.dart` | Login / logout / maintenance / forced update |
 | `lib/state/chat_store.dart` | Chats, messages, optimistic sending, receipts, typing, presence |
-| `lib/screens/` | All screens |
+| `lib/screens/` | All screens (`channel_screens.dart`, `story_screens.dart`, `folder_support_screens.dart` are Phase 2) |
 | `lib/widgets/` | Message bubble, avatar, media players, report dialog |
 
 Before publishing: change the app name/icon, remove the http (cleartext) exceptions added by

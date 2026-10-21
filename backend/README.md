@@ -33,9 +33,10 @@ createdb chatapp_test
 TEST_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/chatapp_test npm test
 ```
 
-15 end-to-end tests cover OTP login & token refresh, profiles & privacy, private chats,
-receipts, pagination, edit/delete, blocking, groups & roles & invites, media access control,
-forwarding, reports, the admin flows (ban, report resolution, settings, roles) and account deletion.
+26 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2) cover OTP login &
+token refresh, profiles & privacy, private chats, receipts, pagination, edit/delete, blocking, groups,
+media access control, forwarding, reports, admin flows, account deletion — plus channels, polls & quizzes,
+reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA.
 
 ## Production deployment (VPS)
 
@@ -119,12 +120,48 @@ Authenticated routes need `Authorization: Bearer <access_token>`.
 | `PATCH /api/messages/:id` `{text}`, `POST /api/messages/forward` | Edit, forward |
 | `POST /api/media` (multipart `file`, `kind`) / `GET /api/media/:id` | Upload / download |
 | `POST /api/reports` `{target_type, target_id, reason, details}` | Report user/message/group |
+| **Phase 2** | |
+| `POST /api/chats/channel` `{title, description, username?}` | Create a channel (only admins post) |
+| `GET /api/chats/search?q=`, `GET /api/chats/public/:username`, `POST /api/chats/:id/join` | Find & join public groups/channels |
+| `PUT /api/chats/:id/username` `{username\|null}` | Make a group/channel public or private (owner) |
+| `PATCH /api/chats/:id` `{signatures}` | Show admin names on channel posts |
+| `GET /api/chats/:id/stats` | Members, growth, views, top posts (admins) |
+| `POST /api/chats/:id/views` `{message_ids}` | Count channel post views (once per user) |
+| `POST /api/chats/:id/messages` `{type:"poll", poll:{question, options, anonymous, multiple, quiz, correct_option, explanation}}` | Poll / quiz |
+| `POST /api/chats/:id/messages` `{..., schedule_at}` → `{scheduled}` | Schedule a message; `GET /api/chats/:id/scheduled`, `DELETE /api/scheduled/:id` |
+| `POST /api/messages/:id/vote` `{options}`, `POST …/poll/close`, `GET …/poll/voters?option=` | Polls |
+| `PUT /api/messages/:id/reaction` `{emoji\|null}` | Reactions (👍 ❤️ 🔥 😂 😮 😢 👏 🙏 🎉 👎) |
+| `GET/POST /api/folders`, `PATCH/DELETE /api/folders/:id`, `PUT /api/folders/order` | Chat folders |
+| `GET/POST /api/stories`, `POST /api/stories/:id/view\|reply`, `GET …/viewers`, `DELETE /api/stories/:id` | 24-hour stories |
+| `GET/POST /api/support/tickets`, `GET …/:id`, `POST …/:id/messages`, `POST …/:id/close` | Support tickets |
+| `GET /api/announcements`, `POST /api/announcements/:id/dismiss` | In-app broadcast banners |
 
 Socket.IO events are documented at the top of `src/realtime/socket.js`
 (`message:send` with ack, `message:new`, receipts, typing, presence, `session:revoked`, …).
 
-Admin API (`/api/admin`): login, dashboard, users (ban / unban / log out / verify / delete),
-reports (resolve with delete / ban / suspend), groups (suspend / delete), settings, admin team, activity log.
+Admin API (`/api/admin`): login (with 2FA code), dashboard, users (ban / unban / restrict / log out / verify / delete),
+reports (resolve with delete / restrict / ban / suspend), groups & channels (suspend / verify / delete),
+support desk, broadcasts, settings (incl. moderation), admin team (roles, reset 2FA), activity log, own 2FA setup.
+
+## Automatic moderation (Phase 2)
+
+Configured in the admin panel → Settings → *Moderation & spam*:
+
+- **Banned words** — block the message, or send it and open an automatic report ("flag").
+- **Links from new accounts** — accounts younger than N hours cannot send links.
+- **Copy-paste spam** — the same text sent to N chats within 10 minutes restricts the sender automatically.
+- **Mass reports** — reports from N different people within 24 hours restrict the account pending review.
+- **Blocked phone prefixes** — numbers starting with these cannot sign up.
+
+A *restricted* user can read but not send; moderators can lift or apply restrictions from the user page.
+
+## Admin two-factor authentication
+
+Each admin can turn on 2FA (Google Authenticator / Authy) from the panel sidebar and gets 8 one-time backup codes.
+Settings → Security → *Require 2FA for all admins* forces everyone to set it up. A super admin can reset
+another admin's 2FA from *Admin team* if they lose their phone.
+
+Scheduled messages are published by the server every 15 seconds (no cron job needed).
 
 ## Scaling later
 

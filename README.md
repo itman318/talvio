@@ -27,8 +27,22 @@ evidence (delete message, ban, suspend group), groups (suspend / delete), app se
 (registration on/off, maintenance mode, max group size, upload limit, edit window, app versions),
 admin team with roles (super admin / moderator / support), activity log.
 
-## Next (Phase 2 ideas)
+## Phase 2 — what's included
 
-Channels, voice/video calls, stories, chat folders, polls, secret (end-to-end encrypted) chats,
-auto-moderation (banned words, spam scoring), broadcast notifications, admin 2FA, support tickets,
-Redis for multi-server scaling, S3 media storage.
+**User app:** channels (public @link or private invite, admin-only posting, optional signatures, view
+counts, statistics), public search & join for groups/channels, polls & quizzes (anonymous/public,
+multiple answers, correct answer + explanation, stop poll, voters list), emoji reactions, scheduled
+messages (hold the send button), chat folders (tabs above the chat list), 24-hour stories (photo/video,
+privacy, viewers, replies, ❤️), help & support tickets, announcement banners.
+
+**Admin panel:** groups & channels (type filter, verified badge), restrict/mute users, automatic
+moderation (banned words, new-account link limit, copy-paste spam, mass-report restriction, phone
+prefix blacklist) with auto-reports, broadcast (in-app banner and/or push, targeted by country code
+or platform), support desk (tickets, replies, priority, assignment), two-factor authentication for
+admins with backup codes and an optional "require 2FA" policy.
+
+## Next (Phase 3 ideas)
+
+Voice/video calls (WebRTC + TURN or LiveKit), secret end-to-end encrypted chats, bots & mini apps,
+group video chat, premium subscriptions & payments, topics in groups, Redis for multi-server
+scaling, S3 media storage.
