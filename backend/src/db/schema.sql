@@ -380,3 +380,88 @@ CREATE INDEX IF NOT EXISTS support_messages_ticket_idx ON support_messages (tick
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS totp_secret  TEXT;
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS backup_codes JSONB;
+
+-- =====================================================================
+-- Batch A — pins, mentions, unread marks, silent & location messages, message search,
+--           slow mode, join requests, invite links, appeals, notes, content pages
+-- =====================================================================
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll', 'location'));
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS silent BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS messages_fts_idx ON messages USING GIN (to_tsvector('simple', text));
+
+CREATE TABLE IF NOT EXISTS pinned_messages (
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  message_id BIGINT      NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  pinned_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  pinned_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (chat_id, message_id)
+);
+
+CREATE TABLE IF NOT EXISTS message_mentions (
+  message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chat_id    BIGINT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  PRIMARY KEY (message_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS message_mentions_user_idx ON message_mentions (user_id, chat_id, message_id);
+
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS marked_unread BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS slow_mode_sec INT NOT NULL DEFAULT 0;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS join_approval BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS chat_join_requests (
+  chat_id     BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id     BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  invite_code VARCHAR(32),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (chat_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_invites (
+  code        VARCHAR(32) PRIMARY KEY,
+  chat_id     BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  created_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  name        VARCHAR(32) NOT NULL DEFAULT '',
+  expires_at  TIMESTAMPTZ,
+  usage_limit INT,
+  usage_count INT         NOT NULL DEFAULT 0,
+  revoked     BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_invites_chat_idx ON chat_invites (chat_id);
+
+CREATE TABLE IF NOT EXISTS ban_appeals (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message     VARCHAR(2000) NOT NULL,
+  status      VARCHAR(10)   NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  admin_reply VARCHAR(1000),
+  resolved_by BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ban_appeals_status_idx ON ban_appeals (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_notes (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  admin_id   BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  text       VARCHAR(2000) NOT NULL,
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS admin_notes_user_idx ON admin_notes (user_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS content_pages (
+  slug       VARCHAR(32)  PRIMARY KEY,
+  title      VARCHAR(120) NOT NULL,
+  body       TEXT         NOT NULL DEFAULT '',
+  updated_by BIGINT       REFERENCES admins(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+INSERT INTO content_pages (slug, title, body) VALUES
+  ('terms', 'Terms of Service', ''),
+  ('privacy', 'Privacy Policy', ''),
+  ('faq', 'Frequently Asked Questions', '')
+ON CONFLICT (slug) DO NOTHING;

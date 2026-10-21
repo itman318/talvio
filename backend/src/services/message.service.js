@@ -11,7 +11,9 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file', 'poll'];
+const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file', 'poll', 'location'];
+const SLOW_MODE_VALUES = [0, 10, 30, 60, 300, 900, 3600];
+const MENTION_RE = /(^|[^A-Za-z0-9_@])@([A-Za-z][A-Za-z0-9_]{3,31})/g;
 const MEDIA_KINDS_FOR_TYPE = {
   image: ['image'],
   video: ['video'],
@@ -133,6 +135,7 @@ async function serializeRows(viewerId, rows) {
   const users = await userService.getUsersMap(viewerId, userIds);
   const polls = await loadPolls(viewerId, rows.filter((r) => r.type === 'poll').map((r) => r.id));
   const reactions = await loadReactions(viewerId, ids);
+  const mentionRows = await db.many('SELECT message_id, user_id FROM message_mentions WHERE message_id = ANY($1::bigint[])', [ids]);
 
   return rows.map((m) => {
     const chat = chatMap.get(m.chat_id) || { type: 'private' };
@@ -166,6 +169,8 @@ async function serializeRows(viewerId, rows) {
       reactions: react ? react.list : [],
       my_reaction: react ? react.mine : null,
       views: m.views_count || 0,
+      silent: !!m.silent,
+      mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
       client_id: m.client_id || null,
       edited_at: iso(m.edited_at),
@@ -272,7 +277,10 @@ function parsePoll(raw) {
 async function prepareMessage(userId, chat, body) {
   const type = v.oneOf(body.type || 'text', SEND_TYPES, 'type');
   const text = cleanText(body.text);
-  const out = { type, text, mediaId: null, replyToId: null, poll: null };
+  const out = { type, text, mediaId: null, replyToId: null, poll: null, meta: null };
+  if (type === 'poll') await settings.requireFeature('feature_polls', 'Polls');
+  if (type === 'voice') await settings.requireFeature('feature_voice_messages', 'Voice messages');
+  if (type === 'location') await settings.requireFeature('feature_location', 'Location sharing');
 
   if (type === 'text') {
     if (!text) throw badRequest('empty_message', 'Message is empty');
@@ -281,6 +289,16 @@ async function prepareMessage(userId, chat, body) {
     if (chat.type === 'private') throw badRequest('invalid_poll', 'Polls can be sent in groups and channels');
     out.poll = parsePoll(body.poll);
     out.text = out.poll.question;
+  } else if (type === 'location') {
+    const loc = body.location || {};
+    const lat = Number(loc.lat);
+    const lng = Number(loc.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      throw badRequest('invalid_location', 'Invalid location');
+    }
+    const title = v.str(loc.title, { field: 'title', max: 120 }) || '';
+    out.meta = { location: { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, title } };
+    out.text = title;
   } else {
     if (text.length > MAX_CAPTION) throw badRequest('caption_too_long', `Captions can be at most ${MAX_CAPTION} characters`);
     const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
@@ -313,17 +331,38 @@ async function insertMessage({
   fwdName = null,
   meta = null,
   poll = null,
+  silent = false,
+  mentionCandidates = null,
 }) {
   let row;
   try {
     row = await db.tx(async (c) => {
       const r = await c.query(
         `INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id,
-                               forwarded_from_user_id, forwarded_from_name, meta)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-        [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null],
+                               forwarded_from_user_id, forwarded_from_name, meta, silent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent],
       );
       const m = r.rows[0];
+      if (mentionCandidates && senderId) {
+        // @username mentions of chat members + the author of the replied-to message
+        const usernames = [...new Set(mentionCandidates.usernames)];
+        const found = usernames.length
+          ? await c.query(
+            `SELECT u.id FROM users u JOIN chat_members cm ON cm.chat_id = $1 AND cm.user_id = u.id
+               WHERE lower(u.username) = ANY($2::text[]) AND u.id <> $3`,
+            [chatId, usernames, senderId],
+          )
+          : { rows: [] };
+        const ids = new Set(found.rows.map((x) => x.id));
+        if (mentionCandidates.replyAuthor && mentionCandidates.replyAuthor !== senderId) ids.add(mentionCandidates.replyAuthor);
+        for (const uid of ids) {
+          await c.query(
+            'INSERT INTO message_mentions (message_id, user_id, chat_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [m.id, uid, chatId],
+          );
+        }
+      }
       if (poll) {
         const p = await c.query(
           `INSERT INTO polls (message_id, question, is_anonymous, multiple, is_quiz, correct_option, explanation)
@@ -377,6 +416,16 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
   const chat = await chatService.requireMember(chatIdRaw, userId);
   await assertCanSend(userId, chat);
   const sender = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
+  if (chat.slow_mode_sec > 0 && chat.type === 'group' && !chatService.ADMIN_ROLES.includes(chat.my_role) && !body.schedule_at) {
+    const last = await db.one(
+      `SELECT created_at FROM messages WHERE chat_id = $1 AND sender_id = $2 AND type <> 'system' ORDER BY id DESC LIMIT 1`,
+      [chat.id, userId],
+    );
+    if (last) {
+      const wait = Math.ceil(chat.slow_mode_sec - (Date.now() - new Date(last.created_at).getTime()) / 1000);
+      if (wait > 0) throw forbidden('slow_mode', `Slow mode is on. You can send another message in ${wait} s`, { retry_after: wait });
+    }
+  }
 
   const clientId = body.client_id ? v.str(String(body.client_id), { field: 'client_id', max: 64 }) : null;
   if (clientId) {
@@ -390,6 +439,18 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
 
   if (body.schedule_at) return { scheduled: await schedule(userId, chat, body) };
 
+  let mentionCandidates = null;
+  if (chat.type === 'group') {
+    const usernames = [];
+    for (const match of prepared.text.matchAll(MENTION_RE)) usernames.push(match[2].toLowerCase());
+    let replyAuthor = null;
+    if (prepared.replyToId) {
+      const r = await db.one('SELECT sender_id FROM messages WHERE id = $1', [prepared.replyToId]);
+      replyAuthor = r && r.sender_id;
+    }
+    if (usernames.length || replyAuthor) mentionCandidates = { usernames: usernames.slice(0, 50), replyAuthor };
+  }
+
   const message = await insertMessage({
     chatId: chat.id,
     senderId: userId,
@@ -399,7 +460,9 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     replyToId: prepared.replyToId,
     clientId,
     poll: prepared.poll,
-    meta: internal.meta || null,
+    meta: internal.meta || prepared.meta || null,
+    silent: body.silent === true,
+    mentionCandidates,
   });
   moderation.afterSend(sender, message, flags).catch((err) => console.error('moderation error', err)); // eslint-disable-line no-console
   return message;
@@ -445,6 +508,7 @@ async function forwardMessages(userId, body = {}) {
         mediaId: r.media_id,
         fwdUserId: from.type === 'channel' ? null : r.forwarded_from_user_id || r.sender_id,
         fwdName: r.forwarded_from_name || fromName,
+        meta: r.type === 'location' ? r.meta : null,
       });
       count += 1;
     }
@@ -458,7 +522,7 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   if (!m) throw notFound('message_not_found', 'Message not found');
   const chat = await chatService.requireMember(m.chat_id, userId);
   const channelAdmin = chat.type === 'channel' && chatService.ADMIN_ROLES.includes(chat.my_role);
-  if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll'].includes(m.type) || m.forwarded_from_name) {
+  if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll', 'location'].includes(m.type) || m.forwarded_from_name) {
     throw forbidden('cannot_edit', 'You can only edit your own messages');
   }
   const hours = await settings.get('message_edit_window_hours');
@@ -665,6 +729,8 @@ async function schedule(userId, chat, body) {
     media_id: body.media_id || null,
     reply_to_id: body.reply_to_id || null,
     poll: body.type === 'poll' ? body.poll : null,
+    location: body.type === 'location' ? body.location : null,
+    silent: body.silent === true,
   };
   const row = await db.one(
     'INSERT INTO scheduled_messages (chat_id, sender_id, payload, send_at) VALUES ($1, $2, $3, $4) RETURNING *',
@@ -713,6 +779,101 @@ async function runDueScheduled(limit = 50) {
   return sent;
 }
 
+
+// ------------------------------------------------------------------ pinned messages
+const MAX_PINS = 50;
+
+function canPin(chat) {
+  if (chat.type === 'private') return true;
+  return chatService.ADMIN_ROLES.includes(chat.my_role);
+}
+
+async function pinMessage(userId, chatIdRaw, messageIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  if (!canPin(chat)) throw forbidden('not_admin', 'Only admins can pin messages');
+  const m = await db.one(
+    `SELECT id FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL AND type <> 'system'`,
+    [v.id(messageIdRaw, 'message_id'), chat.id],
+  );
+  if (!m) throw notFound('message_not_found', 'Message not found');
+  const n = await db.one('SELECT count(*) AS n FROM pinned_messages WHERE chat_id = $1', [chat.id]);
+  if (n.n >= MAX_PINS) throw badRequest('too_many_pins', `You can pin up to ${MAX_PINS} messages`);
+  const r = await db.one(
+    `INSERT INTO pinned_messages (chat_id, message_id, pinned_by) VALUES ($1, $2, $3)
+     ON CONFLICT (chat_id, message_id) DO UPDATE SET pinned_at = now() RETURNING (xmax = 0) AS inserted`,
+    [chat.id, m.id, userId],
+  );
+  if (r.inserted && chat.type === 'group') await createSystemMessage(chat.id, userId, { event: 'message_pinned', message_id: m.id });
+  await chatService.emitUpdated(chat.id);
+  return listPins(userId, chat.id);
+}
+
+async function unpinMessage(userId, chatIdRaw, messageIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  if (!canPin(chat)) throw forbidden('not_admin', 'Only admins can unpin messages');
+  const all = messageIdRaw === 'all';
+  await db.query(
+    all ? 'DELETE FROM pinned_messages WHERE chat_id = $1' : 'DELETE FROM pinned_messages WHERE chat_id = $1 AND message_id = $2',
+    all ? [chat.id] : [chat.id, v.id(messageIdRaw, 'message_id')],
+  );
+  await chatService.emitUpdated(chat.id);
+  return listPins(userId, chat.id);
+}
+
+async function listPins(userId, chatIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  const rows = await db.many(
+    `SELECT m.* FROM pinned_messages p JOIN messages m ON m.id = p.message_id
+     WHERE p.chat_id = $1 AND m.deleted_at IS NULL AND m.id > $2
+       AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $3 AND h.message_id = m.id)
+     ORDER BY p.pinned_at DESC`,
+    [chat.id, chat.cleared_before_id, userId],
+  );
+  return serializeRows(userId, rows);
+}
+
+// ------------------------------------------------------------------ message search
+/** Builds a prefix tsquery from user input: "ali kh" → "ali:* & kh:*" (letters/digits only, any script). */
+function tsQuery(q) {
+  const tokens = (String(q || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).slice(0, 8);
+  return tokens.length ? tokens.map((t) => `${t}:*`).join(' & ') : null;
+}
+
+async function searchMessages(userId, query = {}) {
+  const tq = tsQuery(query.q);
+  if (!tq || String(query.q).trim().length < 2) return { results: [], has_more: false };
+  rateLimit.enforce(`search:${userId}`, 30, 60 * 1000, 'Searching too fast, wait a moment');
+  const lim = v.limit(query.limit, 30, 50);
+  const params = [userId, tq];
+  let extra = '';
+  if (query.chat_id) {
+    params.push(v.id(query.chat_id, 'chat_id'));
+    extra += ` AND m.chat_id = $${params.length}`;
+  }
+  if (query.before) {
+    params.push(v.id(query.before, 'before'));
+    extra += ` AND m.id < $${params.length}`;
+  }
+  params.push(lim);
+  const rows = await db.many(
+    `SELECT m.* FROM messages m
+     JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1
+     WHERE to_tsvector('simple', m.text) @@ to_tsquery('simple', $2)
+       AND m.deleted_at IS NULL AND m.type <> 'system' AND m.id > cm.cleared_before_id
+       AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $1 AND h.message_id = m.id)
+       ${extra}
+     ORDER BY m.id DESC LIMIT $${params.length}`,
+    params,
+  );
+  const messages = await serializeRows(userId, rows);
+  const chats = await chatService.getChatsByIds(userId, [...new Set(rows.map((r) => r.chat_id))]);
+  const chatMap = new Map(chats.map((c) => [c.id, { id: c.id, type: c.type, title: c.title, avatar_url: c.avatar_url }]));
+  return {
+    results: messages.map((m) => ({ chat: chatMap.get(m.chat_id), message: m })),
+    has_more: rows.length === lim,
+  };
+}
+
 // ------------------------------------------------------------------ receipts
 async function chatMaxMessageId(chatId) {
   const r = await db.one('SELECT COALESCE(max(id), 0) AS id FROM messages WHERE chat_id = $1', [chatId]);
@@ -721,6 +882,7 @@ async function chatMaxMessageId(chatId) {
 
 async function markRead(userId, chatIdRaw, messageIdRaw) {
   const chat = await chatService.requireMember(chatIdRaw, userId);
+  await db.query('UPDATE chat_members SET marked_unread = FALSE WHERE chat_id = $1 AND user_id = $2 AND marked_unread', [chat.id, userId]);
   const target = Math.min(v.id(messageIdRaw, 'message_id'), await chatMaxMessageId(chat.id));
   const r = await db.one(
     `UPDATE chat_members SET last_read_message_id = $3,
@@ -773,6 +935,11 @@ async function markAllDelivered(userId) {
 
 module.exports = {
   REACTIONS,
+  SLOW_MODE_VALUES,
+  pinMessage,
+  unpinMessage,
+  listPins,
+  searchMessages,
   serializeRows,
   serializeByIds,
   listMessages,

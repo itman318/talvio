@@ -24,7 +24,18 @@ const DEFINITIONS = {
   auto_restrict_reports: { type: 'integer', default: 5, min: 0, max: 1000 },
   blocked_phone_prefixes: { type: 'string_list', default: [], maxItems: 200, maxLength: 16 },
   require_admin_2fa: { type: 'boolean', default: false },
+
+  // ---- Batch A
+  reserved_usernames: { type: 'string_list', default: ['admin', 'support', 'official', 'moderator', 'help'], maxItems: 2000, maxLength: 32 },
+  blocked_ips: { type: 'string_list', default: [], maxItems: 1000, maxLength: 45 },
+  feature_channels: { type: 'boolean', default: true },
+  feature_stories: { type: 'boolean', default: true },
+  feature_polls: { type: 'boolean', default: true },
+  feature_voice_messages: { type: 'boolean', default: true },
+  feature_location: { type: 'boolean', default: true },
 };
+
+const FEATURE_KEYS = ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location'];
 
 let cache = null;
 let cacheAt = 0;
@@ -116,7 +127,22 @@ async function publicConfig() {
     min_app_version: s.min_app_version,
     latest_app_version: s.latest_app_version,
     support_username: s.support_username,
+    features: {
+      channels: s.feature_channels,
+      stories: s.feature_stories,
+      polls: s.feature_polls,
+      voice_messages: s.feature_voice_messages,
+      location: s.feature_location,
+    },
   };
 }
 
-module.exports = { DEFINITIONS, getAll, get, update, clearCache, publicConfig };
+/** Throws 403 feature_disabled when an admin switched a feature off. */
+async function requireFeature(key, label) {
+  if (!(await get(key))) {
+    const { forbidden } = require('../utils/errors');
+    throw forbidden('feature_disabled', `${label} are turned off right now`);
+  }
+}
+
+module.exports = { DEFINITIONS, FEATURE_KEYS, getAll, get, update, clearCache, publicConfig, requireFeature };

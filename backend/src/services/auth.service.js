@@ -18,11 +18,24 @@ function otpHash(phone, code) {
   return hmac(config.otpSecret, `${phone}:${code}`);
 }
 
-function banError(u) {
+function banError(u, extra = {}) {
   return forbidden('account_banned', 'Your account has been banned', {
     reason: u.ban_reason || null,
     until: u.banned_until ? new Date(u.banned_until).toISOString() : null,
+    ...extra,
   });
+}
+
+/** After a successful OTP, a banned user gets a short-lived token to file an appeal. */
+async function appealExtra(u) {
+  const last = await db.one(
+    'SELECT status, admin_reply, created_at FROM ban_appeals WHERE user_id = $1 ORDER BY id DESC LIMIT 1',
+    [u.id],
+  );
+  return {
+    appeal_token: signJwt({ sub: u.id, typ: 'appeal' }, config.jwtSecret, 3600),
+    appeal: last ? { status: last.status, reply: last.admin_reply, created_at: new Date(last.created_at).toISOString() } : null,
+  };
 }
 
 /** Lifts a temporary ban whose time has passed. Returns the (possibly updated) user row. */
@@ -139,7 +152,7 @@ async function verifyOtp(rawPhone, rawCode, device, ip) {
     else user = await db.one('SELECT * FROM users WHERE phone = $1', [phone]);
   }
   user = await liftExpiredBan(user);
-  if (userService.isBanned(user)) throw banError(user);
+  if (userService.isBanned(user)) throw banError(user, await appealExtra(user));
 
   const tokens = await createSession(user.id, device, ip);
   return {

@@ -148,6 +148,10 @@ async function updateProfile(userId, body) {
   if (body.username !== undefined) {
     const raw = typeof body.username === 'string' ? body.username.trim().replace(/^@/, '') : body.username;
     const name = v.validateUsername(raw);
+    const current = await db.one('SELECT username FROM users WHERE id = $1', [userId]);
+    if (name && name.toLowerCase() !== String((current && current.username) || '').toLowerCase()) {
+      await require('./chat.service').assertNotReserved(name);
+    }
     if (name && (await require('./chat.service').usernameTaken(name, { exceptUserId: userId }))) {
       throw conflict('username_taken', 'This username is already taken');
     }
@@ -381,6 +385,36 @@ async function deleteAccount(userId, { byAdmin = false } = {}) {
   return { ok: true };
 }
 
+/** Data export for the user themself or an admin data request. */
+async function exportData(userId) {
+  const u = await db.one(
+    `SELECT id, phone, username, first_name, last_name, bio, status, is_verified, created_at, last_seen_at,
+            privacy_last_seen, privacy_avatar, privacy_phone, privacy_group_add
+     FROM users WHERE id = $1`,
+    [userId],
+  );
+  if (!u) throw notFound('user_not_found', 'User not found');
+  const q = (sql) => db.many(sql, [userId]);
+  return {
+    exported_at: new Date().toISOString(),
+    profile: u,
+    sessions: await q('SELECT device_name, platform, app_version, ip, created_at, last_active_at, revoked_at FROM sessions WHERE user_id = $1 ORDER BY id'),
+    contacts: await q(`SELECT u.id, u.first_name, u.last_name, u.username FROM contacts c JOIN users u ON u.id = c.contact_id WHERE c.owner_id = $1`),
+    blocked: await q('SELECT blocked_id AS user_id, created_at FROM blocks WHERE blocker_id = $1'),
+    chats: await q(
+      `SELECT c.id, c.type, c.title, cm.role, cm.joined_at FROM chat_members cm JOIN chats c ON c.id = cm.chat_id WHERE cm.user_id = $1`,
+    ),
+    messages_sent: await q(
+      `SELECT id, chat_id, type, text, created_at, edited_at FROM messages
+       WHERE sender_id = $1 AND deleted_at IS NULL AND type <> 'system' ORDER BY id DESC LIMIT 10000`,
+    ),
+    uploads: await q('SELECT id, kind, mime, size_bytes, original_name, created_at FROM media WHERE uploader_id = $1 ORDER BY id DESC LIMIT 5000'),
+    stories: await q('SELECT id, caption, privacy, created_at, expires_at, deleted_at FROM stories WHERE user_id = $1 ORDER BY id DESC'),
+    reports_sent: await q('SELECT target_type, target_id, reason, details, status, created_at FROM reports WHERE reporter_id = $1'),
+    support_tickets: await q('SELECT id, subject, category, status, created_at FROM support_tickets WHERE user_id = $1'),
+  };
+}
+
 function assertActive(u) {
   if (!u || u.status === 'deleted') throw notFound('user_not_found', 'User not found');
   if (isBanned(u)) throw forbidden('user_unavailable', 'This user is unavailable');
@@ -415,5 +449,6 @@ module.exports = {
   listBlocked,
   isBlockedEither,
   deleteAccount,
+  exportData,
   assertActive,
 };

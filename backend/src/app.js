@@ -42,6 +42,18 @@ function createApp() {
     express.static(adminDir, { index: 'index.html', maxAge: config.isProd ? '1h' : 0 }),
   );
   app.get('/', (req, res) => res.redirect('/admin/'));
+  // Public legal pages, e.g. https://chat.example.com/p/privacy (for Play Store / App Store listings)
+  app.get('/p/:slug', async (req, res, next) => {
+    try {
+      // eslint-disable-next-line global-require
+      const content = require('./services/content.service');
+      const page = await content.get(req.params.slug);
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+      res.type('html').send(content.renderHtml(page));
+    } catch (err) {
+      next(err);
+    }
+  });
 
   app.use(notFoundHandler);
   app.use(errorHandler);

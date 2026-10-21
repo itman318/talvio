@@ -105,19 +105,23 @@ function previewText(message) {
       return `📎 ${message.media && message.media.name ? message.media.name : 'File'}`;
     case 'poll':
       return `📊 ${message.text}`;
+    case 'location':
+      return '📍 Location';
     default:
       return message.text;
   }
 }
 
 async function pushNewMessage({ chatId, message, memberIds, senderId }) {
-  if (message.type === 'system') return;
+  if (message.type === 'system' || message.silent) return;
   const offline = memberIds.filter((id) => id !== senderId && !presence.isOnline(id));
   if (offline.length === 0) return;
+  // muted chats still notify people who were @mentioned / replied to
   const rows = await db.many(
     `SELECT user_id FROM chat_members
-     WHERE chat_id = $1 AND user_id = ANY($2::bigint[]) AND (muted_until IS NULL OR muted_until < now())`,
-    [chatId, offline],
+     WHERE chat_id = $1 AND user_id = ANY($2::bigint[])
+       AND (muted_until IS NULL OR muted_until < now() OR user_id = ANY($3::bigint[]))`,
+    [chatId, offline, message.mentions || []],
   );
   const targets = rows.map((r) => r.user_id);
   if (targets.length === 0) return;
@@ -211,6 +215,7 @@ function init(httpServer) {
     try {
       const header = socket.handshake.headers.authorization || '';
       const token = (socket.handshake.auth && socket.handshake.auth.token) || (header.startsWith('Bearer ') ? header.slice(7) : null);
+      if (await require('../http/middleware').isIpBlocked(socket.handshake.address)) throw new AppError(403, 'ip_blocked', 'Blocked');
       const { user, sessionId } = await authService.authenticate(token);
       socket.data.userId = user.id;
       socket.data.sessionId = sessionId;

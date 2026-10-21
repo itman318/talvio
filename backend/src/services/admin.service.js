@@ -32,6 +32,7 @@ const PERMISSIONS = {
     'logs.view',
     'media',
     'support',
+    'users.export',
   ],
   support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support'],
 };
@@ -206,6 +207,69 @@ async function setChatVerified(admin, chatIdRaw, value, ip) {
   return { ok: true };
 }
 
+// ------------------------------------------------------------------ moderator notes, export, usernames, ownership
+async function addNote(admin, userIdRaw, body = {}, ip) {
+  const id = v.id(userIdRaw, 'user_id');
+  const text = v.str(body.text, { field: 'text', min: 1, max: 2000, required: true });
+  const u = await db.one('SELECT id FROM users WHERE id = $1', [id]);
+  if (!u) throw notFound('user_not_found', 'User not found');
+  const n = await db.one('INSERT INTO admin_notes (user_id, admin_id, text) VALUES ($1, $2, $3) RETURNING id', [id, admin.id, text]);
+  await log(admin.id, 'user.note', 'user', id, null, ip);
+  return { ok: true, note_id: n.id };
+}
+
+async function deleteNote(admin, noteIdRaw) {
+  const r = await db.one('DELETE FROM admin_notes WHERE id = $1 AND (admin_id = $2 OR $3) RETURNING id', [
+    v.id(noteIdRaw, 'note_id'),
+    admin.id,
+    admin.role === 'super_admin',
+  ]);
+  if (!r) throw notFound('note_not_found', 'Note not found (you can delete only your own notes)');
+  return { ok: true };
+}
+
+/** Everything stored about a user, for data requests (GDPR-style). */
+async function exportUser(admin, userIdRaw, ip) {
+  const id = v.id(userIdRaw, 'user_id');
+  const data = await userService.exportData(id);
+  await log(admin.id, 'user.export', 'user', id, null, ip);
+  return data;
+}
+
+/** Admins may assign any free username, including reserved ones. */
+async function setUsername(admin, userIdRaw, raw, ip) {
+  const id = v.id(userIdRaw, 'user_id');
+  const name = raw === null || raw === '' ? null : v.validateUsername(String(raw).trim().replace(/^@/, ''));
+  const chatService = require('./chat.service');
+  if (name && (await chatService.usernameTaken(name, { exceptUserId: id }))) throw conflict('username_taken', 'This username is already taken');
+  const u = await db.one(`UPDATE users SET username = $2, updated_at = now() WHERE id = $1 AND status <> 'deleted' RETURNING id`, [id, name]);
+  if (!u) throw notFound('user_not_found', 'User not found');
+  bus.emit('user:updated', { userId: id });
+  await log(admin.id, 'user.set_username', 'user', id, { username: name }, ip);
+  return { ok: true };
+}
+
+async function transferGroupOwner(admin, chatIdRaw, body = {}, ip) {
+  const chatId = v.id(chatIdRaw, 'chat_id');
+  const chat = await db.one(`SELECT id FROM chats WHERE id = $1 AND type IN ('group', 'channel')`, [chatId]);
+  if (!chat) throw notFound('chat_not_found', 'Group or channel not found');
+  await require('./chat.service').transferOwnership(chatId, null, body.user_id, { byAdmin: true });
+  await log(admin.id, 'group.transfer_owner', 'chat', chatId, { to: body.user_id }, ip);
+  return { ok: true };
+}
+
+async function groupMembers(chatIdRaw, query = {}) {
+  const chatId = v.id(chatIdRaw, 'chat_id');
+  const rows = await db.many(
+    `SELECT u.id, u.first_name, u.last_name, u.username, u.phone, cm.role, cm.joined_at
+     FROM chat_members cm JOIN users u ON u.id = cm.user_id WHERE cm.chat_id = $1
+     ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, cm.joined_at
+     LIMIT ${v.limit(query.limit, 100, 500)}`,
+    [chatId],
+  );
+  return rows;
+}
+
 // ------------------------------------------------------------------ dashboard
 async function dashboard() {
   const c = await db.one(`
@@ -224,6 +288,7 @@ async function dashboard() {
       (SELECT count(*) FROM chats WHERE type = 'channel') AS channels_total,
       (SELECT count(*) FROM users WHERE restricted_until > now()) AS users_restricted,
       (SELECT count(*) FROM support_tickets WHERE status = 'open') AS tickets_open,
+      (SELECT count(*) FROM ban_appeals WHERE status = 'pending') AS appeals_pending,
       (SELECT count(*) FROM stories WHERE deleted_at IS NULL AND expires_at > now()) AS stories_active,
       (SELECT count(*) FROM chats WHERE type = 'private') AS private_chats_total,
       (SELECT count(*) FROM reports WHERE status = 'open') AS reports_open,
@@ -302,6 +367,15 @@ async function userDetail(userIdRaw) {
      WHERE l.target_type = 'user' AND l.target_id = $1 ORDER BY l.id DESC LIMIT 20`,
     [id],
   );
+  const notes = await db.many(
+    `SELECT n.id, n.text, n.created_at, a.name AS admin_name FROM admin_notes n LEFT JOIN admins a ON a.id = n.admin_id
+     WHERE n.user_id = $1 ORDER BY n.id DESC LIMIT 50`,
+    [id],
+  );
+  const appeals = await db.many(
+    'SELECT id, message, status, admin_reply, created_at, resolved_at FROM ban_appeals WHERE user_id = $1 ORDER BY id DESC LIMIT 10',
+    [id],
+  );
   return {
     user: {
       ...u,
@@ -311,6 +385,8 @@ async function userDetail(userIdRaw) {
     stats,
     sessions,
     logs,
+    notes,
+    appeals,
   };
 }
 
@@ -629,6 +705,12 @@ async function listLogs(query = {}) {
 }
 
 module.exports = {
+  addNote,
+  deleteNote,
+  exportUser,
+  setUsername,
+  transferGroupOwner,
+  groupMembers,
   twoFactorSetup,
   twoFactorEnable,
   twoFactorDisable,

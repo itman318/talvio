@@ -16,6 +16,11 @@ function parseTarget(raw = {}) {
     t.phone_prefix = p;
   }
   if (raw.platform) t.platform = v.oneOf(raw.platform, PLATFORMS, 'platform');
+  if (raw.app_version_below) {
+    const ver = String(raw.app_version_below).trim();
+    if (!/^\d{1,4}(\.\d{1,4}){0,2}$/.test(ver)) throw badRequest('invalid_input', 'App version must look like 1.2.0');
+    t.app_version_below = ver;
+  }
   return t;
 }
 
@@ -31,7 +36,22 @@ function targetSql(target, params) {
     where.push(`EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.revoked_at IS NULL
                         AND s.expires_at > now() AND s.platform = $${params.length})`);
   }
+  if (target.app_version_below) {
+    params.push(target.app_version_below);
+    where.push(`EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.revoked_at IS NULL AND s.expires_at > now()
+                        AND s.app_version ~ '^[0-9]+(\\.[0-9]+){0,2}$'
+                        AND string_to_array(s.app_version, '.')::int[] < string_to_array($${params.length}, '.')::int[])`);
+  }
   return `SELECT u.id FROM users u WHERE ${where.join(' AND ')}`;
+}
+
+function olderThan(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+  }
+  return false;
 }
 
 async function create(adminId, body = {}) {
@@ -87,10 +107,12 @@ async function expire(idRaw) {
 /** Active in-app announcements for this user (newest first, max 3). */
 async function forUser(userId) {
   const user = await db.one('SELECT id, phone FROM users WHERE id = $1', [userId]);
-  const platforms = (await db.many(
-    'SELECT DISTINCT platform FROM sessions WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()',
+  const sessions = await db.many(
+    'SELECT DISTINCT platform, app_version FROM sessions WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()',
     [userId],
-  )).map((r) => r.platform);
+  );
+  const platforms = sessions.map((r) => r.platform);
+  const versions = sessions.map((r) => r.app_version).filter((x) => /^\d+(\.\d+){0,2}$/.test(x));
   const rows = await db.many(
     `SELECT an.* FROM announcements an
      WHERE an.in_app AND (an.expires_at IS NULL OR an.expires_at > now())
@@ -103,6 +125,7 @@ async function forUser(userId) {
       const t = a.target || {};
       if (t.phone_prefix && !user.phone.startsWith(t.phone_prefix)) return false;
       if (t.platform && !platforms.includes(t.platform)) return false;
+      if (t.app_version_below && !versions.some((ver) => olderThan(ver, t.app_version_below))) return false;
       return true;
     })
     .slice(0, 3)

@@ -41,6 +41,7 @@ function serialize(s, media, { owner = false } = {}) {
 }
 
 async function create(userId, body = {}) {
+  await require('./settings.service').requireFeature('feature_stories', 'Stories');
   rateLimit.enforce(`story:${userId}`, 30, 24 * 3600 * 1000, 'You can post up to 30 stories a day');
   const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
   if (!media) throw notFound('media_not_found', 'Upload the photo or video first');

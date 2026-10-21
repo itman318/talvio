@@ -53,7 +53,15 @@ async function emitUpdated(chatId, extraUserIds = []) {
 const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
-       cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived,
+       c.slow_mode_sec, c.join_approval,
+       cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread,
+       (SELECT count(*) FROM message_mentions mm JOIN messages mmsg ON mmsg.id = mm.message_id
+          WHERE mm.user_id = $1 AND mm.chat_id = c.id AND mmsg.deleted_at IS NULL
+            AND mm.message_id > GREATEST(cm.last_read_message_id, cm.cleared_before_id)) AS unread_mentions,
+       (SELECT p.message_id FROM pinned_messages p JOIN messages pm ON pm.id = p.message_id AND pm.deleted_at IS NULL
+          WHERE p.chat_id = c.id AND p.message_id > cm.cleared_before_id ORDER BY p.pinned_at DESC LIMIT 1) AS pinned_message_id,
+       (SELECT count(*) FROM pinned_messages p WHERE p.chat_id = c.id) AS pinned_count,
+       CASE WHEN cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM chat_join_requests jr WHERE jr.chat_id = c.id) ELSE 0 END AS pending_requests,
        (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id) AS member_count,
        (SELECT count(*) FROM messages m
           WHERE m.chat_id = c.id
@@ -86,7 +94,7 @@ async function serializeChats(userId, rows) {
   );
   const lastMsgs = await lazyMessages().serializeByIds(
     userId,
-    rows.map((r) => r.last_visible_message_id).filter(Boolean),
+    [...new Set([...rows.map((r) => r.last_visible_message_id), ...rows.map((r) => r.pinned_message_id)].filter(Boolean))],
   );
   const now = new Date();
   return rows.map((r) => {
@@ -111,6 +119,13 @@ async function serializeChats(userId, rows) {
       signatures: r.signatures,
       is_verified: isPrivate ? !!(peer && peer.is_verified) : r.is_verified,
       can_post: !r.is_suspended && (r.type !== 'channel' || ADMIN_ROLES.includes(r.my_role)),
+      slow_mode_sec: r.slow_mode_sec,
+      join_approval: r.join_approval,
+      pending_requests: r.pending_requests,
+      marked_unread: r.marked_unread,
+      unread_mentions: r.unread_mentions,
+      pinned_message: r.pinned_message_id ? lastMsgs.get(r.pinned_message_id) || null : null,
+      pinned_count: r.pinned_count,
       is_suspended: r.is_suspended,
       unread_count: r.unread_count,
       read_up_to: r.read_up_to,
@@ -133,6 +148,12 @@ async function listChats(userId, { archived = false } = {}) {
      LIMIT 500`,
     [userId, !!archived],
   );
+  return serializeChats(userId, rows);
+}
+
+async function getChatsByIds(userId, ids) {
+  if (!ids.length) return [];
+  const rows = await db.many(`${CHAT_ROWS_SQL} AND c.id = ANY($2::bigint[])`, [userId, ids]);
   return serializeChats(userId, rows);
 }
 
@@ -240,12 +261,21 @@ async function updateGroup(userId, chatIdRaw, body) {
   const title = v.str(body.title, { field: 'title', min: 1, max: 128 });
   const description = v.str(body.description, { field: 'description', max: 255 });
   const signatures = body.signatures === undefined ? null : v.bool(body.signatures, 'signatures');
+  let slow = null;
+  if (body.slow_mode_sec !== undefined) {
+    slow = Number(body.slow_mode_sec);
+    if (!lazyMessages().SLOW_MODE_VALUES.includes(slow)) throw badRequest('invalid_input', 'Invalid slow mode interval');
+    if (chat.type !== 'group') throw badRequest('invalid_input', 'Slow mode is for groups');
+  }
+  const approval = body.join_approval === undefined ? null : v.bool(body.join_approval, 'join_approval');
   await db.query(
     `UPDATE chats SET title = COALESCE($2, title), description = COALESCE($3, description),
-       signatures = COALESCE($4, signatures), updated_at = now()
+       signatures = COALESCE($4, signatures), slow_mode_sec = COALESCE($5, slow_mode_sec),
+       join_approval = COALESCE($6, join_approval), updated_at = now()
      WHERE id = $1`,
-    [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures],
+    [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures, slow, approval],
   );
+  if (approval === false) await db.query('DELETE FROM chat_join_requests WHERE chat_id = $1', [chat.id]);
   if (title !== undefined && title !== chat.title) {
     await lazyMessages().createSystemMessage(chat.id, userId, { event: 'title_changed', title });
   }
@@ -430,6 +460,10 @@ async function updateMySettings(userId, chatIdRaw, body) {
     params.push(v.bool(body.is_archived, 'is_archived'));
     sets.push(`is_archived = $${params.length}`);
   }
+  if (body.marked_unread !== undefined) {
+    params.push(v.bool(body.marked_unread, 'marked_unread'));
+    sets.push(`marked_unread = $${params.length}`);
+  }
   if (sets.length) {
     await db.query(`UPDATE chat_members SET ${sets.join(', ')} WHERE chat_id = $1 AND user_id = $2`, params);
   }
@@ -461,7 +495,16 @@ async function findByInvite(code) {
   if (typeof code !== 'string' || !/^[A-Za-z0-9_-]{8,32}$/.test(code)) {
     throw notFound('invite_invalid', 'This invite link is invalid or expired');
   }
-  const chat = await db.one(`SELECT * FROM chats WHERE invite_code = $1 AND type IN ('group', 'channel')`, [code]);
+  let chat = await db.one(`SELECT * FROM chats WHERE invite_code = $1 AND type IN ('group', 'channel')`, [code]);
+  if (!chat) {
+    // additional links created by admins (expiry / usage limit / revocable)
+    chat = await db.one(
+      `SELECT c.*, i.code AS via_invite FROM chat_invites i JOIN chats c ON c.id = i.chat_id
+       WHERE i.code = $1 AND NOT i.revoked AND (i.expires_at IS NULL OR i.expires_at > now())
+         AND (i.usage_limit IS NULL OR i.usage_count < i.usage_limit)`,
+      [code],
+    );
+  }
   if (!chat || chat.is_suspended) throw notFound('invite_invalid', 'This invite link is invalid or expired');
   return chat;
 }
@@ -475,6 +518,7 @@ async function invitePreview(userId, code) {
     type: chat.type,
     username: chat.username,
     is_verified: chat.is_verified,
+    join_approval: chat.join_approval,
     title: chat.title,
     description: chat.description,
     avatar_url: userService.avatarUrl(chat.avatar_media_id),
@@ -489,7 +533,17 @@ async function joinByInvite(userId, code) {
 
 async function joinChat(userId, chat) {
   const existing = await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, userId]);
+  if (!existing && chat.join_approval) {
+    await db.query(
+      'INSERT INTO chat_join_requests (chat_id, user_id, invite_code) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [chat.id, userId, chat.via_invite || null],
+    );
+    const admins = await db.many(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND role IN ('owner', 'admin')`, [chat.id]);
+    bus.emit('chat:updated', { chatId: chat.id, memberIds: admins.map((a) => a.user_id) });
+    return { requested: true, chat_id: chat.id, title: chat.title };
+  }
   if (!existing) {
+    if (chat.via_invite) await db.query('UPDATE chat_invites SET usage_count = usage_count + 1 WHERE code = $1', [chat.via_invite]);
     if (chat.type === 'group') {
       const n = await db.one('SELECT count(*) AS n FROM chat_members WHERE chat_id = $1', [chat.id]);
       const max = await settings.get('max_group_members');
@@ -509,8 +563,112 @@ async function joinChat(userId, chat) {
   return getChat(userId, chat.id);
 }
 
+// ------------------------------------------------------------------ invite links & join requests
+async function listInvites(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const rows = await db.many(
+    `SELECT code, name, expires_at, usage_limit, usage_count, revoked, created_at,
+            (revoked OR (expires_at IS NOT NULL AND expires_at <= now()) OR (usage_limit IS NOT NULL AND usage_count >= usage_limit)) AS expired
+     FROM chat_invites WHERE chat_id = $1 ORDER BY created_at DESC LIMIT 100`,
+    [chat.id],
+  );
+  return { primary: chat.invite_code, links: rows };
+}
+
+async function createInvite(userId, chatIdRaw, body = {}) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const name = v.str(body.name, { field: 'name', max: 32 }) || '';
+  let hours = null;
+  if (body.expire_hours !== undefined && body.expire_hours !== null && body.expire_hours !== '') {
+    hours = parseInt(body.expire_hours, 10);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 24 * 365) throw badRequest('invalid_input', 'expire_hours must be 1–8760');
+  }
+  let limit = null;
+  if (body.usage_limit !== undefined && body.usage_limit !== null && body.usage_limit !== '') {
+    limit = parseInt(body.usage_limit, 10);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100000) throw badRequest('invalid_input', 'usage_limit must be 1–100000');
+  }
+  const n = await db.one('SELECT count(*) AS n FROM chat_invites WHERE chat_id = $1 AND NOT revoked', [chat.id]);
+  if (n.n >= 50) throw badRequest('too_many_invites', 'Revoke some links first (max 50)');
+  const row = await db.one(
+    `INSERT INTO chat_invites (code, chat_id, created_by, name, expires_at, usage_limit)
+     VALUES ($1, $2, $3, $4, CASE WHEN $5::int IS NULL THEN NULL ELSE now() + make_interval(hours => $5::int) END, $6)
+     RETURNING code, name, expires_at, usage_limit, usage_count, revoked, created_at`,
+    [randomToken(12), chat.id, userId, name, hours, limit],
+  );
+  return row;
+}
+
+async function revokeInvite(userId, chatIdRaw, code) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const r = await db.one('UPDATE chat_invites SET revoked = TRUE WHERE chat_id = $1 AND code = $2 RETURNING code', [chat.id, String(code)]);
+  if (!r) throw notFound('invite_not_found', 'Invite link not found');
+  return { ok: true };
+}
+
+async function listJoinRequests(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const rows = await db.many('SELECT user_id, created_at FROM chat_join_requests WHERE chat_id = $1 ORDER BY created_at LIMIT 500', [chat.id]);
+  const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
+  return rows.filter((r) => users.has(r.user_id)).map((r) => ({ user: users.get(r.user_id), requested_at: new Date(r.created_at).toISOString() }));
+}
+
+async function resolveJoinRequest(userId, chatIdRaw, targetIdRaw, approve) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const targetId = v.id(targetIdRaw, 'user_id');
+  const req = await db.one('DELETE FROM chat_join_requests WHERE chat_id = $1 AND user_id = $2 RETURNING invite_code', [chat.id, targetId]);
+  if (!req) throw notFound('request_not_found', 'This join request no longer exists');
+  if (approve) {
+    const full = await db.one('SELECT * FROM chats WHERE id = $1', [chat.id]);
+    await joinChat(targetId, { ...full, join_approval: false, via_invite: req.invite_code || null });
+  }
+  await emitUpdated(chat.id);
+  return { ok: true };
+}
+
+/** Owner hands the group/channel to another member (old owner becomes admin). */
+async function transferOwnership(chatId, fromUserId, toUserIdRaw, { byAdmin = false } = {}) {
+  const toUserId = v.id(toUserIdRaw, 'user_id');
+  const outcome = await db.tx(async (c) => {
+    const target = await c.query('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, toUserId]);
+    if (!target.rows[0]) throw notFound('member_not_found', 'This user is not a member');
+    if (target.rows[0].role === 'owner') return { changed: false };
+    const old = await c.query(`UPDATE chat_members SET role = 'admin' WHERE chat_id = $1 AND role = 'owner' RETURNING user_id`, [chatId]);
+    await c.query(`UPDATE chat_members SET role = 'owner' WHERE chat_id = $1 AND user_id = $2`, [chatId, toUserId]);
+    return { changed: true, oldOwner: old.rows[0] ? old.rows[0].user_id : null };
+  });
+  if (outcome.changed) {
+    const chat = await db.one('SELECT type FROM chats WHERE id = $1', [chatId]);
+    if (chat.type === 'group') {
+      await lazyMessages().createSystemMessage(chatId, byAdmin ? null : fromUserId, { event: 'owner_changed', user_id: toUserId });
+    }
+    await emitUpdated(chatId);
+  }
+  return { ok: true };
+}
+
+async function transferOwnershipByOwner(userId, chatIdRaw, toUserIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  if (!isMulti(chat)) throw badRequest('not_a_group', 'Only groups and channels have owners');
+  if (chat.my_role !== 'owner') throw forbidden('not_owner', 'Only the owner can transfer ownership');
+  return transferOwnership(chat.id, userId, toUserIdRaw);
+}
+
 // ------------------------------------------------------------------ channels & public usernames
 /** Usernames are shared between users, groups and channels (like Telegram). */
+/** Throws if the username is on the admin "reserved" list (admins can still assign it). */
+async function assertNotReserved(name) {
+  const reserved = await settings.get('reserved_usernames');
+  if ((reserved || []).includes(String(name).toLowerCase())) {
+    throw conflict('username_reserved', 'This username is reserved');
+  }
+}
+
 async function usernameTaken(name, { exceptUserId = 0, exceptChatId = 0 } = {}) {
   const r = await db.one(
     `SELECT (EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1) AND id <> $2)
@@ -521,12 +679,14 @@ async function usernameTaken(name, { exceptUserId = 0, exceptChatId = 0 } = {}) 
 }
 
 async function createChannel(ownerId, body) {
+  await settings.requireFeature('feature_channels', 'Channels');
   const title = v.str(body.title, { field: 'title', min: 1, max: 128, required: true });
   const description = v.str(body.description, { field: 'description', max: 255 }) || '';
   const signatures = body.signatures === true;
   let username = null;
   if (body.username) {
     username = v.validateUsername(String(body.username).trim().replace(/^@/, ''));
+    await assertNotReserved(username);
     if (await usernameTaken(username)) throw conflict('username_taken', 'This username is already taken');
   }
   let chatId;
@@ -557,6 +717,7 @@ async function setChatUsername(userId, chatIdRaw, raw) {
   let username = null;
   if (raw !== null && raw !== undefined && raw !== '') {
     username = v.validateUsername(String(raw).trim().replace(/^@/, ''));
+    if (username.toLowerCase() !== String(chat.username || '').toLowerCase()) await assertNotReserved(username);
     if (await usernameTaken(username, { exceptChatId: chat.id })) throw conflict('username_taken', 'This username is already taken');
   }
   try {
@@ -656,6 +817,15 @@ module.exports = {
   MULTI_TYPES,
   isMulti,
   usernameTaken,
+  assertNotReserved,
+  getChatsByIds,
+  listInvites,
+  createInvite,
+  revokeInvite,
+  listJoinRequests,
+  resolveJoinRequest,
+  transferOwnership,
+  transferOwnershipByOwner,
   createChannel,
   setChatUsername,
   publicPreview,

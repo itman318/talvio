@@ -39,6 +39,22 @@ function requireAdmin(perm) {
   });
 }
 
+/** True if the IP matches an entry of the admin "blocked IPs" list (exact IP or prefix like "203.0.113."). */
+async function isIpBlocked(ip) {
+  const list = await settings.get('blocked_ips');
+  if (!list || !list.length || !ip) return false;
+  const clean = String(ip).replace(/^::ffff:/, '');
+  return list.some((entry) => (entry.endsWith('.') || entry.endsWith(':') ? clean.startsWith(entry) : clean === entry));
+}
+
+const ipGate = asyncHandler(async (req, res, next) => {
+  if (await isIpBlocked(req.ip)) {
+    res.status(403).json({ error: { code: 'ip_blocked', message: 'Access from your network is blocked' } });
+    return;
+  }
+  next();
+});
+
 const maintenanceGate = asyncHandler(async (req, res, next) => {
   const s = await settings.getAll();
   if (s.maintenance_mode) {
@@ -105,6 +121,8 @@ function errorHandler(err, req, res, next) {
 }
 
 module.exports = {
+  isIpBlocked,
+  ipGate,
   asyncHandler,
   requireUser,
   requireAdmin,

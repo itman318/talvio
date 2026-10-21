@@ -5,6 +5,8 @@ const express = require('express');
 const admin = require('../services/admin.service');
 const support = require('../services/support.service');
 const announcements = require('../services/announcement.service');
+const appeals = require('../services/appeal.service');
+const content = require('../services/content.service');
 const db = require('../db');
 const v = require('../utils/validate');
 const { notFound } = require('../utils/errors');
@@ -33,6 +35,16 @@ router.post('/users/:id/verify', requireAdmin('users.verify'), h(async (req, res
 }));
 router.post('/users/:id/restrict', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.restrictUser(req.admin, req.params.id, req.body, req.ip))));
 router.post('/users/:id/unrestrict', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.unrestrictUser(req.admin, req.params.id, req.ip))));
+router.post('/users/:id/notes', requireAdmin('users.view'), h(async (req, res) => res.json(await admin.addNote(req.admin, req.params.id, req.body, req.ip))));
+router.delete('/notes/:id', requireAdmin('users.view'), h(async (req, res) => res.json(await admin.deleteNote(req.admin, req.params.id))));
+router.get('/users/:id/export', requireAdmin('users.export'), h(async (req, res) => {
+  const data = await admin.exportUser(req.admin, req.params.id, req.ip);
+  res.setHeader('Content-Disposition', `attachment; filename="user-${data.profile.id}-data.json"`);
+  res.json(data);
+}));
+router.put('/users/:id/username', requireAdmin('users.username'), h(async (req, res) => {
+  res.json(await admin.setUsername(req.admin, req.params.id, req.body.username, req.ip));
+}));
 router.delete('/users/:id', requireAdmin('users.delete'), h(async (req, res) => res.json(await admin.deleteUser(req.admin, req.params.id, req.ip))));
 
 // reports
@@ -52,6 +64,10 @@ router.post('/groups/:id/unsuspend', requireAdmin('groups.suspend'), h(async (re
 }));
 router.post('/groups/:id/verify', requireAdmin('groups.verify'), h(async (req, res) => {
   res.json(await admin.setChatVerified(req.admin, req.params.id, req.body.verified, req.ip));
+}));
+router.get('/groups/:id/members', requireAdmin('groups.view'), h(async (req, res) => res.json(await admin.groupMembers(req.params.id, req.query))));
+router.post('/groups/:id/transfer', requireAdmin('groups.transfer'), h(async (req, res) => {
+  res.json(await admin.transferGroupOwner(req.admin, req.params.id, req.body, req.ip));
 }));
 router.delete('/groups/:id', requireAdmin('groups.delete'), h(async (req, res) => res.json(await admin.deleteGroup(req.admin, req.params.id, req.ip))));
 
@@ -83,6 +99,21 @@ router.get('/support', requireAdmin('support'), h(async (req, res) => {
 router.get('/support/:id', requireAdmin('support'), h(async (req, res) => res.json(await support.adminGet(req.params.id))));
 router.post('/support/:id/reply', requireAdmin('support'), h(async (req, res) => res.json(await support.adminReply(req.admin, req.params.id, req.body))));
 router.patch('/support/:id', requireAdmin('support'), h(async (req, res) => res.json(await support.adminUpdate(req.params.id, req.body))));
+
+// ban appeals
+router.get('/appeals', requireAdmin('users.view'), h(async (req, res) => res.json(await appeals.list(req.query))));
+router.post('/appeals/:id/resolve', requireAdmin('users.ban'), h(async (req, res) => res.json(await appeals.resolve(req.admin, req.params.id, req.body, req.ip))));
+
+// content pages (terms, privacy, faq, about)
+router.get('/pages', requireAdmin('settings'), h(async (req, res) => res.json(await content.list())));
+router.put('/pages/:slug', requireAdmin('settings'), h(async (req, res) => {
+  const page = await content.update(req.admin.id, req.params.slug, req.body);
+  await require('../db').query(
+    `INSERT INTO admin_logs (admin_id, action, target_type, details, ip) VALUES ($1, 'page.update', 'page', $2, $3)`,
+    [req.admin.id, JSON.stringify({ slug: page.slug }), req.ip],
+  );
+  res.json(page);
+}));
 
 // audit log
 router.get('/logs', requireAdmin('logs.view'), h(async (req, res) => res.json(await admin.listLogs(req.query))));

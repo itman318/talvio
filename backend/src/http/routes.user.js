@@ -19,17 +19,23 @@ const folderService = require('../services/folder.service');
 const storyService = require('../services/story.service');
 const supportService = require('../services/support.service');
 const announcementService = require('../services/announcement.service');
+const appealService = require('../services/appeal.service');
+const contentService = require('../services/content.service');
 const settings = require('../services/settings.service');
 const { randomToken } = require('../utils/crypto');
 const { badRequest } = require('../utils/errors');
-const { asyncHandler: h, requireUser, maintenanceGate } = require('./middleware');
+const { asyncHandler: h, requireUser, maintenanceGate, ipGate } = require('./middleware');
 
 const router = express.Router();
 
 // ------------------------------------------------------------------ public
 router.get('/app-config', h(async (req, res) => res.json(await settings.publicConfig())));
+router.get('/pages/:slug', h(async (req, res) => res.json(await contentService.get(req.params.slug))));
 
+router.use(ipGate);
 router.use(maintenanceGate);
+
+router.post('/appeals', h(async (req, res) => res.json(await appealService.create(req.body))));
 
 router.post('/auth/otp/request', h(async (req, res) => {
   res.json(await authService.requestOtp(req.body.phone, req.ip));
@@ -66,6 +72,10 @@ router.post('/me/sessions/terminate-others', h(async (req, res) => {
 }));
 router.put('/me/push-token', h(async (req, res) => {
   res.json(await userService.setFcmToken(req.userId, req.sessionId, req.body.token === undefined ? null : req.body.token));
+}));
+router.get('/me/export', h(async (req, res) => {
+  res.setHeader('Content-Disposition', 'attachment; filename="my-data.json"');
+  res.json(await userService.exportData(req.userId));
 }));
 router.delete('/me', h(async (req, res) => {
   if (req.body.confirm !== 'DELETE') throw badRequest('confirm_required', 'Send {"confirm":"DELETE"} to delete your account');
@@ -114,6 +124,21 @@ router.patch('/chats/:id/settings', h(async (req, res) => res.json(await chatSer
 router.post('/chats/:id/clear', h(async (req, res) => res.json(await chatService.clearHistory(req.userId, req.params.id))));
 router.post('/chats/:id/invite/regenerate', h(async (req, res) => res.json(await chatService.regenerateInvite(req.userId, req.params.id))));
 router.post('/chats/:id/join', h(async (req, res) => res.json(await chatService.joinPublic(req.userId, req.params.id))));
+router.get('/chats/:id/invites', h(async (req, res) => res.json(await chatService.listInvites(req.userId, req.params.id))));
+router.post('/chats/:id/invites', h(async (req, res) => res.json(await chatService.createInvite(req.userId, req.params.id, req.body))));
+router.delete('/chats/:id/invites/:code', h(async (req, res) => res.json(await chatService.revokeInvite(req.userId, req.params.id, req.params.code))));
+router.get('/chats/:id/join-requests', h(async (req, res) => res.json(await chatService.listJoinRequests(req.userId, req.params.id))));
+router.post('/chats/:id/join-requests/:userId/approve', h(async (req, res) => {
+  res.json(await chatService.resolveJoinRequest(req.userId, req.params.id, req.params.userId, true));
+}));
+router.post('/chats/:id/join-requests/:userId/decline', h(async (req, res) => {
+  res.json(await chatService.resolveJoinRequest(req.userId, req.params.id, req.params.userId, false));
+}));
+router.put('/chats/:id/owner', h(async (req, res) => res.json(await chatService.transferOwnershipByOwner(req.userId, req.params.id, req.body.user_id))));
+router.get('/chats/:id/pins', h(async (req, res) => res.json(await messageService.listPins(req.userId, req.params.id))));
+router.post('/chats/:id/pins', h(async (req, res) => res.json(await messageService.pinMessage(req.userId, req.params.id, req.body.message_id))));
+router.delete('/chats/:id/pins/:messageId', h(async (req, res) => res.json(await messageService.unpinMessage(req.userId, req.params.id, req.params.messageId))));
+router.get('/search/messages', h(async (req, res) => res.json(await messageService.searchMessages(req.userId, req.query))));
 router.put('/chats/:id/username', h(async (req, res) => res.json(await chatService.setChatUsername(req.userId, req.params.id, req.body.username))));
 router.get('/chats/:id/stats', h(async (req, res) => res.json(await chatService.chatStats(req.userId, req.params.id))));
 router.post('/chats/:id/views', h(async (req, res) => res.json(await messageService.recordViews(req.userId, req.params.id, req.body.message_ids))));
