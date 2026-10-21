@@ -1,0 +1,177 @@
+'use strict';
+
+/**
+ * Mobile-app REST API. Mounted at /api.
+ * All responses are JSON. Errors: { error: { code, message, ...extra } }.
+ */
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const multer = require('multer');
+const config = require('../config');
+const authService = require('../services/auth.service');
+const userService = require('../services/user.service');
+const chatService = require('../services/chat.service');
+const messageService = require('../services/message.service');
+const mediaService = require('../services/media.service');
+const reportService = require('../services/report.service');
+const settings = require('../services/settings.service');
+const { randomToken } = require('../utils/crypto');
+const { badRequest } = require('../utils/errors');
+const { asyncHandler: h, requireUser, maintenanceGate } = require('./middleware');
+
+const router = express.Router();
+
+// ------------------------------------------------------------------ public
+router.get('/app-config', h(async (req, res) => res.json(await settings.publicConfig())));
+
+router.use(maintenanceGate);
+
+router.post('/auth/otp/request', h(async (req, res) => {
+  res.json(await authService.requestOtp(req.body.phone, req.ip));
+}));
+
+router.post('/auth/otp/verify', h(async (req, res) => {
+  res.json(await authService.verifyOtp(req.body.phone, req.body.code, req.body.device, req.ip));
+}));
+
+router.post('/auth/refresh', h(async (req, res) => {
+  res.json(await authService.refresh(req.body.refresh_token, req.ip));
+}));
+
+router.get('/media/:id/public', h(async (req, res) => {
+  sendMedia(res, await mediaService.getPublic(req.params.id), true);
+}));
+
+// ------------------------------------------------------------------ authenticated
+router.use(requireUser);
+
+router.post('/auth/logout', h(async (req, res) => res.json(await authService.logout(req.userId, req.sessionId))));
+
+// --- me
+router.get('/me', h(async (req, res) => res.json(await userService.getMe(req.userId))));
+router.patch('/me', h(async (req, res) => res.json(await userService.updateProfile(req.userId, req.body))));
+router.put('/me/privacy', h(async (req, res) => res.json(await userService.updatePrivacy(req.userId, req.body))));
+router.put('/me/avatar', h(async (req, res) => res.json(await userService.setAvatar(req.userId, req.body.media_id))));
+router.delete('/me/avatar', h(async (req, res) => res.json(await userService.removeAvatar(req.userId))));
+router.get('/me/username-check', h(async (req, res) => res.json(await userService.checkUsername(req.userId, req.query.username))));
+router.get('/me/sessions', h(async (req, res) => res.json(await userService.listSessions(req.userId, req.sessionId))));
+router.delete('/me/sessions/:id', h(async (req, res) => res.json(await userService.revokeSession(req.userId, req.params.id))));
+router.post('/me/sessions/terminate-others', h(async (req, res) => {
+  res.json(await userService.revokeOtherSessions(req.userId, req.sessionId));
+}));
+router.put('/me/push-token', h(async (req, res) => {
+  res.json(await userService.setFcmToken(req.userId, req.sessionId, req.body.token === undefined ? null : req.body.token));
+}));
+router.delete('/me', h(async (req, res) => {
+  if (req.body.confirm !== 'DELETE') throw badRequest('confirm_required', 'Send {"confirm":"DELETE"} to delete your account');
+  res.json(await userService.deleteAccount(req.userId));
+}));
+
+// --- users, contacts, blocks
+router.get('/users/search', h(async (req, res) => res.json(await userService.searchUsers(req.userId, req.query.q))));
+router.get('/users/:id', h(async (req, res) => res.json(await userService.getUser(req.userId, parseIdParam(req.params.id)))));
+
+router.get('/contacts', h(async (req, res) => res.json(await userService.listContacts(req.userId))));
+router.post('/contacts/sync', h(async (req, res) => res.json(await userService.syncContacts(req.userId, req.body.phones))));
+router.post('/contacts/:userId', h(async (req, res) => res.json(await userService.addContact(req.userId, req.params.userId))));
+router.delete('/contacts/:userId', h(async (req, res) => res.json(await userService.removeContact(req.userId, req.params.userId))));
+
+router.get('/blocks', h(async (req, res) => res.json(await userService.listBlocked(req.userId))));
+router.post('/blocks/:userId', h(async (req, res) => res.json(await userService.block(req.userId, req.params.userId))));
+router.delete('/blocks/:userId', h(async (req, res) => res.json(await userService.unblock(req.userId, req.params.userId))));
+
+// --- chats
+router.get('/chats', h(async (req, res) => {
+  res.json(await chatService.listChats(req.userId, { archived: req.query.archived === 'true' }));
+}));
+router.post('/chats/private', h(async (req, res) => res.json(await chatService.getOrCreatePrivate(req.userId, req.body.user_id))));
+router.post('/chats/group', h(async (req, res) => res.json(await chatService.createGroup(req.userId, req.body))));
+router.get('/chats/invite/:code', h(async (req, res) => res.json(await chatService.invitePreview(req.userId, req.params.code))));
+router.post('/chats/invite/:code/join', h(async (req, res) => res.json(await chatService.joinByInvite(req.userId, req.params.code))));
+router.get('/chats/:id', h(async (req, res) => res.json(await chatService.getChat(req.userId, req.params.id))));
+router.patch('/chats/:id', h(async (req, res) => res.json(await chatService.updateGroup(req.userId, req.params.id, req.body))));
+router.put('/chats/:id/avatar', h(async (req, res) => {
+  res.json(await chatService.setGroupAvatar(req.userId, req.params.id, req.body.media_id === undefined ? null : req.body.media_id));
+}));
+router.get('/chats/:id/members', h(async (req, res) => res.json(await chatService.getMembers(req.userId, req.params.id))));
+router.post('/chats/:id/members', h(async (req, res) => res.json(await chatService.addMembers(req.userId, req.params.id, req.body.user_ids))));
+router.delete('/chats/:id/members/:userId', h(async (req, res) => {
+  res.json(await chatService.removeMember(req.userId, req.params.id, req.params.userId));
+}));
+router.put('/chats/:id/members/:userId/role', h(async (req, res) => {
+  res.json(await chatService.setMemberRole(req.userId, req.params.id, req.params.userId, req.body.role));
+}));
+router.post('/chats/:id/leave', h(async (req, res) => res.json(await chatService.leaveChat(req.userId, req.params.id))));
+router.patch('/chats/:id/settings', h(async (req, res) => res.json(await chatService.updateMySettings(req.userId, req.params.id, req.body))));
+router.post('/chats/:id/clear', h(async (req, res) => res.json(await chatService.clearHistory(req.userId, req.params.id))));
+router.post('/chats/:id/invite/regenerate', h(async (req, res) => res.json(await chatService.regenerateInvite(req.userId, req.params.id))));
+
+// --- messages
+router.get('/chats/:id/messages', h(async (req, res) => res.json(await messageService.listMessages(req.userId, req.params.id, req.query))));
+router.post('/chats/:id/messages', h(async (req, res) => res.json(await messageService.sendMessage(req.userId, req.params.id, req.body))));
+router.post('/chats/:id/messages/delete', h(async (req, res) => res.json(await messageService.deleteMessages(req.userId, req.params.id, req.body))));
+router.post('/chats/:id/read', h(async (req, res) => res.json(await messageService.markRead(req.userId, req.params.id, req.body.message_id))));
+router.patch('/messages/:id', h(async (req, res) => res.json(await messageService.editMessage(req.userId, req.params.id, req.body))));
+router.post('/messages/forward', h(async (req, res) => res.json(await messageService.forwardMessages(req.userId, req.body))));
+
+// --- reports
+router.post('/reports', h(async (req, res) => res.json(await reportService.createReport(req.userId, req.body))));
+
+// --- media
+const storage = multer.diskStorage({
+  destination(req, file, cb) {
+    const d = new Date();
+    const dir = path.join(config.uploadDir, String(d.getUTCFullYear()), String(d.getUTCMonth() + 1).padStart(2, '0'));
+    fs.mkdir(dir, { recursive: true }, (err) => cb(err, dir));
+  },
+  filename(req, file, cb) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    cb(null, randomToken(16) + (/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ''));
+  },
+});
+
+router.post('/media', h(async (req, res, next) => {
+  const maxMb = Math.min(await settings.get('max_upload_mb'), config.uploadHardLimitMb);
+  multer({ storage, limits: { fileSize: maxMb * 1024 * 1024, files: 1, fields: 10 } }).single('file')(req, res, (err) => {
+    if (err) return next(err);
+    return mediaService
+      .registerUpload(req.userId, req.file, req.body || {})
+      .then((m) => res.json(m))
+      .catch(next);
+  });
+}));
+
+router.get('/media/:id', h(async (req, res) => {
+  sendMedia(res, await mediaService.getAccessible(req.userId, req.params.id), false);
+}));
+
+// ------------------------------------------------------------------ helpers
+function parseIdParam(value) {
+  const n = parseInt(value, 10);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(n)) throw badRequest('invalid_input', 'Invalid id');
+  return n;
+}
+
+function sendMedia(res, m, isPublic) {
+  const abs = mediaService.absolutePath(m);
+  const inline = mediaService.isInlineSafe(m);
+  const filename = encodeURIComponent(m.original_name || `file-${m.id}`);
+  res.sendFile(
+    abs,
+    {
+      dotfiles: 'deny',
+      headers: {
+        'Content-Type': inline ? m.mime : 'application/octet-stream',
+        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${filename}`,
+        'Cache-Control': isPublic ? 'public, max-age=86400' : 'private, max-age=86400',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    },
+    (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: { code: 'media_not_found', message: 'File not found' } });
+    },
+  );
+}
+
+module.exports = { router, sendMedia };

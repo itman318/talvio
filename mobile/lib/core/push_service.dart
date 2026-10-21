@@ -1,0 +1,63 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+
+import 'api_client.dart';
+
+/// Firebase Cloud Messaging. If Firebase isn't configured (no google-services.json /
+/// GoogleService-Info.plist), push is silently disabled and the app keeps working.
+class PushService {
+  PushService(this.api);
+
+  final ApiClient api;
+  bool _ready = false;
+  StreamSubscription<String>? _tokenSub;
+
+  /// Called with a chat id when the user taps a notification.
+  void Function(int chatId)? onOpenChat;
+
+  Future<void> init() async {
+    try {
+      if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+      _ready = true;
+    } catch (e) {
+      debugPrint('Push disabled (Firebase not configured): $e');
+      return;
+    }
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
+    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    if (initial != null) {
+      // let the UI build first
+      Future.delayed(const Duration(milliseconds: 600), () => _handleTap(initial));
+    }
+  }
+
+  /// Ask permission and register this device's token with the server (after login).
+  Future<void> registerDevice() async {
+    if (!_ready) return;
+    try {
+      final settings = await FirebaseMessaging.instance.requestPermission();
+      if (settings.authorizationStatus == AuthorizationStatus.denied) return;
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) await api.put('/me/push-token', {'token': token});
+      await _tokenSub?.cancel();
+      _tokenSub = FirebaseMessaging.instance.onTokenRefresh.listen((t) {
+        api.put('/me/push-token', {'token': t}).catchError((_) => null);
+      });
+    } catch (e) {
+      debugPrint('Push registration failed: $e');
+    }
+  }
+
+  Future<void> unregister() async {
+    await _tokenSub?.cancel();
+    _tokenSub = null;
+  }
+
+  void _handleTap(RemoteMessage m) {
+    final id = int.tryParse('${m.data['chat_id']}');
+    if (id != null) onOpenChat?.call(id);
+  }
+}

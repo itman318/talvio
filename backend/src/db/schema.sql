@@ -1,0 +1,213 @@
+-- ChatApp Phase 1 schema (PostgreSQL 13+). Safe to run repeatedly.
+
+-- ---------------------------------------------------------------- users
+CREATE TABLE IF NOT EXISTS users (
+  id                BIGSERIAL PRIMARY KEY,
+  phone             VARCHAR(32)  NOT NULL UNIQUE,
+  username          VARCHAR(32),
+  first_name        VARCHAR(64)  NOT NULL DEFAULT '',
+  last_name         VARCHAR(64)  NOT NULL DEFAULT '',
+  bio               VARCHAR(140) NOT NULL DEFAULT '',
+  avatar_media_id   BIGINT,
+  status            VARCHAR(16)  NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active', 'banned', 'deleted')),
+  ban_reason        TEXT,
+  banned_until      TIMESTAMPTZ,
+  is_verified       BOOLEAN      NOT NULL DEFAULT FALSE,
+  privacy_last_seen VARCHAR(10)  NOT NULL DEFAULT 'everyone'
+                    CHECK (privacy_last_seen IN ('everyone', 'contacts', 'nobody')),
+  privacy_avatar    VARCHAR(10)  NOT NULL DEFAULT 'everyone'
+                    CHECK (privacy_avatar IN ('everyone', 'contacts', 'nobody')),
+  privacy_phone     VARCHAR(10)  NOT NULL DEFAULT 'contacts'
+                    CHECK (privacy_phone IN ('everyone', 'contacts', 'nobody')),
+  privacy_group_add VARCHAR(10)  NOT NULL DEFAULT 'everyone'
+                    CHECK (privacy_group_add IN ('everyone', 'contacts', 'nobody')),
+  last_seen_at      TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uq ON users (lower(username)) WHERE username IS NOT NULL;
+CREATE INDEX IF NOT EXISTS users_created_at_idx ON users (created_at);
+CREATE INDEX IF NOT EXISTS users_last_seen_idx ON users (last_seen_at);
+
+-- ---------------------------------------------------------------- sessions (one per logged-in device)
+CREATE TABLE IF NOT EXISTS sessions (
+  id                 BIGSERIAL PRIMARY KEY,
+  user_id            BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  refresh_token_hash CHAR(64)     NOT NULL UNIQUE,
+  device_name        VARCHAR(100) NOT NULL DEFAULT '',
+  platform           VARCHAR(20)  NOT NULL DEFAULT '',
+  app_version        VARCHAR(20)  NOT NULL DEFAULT '',
+  ip                 VARCHAR(64),
+  fcm_token          TEXT,
+  created_at         TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  last_active_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  expires_at         TIMESTAMPTZ  NOT NULL,
+  revoked_at         TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS sessions_user_active_idx ON sessions (user_id) WHERE revoked_at IS NULL;
+
+-- ---------------------------------------------------------------- OTP codes
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id          BIGSERIAL PRIMARY KEY,
+  phone       VARCHAR(32) NOT NULL,
+  code_hash   CHAR(64)    NOT NULL,
+  attempts    INT         NOT NULL DEFAULT 0,
+  ip          VARCHAR(64),
+  expires_at  TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS otp_codes_phone_idx ON otp_codes (phone, created_at DESC);
+
+-- ---------------------------------------------------------------- contacts & blocks
+CREATE TABLE IF NOT EXISTS contacts (
+  owner_id   BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, contact_id)
+);
+CREATE INDEX IF NOT EXISTS contacts_contact_idx ON contacts (contact_id);
+
+CREATE TABLE IF NOT EXISTS blocks (
+  blocker_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON blocks (blocked_id);
+
+-- ---------------------------------------------------------------- media (uploaded files)
+CREATE TABLE IF NOT EXISTS media (
+  id            BIGSERIAL PRIMARY KEY,
+  uploader_id   BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  kind          VARCHAR(10)  NOT NULL CHECK (kind IN ('image', 'video', 'voice', 'file', 'avatar')),
+  mime          VARCHAR(100) NOT NULL,
+  size_bytes    BIGINT       NOT NULL,
+  storage_path  TEXT         NOT NULL,
+  original_name VARCHAR(255) NOT NULL DEFAULT '',
+  duration_sec  INT,
+  width         INT,
+  height        INT,
+  is_public     BOOLEAN      NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS media_uploader_idx ON media (uploader_id);
+
+-- ---------------------------------------------------------------- chats (private + group)
+CREATE TABLE IF NOT EXISTS chats (
+  id              BIGSERIAL PRIMARY KEY,
+  type            VARCHAR(10)  NOT NULL CHECK (type IN ('private', 'group')),
+  private_key     VARCHAR(50)  UNIQUE,            -- "minUserId:maxUserId" for private chats
+  title           VARCHAR(128) NOT NULL DEFAULT '',
+  description     VARCHAR(255) NOT NULL DEFAULT '',
+  avatar_media_id BIGINT       REFERENCES media(id) ON DELETE SET NULL,
+  created_by      BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  invite_code     VARCHAR(32)  UNIQUE,
+  is_suspended    BOOLEAN      NOT NULL DEFAULT FALSE,
+  suspend_reason  TEXT,
+  last_message_id BIGINT,
+  last_message_at TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chats_type_idx ON chats (type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_members (
+  chat_id                   BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id                   BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role                      VARCHAR(10) NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+  joined_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_read_message_id      BIGINT      NOT NULL DEFAULT 0,
+  last_delivered_message_id BIGINT      NOT NULL DEFAULT 0,
+  cleared_before_id         BIGINT      NOT NULL DEFAULT 0,  -- "clear history" for this user
+  muted_until               TIMESTAMPTZ,
+  is_pinned                 BOOLEAN     NOT NULL DEFAULT FALSE,
+  is_archived               BOOLEAN     NOT NULL DEFAULT FALSE,
+  is_hidden                 BOOLEAN     NOT NULL DEFAULT FALSE, -- private chat deleted from list (reappears on new message)
+  PRIMARY KEY (chat_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS chat_members_user_idx ON chat_members (user_id);
+
+-- ---------------------------------------------------------------- messages
+CREATE TABLE IF NOT EXISTS messages (
+  id                     BIGSERIAL PRIMARY KEY,
+  chat_id                BIGINT       NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  sender_id              BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  type                   VARCHAR(10)  NOT NULL CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system')),
+  text                   TEXT         NOT NULL DEFAULT '',
+  media_id               BIGINT       REFERENCES media(id) ON DELETE SET NULL,
+  reply_to_id            BIGINT       REFERENCES messages(id) ON DELETE SET NULL,
+  forwarded_from_user_id BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  forwarded_from_name    VARCHAR(130),
+  meta                   JSONB,
+  client_id              VARCHAR(64),
+  edited_at              TIMESTAMPTZ,
+  deleted_at             TIMESTAMPTZ,
+  created_at             TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS messages_chat_id_idx ON messages (chat_id, id DESC);
+CREATE INDEX IF NOT EXISTS messages_media_idx ON messages (media_id) WHERE media_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS messages_created_idx ON messages (created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS messages_client_id_uq ON messages (sender_id, client_id) WHERE client_id IS NOT NULL;
+
+-- "Delete for me"
+CREATE TABLE IF NOT EXISTS message_hidden (
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, message_id)
+);
+
+-- ---------------------------------------------------------------- admins
+CREATE TABLE IF NOT EXISTS admins (
+  id            BIGSERIAL PRIMARY KEY,
+  email         VARCHAR(255) NOT NULL UNIQUE,
+  password_hash TEXT         NOT NULL,
+  name          VARCHAR(100) NOT NULL DEFAULT '',
+  role          VARCHAR(20)  NOT NULL DEFAULT 'moderator' CHECK (role IN ('super_admin', 'moderator', 'support')),
+  is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  token_version INT          NOT NULL DEFAULT 0,
+  last_login_at TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS admin_logs (
+  id          BIGSERIAL PRIMARY KEY,
+  admin_id    BIGINT      REFERENCES admins(id) ON DELETE SET NULL,
+  action      VARCHAR(64) NOT NULL,
+  target_type VARCHAR(20),
+  target_id   BIGINT,
+  details     JSONB,
+  ip          VARCHAR(64),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS admin_logs_created_idx ON admin_logs (created_at DESC);
+
+-- ---------------------------------------------------------------- reports
+CREATE TABLE IF NOT EXISTS reports (
+  id           BIGSERIAL PRIMARY KEY,
+  reporter_id  BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  target_type  VARCHAR(10)  NOT NULL CHECK (target_type IN ('user', 'message', 'chat')),
+  target_id    BIGINT       NOT NULL,
+  reason       VARCHAR(20)  NOT NULL CHECK (reason IN ('spam', 'abuse', 'scam', 'violence', 'sexual', 'illegal', 'other')),
+  details      VARCHAR(1000) NOT NULL DEFAULT '',
+  snapshot     JSONB,
+  status       VARCHAR(10)  NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
+  action_taken VARCHAR(30),
+  admin_note   TEXT,
+  resolved_by  BIGINT       REFERENCES admins(id) ON DELETE SET NULL,
+  resolved_at  TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS reports_status_idx ON reports (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS reports_target_idx ON reports (target_type, target_id);
+CREATE UNIQUE INDEX IF NOT EXISTS reports_open_dedupe_uq
+  ON reports (reporter_id, target_type, target_id) WHERE status = 'open';
+
+-- ---------------------------------------------------------------- app settings (admin editable)
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        VARCHAR(64) PRIMARY KEY,
+  value      JSONB       NOT NULL,
+  updated_by BIGINT      REFERENCES admins(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -1,0 +1,711 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+
+import '../core/api_client.dart';
+import '../core/services.dart';
+import '../core/socket_service.dart';
+import '../models/models.dart';
+
+/// Holds chats, loaded messages, typing & presence, and handles realtime events.
+class ChatStore extends ChangeNotifier {
+  ChatStore(this.services);
+
+  final AppServices services;
+  ApiClient get api => services.api;
+  SocketService get socket => services.socket;
+
+  int? myId;
+  List<Chat> chats = [];
+  bool chatsLoaded = false;
+  bool connected = false;
+  int? activeChatId;
+  bool appInForeground = true;
+  void Function()? onSessionRevoked;
+
+  final Map<int, List<Message>> _messages = {}; // newest first
+  final Map<int, bool> _hasMore = {};
+  final Set<int> _loadingMore = {};
+  final Map<int, Map<int, DateTime>> _typing = {}; // chatId -> userId -> expiry
+  final Map<int, DateTime> _typingSent = {};
+  final Map<int, int> _lastReadSent = {};
+  final Map<int, AppUser> userCache = {};
+  final Map<int, List<GroupMember>> members = {};
+
+  StreamSubscription<SocketEvent>? _eventSub;
+  StreamSubscription<bool>? _connSub;
+  Timer? _typingTimer;
+  int _localId = -1;
+  final _rand = Random();
+
+  // ------------------------------------------------------------------ lifecycle
+  void start(int meId) {
+    stop();
+    myId = meId;
+    connected = socket.isConnected;
+    _eventSub = socket.events.listen(_onEvent);
+    _connSub = socket.connectionChanges.listen((c) {
+      connected = c;
+      notifyListeners();
+      if (c) _resync();
+    });
+    _typingTimer = Timer.periodic(const Duration(seconds: 2), (_) => _expireTyping());
+    loadChats().catchError((_) {});
+  }
+
+  void stop() {
+    _eventSub?.cancel();
+    _connSub?.cancel();
+    _typingTimer?.cancel();
+    _eventSub = null;
+    _connSub = null;
+    chats = [];
+    chatsLoaded = false;
+    activeChatId = null;
+    _messages.clear();
+    _hasMore.clear();
+    _typing.clear();
+    _lastReadSent.clear();
+    userCache.clear();
+    members.clear();
+    myId = null;
+  }
+
+  void setForeground(bool fg) {
+    appInForeground = fg;
+    if (fg && activeChatId != null) markChatRead(activeChatId!);
+  }
+
+  // ------------------------------------------------------------------ chats
+  Chat? chatById(int id) {
+    for (final c in chats) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  int get totalUnread => chats.where((c) => !c.isMuted).fold(0, (s, c) => s + c.unreadCount);
+
+  Future<void> loadChats() async {
+    final data = await api.get('/chats') as List;
+    chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    for (final c in chats) {
+      if (c.peer != null) userCache[c.peer!.id] = c.peer!;
+    }
+    _sortChats();
+    chatsLoaded = true;
+    notifyListeners();
+  }
+
+  Future<List<Chat>> loadArchived() async {
+    final data = await api.get('/chats', query: {'archived': 'true'}) as List;
+    return data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+  }
+
+  Future<Chat?> refreshChat(int id) async {
+    try {
+      final c = Chat.fromJson(Map<String, dynamic>.from(await api.get('/chats/$id') as Map));
+      _upsertChat(c);
+      return c;
+    } on ApiException catch (e) {
+      if (e.status == 404) _removeChat(id);
+      return null;
+    }
+  }
+
+  /// Fetches a chat (from cache or server) without adding hidden chats to the list.
+  Future<Chat> getChat(int id) async {
+    return chatById(id) ?? Chat.fromJson(Map<String, dynamic>.from(await api.get('/chats/$id') as Map));
+  }
+
+  void _upsertChat(Chat c) {
+    if (c.peer != null) userCache[c.peer!.id] = c.peer!;
+    chats.removeWhere((x) => x.id == c.id);
+    if (!c.isArchived && (c.lastMessage != null || c.isGroup || c.id == activeChatId)) chats.add(c);
+    _sortChats();
+    notifyListeners();
+  }
+
+  void _removeChat(int id) {
+    chats.removeWhere((c) => c.id == id);
+    _messages.remove(id);
+    members.remove(id);
+    notifyListeners();
+  }
+
+  void _sortChats() {
+    chats.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.sortTime.compareTo(a.sortTime);
+    });
+  }
+
+  // ------------------------------------------------------------------ messages
+  List<Message> messagesOf(int chatId) => _messages[chatId] ?? const [];
+  bool isLoaded(int chatId) => _messages.containsKey(chatId);
+  bool hasMore(int chatId) => _hasMore[chatId] ?? true;
+
+  Future<void> openChat(int chatId) async {
+    activeChatId = chatId;
+    if (!_messages.containsKey(chatId)) await loadMessages(chatId);
+    markChatRead(chatId);
+  }
+
+  void closeChat(int chatId) {
+    if (activeChatId == chatId) activeChatId = null;
+  }
+
+  void _cacheSenders(Iterable<Message> list) {
+    for (final m in list) {
+      final s = m.sender;
+      if (s != null && !userCache.containsKey(s.id)) userCache[s.id] = s;
+    }
+  }
+
+  Future<void> loadMessages(int chatId) async {
+    final data = Map<String, dynamic>.from(await api.get('/chats/$chatId/messages', query: {'limit': '50'}) as Map);
+    final list = (data['messages'] as List).map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    _cacheSenders(list);
+    final locals = (_messages[chatId] ?? []).where((m) => m.isLocal).toList();
+    _messages[chatId] = [...locals, ...list];
+    _hasMore[chatId] = data['has_more'] == true;
+    notifyListeners();
+  }
+
+  Future<void> loadMore(int chatId) async {
+    if (_loadingMore.contains(chatId) || !hasMore(chatId)) return;
+    final list = _messages[chatId];
+    if (list == null) return;
+    final oldest = list.lastWhere((m) => !m.isLocal, orElse: () => list.isEmpty ? Message(id: 0, chatId: chatId, type: 'text', createdAt: DateTime.now()) : list.last);
+    if (oldest.id <= 0) {
+      _hasMore[chatId] = false;
+      return;
+    }
+    _loadingMore.add(chatId);
+    try {
+      final data = Map<String, dynamic>.from(
+          await api.get('/chats/$chatId/messages', query: {'before': '${oldest.id}', 'limit': '50'}) as Map);
+      final older = (data['messages'] as List).map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+      _cacheSenders(older);
+      final known = list.map((m) => m.id).toSet();
+      list.addAll(older.where((m) => !known.contains(m.id)));
+      _hasMore[chatId] = data['has_more'] == true;
+    } finally {
+      _loadingMore.remove(chatId);
+      notifyListeners();
+    }
+  }
+
+  /// After a reconnect: fetch anything we missed in the open chat; drop other caches.
+  Future<void> _resync() async {
+    try {
+      await loadChats();
+    } catch (_) {}
+    final active = activeChatId;
+    _messages.removeWhere((k, _) => k != active);
+    if (active == null || !_messages.containsKey(active)) return;
+    final list = _messages[active]!;
+    final newest = list.firstWhere((m) => !m.isLocal, orElse: () => Message(id: 0, chatId: active, type: 'text', createdAt: DateTime.now()));
+    try {
+      if (newest.id == 0) {
+        await loadMessages(active);
+      } else {
+        final data = Map<String, dynamic>.from(
+            await api.get('/chats/$active/messages', query: {'after': '${newest.id}', 'limit': '100'}) as Map);
+        if (data['has_more'] == true) {
+          await loadMessages(active);
+        } else {
+          for (final j in (data['messages'] as List).reversed) {
+            _insertIncoming(Message.fromJson(Map<String, dynamic>.from(j as Map)));
+          }
+          notifyListeners();
+        }
+      }
+      markChatRead(active);
+    } catch (_) {}
+  }
+
+  void markChatRead(int chatId) {
+    if (!appInForeground) return;
+    final list = _messages[chatId];
+    final chat = chatById(chatId);
+    if (list == null) return;
+    final newest = list.firstWhere((m) => !m.isLocal, orElse: () => Message(id: 0, chatId: chatId, type: 'text', createdAt: DateTime.now()));
+    if (newest.id <= 0) return;
+    if ((_lastReadSent[chatId] ?? 0) >= newest.id && (chat == null || chat.unreadCount == 0)) return;
+    _lastReadSent[chatId] = newest.id;
+    if (chat != null && chat.unreadCount != 0) {
+      chat.unreadCount = 0;
+      notifyListeners();
+    }
+    final payload = {'chat_id': chatId, 'message_id': newest.id};
+    if (socket.isConnected) {
+      socket.emit('message:read', payload);
+    } else {
+      api.post('/chats/$chatId/read', {'message_id': newest.id}).catchError((_) => null);
+    }
+  }
+
+  // ------------------------------------------------------------------ sending
+  String _newClientId() => '${DateTime.now().microsecondsSinceEpoch}-${_rand.nextInt(1 << 30)}';
+
+  void _insertLocal(Message m) {
+    final list = _messages.putIfAbsent(m.chatId, () => []);
+    list.insert(0, m);
+    final chat = chatById(m.chatId);
+    if (chat != null) {
+      chat.lastMessage = m;
+      _sortChats();
+    }
+    notifyListeners();
+  }
+
+  ReplyInfo? _replyInfo(Message? r) => r == null
+      ? null
+      : ReplyInfo(id: r.id, senderId: r.senderId, senderName: r.sender?.name ?? '', type: r.type, text: r.text);
+
+  Future<void> sendText(int chatId, String text, {Message? replyTo}) async {
+    final local = Message(
+      id: _localId--,
+      chatId: chatId,
+      senderId: myId,
+      type: 'text',
+      text: text,
+      replyTo: _replyInfo(replyTo),
+      clientId: _newClientId(),
+      createdAt: DateTime.now(),
+      sendState: SendState.sending,
+      outbox: {'type': 'text', 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id},
+    );
+    _insertLocal(local);
+    await _deliver(local);
+  }
+
+  /// type: image | video | voice | file
+  Future<void> sendMedia(
+    int chatId,
+    String path, {
+    required String type,
+    String caption = '',
+    String? mime,
+    String? name,
+    int? duration,
+    int? width,
+    int? height,
+    Message? replyTo,
+  }) async {
+    final file = File(path);
+    final local = Message(
+      id: _localId--,
+      chatId: chatId,
+      senderId: myId,
+      type: type,
+      text: caption,
+      replyTo: _replyInfo(replyTo),
+      clientId: _newClientId(),
+      createdAt: DateTime.now(),
+      sendState: SendState.sending,
+      localFilePath: path,
+      uploadKind: type,
+      media: MediaInfo(
+        id: 0,
+        kind: type,
+        mime: mime ?? 'application/octet-stream',
+        size: await file.length(),
+        name: name ?? path.split(Platform.pathSeparator).last,
+        duration: duration,
+        width: width,
+        height: height,
+        url: '',
+      ),
+      outbox: {'type': type, 'text': caption, if (replyTo != null) 'reply_to_id': replyTo.id},
+    );
+    _insertLocal(local);
+    await _uploadAndDeliver(local);
+  }
+
+  Future<void> _uploadAndDeliver(Message local) async {
+    if (local.uploadKind != null) {
+      try {
+        final m = local.media!;
+        final media = await api.upload(local.localFilePath!, kind: local.uploadKind!, mime: m.mime, fields: {
+          if (m.duration != null) 'duration': '${m.duration}',
+          if (m.width != null) 'width': '${m.width}',
+          if (m.height != null) 'height': '${m.height}',
+        });
+        final info = MediaInfo.fromJson(media);
+        await services.media.putLocal(info, local.localFilePath!);
+        local.outbox!['media_id'] = info.id;
+        local.uploadKind = null;
+      } on ApiException catch (e) {
+        _fail(local, e.message);
+        return;
+      } catch (e) {
+        _fail(local, 'Upload failed');
+        return;
+      }
+    }
+    await _deliver(local);
+  }
+
+  Future<void> _deliver(Message local) async {
+    final payload = <String, dynamic>{...local.outbox!, 'chat_id': local.chatId, 'client_id': local.clientId};
+    try {
+      Map<String, dynamic> json;
+      if (socket.isConnected) {
+        final r = await socket.request('message:send', payload);
+        json = Map<String, dynamic>.from(r['message'] as Map);
+      } else {
+        json = Map<String, dynamic>.from(await api.post('/chats/${local.chatId}/messages', payload) as Map);
+      }
+      _confirm(local, Message.fromJson(json));
+    } on ApiException catch (e) {
+      _fail(local, e.message);
+    } catch (_) {
+      _fail(local, 'Could not send');
+    }
+  }
+
+  void _fail(Message local, String error) {
+    local.sendState = SendState.failed;
+    local.errorText = error;
+    notifyListeners();
+  }
+
+  void _confirm(Message local, Message real) {
+    final list = _messages[local.chatId];
+    if (list != null) {
+      final already = list.any((m) => m.id == real.id);
+      final i = list.indexOf(local);
+      if (i >= 0) {
+        if (already) {
+          list.removeAt(i);
+        } else {
+          list[i] = real;
+        }
+      }
+      list.sort(_byNewest);
+    }
+    final chat = chatById(local.chatId);
+    if (chat != null && (chat.lastMessage == local || (chat.lastMessage?.id ?? 0) < real.id)) {
+      chat.lastMessage = real;
+      _sortChats();
+    } else if (chat == null) {
+      refreshChat(local.chatId);
+    }
+    notifyListeners();
+  }
+
+  static int _byNewest(Message a, Message b) {
+    if (a.isLocal != b.isLocal) return a.isLocal ? -1 : 1;
+    if (a.isLocal) return a.id.compareTo(b.id); // more negative = newer
+    return b.id.compareTo(a.id);
+  }
+
+  Future<void> retry(Message local) async {
+    local.sendState = SendState.sending;
+    local.errorText = null;
+    notifyListeners();
+    await _uploadAndDeliver(local);
+  }
+
+  void discard(Message local) {
+    _messages[local.chatId]?.remove(local);
+    final chat = chatById(local.chatId);
+    if (chat != null && chat.lastMessage == local) {
+      final rest = messagesOf(local.chatId);
+      chat.lastMessage = rest.isEmpty ? null : rest.first;
+    }
+    notifyListeners();
+  }
+
+  void sendTyping(int chatId) {
+    final last = _typingSent[chatId];
+    if (last != null && DateTime.now().difference(last).inMilliseconds < 3000) return;
+    _typingSent[chatId] = DateTime.now();
+    socket.emit('typing', {'chat_id': chatId});
+  }
+
+  // ------------------------------------------------------------------ message actions
+  Future<void> editMessage(Message m, String text) async {
+    final json = await api.patch('/messages/${m.id}', {'text': text});
+    _replaceMessage(Message.fromJson(Map<String, dynamic>.from(json as Map)));
+  }
+
+  Future<void> deleteMessages(int chatId, List<int> ids, {required bool forEveryone}) async {
+    await api.post('/chats/$chatId/messages/delete', {'message_ids': ids, 'for_everyone': forEveryone});
+    _removeMessages(chatId, ids);
+  }
+
+  Future<int> forward(int fromChatId, List<int> messageIds, List<int> toChatIds) async {
+    final r = await api.post('/messages/forward', {
+      'from_chat_id': fromChatId,
+      'message_ids': messageIds,
+      'to_chat_ids': toChatIds,
+    });
+    return ((r as Map)['forwarded'] as num).toInt();
+  }
+
+  void _replaceMessage(Message m) {
+    final list = _messages[m.chatId];
+    if (list != null) {
+      final i = list.indexWhere((x) => x.id == m.id);
+      if (i >= 0) list[i] = m;
+    }
+    final chat = chatById(m.chatId);
+    if (chat != null && chat.lastMessage?.id == m.id) chat.lastMessage = m;
+    notifyListeners();
+  }
+
+  void _removeMessages(int chatId, List<int> ids) {
+    _messages[chatId]?.removeWhere((m) => ids.contains(m.id));
+    final chat = chatById(chatId);
+    if (chat != null && ids.contains(chat.lastMessage?.id)) refreshChat(chatId);
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ chat actions
+  Future<Chat> openPrivateWith(int userId) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/private', {'user_id': userId}) as Map));
+    if (c.peer != null) userCache[c.peer!.id] = c.peer!;
+    return c;
+  }
+
+  Future<(Chat, List<int>)> createGroup(String title, List<int> memberIds, {String? avatarPath}) async {
+    final r = Map<String, dynamic>.from(await api.post('/chats/group', {'title': title, 'member_ids': memberIds}) as Map);
+    var chat = Chat.fromJson(Map<String, dynamic>.from(r['chat'] as Map));
+    final skipped = (r['skipped'] as List).map((s) => ((s as Map)['user_id'] as num).toInt()).toList();
+    if (avatarPath != null) {
+      try {
+        chat = await setGroupAvatar(chat.id, avatarPath);
+      } catch (_) {}
+    }
+    _upsertChat(chat);
+    return (chat, skipped);
+  }
+
+  Future<Chat> updateChatSettings(int chatId, Map<String, dynamic> body) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.patch('/chats/$chatId/settings', body) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<void> leaveOrDelete(int chatId) async {
+    await api.post('/chats/$chatId/leave');
+    _removeChat(chatId);
+  }
+
+  Future<void> clearHistory(int chatId) async {
+    await api.post('/chats/$chatId/clear');
+    _messages[chatId] = [];
+    _hasMore[chatId] = false;
+    final chat = chatById(chatId);
+    if (chat != null) {
+      chat.lastMessage = null;
+      chat.unreadCount = 0;
+    }
+    notifyListeners();
+  }
+
+  Future<List<GroupMember>> loadMembers(int chatId) async {
+    final data = await api.get('/chats/$chatId/members') as List;
+    final list = data.map((j) => GroupMember.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    for (final m in list) {
+      userCache[m.user.id] = m.user;
+    }
+    members[chatId] = list;
+    notifyListeners();
+    return list;
+  }
+
+  Future<Chat> updateGroup(int chatId, {String? title, String? description}) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.patch('/chats/$chatId', {
+      if (title != null) 'title': title,
+      if (description != null) 'description': description,
+    }) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<Chat> setGroupAvatar(int chatId, String? path) async {
+    int? mediaId;
+    if (path != null) mediaId = ((await api.upload(path, kind: 'avatar'))['id'] as num).toInt();
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.put('/chats/$chatId/avatar', {'media_id': mediaId}) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<List<int>> addMembers(int chatId, List<int> userIds) async {
+    final r = Map<String, dynamic>.from(await api.post('/chats/$chatId/members', {'user_ids': userIds}) as Map);
+    await loadMembers(chatId);
+    return (r['skipped'] as List).map((s) => ((s as Map)['user_id'] as num).toInt()).toList();
+  }
+
+  Future<void> removeMember(int chatId, int userId) async {
+    await api.delete('/chats/$chatId/members/$userId');
+    await loadMembers(chatId);
+  }
+
+  Future<void> setRole(int chatId, int userId, String role) async {
+    await api.put('/chats/$chatId/members/$userId/role', {'role': role});
+    await loadMembers(chatId);
+  }
+
+  Future<String> regenerateInvite(int chatId) async {
+    final r = await api.post('/chats/$chatId/invite/regenerate');
+    await refreshChat(chatId);
+    return (r as Map)['invite_code'] as String;
+  }
+
+  Future<Map<String, dynamic>> invitePreview(String code) async =>
+      Map<String, dynamic>.from(await api.get('/chats/invite/${Uri.encodeComponent(code)}') as Map);
+
+  Future<Chat> joinByInvite(String code) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/invite/${Uri.encodeComponent(code)}/join') as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  // ------------------------------------------------------------------ typing & names
+  String userName(int? id) {
+    if (id == null) return 'Someone';
+    if (id == myId) return 'You';
+    return userCache[id]?.name ?? 'a member';
+  }
+
+  /// "typing…" / "Ali is typing…" / "2 people are typing…", or null.
+  String? typingText(Chat chat) {
+    final t = _typing[chat.id];
+    if (t == null || t.isEmpty) return null;
+    if (!chat.isGroup) return 'typing…';
+    if (t.length == 1) return '${userCache[t.keys.first]?.firstName ?? 'Someone'} is typing…';
+    return '${t.length} people are typing…';
+  }
+
+  void _expireTyping() {
+    final now = DateTime.now();
+    var changed = false;
+    for (final m in _typing.values) {
+      final before = m.length;
+      m.removeWhere((_, exp) => exp.isBefore(now));
+      if (m.length != before) changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ realtime events
+  int _int(dynamic v) => (v as num).toInt();
+
+  void _onEvent(SocketEvent e) {
+    final d = e.data;
+    switch (e.name) {
+      case 'message:new':
+        final m = Message.fromJson(Map<String, dynamic>.from(d['message'] as Map));
+        _onNewMessage(m);
+        break;
+      case 'message:edited':
+        _replaceMessage(Message.fromJson(Map<String, dynamic>.from(d['message'] as Map)));
+        break;
+      case 'message:deleted':
+        _removeMessages(_int(d['chat_id']), (d['message_ids'] as List).map(_int).toList());
+        break;
+      case 'receipt:read':
+        final chat = chatById(_int(d['chat_id']));
+        if (chat != null) {
+          chat.readUpTo = max(chat.readUpTo, _int(d['message_id']));
+          chat.deliveredUpTo = max(chat.deliveredUpTo, chat.readUpTo);
+          notifyListeners();
+        }
+        break;
+      case 'receipt:delivered':
+        final dChat = chatById(_int(d['chat_id']));
+        if (dChat != null) {
+          dChat.deliveredUpTo = max(dChat.deliveredUpTo, _int(d['message_id']));
+          notifyListeners();
+        }
+        break;
+      case 'chat:updated':
+        final id = _int(d['chat_id']);
+        refreshChat(id);
+        if (members.containsKey(id)) loadMembers(id).catchError((_) => <GroupMember>[]);
+        break;
+      case 'chat:removed':
+        _removeChat(_int(d['chat_id']));
+        break;
+      case 'typing':
+        final uid = _int(d['user_id']);
+        if (uid == myId) break;
+        _typing.putIfAbsent(_int(d['chat_id']), () => {})[uid] = DateTime.now().add(const Duration(seconds: 5));
+        notifyListeners();
+        break;
+      case 'presence':
+        _onPresence(_int(d['user_id']), d['online'] == true, d['last_seen'] as String?);
+        break;
+      case 'user:updated':
+        final changedId = _int(d['user_id']);
+        for (final c in chats.where((c) => c.peer?.id == changedId).toList()) {
+          refreshChat(c.id);
+        }
+        break;
+      case 'session:revoked':
+        onSessionRevoked?.call();
+        break;
+    }
+  }
+
+  void _onPresence(int userId, bool online, String? lastSeen) {
+    final seen = lastSeen == null ? null : DateTime.parse(lastSeen).toLocal();
+    for (final c in chats) {
+      if (c.peer?.id == userId) {
+        c.peer!.online = online;
+        if (seen != null) c.peer!.lastSeen = seen;
+      }
+    }
+    final u = userCache[userId];
+    if (u != null) {
+      u.online = online;
+      if (seen != null) u.lastSeen = seen;
+    }
+    notifyListeners();
+  }
+
+  /// Inserts a message from the server into the loaded list (dedupes own optimistic copies).
+  bool _insertIncoming(Message m) {
+    final list = _messages[m.chatId];
+    if (list == null) return false;
+    if (list.any((x) => x.id == m.id)) return false;
+    final localIdx = m.clientId == null ? -1 : list.indexWhere((x) => x.isLocal && x.clientId == m.clientId);
+    if (localIdx >= 0) {
+      list[localIdx] = m;
+    } else {
+      list.add(m);
+    }
+    list.sort(_byNewest);
+    return true;
+  }
+
+  void _onNewMessage(Message m) {
+    _cacheSenders([m]);
+    _insertIncoming(m);
+    final mine = m.senderId == myId && !m.isSystem;
+    final chat = chatById(m.chatId);
+    if (chat == null) {
+      refreshChat(m.chatId);
+    } else {
+      if ((chat.lastMessage?.id ?? 0) <= m.id || chat.lastMessage!.isLocal) chat.lastMessage = m;
+      if (!mine && m.senderId != myId) {
+        final viewing = activeChatId == m.chatId && appInForeground;
+        if (!viewing) chat.unreadCount += 1;
+        _typing[m.chatId]?.remove(m.senderId);
+      }
+      _sortChats();
+    }
+    if (m.senderId != myId) {
+      socket.emit('message:delivered', {'chat_id': m.chatId, 'message_id': m.id});
+      if (activeChatId == m.chatId) markChatRead(m.chatId);
+    }
+    notifyListeners();
+  }
+}

@@ -1,0 +1,708 @@
+/* Admin panel — dependency-free single page app. All user data is rendered with textContent (no innerHTML). */
+(() => {
+  'use strict';
+
+  const PERMISSIONS = {
+    super_admin: ['*'],
+    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media'],
+    support: ['dashboard', 'users.view', 'reports.view', 'groups.view'],
+  };
+  const NAV = [
+    { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
+    { id: 'users', label: 'Users', perm: 'users.view' },
+    { id: 'reports', label: 'Reports', perm: 'reports.view' },
+    { id: 'groups', label: 'Groups', perm: 'groups.view' },
+    { id: 'settings', label: 'Settings', perm: 'settings' },
+    { id: 'admins', label: 'Admin team', perm: 'admins' },
+    { id: 'logs', label: 'Activity log', perm: 'logs.view' },
+  ];
+  const REASONS = { spam: 'Spam', abuse: 'Abuse / harassment', scam: 'Scam / fraud', violence: 'Violence', sexual: 'Sexual content', illegal: 'Illegal', other: 'Other' };
+
+  const state = {
+    token: sessionStorage.getItem('adminToken'),
+    admin: null,
+    page: location.hash.slice(1) || 'dashboard',
+    openReports: 0,
+  };
+  const root = document.getElementById('app');
+
+  // ------------------------------------------------------------------ helpers
+  function el(tag, attrs, ...children) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === 'class') e.className = v;
+      else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+      else if (k === 'value') e.value = v;
+      else if (k === 'checked') e.checked = !!v;
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of children.flat(Infinity)) {
+      if (c === null || c === undefined || c === false) continue;
+      e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return e;
+  }
+
+  function svg(tag, attrs, ...children) {
+    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+    for (const c of children.flat()) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    return e;
+  }
+
+  function can(perm) {
+    if (!state.admin) return false;
+    const perms = PERMISSIONS[state.admin.role] || [];
+    return perms.includes('*') || perms.includes(perm) || perms.includes(perm.split('.')[0]);
+  }
+
+  let toastTimer;
+  function toast(message, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = message;
+    t.className = isError ? 'toast error' : 'toast';
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+  }
+
+  async function api(method, path, body) {
+    const res = await fetch(`/api/admin${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* empty body */ }
+    if (res.status === 401 && path !== '/login') {
+      logout();
+      throw new Error('Your session expired, please log in again');
+    }
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || `Request failed (${res.status})`);
+    return data;
+  }
+
+  async function action(fn, okMessage) {
+    try {
+      const r = await fn();
+      if (okMessage) toast(okMessage);
+      return r;
+    } catch (err) {
+      toast(err.message, true);
+      return undefined;
+    }
+  }
+
+  const fmtDate = (d) => (d ? new Date(d).toLocaleString() : '—');
+  const fmtNum = (n) => Number(n || 0).toLocaleString();
+  function fmtBytes(b) {
+    const n = Number(b || 0);
+    if (n < 1024) return `${n} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let v = n / 1024;
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+    return `${v.toFixed(1)} ${units[i]}`;
+  }
+  function ago(d) {
+    if (!d) return 'never';
+    const s = Math.round((Date.now() - new Date(d).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    return `${Math.floor(s / 86400)} d ago`;
+  }
+  const fullName = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ') || '(no name)';
+
+  function statusChip(u) {
+    if (u.status === 'banned') return el('span', { class: 'chip bad' }, u.banned_until ? `Banned until ${new Date(u.banned_until).toLocaleDateString()}` : 'Banned');
+    if (u.status === 'deleted') return el('span', { class: 'chip' }, 'Deleted');
+    return el('span', { class: 'chip ok' }, u.online ? 'Online' : 'Active');
+  }
+
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  function pager(data, onPage) {
+    const pages = Math.max(1, Math.ceil(data.total / data.limit));
+    return el('div', { class: 'pager' },
+      `${fmtNum(data.total)} total · page ${data.page} of ${pages}`,
+      el('button', { class: 'btn small', disabled: data.page <= 1, onclick: () => onPage(data.page - 1) }, '‹ Prev'),
+      el('button', { class: 'btn small', disabled: data.page >= pages, onclick: () => onPage(data.page + 1) }, 'Next ›'));
+  }
+
+  function table(headers, rows, emptyText) {
+    if (!rows.length) return el('div', { class: 'table-wrap' }, el('div', { class: 'empty' }, emptyText || 'Nothing here yet'));
+    return el('div', { class: 'table-wrap' },
+      el('table', {}, el('thead', {}, el('tr', {}, headers.map((h) => el('th', {}, h)))), el('tbody', {}, rows)));
+  }
+
+  // ------------------------------------------------------------------ overlays
+  let drawerEls = [];
+  function closeDrawer() { drawerEls.forEach((e) => e.remove()); drawerEls = []; }
+  function openDrawer(content) {
+    closeDrawer();
+    const overlay = el('div', { class: 'overlay', onclick: closeDrawer });
+    const drawer = el('div', { class: 'drawer', role: 'dialog' }, el('button', { class: 'btn small close', onclick: closeDrawer }, 'Close'), content);
+    document.body.append(overlay, drawer);
+    drawerEls = [overlay, drawer];
+  }
+
+  function modal(title, bodyNodes, confirmLabel, onConfirm, danger) {
+    return new Promise((resolve) => {
+      const overlay = el('div', { class: 'overlay top' });
+      const close = (v) => { overlay.remove(); box.remove(); resolve(v); };
+      const confirm = el('button', { class: danger ? 'btn danger' : 'btn primary' }, confirmLabel);
+      confirm.addEventListener('click', async () => {
+        confirm.disabled = true;
+        const ok = await onConfirm();
+        confirm.disabled = false;
+        if (ok !== false) close(true);
+      });
+      const box = el('div', { class: 'modal', role: 'dialog' }, el('h3', {}, title), bodyNodes,
+        el('div', { class: 'btn-row' }, confirm, el('button', { class: 'btn', onclick: () => close(false) }, 'Cancel')));
+      overlay.addEventListener('click', () => close(false));
+      document.body.append(overlay, box);
+    });
+  }
+
+  function banModal(userId, defaultReason, onDone) {
+    const reason = el('textarea', { placeholder: 'Reason (the user will see this)' }, defaultReason || '');
+    const duration = el('select', {},
+      el('option', { value: '24' }, '1 day'), el('option', { value: '168' }, '7 days'),
+      el('option', { value: '720' }, '30 days'), el('option', { value: '' }, 'Permanent'));
+    return modal('Ban user', [
+      el('div', { class: 'field' }, el('label', {}, 'Reason'), reason),
+      el('div', { class: 'field' }, el('label', {}, 'Duration'), duration),
+    ], 'Ban user', async () => {
+      if (!reason.value.trim()) { toast('Reason is required', true); return false; }
+      const r = await action(() => api('POST', `/users/${userId}/ban`, {
+        reason: reason.value.trim(), duration_hours: duration.value ? Number(duration.value) : null,
+      }), 'User banned');
+      if (r && onDone) onDone();
+      return !!r;
+    }, true);
+  }
+
+  async function mediaPreview(m) {
+    try {
+      const res = await fetch(m.admin_url, { headers: { Authorization: `Bearer ${state.token}` } });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
+      if (m.mime.startsWith('image/')) return el('div', { class: 'preview-media' }, el('img', { src: url, alt: 'Reported image' }));
+      if (m.mime.startsWith('video/')) return el('div', { class: 'preview-media' }, el('video', { src: url, controls: true }));
+      if (m.mime.startsWith('audio/') || m.kind === 'voice') return el('audio', { src: url, controls: true });
+      return el('a', { href: url, download: m.name || 'file' }, `Download ${m.name || 'file'} (${fmtBytes(m.size)})`);
+    } catch (_) {
+      return el('div', { class: 'muted' }, 'File is no longer available');
+    }
+  }
+
+  // ------------------------------------------------------------------ login
+  function renderLogin() {
+    const email = el('input', { type: 'email', placeholder: 'admin@example.com', autocomplete: 'username', required: true });
+    const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', required: true });
+    const submit = el('button', { class: 'btn primary', type: 'submit' }, 'Log in');
+    const form = el('form', { class: 'login' },
+      el('h1', {}, 'Admin Panel'), el('p', {}, 'Sign in to manage users, reports and settings.'),
+      el('div', { class: 'field' }, el('label', {}, 'Email'), email),
+      el('div', { class: 'field' }, el('label', {}, 'Password'), password),
+      submit);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submit.disabled = true;
+      const r = await action(() => api('POST', '/login', { email: email.value, password: password.value }));
+      submit.disabled = false;
+      if (r) {
+        state.token = r.token;
+        state.admin = r.admin;
+        sessionStorage.setItem('adminToken', r.token);
+        render();
+      }
+    });
+    root.replaceChildren(el('div', { class: 'login-wrap' }, form));
+    email.focus();
+  }
+
+  function logout() {
+    state.token = null;
+    state.admin = null;
+    sessionStorage.removeItem('adminToken');
+    closeDrawer();
+    renderLogin();
+  }
+
+  function changePassword() {
+    const cur = el('input', { type: 'password', autocomplete: 'current-password' });
+    const next = el('input', { type: 'password', autocomplete: 'new-password' });
+    modal('Change password', [
+      el('div', { class: 'field' }, el('label', {}, 'Current password'), cur),
+      el('div', { class: 'field' }, el('label', {}, 'New password (min 10 characters)'), next),
+    ], 'Change password', async () => {
+      const r = await action(() => api('POST', '/me/password', { current_password: cur.value, new_password: next.value }));
+      if (r) { toast('Password changed — please log in again'); logout(); }
+      return !!r;
+    });
+  }
+
+  // ------------------------------------------------------------------ layout
+  let main;
+  function renderLayout() {
+    const allowed = NAV.filter((n) => can(n.perm));
+    if (!allowed.some((n) => n.id === state.page)) state.page = allowed[0] ? allowed[0].id : 'dashboard';
+    const side = el('nav', { class: 'side' },
+      el('div', { class: 'brand' }, 'Chat Admin'),
+      allowed.map((n) => el('button', {
+        class: n.id === state.page ? 'active' : '',
+        onclick: () => { state.page = n.id; location.hash = n.id; renderLayout(); },
+      }, n.label, n.id === 'reports' && state.openReports ? el('span', { class: 'badge' }, state.openReports) : null)),
+      el('div', { class: 'spacer' }),
+      el('button', { onclick: changePassword }, 'Change password'),
+      el('button', { onclick: logout }, 'Log out'),
+      el('div', { class: 'who' }, state.admin.name || state.admin.email, el('br'), state.admin.role.replace('_', ' ')));
+    main = el('main', {});
+    root.replaceChildren(el('div', { class: 'layout' }, side, main));
+    PAGES[state.page]();
+  }
+
+  function head(title, ...right) {
+    return el('div', { class: 'page-head' }, el('h2', {}, title), el('div', { class: 'btn-row' }, right));
+  }
+
+  // ------------------------------------------------------------------ dashboard
+  function barChart(title, points) {
+    const w = 600;
+    const h = 180;
+    const pad = 22;
+    const max = Math.max(1, ...points.map((p) => Number(p.count)));
+    const bw = (w - pad) / points.length;
+    const bars = points.map((p, i) => {
+      const bh = ((h - pad - 8) * Number(p.count)) / max;
+      const rect = svg('rect', { class: 'bar', x: pad + i * bw + 1, y: h - pad - bh, width: Math.max(1, bw - 2), height: bh, rx: 2 });
+      rect.append(svg('title', {}, `${p.day}: ${p.count}`));
+      return rect;
+    });
+    const last = points.length - 1;
+    const labels = [0, Math.floor(points.length / 2), last].map((i) => svg('text', {
+      class: 'axis',
+      x: i === 0 ? pad : i === last ? w : pad + i * bw + bw / 2,
+      y: h - 6,
+      'text-anchor': i === 0 ? 'start' : i === last ? 'end' : 'middle',
+    }, points[i] ? points[i].day.slice(5) : ''));
+    const maxLabel = svg('text', { class: 'axis', x: 0, y: 12 }, String(max));
+    return el('div', { class: 'card chart' }, el('h3', {}, title),
+      svg('svg', { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': title }, bars, labels, maxLabel));
+  }
+
+  async function pageDashboard() {
+    main.replaceChildren(head('Dashboard', el('button', { class: 'btn', onclick: pageDashboard }, 'Refresh')), el('div', { class: 'muted' }, 'Loading…'));
+    const d = await action(() => api('GET', '/dashboard'));
+    if (!d) return;
+    state.openReports = d.reports_open;
+    const stat = (label, value) => el('div', { class: 'card stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+    main.replaceChildren(
+      head('Dashboard', el('button', { class: 'btn', onclick: pageDashboard }, 'Refresh')),
+      el('div', { class: 'stats' },
+        stat('Total users', fmtNum(d.users_total)),
+        stat('Online now', fmtNum(d.online_now)),
+        stat('Active (24h)', fmtNum(d.users_active_24h)),
+        stat('Active (30d)', fmtNum(d.users_active_30d)),
+        stat('Signups today', fmtNum(d.users_new_today)),
+        stat('Signups (7 days)', fmtNum(d.users_new_7d)),
+        stat('Messages today', fmtNum(d.messages_today)),
+        stat('Total messages', fmtNum(d.messages_total)),
+        stat('Groups', fmtNum(d.groups_total)),
+        stat('Private chats', fmtNum(d.private_chats_total)),
+        stat('Open reports', fmtNum(d.reports_open)),
+        stat('Banned users', fmtNum(d.users_banned)),
+        stat('Storage used', fmtBytes(d.storage_bytes))),
+      el('div', { class: 'charts' }, barChart('New signups — last 30 days', d.signups_30d), barChart('Messages — last 14 days', d.messages_14d)));
+  }
+
+  // ------------------------------------------------------------------ users
+  const usersState = { q: '', status: 'all', page: 1 };
+  async function pageUsers() {
+    const search = el('input', { type: 'text', placeholder: 'Search name, @username, phone or ID', value: usersState.q, style: 'flex:1;min-width:220px' });
+    const status = el('select', {},
+      ['all', 'active', 'banned', 'deleted'].map((s) => el('option', { value: s, selected: usersState.status === s ? true : null }, s[0].toUpperCase() + s.slice(1))));
+    const listBox = el('div', {});
+    main.replaceChildren(head('Users'), el('div', { class: 'toolbar' }, search, status), listBox);
+
+    async function load() {
+      const q = new URLSearchParams({ q: usersState.q, status: usersState.status, page: usersState.page });
+      const data = await action(() => api('GET', `/users?${q}`));
+      if (!data) return;
+      const rows = data.users.map((u) => el('tr', { class: 'clickable', onclick: () => openUser(u.id, load) },
+        el('td', { class: 'num' }, u.id),
+        el('td', {}, fullName(u), u.is_verified ? el('span', { class: 'chip info', style: 'margin-left:6px' }, 'Verified') : null),
+        el('td', {}, u.username ? `@${u.username}` : el('span', { class: 'muted' }, '—')),
+        el('td', { class: 'num' }, u.phone),
+        el('td', {}, statusChip(u)),
+        el('td', { class: 'muted' }, u.online ? 'online' : ago(u.last_seen_at)),
+        el('td', { class: 'muted' }, new Date(u.created_at).toLocaleDateString())));
+      listBox.replaceChildren(
+        table(['ID', 'Name', 'Username', 'Phone', 'Status', 'Last seen', 'Joined'], rows, 'No users match'),
+        pager(data, (p) => { usersState.page = p; load(); }));
+    }
+    search.addEventListener('input', debounce(() => { usersState.q = search.value.trim(); usersState.page = 1; load(); }, 300));
+    status.addEventListener('change', () => { usersState.status = status.value; usersState.page = 1; load(); });
+    load();
+  }
+
+  async function openUser(id, refreshList) {
+    const d = await action(() => api('GET', `/users/${id}`));
+    if (!d) return;
+    const u = d.user;
+    const reload = () => { openUser(id, refreshList); if (refreshList) refreshList(); };
+    const actions = [];
+    if (u.status !== 'deleted') {
+      if (can('users.ban')) {
+        actions.push(u.status === 'banned'
+          ? el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/unban`), 'User unbanned')) reload(); } }, 'Unban')
+          : el('button', { class: 'btn danger', onclick: () => banModal(id, '', reload) }, 'Ban'));
+      }
+      if (can('users.logout')) {
+        actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/logout-all`), 'Logged out from all devices')) reload(); } }, 'Log out all devices'));
+      }
+      if (can('users.verify')) {
+        actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/verify`, { verified: !u.is_verified }), u.is_verified ? 'Badge removed' : 'Verified badge added')) reload(); } }, u.is_verified ? 'Remove verified badge' : 'Give verified badge'));
+      }
+      if (can('users.delete')) {
+        actions.push(el('button', {
+          class: 'btn danger',
+          onclick: () => {
+            const confirmInput = el('input', { type: 'text', placeholder: 'Type DELETE' });
+            modal('Delete account', [el('p', {}, 'This removes the profile, frees the phone number and removes the user from all groups. Messages stay as "Deleted Account".'), confirmInput], 'Delete account', async () => {
+              if (confirmInput.value !== 'DELETE') { toast('Type DELETE to confirm', true); return false; }
+              const r = await action(() => api('DELETE', `/users/${id}`), 'Account deleted');
+              if (r) reload();
+              return !!r;
+            }, true);
+          },
+        }, 'Delete account'));
+      }
+    }
+    openDrawer([
+      el('div', { style: 'display:flex;gap:14px;align-items:center' },
+        u.avatar_url ? el('img', { class: 'avatar', src: u.avatar_url, alt: '' }) : el('div', { class: 'avatar' }),
+        el('div', {}, el('h3', {}, fullName(u)), el('div', { class: 'muted' }, u.username ? `@${u.username}` : 'no username', ' · ID ', u.id), statusChip(u))),
+      el('section', {}, el('div', { class: 'btn-row' }, actions)),
+      el('section', {}, el('h4', {}, 'Profile'), el('div', { class: 'kv' },
+        el('div', {}, 'Phone'), el('div', {}, u.phone),
+        el('div', {}, 'Bio'), el('div', {}, u.bio || '—'),
+        el('div', {}, 'Joined'), el('div', {}, fmtDate(u.created_at)),
+        el('div', {}, 'Last seen'), el('div', {}, u.online ? 'Online now' : fmtDate(u.last_seen_at)),
+        u.status === 'banned' ? [el('div', {}, 'Ban reason'), el('div', {}, u.ban_reason || '—')] : null)),
+      el('section', {}, el('h4', {}, 'Activity'), el('div', { class: 'kv' },
+        el('div', {}, 'Messages sent'), el('div', {}, fmtNum(d.stats.messages_sent)),
+        el('div', {}, 'Groups'), el('div', {}, fmtNum(d.stats.groups)),
+        el('div', {}, 'Blocked by'), el('div', {}, `${fmtNum(d.stats.blocked_by_count)} users`),
+        el('div', {}, 'Reports against'), el('div', {}, fmtNum(d.stats.reports_against)))),
+      el('section', {}, el('h4', {}, `Active devices (${d.sessions.length})`),
+        d.sessions.length ? d.sessions.map((s) => el('div', { class: 'bubble' },
+          el('small', {}, [s.platform || 'unknown', s.app_version ? `v${s.app_version}` : null, `IP ${s.ip || '—'}`].filter(Boolean).join(' · ')),
+          `${s.device_name || 'Unknown device'} — last active ${ago(s.last_active_at)}`)) : el('div', { class: 'muted' }, 'No active devices')),
+      el('section', {}, el('h4', {}, 'Admin history'),
+        d.logs.length ? d.logs.map((l) => el('div', { class: 'bubble' },
+          el('small', {}, `${fmtDate(l.created_at)} · ${l.admin_name || l.admin_email || 'system'}`),
+          l.action, l.details && l.details.reason ? ` — ${l.details.reason}` : '')) : el('div', { class: 'muted' }, 'No admin actions yet')),
+    ]);
+  }
+
+  // ------------------------------------------------------------------ reports
+  const reportsState = { status: 'open', page: 1 };
+  function reportSummary(r) {
+    const s = r.snapshot || {};
+    if (r.target_type === 'message' && s.message) return s.message.text || `[${s.message.type}]`;
+    if (r.target_type === 'user' && s.user) return `${fullName(s.user)}${s.user.username ? ` (@${s.user.username})` : ''}`;
+    if (r.target_type === 'chat' && s.chat) return s.chat.title || `Chat #${r.target_id}`;
+    return `#${r.target_id}`;
+  }
+
+  async function pageReports() {
+    const tabs = el('div', { class: 'tabs' }, ['open', 'resolved', 'dismissed', 'all'].map((s) => el('button', {
+      class: reportsState.status === s ? 'active' : '',
+      onclick: () => { reportsState.status = s; reportsState.page = 1; pageReports(); },
+    }, s[0].toUpperCase() + s.slice(1))));
+    const listBox = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Reports'), tabs, listBox);
+    const q = new URLSearchParams({ status: reportsState.status, page: reportsState.page });
+    const data = await action(() => api('GET', `/reports?${q}`));
+    if (!data) return;
+    if (reportsState.status === 'open') { state.openReports = data.total; }
+    const rows = data.reports.map((r) => el('tr', { class: 'clickable', onclick: () => openReport(r.id) },
+      el('td', { class: 'num' }, r.id),
+      el('td', {}, el('span', { class: 'chip warn' }, REASONS[r.reason] || r.reason)),
+      el('td', {}, r.target_type),
+      el('td', { style: 'max-width:340px' }, reportSummary(r).slice(0, 140)),
+      el('td', {}, r.open_reports_on_target > 1 ? el('span', { class: 'chip bad' }, `${r.open_reports_on_target} reports`) : '1'),
+      el('td', {}, r.reporter_first_name || (r.reporter_username ? `@${r.reporter_username}` : '—')),
+      el('td', {}, r.status === 'open' ? el('span', { class: 'chip warn' }, 'Open') : el('span', { class: 'chip ok' }, `${r.status} · ${r.action_taken || ''}`)),
+      el('td', { class: 'muted' }, ago(r.created_at))));
+    listBox.replaceChildren(
+      table(['#', 'Reason', 'Type', 'Content', 'Count', 'Reporter', 'Status', 'When'], rows, 'No reports here 🎉'),
+      pager(data, (p) => { reportsState.page = p; pageReports(); }));
+  }
+
+  async function openReport(id) {
+    const d = await action(() => api('GET', `/reports/${id}`));
+    if (!d) return;
+    const r = d.report;
+    const s = r.snapshot || {};
+    const done = () => { closeDrawer(); pageReports(); };
+    const note = el('textarea', { placeholder: 'Internal note (optional)' });
+    const banHours = el('select', {},
+      el('option', { value: '24' }, 'Ban 1 day'), el('option', { value: '168' }, 'Ban 7 days'),
+      el('option', { value: '720' }, 'Ban 30 days'), el('option', { value: '' }, 'Ban permanently'));
+    const resolve = (act, label) => el('button', {
+      class: act === 'dismiss' ? 'btn' : 'btn danger',
+      onclick: async () => {
+        const body = { action: act, note: note.value || undefined };
+        if (act.includes('ban')) body.ban_hours = banHours.value ? Number(banHours.value) : null;
+        if (await action(() => api('POST', `/reports/${id}/resolve`, body), 'Report handled')) done();
+      },
+    }, label);
+
+    let evidence;
+    if (r.target_type === 'message' && s.message) {
+      evidence = [
+        (s.context || []).map((m) => el('div', { class: m.id === s.message.id ? 'bubble hl' : 'bubble' },
+          el('small', {}, `User #${m.sender_id} · ${fmtDate(m.created_at)}`), m.text || `[${m.type}]`)),
+        d.media ? await mediaPreview(d.media) : null,
+        d.target ? el('div', { class: 'kv', style: 'margin-top:10px' },
+          el('div', {}, 'Sender'), el('div', {}, `${d.target.sender_first_name || ''} ${d.target.sender_username ? `@${d.target.sender_username}` : ''} (#${d.target.sender_id})`),
+          el('div', {}, 'Message now'), el('div', {}, d.target.deleted_at ? 'Deleted' : 'Still visible')) : null,
+      ];
+    } else if (r.target_type === 'user' && s.user) {
+      evidence = el('div', { class: 'kv' },
+        el('div', {}, 'User'), el('div', {}, `${fullName(s.user)} (#${s.user.id})`),
+        el('div', {}, 'Username'), el('div', {}, s.user.username ? `@${s.user.username}` : '—'),
+        el('div', {}, 'Bio'), el('div', {}, s.user.bio || '—'),
+        el('div', {}, 'Status now'), el('div', {}, d.target ? d.target.status : 'unknown'));
+    } else {
+      evidence = el('div', { class: 'kv' },
+        el('div', {}, 'Group'), el('div', {}, (s.chat && s.chat.title) || `#${r.target_id}`),
+        el('div', {}, 'Members'), el('div', {}, d.target ? fmtNum(d.target.member_count) : '—'),
+        el('div', {}, 'Suspended'), el('div', {}, d.target && d.target.is_suspended ? 'Yes' : 'No'));
+    }
+
+    const canResolve = r.status === 'open' && can('reports.resolve');
+    const buttons = [resolve('dismiss', 'Dismiss')];
+    if (r.target_type === 'message') buttons.push(resolve('delete_message', 'Delete message'), resolve('delete_message_and_ban', 'Delete + ban sender'));
+    if (r.target_type !== 'chat') buttons.push(resolve('ban_user', 'Ban user'));
+    if (r.target_type === 'chat') buttons.push(resolve('suspend_chat', 'Suspend group'));
+    buttons.push(resolve('warn_only', 'Mark handled'));
+
+    openDrawer([
+      el('h3', {}, `Report #${r.id} — ${REASONS[r.reason] || r.reason}`),
+      el('div', { class: 'muted' }, `${r.target_type} #${r.target_id} · reported ${fmtDate(r.created_at)} by ${r.reporter_first_name || ''} ${r.reporter_username ? `@${r.reporter_username}` : ''}`),
+      r.details ? el('section', {}, el('h4', {}, 'Reporter says'), el('div', { class: 'bubble' }, r.details)) : null,
+      el('section', {}, el('h4', {}, 'Evidence (saved when reported)'), evidence),
+      canResolve
+        ? el('section', {}, el('h4', {}, 'Action'), el('div', { class: 'field' }, banHours), el('div', { class: 'field' }, note), el('div', { class: 'btn-row' }, buttons))
+        : el('section', {}, el('h4', {}, 'Outcome'), el('div', { class: 'kv' },
+          el('div', {}, 'Status'), el('div', {}, r.status),
+          el('div', {}, 'Action'), el('div', {}, r.action_taken || '—'),
+          el('div', {}, 'By'), el('div', {}, r.resolved_by_name || '—'),
+          el('div', {}, 'Note'), el('div', {}, r.admin_note || '—'),
+          el('div', {}, 'When'), el('div', {}, fmtDate(r.resolved_at)))),
+    ]);
+  }
+
+  // ------------------------------------------------------------------ groups
+  const groupsState = { q: '', status: 'all', page: 1 };
+  async function pageGroups() {
+    const search = el('input', { type: 'text', placeholder: 'Search group title', value: groupsState.q, style: 'flex:1;min-width:220px' });
+    const status = el('select', {}, el('option', { value: 'all' }, 'All groups'), el('option', { value: 'suspended', selected: groupsState.status === 'suspended' ? true : null }, 'Suspended'));
+    const listBox = el('div', {});
+    main.replaceChildren(head('Groups'), el('div', { class: 'toolbar' }, search, status), listBox);
+
+    async function load() {
+      const q = new URLSearchParams({ q: groupsState.q, status: groupsState.status, page: groupsState.page });
+      const data = await action(() => api('GET', `/groups?${q}`));
+      if (!data) return;
+      const rows = data.groups.map((g) => {
+        const acts = [];
+        if (can('groups.suspend')) {
+          acts.push(g.is_suspended
+            ? el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('POST', `/groups/${g.id}/unsuspend`), 'Group restored')) load(); } }, 'Unsuspend')
+            : el('button', {
+              class: 'btn small danger',
+              onclick: () => {
+                const reason = el('input', { type: 'text', placeholder: 'Reason' });
+                modal(`Suspend “${g.title}”?`, [el('p', {}, 'Members can still read old messages but nobody can post.'), el('div', { class: 'field' }, reason)], 'Suspend', async () => {
+                  const r = await action(() => api('POST', `/groups/${g.id}/suspend`, { reason: reason.value }), 'Group suspended');
+                  if (r) load();
+                  return !!r;
+                }, true);
+              },
+            }, 'Suspend'));
+        }
+        if (can('groups.delete')) {
+          acts.push(el('button', {
+            class: 'btn small danger',
+            onclick: () => modal(`Delete “${g.title}”?`, [el('p', {}, 'The group and all its messages are deleted for everyone. This cannot be undone.')], 'Delete group', async () => {
+              const r = await action(() => api('DELETE', `/groups/${g.id}`), 'Group deleted');
+              if (r) load();
+              return !!r;
+            }, true),
+          }, 'Delete'));
+        }
+        return el('tr', {},
+          el('td', { class: 'num' }, g.id),
+          el('td', {}, g.title, g.is_suspended ? el('span', { class: 'chip bad', style: 'margin-left:6px' }, 'Suspended') : null),
+          el('td', { class: 'num' }, fmtNum(g.member_count)),
+          el('td', {}, g.owner_id ? `${g.owner_first_name || ''} ${g.owner_username ? `@${g.owner_username}` : ''} (#${g.owner_id})` : '—'),
+          el('td', { class: 'muted' }, ago(g.last_message_at)),
+          el('td', { class: 'muted' }, new Date(g.created_at).toLocaleDateString()),
+          el('td', {}, el('div', { class: 'btn-row' }, acts)));
+      });
+      listBox.replaceChildren(
+        table(['ID', 'Title', 'Members', 'Owner', 'Last activity', 'Created', ''], rows, 'No groups found'),
+        pager(data, (p) => { groupsState.page = p; load(); }));
+    }
+    search.addEventListener('input', debounce(() => { groupsState.q = search.value.trim(); groupsState.page = 1; load(); }, 300));
+    status.addEventListener('change', () => { groupsState.status = status.value; groupsState.page = 1; load(); });
+    load();
+  }
+
+  // ------------------------------------------------------------------ settings
+  const SETTING_LABELS = {
+    registration_open: ['New registrations open', 'Turn off to stop new phone numbers from signing up.'],
+    maintenance_mode: ['Maintenance mode', 'The app shows the maintenance message and stops working until turned off.'],
+    maintenance_message: ['Maintenance message', ''],
+    max_group_members: ['Max members per group', ''],
+    max_upload_mb: ['Max upload size (MB)', 'Also limited by your server / Nginx upload limit.'],
+    message_edit_window_hours: ['Edit window (hours)', '0 = messages can always be edited.'],
+    min_app_version: ['Minimum app version', 'Older apps are asked to update.'],
+    latest_app_version: ['Latest app version', 'Apps below this see an optional update notice.'],
+    support_username: ['Support username', 'Shown in the app for help (without @).'],
+  };
+
+  async function pageSettings() {
+    main.replaceChildren(head('Settings'), el('div', { class: 'muted' }, 'Loading…'));
+    const d = await action(() => api('GET', '/settings'));
+    if (!d) return;
+    const inputs = {};
+    const fields = Object.entries(d.definitions).map(([key, def]) => {
+      const [label, help] = SETTING_LABELS[key] || [key, ''];
+      const value = d.settings[key];
+      if (def.type === 'boolean') {
+        inputs[key] = el('input', { type: 'checkbox', checked: value, id: `s-${key}` });
+        return el('div', {}, el('label', { class: 'check', for: `s-${key}` }, inputs[key], label), help ? el('div', { class: 'muted', style: 'margin:-8px 0 12px 26px;font-size:12px' }, help) : null);
+      }
+      inputs[key] = el('input', { type: def.type === 'integer' ? 'number' : 'text', value: String(value), min: def.min, max: def.max, maxlength: def.max && def.type === 'string' ? def.max : null });
+      return el('div', { class: 'field' }, el('label', {}, label), inputs[key], help ? el('div', { class: 'muted', style: 'font-size:12px' }, help) : null);
+    });
+    const save = el('button', { class: 'btn primary' }, 'Save settings');
+    save.addEventListener('click', async () => {
+      const body = {};
+      for (const [key, def] of Object.entries(d.definitions)) {
+        const inp = inputs[key];
+        body[key] = def.type === 'boolean' ? inp.checked : def.type === 'integer' ? parseInt(inp.value, 10) : inp.value;
+      }
+      save.disabled = true;
+      await action(() => api('PUT', '/settings', body), 'Settings saved');
+      save.disabled = false;
+    });
+    main.replaceChildren(head('Settings'), el('div', { class: 'card', style: 'max-width:560px' }, fields, save));
+  }
+
+  // ------------------------------------------------------------------ admins
+  async function pageAdmins() {
+    main.replaceChildren(head('Admin team'), el('div', { class: 'muted' }, 'Loading…'));
+    const list = await action(() => api('GET', '/admins'));
+    if (!list) return;
+    const rows = list.map((a) => el('tr', {},
+      el('td', {}, a.name || '—', a.id === state.admin.id ? el('span', { class: 'chip info', style: 'margin-left:6px' }, 'You') : null),
+      el('td', {}, a.email),
+      el('td', {}, a.role.replace('_', ' ')),
+      el('td', {}, a.is_active ? el('span', { class: 'chip ok' }, 'Active') : el('span', { class: 'chip' }, 'Disabled')),
+      el('td', { class: 'muted' }, ago(a.last_login_at)),
+      el('td', {}, a.id === state.admin.id ? null : el('button', { class: 'btn small', onclick: () => editAdmin(a) }, 'Edit'))));
+    main.replaceChildren(
+      head('Admin team', el('button', { class: 'btn primary', onclick: () => editAdmin(null) }, 'Add admin')),
+      table(['Name', 'Email', 'Role', 'Status', 'Last login', ''], rows),
+      el('div', { class: 'card', style: 'margin-top:12px' },
+        el('strong', {}, 'Roles'), el('br'),
+        'Super admin: everything. Moderator: users (ban, verify, log out), reports, groups (suspend), activity log. Support: read-only access to users, reports and groups.'));
+  }
+
+  function editAdmin(a) {
+    const name = el('input', { type: 'text', value: a ? a.name : '' });
+    const email = el('input', { type: 'email', value: a ? a.email : '', disabled: !!a });
+    const role = el('select', {}, ['moderator', 'support', 'super_admin'].map((r) => el('option', { value: r, selected: a && a.role === r ? true : null }, r.replace('_', ' '))));
+    const password = el('input', { type: 'password', placeholder: a ? 'Leave empty to keep current' : 'Min 10 characters', autocomplete: 'new-password' });
+    const active = el('input', { type: 'checkbox', checked: a ? a.is_active : true, id: 'adm-active' });
+    modal(a ? `Edit ${a.email}` : 'Add admin', [
+      el('div', { class: 'field' }, el('label', {}, 'Name'), name),
+      el('div', { class: 'field' }, el('label', {}, 'Email'), email),
+      el('div', { class: 'field' }, el('label', {}, 'Role'), role),
+      el('div', { class: 'field' }, el('label', {}, a ? 'Reset password' : 'Password'), password),
+      a ? el('label', { class: 'check', for: 'adm-active' }, active, 'Active') : null,
+    ], a ? 'Save' : 'Create admin', async () => {
+      const r = a
+        ? await action(() => api('PATCH', `/admins/${a.id}`, { name: name.value, role: role.value, is_active: active.checked, password: password.value || undefined }), 'Admin updated')
+        : await action(() => api('POST', '/admins', { name: name.value, email: email.value, role: role.value, password: password.value }), 'Admin created');
+      if (r) pageAdmins();
+      return !!r;
+    });
+  }
+
+  // ------------------------------------------------------------------ logs
+  const logsState = { page: 1, action: '' };
+  async function pageLogs() {
+    const filter = el('select', {},
+      [['', 'All actions'], ['user.', 'User actions'], ['report.', 'Reports'], ['group.', 'Groups'], ['settings.', 'Settings'], ['admin.', 'Admin team & logins']]
+        .map(([v, l]) => el('option', { value: v, selected: logsState.action === v ? true : null }, l)));
+    filter.addEventListener('change', () => { logsState.action = filter.value; logsState.page = 1; pageLogs(); });
+    main.replaceChildren(head('Activity log'), el('div', { class: 'toolbar' }, filter), el('div', { class: 'muted' }, 'Loading…'));
+    const q = new URLSearchParams({ page: logsState.page, action: logsState.action });
+    const data = await action(() => api('GET', `/logs?${q}`));
+    if (!data) return;
+    const rows = data.logs.map((l) => el('tr', {},
+      el('td', { class: 'muted' }, fmtDate(l.created_at)),
+      el('td', {}, l.admin_name || l.admin_email || '—'),
+      el('td', {}, el('span', { class: 'chip' }, l.action)),
+      el('td', {}, l.target_type ? `${l.target_type} #${l.target_id || ''}` : '—'),
+      el('td', { class: 'muted', style: 'max-width:320px;word-break:break-word' }, l.details ? JSON.stringify(l.details) : ''),
+      el('td', { class: 'muted' }, l.ip || '')));
+    main.replaceChildren(head('Activity log'), el('div', { class: 'toolbar' }, filter),
+      table(['When', 'Admin', 'Action', 'Target', 'Details', 'IP'], rows),
+      pager(data, (p) => { logsState.page = p; pageLogs(); }));
+  }
+
+  const PAGES = {
+    dashboard: pageDashboard,
+    users: pageUsers,
+    reports: pageReports,
+    groups: pageGroups,
+    settings: pageSettings,
+    admins: pageAdmins,
+    logs: pageLogs,
+  };
+
+  // ------------------------------------------------------------------ boot
+  async function render() {
+    if (!state.token) return renderLogin();
+    if (!state.admin) {
+      state.admin = await action(() => api('GET', '/me'));
+      if (!state.admin) return renderLogin();
+    }
+    renderLayout();
+    if (can('reports.view') && state.page !== 'dashboard') {
+      api('GET', '/reports?status=open&limit=1').then((r) => {
+        state.openReports = r.total;
+        const badgeHost = [...document.querySelectorAll('.side button')].find((b) => b.textContent.startsWith('Reports'));
+        if (badgeHost && r.total && !badgeHost.querySelector('.badge')) badgeHost.append(el('span', { class: 'badge' }, r.total));
+      }).catch(() => {});
+    }
+    return undefined;
+  }
+
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+  render();
+})();
