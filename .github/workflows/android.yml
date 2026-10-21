@@ -37,6 +37,7 @@ jobs:
           flutter --version
           flutter create . --org com.talvio --project-name chatapp --platforms=android
           dart run tool/patch_platforms.dart
+          rm -f test/widget_test.dart  # template test for the default counter app
 
       - name: Get packages
         run: flutter pub get
