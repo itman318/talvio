@@ -9,6 +9,7 @@ import 'dart:io';
 
 void main() {
   _android();
+  _pluginCompileSdk();
   _ios();
   stdout.writeln('\nDone. Next: flutter pub get && flutter run --dart-define=API_BASE=http://<your-server>:4000');
 }
@@ -138,4 +139,40 @@ void _ios() {
     podfile.writeAsStringSync(p);
     stdout.writeln('✓ Podfile: iOS 13.0');
   }
+}
+
+/// Some plugins still compile against an old Android SDK, while current AndroidX
+/// libraries require compileSdk 36. Raise every plugin module to 36 (minSdk/targetSdk unchanged).
+void _pluginCompileSdk() {
+  const marker = 'talvio-compileSdk';
+  final kts = File('android/build.gradle.kts');
+  final groovy = File('android/build.gradle');
+  if (kts.existsSync()) {
+    final s = kts.readAsStringSync();
+    if (!s.contains(marker)) {
+      kts.writeAsStringSync('''// $marker: plugins compiled against an old SDK break newer AndroidX
+subprojects {
+    afterEvaluate {
+        (extensions.findByName("android") as? com.android.build.gradle.BaseExtension)?.compileSdkVersion(36)
+    }
+}
+
+$s''');
+    }
+  } else if (groovy.existsSync()) {
+    final s = groovy.readAsStringSync();
+    if (!s.contains(marker)) {
+      groovy.writeAsStringSync('''// $marker: plugins compiled against an old SDK break newer AndroidX
+subprojects {
+    afterEvaluate { p ->
+        if (p.hasProperty('android')) { p.android.compileSdkVersion 36 }
+    }
+}
+
+$s''');
+    }
+  } else {
+    return;
+  }
+  stdout.writeln('✓ android/build.gradle: plugins compile against SDK 36');
 }
