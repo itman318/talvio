@@ -679,3 +679,23 @@ CREATE TABLE IF NOT EXISTS ad_views (
   clicked      BOOLEAN  NOT NULL DEFAULT FALSE,
   PRIMARY KEY (campaign_id, user_id, day)
 );
+
+-- =====================================================================
+-- Batch E: QR login for web/desktop, photo albums
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS qr_logins (
+  id           BIGSERIAL    PRIMARY KEY,
+  token_hash   VARCHAR(64)  NOT NULL UNIQUE,
+  status       VARCHAR(10)  NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending', 'scanned', 'approved', 'declined', 'consumed')),
+  user_id      BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  device_name  VARCHAR(100) NOT NULL DEFAULT '',
+  platform     VARCHAR(10)  NOT NULL DEFAULT 'web',
+  ip           VARCHAR(64),
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  expires_at   TIMESTAMPTZ  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS qr_logins_expiry_idx ON qr_logins (expires_at);
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS album_id VARCHAR(36);
+CREATE INDEX IF NOT EXISTS messages_album_idx ON messages (album_id) WHERE album_id IS NOT NULL;

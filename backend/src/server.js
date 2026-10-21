@@ -41,6 +41,7 @@ const scheduler = setInterval(() => {
   callService.sweep().catch((err) => console.error('call sweep error', err)); // eslint-disable-line no-console
   secretSweepTick = (secretSweepTick + 1) % 240; // about once an hour
   require('./services/payment.service').sweep().catch(() => {});
+  if (secretSweepTick % 20 === 2) require('./services/qr.service').sweep().catch(() => {});
   require('./services/bot.service').sweep().catch((err) => console.error('bot sweep error', err)); // eslint-disable-line no-console
   if (secretSweepTick === 1) secretService.sweep().catch((err) => console.error('secret sweep error', err)); // eslint-disable-line no-console
 }, 15000);

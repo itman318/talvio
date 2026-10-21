@@ -183,6 +183,7 @@ async function serializeRows(viewerId, rows) {
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
       thread_id: m.thread_id || null,
+      album_id: m.album_id || null,
       topic_id: m.topic_id || null,
       comments_count: commentMap.get(m.id) || 0,
       reply_markup: m.reply_markup || null,
@@ -339,6 +340,13 @@ async function prepareMessage(userId, chat, body) {
 
   out.threadId = null;
   out.topicId = null;
+  out.albumId = null;
+  if (body.album_id !== undefined && body.album_id !== null && body.album_id !== '') {
+    if (!['image', 'video'].includes(type)) throw badRequest('invalid_input', 'Only photos and videos can be grouped in an album');
+    const a = String(body.album_id);
+    if (!/^[A-Za-z0-9-]{8,36}$/.test(a)) throw badRequest('invalid_input', 'Invalid album_id');
+    out.albumId = a;
+  }
   if (body.thread_id) {
     if (chat.type !== 'channel') throw badRequest('invalid_input', 'Comments are only for channel posts');
     if (type === 'poll') throw badRequest('invalid_input', 'Polls can’t be sent as comments');
@@ -386,16 +394,17 @@ async function insertMessage({
   topicId = null,
   replyMarkup = null,
   viaBotId = null,
+  albumId = null,
 }) {
   let row;
   try {
     row = await db.tx(async (c) => {
       const r = await c.query(
         `INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id,
-                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id, album_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
         [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent,
-          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId],
+          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId],
       );
       const m = r.rows[0];
       if (mentionCandidates && senderId) {
@@ -527,6 +536,7 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     mentionCandidates,
     threadId: prepared.threadId,
     topicId: prepared.topicId,
+    albumId: prepared.albumId,
     replyMarkup: internal.replyMarkup || null,
   });
   moderation.afterSend(sender, message, flags).catch((err) => console.error('moderation error', err)); // eslint-disable-line no-console

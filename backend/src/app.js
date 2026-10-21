@@ -34,6 +34,22 @@ function createApp() {
   app.use('/api/admin', adminRoutes.router);
   app.use('/api', userRoutes.router);
 
+  // Web / desktop app (installable PWA) at /web
+  const webDir = path.join(__dirname, '..', 'web-client');
+  app.use(
+    '/web',
+    (req, res, next) => {
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; " +
+          "connect-src 'self' ws: wss:; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+      );
+      res.setHeader('Service-Worker-Allowed', '/web/');
+      next();
+    },
+    express.static(webDir, { index: 'index.html', maxAge: config.isProd ? '10m' : 0 }),
+  );
+
   // Admin panel (static single-page app)
   const adminDir = path.join(__dirname, '..', 'admin-panel');
   app.use(

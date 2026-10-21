@@ -26,6 +26,7 @@ const secretService = require('../services/secret.service');
 const botService = require('../services/bot.service');
 const topicService = require('../services/topic.service');
 const paymentService = require('../services/payment.service');
+const qrService = require('../services/qr.service');
 const adsService = require('../services/ads.service');
 const settings = require('../services/settings.service');
 const { randomToken } = require('../utils/crypto');
@@ -51,6 +52,9 @@ router.post('/auth/otp/verify', h(async (req, res) => {
   res.json(await authService.verifyOtp(req.body.phone, req.body.code, req.body.device, req.ip));
 }));
 
+router.post('/auth/qr', h(async (req, res) => res.json(await qrService.create(req.body.device || {}, req.ip))));
+router.get('/auth/qr/status', h(async (req, res) => res.json(await qrService.status(req.query.token, req.query.wait, req.ip))));
+
 router.post('/auth/refresh', h(async (req, res) => {
   res.json(await authService.refresh(req.body.refresh_token, req.ip));
 }));
@@ -63,6 +67,9 @@ router.get('/media/:id/public', h(async (req, res) => {
 router.use(requireUser);
 
 router.post('/auth/logout', h(async (req, res) => res.json(await authService.logout(req.userId, req.sessionId))));
+router.post('/auth/qr/scan', h(async (req, res) => res.json(await qrService.scan(req.userId, req.body.token))));
+router.post('/auth/qr/approve', h(async (req, res) => res.json(await qrService.approve(req.userId, req.body.token))));
+router.post('/auth/qr/decline', h(async (req, res) => res.json(await qrService.decline(req.userId, req.body.token))));
 
 // --- me
 router.get('/me', h(async (req, res) => res.json(await userService.getMe(req.userId))));

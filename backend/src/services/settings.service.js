@@ -62,6 +62,10 @@ const DEFINITIONS = {
   },
   feature_ads: { type: 'boolean', default: false },
   ads_min_subscribers: { type: 'integer', default: 1000, min: 0, max: 100000000 },
+
+  // ---- Batch E
+  feature_web_login: { type: 'boolean', default: true },
+  max_accounts_per_device: { type: 'integer', default: 3, min: 1, max: 10 },
 };
 
 const FEATURE_KEYS = [
@@ -78,6 +82,7 @@ const FEATURE_KEYS = [
   'feature_topics',
   'feature_premium',
   'feature_ads',
+  'feature_web_login',
 ];
 
 let cache = null;
@@ -183,7 +188,9 @@ async function publicConfig() {
       channel_comments: s.feature_channel_comments,
       topics: s.feature_topics,
       premium: s.feature_premium,
+      web_login: s.feature_web_login,
     },
+    max_accounts: s.max_accounts_per_device,
     call_ring_timeout_sec: s.call_ring_timeout_sec,
   };
 }
