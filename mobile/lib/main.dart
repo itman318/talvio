@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'config.dart';
+import 'core/prefs.dart';
 import 'core/services.dart';
+import 'screens/more_screens.dart';
 import 'screens/auth_screens.dart';
 import 'screens/chat_screen.dart';
 import 'screens/folder_support_screens.dart';
@@ -12,11 +14,13 @@ import 'state/chat_store.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final prefs = AppPrefs();
+  await prefs.load();
   final services = AppServices();
   final chats = ChatStore(services);
-  final auth = AuthState(services, chats);
+  final auth = AuthState(services, chats)..prefs = prefs;
   services.push.onOpenChat = (chatId) {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
@@ -31,6 +35,7 @@ void main() {
     MultiProvider(
       providers: [
         Provider<AppServices>.value(value: services),
+        ChangeNotifierProvider<AppPrefs>.value(value: prefs),
         ChangeNotifierProvider<ChatStore>.value(value: chats),
         ChangeNotifierProvider<AuthState>.value(value: auth),
       ],
@@ -47,10 +52,14 @@ class ChatApp extends StatefulWidget {
 }
 
 class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
+  late bool _locked;
+  DateTime? _pausedAt;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _locked = context.read<AppPrefs>().lockEnabled; // lock on cold start
   }
 
   @override
@@ -64,7 +73,13 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
     final store = context.read<ChatStore>();
     final services = context.read<AppServices>();
     final auth = context.read<AuthState>();
+    final prefs = context.read<AppPrefs>();
     if (state == AppLifecycleState.resumed) {
+      final pausedAt = _pausedAt;
+      _pausedAt = null;
+      if (pausedAt != null && prefs.lockEnabled && !_locked && DateTime.now().difference(pausedAt) >= Duration(minutes: prefs.lockAfterMinutes)) {
+        setState(() => _locked = true);
+      }
       store.setForeground(true);
       if (auth.status == AuthStatus.loggedIn && !services.socket.isConnected) {
         services.api.refreshTokens().then((_) => services.socket.connect()).catchError((_) {});
@@ -75,6 +90,8 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.paused) {
       store.setForeground(false);
+      // Not while the lock screen is up: the fingerprint prompt itself pauses the app on some phones.
+      if (!_locked) _pausedAt = DateTime.now();
     }
   }
 
@@ -83,6 +100,7 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
+    final prefs = context.watch<AppPrefs>();
     if (_lastStatus != null && _lastStatus != auth.status) {
       // Login state changed (e.g. logged out from another device): drop any pushed screens.
       WidgetsBinding.instance.addPostFrameCallback((_) => navigatorKey.currentState?.popUntil((r) => r.isFirst));
@@ -115,6 +133,22 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
         colorSchemeSeed: const Color(0xFF2AABEE),
         appBarTheme: const AppBarTheme(centerTitle: false),
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF2AABEE),
+        brightness: Brightness.dark,
+        appBarTheme: const AppBarTheme(centerTitle: false),
+      ),
+      themeMode: prefs.themeMode,
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final scaled = MediaQuery(data: mq.copyWith(textScaler: TextScaler.linear(prefs.textScale)), child: child ?? const SizedBox());
+        final showLock = _locked && prefs.lockEnabled && auth.status == AuthStatus.loggedIn;
+        return Stack(textDirection: TextDirection.ltr, children: [
+          scaled,
+          if (showLock) Positioned.fill(child: LockScreen(onUnlocked: () => setState(() => _locked = false))),
+        ]);
+      },
       // Rebuilding the key resets navigation when the login state changes.
       home: KeyedSubtree(key: ValueKey(auth.status), child: home),
     );

@@ -214,6 +214,8 @@ class Message {
   List<ReactionCount> reactions;
   String? myReaction;
   int views;
+  final bool silent;
+  final List<int> mentions;
   final Map<String, dynamic>? meta;
   final String? clientId;
   DateTime? editedAt;
@@ -242,6 +244,8 @@ class Message {
     List<ReactionCount>? reactions,
     this.myReaction,
     this.views = 0,
+    this.silent = false,
+    this.mentions = const [],
     this.meta,
     this.clientId,
     this.editedAt,
@@ -279,6 +283,8 @@ class Message {
       reactions: ReactionCount.listFrom(j['reactions']),
       myReaction: j['my_reaction'] as String?,
       views: _int(j['views'] ?? 0),
+      silent: j['silent'] == true,
+      mentions: ((j['mentions'] as List?) ?? []).map(_int).toList(),
       meta: j['meta'] == null ? null : Map<String, dynamic>.from(j['meta'] as Map),
       clientId: j['client_id'] as String?,
       editedAt: _date(j['edited_at']),
@@ -287,6 +293,10 @@ class Message {
   }
 
   bool get isSystem => type == 'system';
+
+  /// {lat, lng, title} for location messages.
+  Map<String, dynamic>? get location =>
+      meta != null && meta!['location'] is Map ? Map<String, dynamic>.from(meta!['location'] as Map) : null;
   bool get isLocal => id < 0;
 
   /// Short text used in the chat list and notifications.
@@ -302,6 +312,8 @@ class Message {
         return '📎 ${media?.name ?? 'File'}';
       case 'poll':
         return '📊 $text';
+      case 'location':
+        return text.isNotEmpty ? '📍 $text' : '📍 Location';
       default:
         return text;
     }
@@ -325,6 +337,13 @@ class Chat {
   bool isVerified;
   bool canPost;
   bool isSuspended;
+  int slowModeSec;
+  bool joinApproval;
+  int pendingRequests;
+  bool markedUnread;
+  int unreadMentions;
+  Message? pinnedMessage;
+  int pinnedCount;
   int unreadCount;
   int readUpTo;
   int deliveredUpTo;
@@ -353,6 +372,13 @@ class Chat {
     this.isVerified = false,
     this.canPost = true,
     this.isSuspended = false,
+    this.slowModeSec = 0,
+    this.joinApproval = false,
+    this.pendingRequests = 0,
+    this.markedUnread = false,
+    this.unreadMentions = 0,
+    this.pinnedMessage,
+    this.pinnedCount = 0,
     this.unreadCount = 0,
     this.readUpTo = 0,
     this.deliveredUpTo = 0,
@@ -382,6 +408,13 @@ class Chat {
         isVerified: j['is_verified'] == true,
         canPost: j['can_post'] != false,
         isSuspended: j['is_suspended'] == true,
+        slowModeSec: _int(j['slow_mode_sec'] ?? 0),
+        joinApproval: j['join_approval'] == true,
+        pendingRequests: _int(j['pending_requests'] ?? 0),
+        markedUnread: j['marked_unread'] == true,
+        unreadMentions: _int(j['unread_mentions'] ?? 0),
+        pinnedMessage: j['pinned_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['pinned_message'] as Map)),
+        pinnedCount: _int(j['pinned_count'] ?? 0),
         unreadCount: _int(j['unread_count'] ?? 0),
         readUpTo: _int(j['read_up_to'] ?? 0),
         deliveredUpTo: _int(j['delivered_up_to'] ?? 0),

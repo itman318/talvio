@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../utils/format.dart';
 import 'avatar.dart';
 import 'media_widgets.dart';
+import 'extras.dart';
 import 'poll_view.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -28,12 +29,13 @@ class MessageBubble extends StatelessWidget {
 
   Widget _ticks(BuildContext context) {
     final m = message;
-    if (m.sendState == SendState.sending) return const Icon(Icons.schedule, size: 14, color: Colors.black45);
+    final colors = ChatColors.of(context);
+    if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: colors.meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
     if (chat.isSavedMessages || chat.isChannel) return const SizedBox.shrink();
     if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Color(0xFF2AABEE));
-    if (m.id <= chat.deliveredUpTo) return const Icon(Icons.done_all, size: 15, color: Colors.black45);
-    return const Icon(Icons.done, size: 15, color: Colors.black45);
+    if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: colors.meta);
+    return Icon(Icons.done, size: 15, color: colors.meta);
   }
 
   Widget _body(BuildContext context, Color accent) {
@@ -49,6 +51,8 @@ class MessageBubble extends StatelessWidget {
         return MessageFile(message: m, color: accent);
       case 'poll':
         return PollView(message: m, accent: accent);
+      case 'location':
+        return LocationView(message: m, accent: accent);
       default:
         return const SizedBox.shrink();
     }
@@ -58,9 +62,10 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final m = message;
-    final bg = isMine ? const Color(0xFFE6F4FF) : Colors.white;
+    final bg = isMine ? ChatColors.of(context).mine : ChatColors.of(context).other;
     final accent = isMine ? const Color(0xFF2AABEE) : colorForId(m.senderId ?? 0);
-    final hasText = m.text.isNotEmpty && m.type != 'poll';
+    final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
+    final colors = ChatColors.of(context);
 
     final children = <Widget>[
       if (chat.isChannel && !isMine)
@@ -109,19 +114,19 @@ class MessageBubble extends StatelessWidget {
         ),
       if (m.type != 'text') _body(context, accent),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
-      if (hasText) Text(m.text, style: const TextStyle(fontSize: 15.5, height: 1.3)),
+      if (hasText) MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.3, color: Theme.of(context).colorScheme.onSurface)),
       ReactionChips(message: m),
       const SizedBox(height: 2),
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (chat.isChannel && !m.isLocal) ...[
-            const Icon(Icons.visibility_outlined, size: 13, color: Colors.black45),
-            Text(' ${compactNumber(m.views)}  ', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+            Icon(Icons.visibility_outlined, size: 13, color: colors.meta),
+            Text(' ${compactNumber(m.views)}  ', style: TextStyle(fontSize: 11, color: colors.meta)),
           ],
-          if (m.authorSignature != null) Text('${m.authorSignature} · ', style: const TextStyle(fontSize: 11, color: Colors.black45)),
-          if (m.editedAt != null) const Text('edited · ', style: TextStyle(fontSize: 11, color: Colors.black45)),
-          Text(messageTime(m.createdAt), style: const TextStyle(fontSize: 11, color: Colors.black45)),
+          if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: colors.meta)),
+          if (m.editedAt != null) Text('edited · ', style: TextStyle(fontSize: 11, color: colors.meta)),
+          Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11, color: colors.meta)),
           if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
         ],
       ),

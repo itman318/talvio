@@ -12,6 +12,7 @@ import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'folder_support_screens.dart';
 import 'home_screen.dart';
+import 'more_screens.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -55,6 +56,22 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SessionsScreen())),
           ),
           ListTile(
+            leading: const Icon(Icons.pin_outlined),
+            title: const Text('App lock'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppLockSettingsScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('Appearance'),
+            subtitle: const Text('Dark mode, text size'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppearanceScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.data_usage),
+            title: const Text('Data & storage'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StorageScreen())),
+          ),
+          ListTile(
             leading: const Icon(Icons.archive_outlined),
             title: const Text('Archived chats'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchivedChatsScreen())),
@@ -69,6 +86,21 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Help & support'),
             subtitle: support.isNotEmpty ? Text('Or message @$support') : null,
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportListScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.quiz_outlined),
+            title: const Text('FAQ'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
+          ),
+          ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('Terms of service'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'terms', fallbackTitle: 'Terms'))),
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Privacy policy'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'privacy', fallbackTitle: 'Privacy'))),
           ),
           const Divider(),
           ListTile(

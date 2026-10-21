@@ -248,14 +248,17 @@ class ChatStore extends ChangeNotifier {
     if (list == null) return;
     final newest = list.firstWhere((m) => !m.isLocal, orElse: () => Message(id: 0, chatId: chatId, type: 'text', createdAt: DateTime.now()));
     if (newest.id <= 0) return;
-    if ((_lastReadSent[chatId] ?? 0) >= newest.id && (chat == null || chat.unreadCount == 0)) return;
+    final dirty = chat != null && (chat.unreadCount != 0 || chat.markedUnread || chat.unreadMentions != 0);
+    if ((_lastReadSent[chatId] ?? 0) >= newest.id && !dirty) return;
     _lastReadSent[chatId] = newest.id;
-    if (chat != null && chat.unreadCount != 0) {
+    if (chat != null && dirty) {
       chat.unreadCount = 0;
+      chat.unreadMentions = 0;
+      chat.markedUnread = false;
       notifyListeners();
     }
     final payload = {'chat_id': chatId, 'message_id': newest.id};
-    if (socket.isConnected) {
+    if (socket.isConnected && !(chat?.markedUnread ?? false)) {
       socket.emit('message:read', payload);
     } else {
       api.post('/chats/$chatId/read', {'message_id': newest.id}).catchError((_) => null);
@@ -280,7 +283,7 @@ class ChatStore extends ChangeNotifier {
       ? null
       : ReplyInfo(id: r.id, senderId: r.senderId, senderName: r.sender?.name ?? '', type: r.type, text: r.text);
 
-  Future<void> sendText(int chatId, String text, {Message? replyTo}) async {
+  Future<void> sendText(int chatId, String text, {Message? replyTo, bool silent = false}) async {
     final local = Message(
       id: _localId--,
       chatId: chatId,
@@ -291,7 +294,29 @@ class ChatStore extends ChangeNotifier {
       clientId: _newClientId(),
       createdAt: DateTime.now(),
       sendState: SendState.sending,
-      outbox: {'type': 'text', 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id},
+      outbox: {'type': 'text', 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id, if (silent) 'silent': true},
+    );
+    _insertLocal(local);
+    await _deliver(local);
+  }
+
+  Future<void> sendLocation(int chatId, double lat, double lng, {String title = ''}) async {
+    final local = Message(
+      id: _localId--,
+      chatId: chatId,
+      senderId: myId,
+      type: 'location',
+      text: title,
+      meta: {
+        'location': {'lat': lat, 'lng': lng, 'title': title},
+      },
+      clientId: _newClientId(),
+      createdAt: DateTime.now(),
+      sendState: SendState.sending,
+      outbox: {
+        'type': 'location',
+        'location': {'lat': lat, 'lng': lng, 'title': title},
+      },
     );
     _insertLocal(local);
     await _deliver(local);
@@ -576,8 +601,11 @@ class ChatStore extends ChangeNotifier {
   Future<Map<String, dynamic>> invitePreview(String code) async =>
       Map<String, dynamic>.from(await api.get('/chats/invite/${Uri.encodeComponent(code)}') as Map);
 
-  Future<Chat> joinByInvite(String code) async {
-    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/invite/${Uri.encodeComponent(code)}/join') as Map));
+  /// Returns null when the chat requires admin approval (request sent).
+  Future<Chat?> joinByInvite(String code) async {
+    final r = Map<String, dynamic>.from(await api.post('/chats/invite/${Uri.encodeComponent(code)}/join') as Map);
+    if (r['requested'] == true) return null;
+    final c = Chat.fromJson(r);
     _upsertChat(c);
     return c;
   }
@@ -656,8 +684,11 @@ class ChatStore extends ChangeNotifier {
   Future<Map<String, dynamic>> publicPreview(String username) async =>
       Map<String, dynamic>.from(await api.get('/chats/public/${Uri.encodeComponent(username)}') as Map);
 
-  Future<Chat> joinPublic(int chatId) async {
-    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/$chatId/join') as Map));
+  /// Returns null when the chat requires admin approval (request sent).
+  Future<Chat?> joinPublic(int chatId) async {
+    final r = Map<String, dynamic>.from(await api.post('/chats/$chatId/join') as Map);
+    if (r['requested'] == true) return null;
+    final c = Chat.fromJson(r);
     _upsertChat(c);
     return c;
   }
@@ -786,6 +817,100 @@ class ChatStore extends ChangeNotifier {
     announcements.remove(a);
     notifyListeners();
     await api.post('/announcements/${a.id}/dismiss');
+  }
+
+
+  // ------------------------------------------------------------------ pins
+  Future<List<Message>> listPins(int chatId) async {
+    final data = await api.get('/chats/$chatId/pins') as List;
+    return data.map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+  }
+
+  Future<void> pin(int chatId, int messageId) async {
+    await api.post('/chats/$chatId/pins', {'message_id': messageId});
+    await refreshChat(chatId);
+  }
+
+  Future<void> unpin(int chatId, Object messageId) async {
+    await api.delete('/chats/$chatId/pins/$messageId');
+    await refreshChat(chatId);
+  }
+
+  // ------------------------------------------------------------------ unread marks
+  Future<void> setMarkedUnread(Chat chat, bool value) async {
+    if (!value) {
+      chat.markedUnread = false;
+      chat.unreadCount = 0;
+      notifyListeners();
+      final last = chat.lastMessage;
+      if (last != null && !last.isLocal) {
+        await api.post('/chats/${chat.id}/read', {'message_id': last.id});
+      } else {
+        await api.patch('/chats/${chat.id}/settings', {'marked_unread': false});
+      }
+      return;
+    }
+    await updateChatSettings(chat.id, {'marked_unread': true});
+  }
+
+  // ------------------------------------------------------------------ search
+  /// Returns pairs of (chat summary, message), newest first.
+  Future<List<(Map<String, dynamic>, Message)>> searchMessages(String q, {int? chatId}) async {
+    final r = Map<String, dynamic>.from(await api.get('/search/messages', query: {
+      'q': q,
+      if (chatId != null) 'chat_id': '$chatId',
+    }) as Map);
+    return (r['results'] as List).map((x) {
+      final m = Map<String, dynamic>.from(x as Map);
+      return (Map<String, dynamic>.from(m['chat'] as Map), Message.fromJson(Map<String, dynamic>.from(m['message'] as Map)));
+    }).toList();
+  }
+
+  // ------------------------------------------------------------------ contacts
+  Future<List<AppUser>> syncContacts(List<String> phones) async {
+    final out = <AppUser>[];
+    for (var i = 0; i < phones.length; i += 2000) {
+      final part = phones.sublist(i, (i + 2000).clamp(0, phones.length).toInt());
+      final data = await api.post('/contacts/sync', {'phones': part}) as List;
+      out.addAll(data.map((j) => AppUser.fromJson(Map<String, dynamic>.from(j as Map))));
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ group admin tools
+  Future<Chat> patchChat(int chatId, Map<String, dynamic> body) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.patch('/chats/$chatId', body) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<Map<String, dynamic>> listInvites(int chatId) async => Map<String, dynamic>.from(await api.get('/chats/$chatId/invites') as Map);
+
+  Future<void> createInvite(int chatId, {String name = '', int? expireHours, int? usageLimit}) async {
+    await api.post('/chats/$chatId/invites', {
+      'name': name,
+      if (expireHours != null) 'expire_hours': expireHours,
+      if (usageLimit != null) 'usage_limit': usageLimit,
+    });
+  }
+
+  Future<void> revokeInvite(int chatId, String code) async => api.delete('/chats/$chatId/invites/$code');
+
+  Future<List<Map<String, dynamic>>> joinRequests(int chatId) async {
+    final data = await api.get('/chats/$chatId/join-requests') as List;
+    return data.map((j) => Map<String, dynamic>.from(j as Map)).toList();
+  }
+
+  Future<void> resolveJoinRequest(int chatId, int userId, bool approve) async {
+    await api.post('/chats/$chatId/join-requests/$userId/${approve ? 'approve' : 'decline'}');
+    await refreshChat(chatId);
+    if (members.containsKey(chatId)) await loadMembers(chatId);
+  }
+
+  Future<void> transferOwnership(int chatId, int userId) async {
+    await api.put('/chats/$chatId/owner', {'user_id': userId});
+    await refreshChat(chatId);
+    await loadMembers(chatId);
   }
 
   // ------------------------------------------------------------------ typing & names
@@ -935,7 +1060,10 @@ class ChatStore extends ChangeNotifier {
       if ((chat.lastMessage?.id ?? 0) <= m.id || chat.lastMessage!.isLocal) chat.lastMessage = m;
       if (!mine && (m.senderId != myId || m.senderId == null)) {
         final viewing = activeChatId == m.chatId && appInForeground;
-        if (!viewing) chat.unreadCount += 1;
+        if (!viewing) {
+          chat.unreadCount += 1;
+          if (m.mentions.contains(myId)) chat.unreadMentions += 1;
+        }
         _typing[m.chatId]?.remove(m.senderId);
       }
       _sortChats();

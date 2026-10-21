@@ -46,6 +46,21 @@ class MediaCache {
     return api.download(m.url, target);
   }
 
+  Future<int> sizeBytes() async {
+    final dir = await _cacheDir();
+    var total = 0;
+    await for (final e in dir.list(recursive: true, followLinks: false)) {
+      if (e is File) total += await e.length();
+    }
+    return total;
+  }
+
+  Future<void> clear() async {
+    final dir = await _cacheDir();
+    if (await dir.exists()) await dir.delete(recursive: true);
+    _dir = null;
+  }
+
   /// Puts a file we just uploaded into the cache so we don't download it again.
   Future<void> putLocal(MediaInfo m, String localPath) async {
     try {

@@ -24,6 +24,10 @@ void _android() {
     'android.permission.INTERNET',
     'android.permission.RECORD_AUDIO',
     'android.permission.POST_NOTIFICATIONS',
+    'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_COARSE_LOCATION',
+    'android.permission.READ_CONTACTS',
+    'android.permission.USE_BIOMETRIC',
   ];
   for (final p in perms) {
     if (!xml.contains(p)) {
@@ -47,6 +51,22 @@ void _android() {
     f.writeAsStringSync(g);
     stdout.writeln('✓ $name: minSdk 23');
   }
+
+  // Fingerprint unlock (local_auth) needs a FlutterFragmentActivity.
+  final src = Directory('android/app/src/main');
+  if (src.existsSync()) {
+    for (final f in src.listSync(recursive: true).whereType<File>()) {
+      final n = f.path.split(Platform.pathSeparator).last;
+      if (n != 'MainActivity.kt' && n != 'MainActivity.java') continue;
+      var code = f.readAsStringSync();
+      if (code.contains('FlutterFragmentActivity')) continue;
+      code = code
+          .replaceAll('io.flutter.embedding.android.FlutterActivity', 'io.flutter.embedding.android.FlutterFragmentActivity')
+          .replaceAll(RegExp(r'\bFlutterActivity\b'), 'FlutterFragmentActivity');
+      f.writeAsStringSync(code);
+      stdout.writeln('✓ ${f.path}: FlutterFragmentActivity (for fingerprint unlock)');
+    }
+  }
 }
 
 void _ios() {
@@ -60,6 +80,9 @@ void _ios() {
     'NSCameraUsageDescription': 'Take photos to send in chats.',
     'NSPhotoLibraryUsageDescription': 'Choose photos and videos to send in chats.',
     'NSMicrophoneUsageDescription': 'Record voice messages.',
+    'NSLocationWhenInUseUsageDescription': 'Share your location in a chat when you choose to.',
+    'NSContactsUsageDescription': 'Find friends from your contacts who use the app.',
+    'NSFaceIDUsageDescription': 'Unlock the app with Face ID.',
   };
   final add = StringBuffer();
   keys.forEach((k, v) {
@@ -74,7 +97,7 @@ void _ios() {
     s = s.substring(0, i) + add.toString() + s.substring(i);
     plist.writeAsStringSync(s);
   }
-  stdout.writeln('✓ Info.plist: camera, photos, microphone permissions');
+  stdout.writeln('✓ Info.plist: camera, photos, microphone, location, contacts, Face ID');
 
   final podfile = File('ios/Podfile');
   if (podfile.existsSync()) {

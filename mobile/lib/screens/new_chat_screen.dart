@@ -8,11 +8,13 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../core/services.dart';
 import '../models/models.dart';
+import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'channel_screens.dart';
 import 'chat_screen.dart';
+import 'more_screens.dart';
 
 /// Search field + results for finding users by @username or phone number.
 class UserSearch extends StatefulWidget {
@@ -169,15 +171,21 @@ class NewChatScreen extends StatelessWidget {
             title: const Text('New group'),
             onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewGroupScreen())),
           ),
-          ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.campaign)),
-            title: const Text('New channel'),
-            onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewChannelScreen())),
-          ),
+          if (context.read<AuthState>().feature('channels'))
+            ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.campaign)),
+              title: const Text('New channel'),
+              onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewChannelScreen())),
+            ),
           ListTile(
             leading: const CircleAvatar(child: Icon(Icons.bookmark)),
             title: const Text('Saved Messages'),
             onTap: () => _openWith(context, myId),
+          ),
+          ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.contacts_outlined)),
+            title: const Text('Find friends from contacts'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactsSyncScreen())),
           ),
           ListTile(
             leading: const CircleAvatar(child: Icon(Icons.link)),
@@ -214,10 +222,15 @@ Future<void> showJoinGroupDialog(BuildContext context) async {
       if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
       return;
     }
-    final ok = await confirm(context, p['title'] as String, '${p['member_count']} members\n\n${p['description'] ?? ''}'.trim(), ok: 'Join group');
+    final ok = await confirm(context, p['title'] as String, '${p['member_count']} members\n\n${p['description'] ?? ''}'.trim(), ok: p['join_approval'] == true ? 'Request to join' : 'Join group');
     if (!ok || !context.mounted) return;
     final chat = await store.joinByInvite(code.split('/').last);
-    if (context.mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+    if (!context.mounted) return;
+    if (chat == null) {
+      showInfo(context, 'Request sent — the admins will review it');
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
   } catch (e) {
     if (context.mounted) showError(context, e);
   }

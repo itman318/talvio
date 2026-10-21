@@ -741,6 +741,7 @@ function publicSummary(c, memberCount, isMember) {
     avatar_url: userService.avatarUrl(c.avatar_media_id),
     member_count: memberCount,
     is_member: isMember,
+    join_approval: c.type === 'group' && !!c.join_approval,
   };
 }
 

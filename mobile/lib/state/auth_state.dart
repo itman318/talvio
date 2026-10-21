@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../config.dart';
 import '../core/api_client.dart';
+import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import 'chat_store.dart';
@@ -23,6 +24,9 @@ class AuthState extends ChangeNotifier {
   AppUser? me;
   Map<String, dynamic> appConfig = {};
   String? logoutReason;
+
+  /// Device prefs; drafts and app lock are cleared on logout.
+  AppPrefs? prefs;
 
   ApiClient get api => services.api;
 
@@ -180,6 +184,7 @@ class AuthState extends ChangeNotifier {
     me = null;
     await api.clearTokens();
     await _storage.delete(key: 'me');
+    await prefs?.clearAccountData();
   }
 
   // ------------------------------------------------------------------ helpers
@@ -220,6 +225,9 @@ class AuthState extends ChangeNotifier {
     }
     return false;
   }
+
+  /// Admin feature switches (default on when the server doesn't say).
+  bool feature(String key) => (appConfig['features'] as Map?)?[key] != false;
 
   bool get updateAvailable => _isOlder(AppConfig.appVersion, '${appConfig['latest_app_version'] ?? '0'}');
 }

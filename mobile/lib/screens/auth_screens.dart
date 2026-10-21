@@ -10,6 +10,7 @@ import '../config.dart';
 import '../core/api_client.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
+import 'more_screens.dart';
 
 // ------------------------------------------------------------------ phone number
 class PhoneScreen extends StatefulWidget {
@@ -160,6 +161,11 @@ class _OtpScreenState extends State<OtpScreen> {
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } on ApiException catch (e) {
       if (!mounted) return;
+      if (e.code == 'account_banned') {
+        _code.clear();
+        await showBannedDialog(context, e);
+        return;
+      }
       final left = e.extra['attempts_left'];
       showInfo(context, left != null ? '${e.message} ($left attempts left)' : e.message);
       _code.clear();

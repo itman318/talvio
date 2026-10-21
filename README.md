@@ -1,4 +1,4 @@
-# ChatApp — Phase 1 (Telegram-style messaging)
+# ChatApp (Telegram-style messaging)
 
 | Folder | What | Tech |
 |---|---|---|
@@ -41,8 +41,21 @@ prefix blacklist) with auto-reports, broadcast (in-app banner and/or push, targe
 or platform), support desk (tickets, replies, priority, assignment), two-factor authentication for
 admins with backup codes and an optional "require 2FA" policy.
 
-## Next (Phase 3 ideas)
+## Batch A — what's included
 
-Voice/video calls (WebRTC + TURN or LiveKit), secret end-to-end encrypted chats, bots & mini apps,
-group video chat, premium subscriptions & payments, topics in groups, Redis for multi-server
-scaling, S3 media storage.
+**User app:** pinned messages (bar on top + list), @mentions with an @ badge in the chat list,
+mark as unread, drafts kept per chat, silent messages (hold send), search inside all messages,
+find friends from phone contacts, share location, dark mode & text size, app lock (PIN + fingerprint/
+Face ID, auto-lock), media cache size & clear, download my data, Terms / Privacy / FAQ pages,
+ban appeal from the login screen. Groups: slow mode, approve new members (join requests), extra
+invite links with expiry and usage limit, transfer ownership.
+
+**Admin panel:** ban appeals queue, moderator notes on users, export a user's data, set usernames
+and a reserved-usernames list, group members & owner transfer, IP blacklist, feature switches
+(channels, stories, polls, voice messages, location), Terms/Privacy/FAQ editor, broadcasts to app
+versions below X.
+
+## Next (remaining batches)
+
+B: voice/video calls · C: secret end-to-end chats · D: bots, channel comments, topics, premium,
+payments (JazzCash/Easypaisa), ads · E: web/desktop + QR login, multiple accounts, Urdu, image editor.

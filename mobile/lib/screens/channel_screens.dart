@@ -412,6 +412,11 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
     try {
       final chat = widget.info['is_member'] == true ? await store.getChat(id) : await store.joinPublic(id);
       if (!mounted) return;
+      if (chat == null) {
+        showInfo(context, 'Request sent — the admins will review it');
+        Navigator.pop(context);
+        return;
+      }
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
     } catch (e) {
       if (mounted) showError(context, e);
@@ -456,7 +461,9 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
           FilledButton(
             onPressed: _busy ? null : _join,
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: Text(i['is_member'] == true ? 'Open' : (isChannel ? 'Join channel' : 'Join group')),
+            child: Text(i['is_member'] == true
+                ? 'Open'
+                : (isChannel ? 'Join channel' : (i['join_approval'] == true ? 'Request to join' : 'Join group'))),
           ),
         ],
       ),

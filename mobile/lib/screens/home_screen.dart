@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../config.dart';
+import '../core/prefs.dart';
 import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
@@ -24,6 +28,34 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _searching = false;
   final _search = TextEditingController();
   int? _folderId; // null = all chats
+  List<(Map<String, dynamic>, Message)> _found = [];
+  bool _searchingMessages = false;
+  Timer? _debounce;
+
+  void _onSearch(String q) {
+    setState(() {});
+    _debounce?.cancel();
+    if (q.trim().length < 2) {
+      setState(() => _found = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 400), () async {
+      setState(() => _searchingMessages = true);
+      try {
+        final r = await context.read<ChatStore>().searchMessages(q.trim());
+        if (mounted && _search.text.trim() == q.trim()) setState(() => _found = r);
+      } catch (_) {
+      } finally {
+        if (mounted) setState(() => _searchingMessages = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
 
   Future<void> _refresh(ChatStore store) async {
     try {
@@ -40,7 +72,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Wrap(children: [
           ListTile(leading: const Icon(Icons.person_outline), title: const Text('New message'), onTap: () => Navigator.pop(ctx, 'chat')),
           ListTile(leading: const Icon(Icons.group_add_outlined), title: const Text('New group'), onTap: () => Navigator.pop(ctx, 'group')),
-          ListTile(leading: const Icon(Icons.campaign_outlined), title: const Text('New channel'), onTap: () => Navigator.pop(ctx, 'channel')),
+          if (context.read<AuthState>().feature('channels'))
+            ListTile(leading: const Icon(Icons.campaign_outlined), title: const Text('New channel'), onTap: () => Navigator.pop(ctx, 'channel')),
         ]),
       ),
     );
@@ -64,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     var chats = folder == null ? store.chats : store.chats.where(folder.matches).toList();
     if (q.isNotEmpty) chats = chats.where((c) => c.title.toLowerCase().contains(q)).toList();
-    final showStories = q.isEmpty && folder == null;
+    final showStories = q.isEmpty && folder == null && auth.feature('stories');
+    final showFound = q.length >= 2;
 
     return Scaffold(
       appBar: AppBar(
@@ -72,8 +106,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ? TextField(
                 controller: _search,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: 'Search chats', border: InputBorder.none),
-                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(hintText: 'Search chats and messages', border: InputBorder.none),
+                onChanged: _onSearch,
               )
             : Text(store.connected || !store.chatsLoaded ? 'Chats' : 'Connecting…'),
         actions: [
@@ -82,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => setState(() {
               _searching = !_searching;
               _search.clear();
+              _found = [];
             }),
           ),
           PopupMenuButton<String>(
@@ -132,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (auth.updateAvailable)
             Container(
               width: double.infinity,
-              color: const Color(0xFFE6F4FF),
+              color: Theme.of(context).colorScheme.primaryContainer,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: const Text('A new version of the app is available. Please update from the store.'),
             ),
@@ -157,7 +192,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
                     onRefresh: () => _refresh(store),
-                    child: ListView.builder(
+                    child: showFound
+                        ? _searchResults(chats)
+                        : ListView.builder(
                       itemCount: chats.length + (showStories ? 1 : 0) + (chats.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i) {
                         if (showStories && i == 0) return const Column(children: [StoryBar(), Divider(height: 1)]);
@@ -191,6 +228,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+extension on _HomeScreenState {
+  Widget _searchResults(List<Chat> chats) {
+    return ListView(children: [
+      if (chats.isNotEmpty) const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Chats', style: TextStyle(fontWeight: FontWeight.w600))),
+      ...chats.map((c) => ChatTile(chat: c)),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Row(children: [
+          const Text('Messages', style: TextStyle(fontWeight: FontWeight.w600)),
+          if (_searchingMessages) const Padding(padding: EdgeInsets.only(left: 8), child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))),
+        ]),
+      ),
+      if (!_searchingMessages && _found.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('No messages found')),
+      ..._found.map((r) {
+        final (chatInfo, m) = r;
+        final title = '${chatInfo['title'] ?? ''}';
+        final avatar = chatInfo['avatar_url'] as String?;
+        return ListTile(
+          leading: Avatar(id: (chatInfo['id'] as num).toInt(), name: title, url: avatar == null ? null : AppConfig.absolute(avatar)),
+          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text('${m.sender != null && chatInfo['type'] != 'private' ? '${m.sender!.firstName}: ' : ''}${m.preview}',
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          trailing: Text(chatListTime(m.createdAt), style: const TextStyle(fontSize: 12)),
+          onTap: () {
+            final id = (chatInfo['id'] as num).toInt();
+            Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id, initial: context.read<ChatStore>().chatById(id))));
+          },
+        );
+      }),
+    ]);
+  }
+}
+
 class _FolderChip extends StatelessWidget {
   const _FolderChip({required this.label, required this.selected, required this.onTap, this.onLongPress});
   final String label;
@@ -217,6 +287,7 @@ class ChatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
+    final draft = context.watch<AppPrefs>().draft(chat.id);
     final typing = store.typingText(chat);
     final last = chat.lastMessage;
     final mine = last != null && last.senderId == store.myId && !last.isSystem;
@@ -266,13 +337,31 @@ class ChatTile extends StatelessWidget {
       subtitle: Row(
         children: [
           Expanded(
-            child: Text(
-              typing ?? preview,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: typing != null ? const TextStyle(color: Color(0xFF2AABEE)) : null,
-            ),
+            child: typing == null && draft != null && draft.trim().isNotEmpty
+                ? Text.rich(
+                    TextSpan(children: [
+                      const TextSpan(text: 'Draft: ', style: TextStyle(color: Colors.red)),
+                      TextSpan(text: draft.replaceAll('\n', ' ')),
+                    ]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                : Text(
+                    typing ?? preview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: typing != null ? const TextStyle(color: Color(0xFF2AABEE)) : null,
+                  ),
           ),
+          if (chat.unreadMentions > 0)
+            Container(
+              margin: const EdgeInsets.only(left: 6),
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(color: Color(0xFF2AABEE), shape: BoxShape.circle),
+              child: const Text('@', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           if (chat.unreadCount > 0)
             Container(
               margin: const EdgeInsets.only(left: 6),
@@ -282,6 +371,13 @@ class ChatTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text('${chat.unreadCount > 999 ? '999+' : chat.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+            )
+          else if (chat.markedUnread)
+            Container(
+              margin: const EdgeInsets.only(left: 6),
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(color: chat.isMuted ? Colors.black38 : const Color(0xFF2AABEE), shape: BoxShape.circle),
             )
           else if (chat.isPinned)
             const Icon(Icons.push_pin, size: 16, color: Colors.black38),
@@ -303,6 +399,11 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
           leading: Icon(chat.isPinned ? Icons.push_pin_outlined : Icons.push_pin),
           title: Text(chat.isPinned ? 'Unpin' : 'Pin to top'),
           onTap: () => Navigator.pop(ctx, 'pin'),
+        ),
+        ListTile(
+          leading: Icon(chat.unreadCount > 0 || chat.markedUnread ? Icons.mark_chat_read_outlined : Icons.mark_chat_unread_outlined),
+          title: Text(chat.unreadCount > 0 || chat.markedUnread ? 'Mark as read' : 'Mark as unread'),
+          onTap: () => Navigator.pop(ctx, 'unread'),
         ),
         ListTile(
           leading: Icon(chat.isMuted ? Icons.volume_up : Icons.volume_off),
@@ -330,6 +431,9 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
         break;
       case 'mute':
         await store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'});
+        break;
+      case 'unread':
+        await store.setMarkedUnread(chat, !(chat.unreadCount > 0 || chat.markedUnread));
         break;
       case 'archive':
         await store.updateChatSettings(chat.id, {'is_archived': !chat.isArchived});

@@ -33,10 +33,11 @@ createdb chatapp_test
 TEST_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/chatapp_test npm test
 ```
 
-26 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2) cover OTP login &
+38 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A) cover OTP login &
 token refresh, profiles & privacy, private chats, receipts, pagination, edit/delete, blocking, groups,
 media access control, forwarding, reports, admin flows, account deletion — plus channels, polls & quizzes,
-reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA.
+reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA — plus pins, mentions, message search, slow mode, join requests,
+invite links, owner transfer, ban appeals, reserved usernames, IP blacklist, feature flags and version-targeted broadcasts.
 
 ## Production deployment (VPS)
 
@@ -135,13 +136,27 @@ Authenticated routes need `Authorization: Bearer <access_token>`.
 | `GET/POST /api/stories`, `POST /api/stories/:id/view\|reply`, `GET …/viewers`, `DELETE /api/stories/:id` | 24-hour stories |
 | `GET/POST /api/support/tickets`, `GET …/:id`, `POST …/:id/messages`, `POST …/:id/close` | Support tickets |
 | `GET /api/announcements`, `POST /api/announcements/:id/dismiss` | In-app broadcast banners |
+| **Batch A** | |
+| `GET/POST /api/chats/:id/pins`, `DELETE /api/chats/:id/pins/:messageId\|all` | Pinned messages |
+| `GET /api/search/messages?q=&chat_id=` | Full-text search across your chats |
+| `POST /api/chats/:id/messages` `{silent:true}` / `{type:"location", location:{lat,lng,title}}` | Silent message / location |
+| `PATCH /api/chats/:id/settings` `{marked_unread}` | Mark a chat unread |
+| `PATCH /api/chats/:id` `{slow_mode_sec, join_approval}` | Slow mode (0/10/30/60/300/900/3600 s), approve new members |
+| `GET/POST /api/chats/:id/invites`, `DELETE …/invites/:code` | Extra invite links with expiry / usage limit |
+| `GET /api/chats/:id/join-requests`, `POST …/:userId/approve\|decline` | Join requests |
+| `PUT /api/chats/:id/owner` `{user_id}` | Transfer ownership |
+| `GET /api/me/export` | Download my data (JSON) |
+| `POST /api/appeals` `{appeal_token, message}` | Banned user appeals (token comes with the `account_banned` error at login) |
+| `GET /api/pages/:slug` (`terms`, `privacy`, `faq`, `about`) — also as HTML at `/p/:slug` | Legal pages & FAQ |
 
 Socket.IO events are documented at the top of `src/realtime/socket.js`
 (`message:send` with ack, `message:new`, receipts, typing, presence, `session:revoked`, …).
 
 Admin API (`/api/admin`): login (with 2FA code), dashboard, users (ban / unban / restrict / log out / verify / delete),
 reports (resolve with delete / restrict / ban / suspend), groups & channels (suspend / verify / delete),
-support desk, broadcasts, settings (incl. moderation), admin team (roles, reset 2FA), activity log, own 2FA setup.
+support desk, broadcasts, settings (incl. moderation), admin team (roles, reset 2FA), activity log, own 2FA setup —
+and in Batch A: ban appeals, moderator notes, user data export, set/reserve usernames, group members & owner transfer,
+IP blacklist, feature flags, pages & FAQ editor, broadcasts to app versions below X.
 
 ## Automatic moderation (Phase 2)
 

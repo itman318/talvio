@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import '../widgets/extras.dart';
 
 // ================================================================== chat folders
 class FoldersScreen extends StatelessWidget {
@@ -390,8 +391,9 @@ class _TicketScreenState extends State<TicketScreen> {
   Widget build(BuildContext context) {
     final t = _ticket;
     final closed = t?.status == 'closed';
+    final cc = ChatColors.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFDCE6EE),
+      backgroundColor: cc.background,
       appBar: AppBar(
         title: Text(t?.subject ?? 'Support', maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [if (t != null && !closed) TextButton(onPressed: _close, child: const Text('Close'))],
@@ -400,9 +402,9 @@ class _TicketScreenState extends State<TicketScreen> {
         if (t != null)
           Container(
             width: double.infinity,
-            color: Colors.white,
+            color: cc.bar,
             padding: const EdgeInsets.all(8),
-            child: Text(_statusText(t.status), textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+            child: Text(_statusText(t.status), textAlign: TextAlign.center, style: TextStyle(color: cc.meta)),
           ),
         Expanded(
           child: ListView(
@@ -415,14 +417,14 @@ class _TicketScreenState extends State<TicketScreen> {
                         margin: const EdgeInsets.symmetric(vertical: 3),
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: m.fromUser ? const Color(0xFFE6F4FF) : Colors.white,
+                          color: m.fromUser ? cc.mine : cc.other,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           if (!m.fromUser) const Text('Support team', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2AABEE), fontSize: 13)),
                           Text(m.text),
                           const SizedBox(height: 2),
-                          Text('${chatListTime(m.createdAt)} ${messageTime(m.createdAt)}', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                          Text('${chatListTime(m.createdAt)} ${messageTime(m.createdAt)}', style: TextStyle(fontSize: 11, color: cc.meta)),
                         ]),
                       ),
                     ))
@@ -433,7 +435,7 @@ class _TicketScreenState extends State<TicketScreen> {
           SafeArea(
             top: false,
             child: Container(
-              color: Colors.white,
+              color: cc.bar,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
                 Expanded(

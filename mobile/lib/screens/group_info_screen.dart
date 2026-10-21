@@ -9,6 +9,7 @@ import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/report_dialog.dart';
 import 'channel_screens.dart';
+import 'more_screens.dart';
 import 'new_chat_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -131,6 +132,38 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
+  static const _slowModes = [0, 10, 30, 60, 300, 900, 3600];
+
+  static String _slowLabel(int sec) {
+    if (sec == 0) return 'Off';
+    if (sec < 60) return '${sec}s';
+    if (sec < 3600) return '${sec ~/ 60}m';
+    return '${sec ~/ 3600}h';
+  }
+
+  Future<void> _pickSlowMode(Chat chat) async {
+    final v = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Slow mode'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text('Members can send one message per this interval. Admins are not limited.'),
+          ),
+          ..._slowModes.map((s) => RadioListTile<int>(
+                value: s,
+                groupValue: chat.slowModeSec,
+                title: Text(_slowLabel(s)),
+                onChanged: (x) => Navigator.pop(ctx, x),
+              )),
+        ],
+      ),
+    );
+    if (v == null || v == chat.slowModeSec) return;
+    await _run(() => _store.patchChat(chat.id, {'slow_mode_sec': v}));
+  }
+
   Future<void> _memberActions(Chat chat, GroupMember m) async {
     if (m.user.id == _store.myId) return;
     final canRemove = chat.isOwner || (chat.myRole == 'admin' && m.role == 'member');
@@ -143,6 +176,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             ListTile(leading: const Icon(Icons.admin_panel_settings), title: const Text('Make admin'), onTap: () => Navigator.pop(ctx, 'admin')),
           if (chat.isOwner && m.role == 'admin')
             ListTile(leading: const Icon(Icons.remove_moderator), title: const Text('Remove admin rights'), onTap: () => Navigator.pop(ctx, 'member')),
+          if (chat.isOwner)
+            ListTile(leading: const Icon(Icons.key_outlined), title: const Text('Transfer ownership'), onTap: () => Navigator.pop(ctx, 'owner')),
           if (canRemove && m.role != 'owner')
             ListTile(
               leading: const Icon(Icons.person_remove, color: Colors.red),
@@ -160,6 +195,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       case 'admin':
       case 'member':
         await _run(() => _store.setRole(chat.id, m.user.id, a));
+        break;
+      case 'owner':
+        if (await confirm(context, 'Make ${m.user.name} the owner?',
+            'They get full control of “${chat.title}”. You will stay as an admin and cannot undo this yourself.',
+            ok: 'Transfer', danger: true)) {
+          await _run(() => _store.transferOwnership(chat.id, m.user.id), '${m.user.name} is now the owner');
+        }
         break;
       case 'remove':
         if (await confirm(context, 'Remove ${m.user.name}?', 'They will be removed from “${chat.title}”.', ok: 'Remove', danger: true)) {
@@ -238,6 +280,30 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               title: const Text('Statistics'),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat))),
             ),
+          if (chat.isGroup && chat.isAdmin) ...[
+            ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Slow mode'),
+              trailing: Text(_slowLabel(chat.slowModeSec)),
+              onTap: () => _pickSlowMode(chat),
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.how_to_reg_outlined),
+              title: const Text('Approve new members'),
+              subtitle: const Text('People with an invite must be approved by an admin'),
+              value: chat.joinApproval,
+              onChanged: (v) => _run(() => _store.patchChat(chat.id, {'join_approval': v})),
+            ),
+            if (chat.joinApproval || chat.pendingRequests > 0)
+              ListTile(
+                leading: const Icon(Icons.person_search_outlined),
+                title: const Text('Join requests'),
+                trailing: chat.pendingRequests > 0
+                    ? CircleAvatar(radius: 12, backgroundColor: const Color(0xFF2AABEE), child: Text('${chat.pendingRequests}', style: const TextStyle(fontSize: 12, color: Colors.white)))
+                    : null,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))),
+              ),
+          ],
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),
             title: const Text('Notifications'),
@@ -263,6 +329,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   PopupMenuItem(value: 'reset', child: Text('Reset code')),
                 ],
               ),
+            ),
+          if (chat.isAdmin && chat.inviteCode != null)
+            ListTile(
+              leading: const Icon(Icons.add_link),
+              title: const Text('Invite links'),
+              subtitle: const Text('Links with expiry date or a member limit'),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InviteLinksScreen(chat: chat))),
             ),
           const Divider(),
           if (chat.isAdmin && !chat.isSuspended)

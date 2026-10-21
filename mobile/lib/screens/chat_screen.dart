@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,12 +11,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 
+import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
 import 'channel_screens.dart';
@@ -35,6 +38,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatStore _store;
+  late final AppPrefs _prefs;
   Chat? _chat;
   bool _loading = true;
   String? _error;
@@ -55,7 +59,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _store = context.read<ChatStore>();
+    _prefs = context.read<AppPrefs>();
     _chat = widget.initial;
+    _text.text = _prefs.draft(widget.chatId) ?? '';
     _scroll.addListener(() {
       if (_scroll.hasClients && _scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
         _store.loadMore(chatId).catchError((_) {});
@@ -77,6 +83,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _prefs.setDraft(chatId, _editing == null ? _text.text : '');
     _store.closeChat(chatId);
     _recTimer?.cancel();
     _recorder.dispose();
@@ -86,7 +93,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ------------------------------------------------------------------ sending
-  Future<void> _send() async {
+  Future<void> _send({bool silent = false}) async {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     if (_editing != null) {
@@ -103,10 +110,49 @@ class _ChatScreenState extends State<ChatScreen> {
     final reply = _replyTo;
     setState(() => _replyTo = null);
     _text.clear();
-    await _store.sendText(chatId, text, replyTo: reply);
+    await _store.sendText(chatId, text, replyTo: reply, silent: silent);
   }
 
-  /// Long-press on send: pick a date & time and schedule the typed text.
+  /// Long-press on send: send silently or schedule.
+  Future<void> _sendOptions() async {
+    if (_text.text.trim().isEmpty) return;
+    final a = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(leading: const Icon(Icons.notifications_off_outlined), title: const Text('Send without sound'), onTap: () => Navigator.pop(ctx, 'silent')),
+          ListTile(leading: const Icon(Icons.schedule), title: const Text('Schedule message'), onTap: () => Navigator.pop(ctx, 'schedule')),
+        ]),
+      ),
+    );
+    if (a == 'silent') await _send(silent: true);
+    if (a == 'schedule') await _scheduleCurrent();
+  }
+
+  Future<void> _shareLocation() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (mounted) showInfo(context, 'Allow location access to share your location');
+        return;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) showInfo(context, 'Turn on location (GPS) first');
+        return;
+      }
+      if (mounted) showInfo(context, 'Getting your location…');
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      if (!mounted) return;
+      final ok = await confirm(context, 'Send your location?',
+          '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)} (±${pos.accuracy.round()} m)', ok: 'Send');
+      if (ok) await _store.sendLocation(chatId, pos.latitude, pos.longitude, title: 'My location');
+    } catch (e) {
+      if (mounted) showInfo(context, 'Could not get your location');
+    }
+  }
+
+  /// Pick a date & time and schedule the typed text.
   Future<void> _scheduleCurrent() async {
     final text = _text.text.trim();
     if (text.isEmpty) return;
@@ -174,12 +220,18 @@ class _ChatScreenState extends State<ChatScreen> {
           ListTile(leading: const Icon(Icons.photo_camera), title: const Text('Camera'), onTap: () => Navigator.pop(ctx, 'camera')),
           ListTile(leading: const Icon(Icons.videocam), title: const Text('Video'), onTap: () => Navigator.pop(ctx, 'video')),
           ListTile(leading: const Icon(Icons.attach_file), title: const Text('File'), onTap: () => Navigator.pop(ctx, 'file')),
-          if (_store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false)
+          if (context.read<AuthState>().feature('location'))
+            ListTile(leading: const Icon(Icons.location_on_outlined), title: const Text('Location'), onTap: () => Navigator.pop(ctx, 'location')),
+          if ((_store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false) && context.read<AuthState>().feature('polls'))
             ListTile(leading: const Icon(Icons.poll_outlined), title: const Text('Poll or quiz'), onTap: () => Navigator.pop(ctx, 'poll')),
         ]),
       ),
     );
     if (choice == null) return;
+    if (choice == 'location') {
+      await _shareLocation();
+      return;
+    }
     if (choice == 'poll') {
       if (!mounted) return;
       final poll = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => const CreatePollScreen()));
@@ -304,6 +356,12 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const Divider(height: 1),
+          if (chat.type == 'private' || chat.isAdmin)
+            ListTile(
+              leading: const Icon(Icons.push_pin_outlined),
+              title: Text(chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
+              onTap: () => Navigator.pop(ctx, chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin'),
+            ),
           if (canClosePoll) ListTile(leading: const Icon(Icons.stop_circle_outlined), title: const Text('Stop poll'), onTap: () => Navigator.pop(ctx, 'close_poll')),
           if (chat.canPost) ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(ctx, 'reply')),
           if (m.text.isNotEmpty) ListTile(leading: const Icon(Icons.copy), title: const Text('Copy text'), onTap: () => Navigator.pop(ctx, 'copy')),
@@ -322,6 +380,18 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     switch (a) {
+      case 'pin':
+      case 'unpin':
+        try {
+          if (a == 'pin') {
+            await _store.pin(chatId, m.id);
+          } else {
+            await _store.unpin(chatId, m.id);
+          }
+        } catch (e) {
+          if (mounted) showError(context, e);
+        }
+        break;
       case 'close_poll':
         if (await confirm(context, 'Stop poll?', 'Nobody will be able to vote after this. Results become final.', ok: 'Stop poll')) {
           try {
@@ -475,7 +545,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFDCE6EE),
+      backgroundColor: ChatColors.of(context).background,
       appBar: AppBar(
         titleSpacing: 0,
         title: InkWell(
@@ -522,6 +592,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: const Text('Connecting…', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
             ),
+          if (chat.pinnedMessage != null) _pinnedBar(chat),
           Expanded(child: _messageList(chat, messages, store)),
           _bottomBar(chat),
         ],
@@ -577,12 +648,82 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _pinnedBar(Chat chat) {
+    final p = chat.pinnedMessage!;
+    return Material(
+      color: ChatColors.of(context).bar,
+      child: InkWell(
+        onTap: () => _showPins(chat),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black12))),
+          child: Row(children: [
+            Container(width: 3, height: 34, color: const Color(0xFF2AABEE)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(chat.pinnedCount > 1 ? 'Pinned message (${chat.pinnedCount})' : 'Pinned message',
+                    style: const TextStyle(color: Color(0xFF2AABEE), fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(p.preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+              ]),
+            ),
+            if (chat.type == 'private' || chat.isAdmin)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Unpin',
+                onPressed: () => _store.unpin(chat.id, p.id).catchError((e) {
+                  if (mounted) showError(context, e);
+                }),
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPins(Chat chat) async {
+    try {
+      final pins = await _store.listPins(chat.id);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+            child: ListView(shrinkWrap: true, children: [
+              ListTile(
+                title: Text('${pins.length} pinned', style: const TextStyle(fontWeight: FontWeight.w600)),
+                trailing: (chat.type == 'private' || chat.isAdmin) && pins.length > 1
+                    ? TextButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _store.unpin(chat.id, 'all');
+                        },
+                        child: const Text('Unpin all'),
+                      )
+                    : null,
+              ),
+              ...pins.map((m) => ListTile(
+                    leading: const Icon(Icons.push_pin_outlined),
+                    title: Text(m.preview, maxLines: 3, overflow: TextOverflow.ellipsis),
+                    subtitle: Text('${m.sender?.name ?? chat.title} · ${chatListTime(m.createdAt)}'),
+                  )),
+            ]),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   Widget _bottomBar(Chat chat) {
     if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
       return SafeArea(
         top: false,
         child: Container(
-          color: Colors.white,
+          color: ChatColors.of(context).bar,
           width: double.infinity,
           child: TextButton(
             onPressed: () => _chatMenu('mute', chat),
@@ -605,7 +746,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return SafeArea(
         top: false,
         child: Container(
-          color: Colors.white,
+          color: ChatColors.of(context).bar,
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -620,7 +761,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       top: false,
       child: Container(
-        color: Colors.white,
+        color: ChatColors.of(context).bar,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -676,7 +817,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       maxLines: 6,
                       maxLength: 4096,
                       textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(hintText: 'Message', border: InputBorder.none, counterText: ''),
+                      decoration: InputDecoration(
+                        hintText: chat.slowModeSec > 0 && !chat.isAdmin ? 'Message (slow mode: ${chat.slowModeSec}s)' : 'Message',
+                        border: InputBorder.none,
+                        counterText: '',
+                      ),
                       onChanged: (v) {
                         if (v.isNotEmpty) _store.sendTyping(chatId);
                         setState(() {});
@@ -685,14 +830,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   if (_text.text.trim().isNotEmpty || _editing != null)
                     GestureDetector(
-                      onLongPress: _editing == null ? _scheduleCurrent : null,
+                      onLongPress: _editing == null ? _sendOptions : null,
                       child: IconButton(
                         icon: Icon(_editing != null ? Icons.check : Icons.send, color: const Color(0xFF2AABEE)),
                         tooltip: 'Send (hold to schedule)',
                         onPressed: _send,
                       ),
                     )
-                  else
+                  else if (context.read<AuthState>().feature('voice_messages'))
                     IconButton(icon: const Icon(Icons.mic_none), onPressed: _startRecording, tooltip: 'Record voice message'),
                 ],
               ),
