@@ -64,6 +64,9 @@ The app runs without Firebase; push is simply off. To enable it:
 | `lib/widgets/bot_widgets.dart`, `lib/screens/bot_screens.dart` | Batch D: inline buttons, mini apps (web view), My bots |
 | `lib/screens/thread_screen.dart` | Channel comments and group topics |
 | `lib/screens/premium_screens.dart` | Premium plans, JazzCash/Easypaisa checkout, manual payment proof |
+| `lib/screens/link_device_screen.dart` | Batch E: scan the web/desktop login QR |
+| `lib/core/accounts.dart` | Multiple accounts on one phone |
+| `lib/screens/image_editor_screen.dart`, `lib/widgets/album_view.dart` | Photo editor, albums |
 | `lib/core/prefs.dart` | Device settings: theme, text size, drafts, app lock |
 | `lib/screens/more_screens.dart` | Batch A: invite links, join requests, contacts sync, appearance, app lock, storage, legal pages, ban appeal |
 | `lib/widgets/` | Message bubble, avatar, media players, report dialog, `extras.dart` (dark-mode chat colours, @mention/link text, location card) |

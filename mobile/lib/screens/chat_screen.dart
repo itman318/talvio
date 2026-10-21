@@ -23,6 +23,8 @@ import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
 import 'premium_screens.dart';
+import 'image_editor_screen.dart';
+import '../widgets/album_view.dart';
 import 'thread_screen.dart';
 import '../widgets/bot_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -239,7 +241,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return true;
   }
 
-  Future<void> _sendFile(String path, {required String type, String? name, int? duration}) async {
+  Future<void> _sendFile(String path, {required String type, String? name, int? duration, String? albumId}) async {
     if (!_checkSize(path)) return;
     int? w;
     int? h;
@@ -265,6 +267,7 @@ class _ChatScreenState extends State<ChatScreen> {
       duration: duration,
       width: w,
       height: h,
+      albumId: albumId,
       replyTo: reply,
     );
   }
@@ -305,14 +308,21 @@ class _ChatScreenState extends State<ChatScreen> {
       final picker = ImagePicker();
       switch (choice) {
         case 'photo':
+          final picked = await picker.pickMultiImage(imageQuality: 85, maxWidth: 2560, maxHeight: 2560, limit: 10);
+          if (picked.isEmpty) break;
+          if (picked.length == 1) {
+            await _editAndSend(picked.first.path, picked.first.name);
+          } else {
+            // several photos → one album
+            final albumId = 'a${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}-${picked.length}';
+            for (final x in picked.take(10)) {
+              await _sendFile(x.path, type: 'image', name: x.name, albumId: albumId);
+            }
+          }
+          break;
         case 'camera':
-          final x = await picker.pickImage(
-            source: choice == 'photo' ? ImageSource.gallery : ImageSource.camera,
-            imageQuality: 85,
-            maxWidth: 2560,
-            maxHeight: 2560,
-          );
-          if (x != null) await _sendFile(x.path, type: 'image', name: x.name);
+          final x = await picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2560, maxHeight: 2560);
+          if (x != null) await _editAndSend(x.path, x.name);
           break;
         case 'video':
           final x = await picker.pickVideo(source: ImageSource.gallery);
@@ -327,6 +337,14 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) showInfo(context, 'Could not attach: $e');
     }
+  }
+
+  /// Opens the photo editor (crop, rotate, draw, text) before sending one photo.
+  Future<void> _editAndSend(String path, String name) async {
+    if (!mounted) return;
+    final edited = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => ImageEditorScreen(path: path)));
+    if (edited == null) return;
+    await _sendFile(edited, type: 'image', name: edited == path ? name : 'photo.jpg');
   }
 
   // ------------------------------------------------------------------ voice notes
@@ -708,7 +726,26 @@ class _ChatScreenState extends State<ChatScreen> {
           return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
         }
         final m = messages[i];
-        final older = i + 1 < messages.length ? messages[i + 1] : null;
+        if (m.albumId != null && i > 0 && messages[i - 1].albumId == m.albumId) {
+          return const SizedBox.shrink(); // drawn as part of the album below
+        }
+        final older0 = i + 1 < messages.length ? messages[i + 1] : null;
+        if (m.albumId != null && older0?.albumId == m.albumId) {
+          var j = i;
+          while (j + 1 < messages.length && messages[j + 1].albumId == m.albumId) {
+            j++;
+          }
+          final items = messages.sublist(i, j + 1).reversed.toList();
+          final mineA = chat.isChannel ? m.isLocal : m.senderId == store.myId;
+          return AlbumBubble(
+            key: ValueKey('album-${m.albumId}'),
+            items: items,
+            isMine: mineA,
+            senderName: chat.isGroup && !mineA ? m.sender?.name : null,
+            onLongPress: () => _messageMenu(m, chat),
+          );
+        }
+        final older = older0;
         final newDay = older == null ||
             older.createdAt.year != m.createdAt.year ||
             older.createdAt.month != m.createdAt.month ||

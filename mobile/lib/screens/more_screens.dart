@@ -635,6 +635,22 @@ class _StorageScreenState extends State<StorageScreen> {
           trailing: TextButton(onPressed: (_size ?? 0) == 0 ? null : _clear, child: const Text('Clear')),
         ),
         const Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text('Auto-download photos', style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
+        ),
+        for (final o in const [('always', 'On Wi-Fi and mobile data'), ('wifi', 'Only on Wi-Fi'), ('never', 'Never (tap to download)')])
+          RadioListTile<String>(
+            value: o.$1,
+            groupValue: context.watch<AppPrefs>().autoPhotos,
+            title: Text(o.$2),
+            onChanged: (v) => context.read<AppPrefs>().setAutoPhotos(v!),
+          ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text('Videos and files always download when you tap them.', style: TextStyle(fontSize: 12)),
+        ),
+        const Divider(),
         ListTile(
           leading: const Icon(Icons.download_outlined),
           title: const Text('Download my data'),

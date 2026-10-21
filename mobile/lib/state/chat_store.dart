@@ -334,6 +334,7 @@ class ChatStore extends ChangeNotifier {
     int? width,
     int? height,
     Message? replyTo,
+    String? albumId,
   }) async {
     final file = File(path);
     final local = Message(
@@ -342,6 +343,7 @@ class ChatStore extends ChangeNotifier {
       senderId: myId,
       type: type,
       text: caption,
+      albumId: albumId,
       replyTo: _replyInfo(replyTo),
       clientId: _newClientId(),
       createdAt: DateTime.now(),
@@ -359,7 +361,7 @@ class ChatStore extends ChangeNotifier {
         height: height,
         url: '',
       ),
-      outbox: {'type': type, 'text': caption, if (replyTo != null) 'reply_to_id': replyTo.id},
+      outbox: {'type': type, 'text': caption, if (replyTo != null) 'reply_to_id': replyTo.id, if (albumId != null) 'album_id': albumId},
     );
     _insertLocal(local);
     await _uploadAndDeliver(local);

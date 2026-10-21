@@ -15,6 +15,7 @@ import 'home_screen.dart';
 import 'more_screens.dart';
 import 'premium_screens.dart';
 import 'bot_screens.dart';
+import 'link_device_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -36,6 +37,29 @@ class SettingsScreen extends StatelessWidget {
             subtitle: Text([me.phone ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty).join('\n')),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
           ),
+          ...auth.otherAccounts.map((a) => ListTile(
+                leading: Avatar(id: a.id, name: a.name, url: a.avatarUrl == null ? null : AppConfig.absolute(a.avatarUrl!), size: 36),
+                title: Text(a.name),
+                subtitle: Text(a.phone ?? 'Tap to switch'),
+                trailing: const Icon(Icons.swap_horiz),
+                onTap: () {
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  auth.switchTo(a.id);
+                },
+              )),
+          if (auth.accounts.list.length < auth.maxAccounts)
+            ListTile(
+              leading: const CircleAvatar(radius: 18, child: Icon(Icons.add, size: 20)),
+              title: const Text('Add account'),
+              onTap: () async {
+                Navigator.of(context).popUntil((r) => r.isFirst);
+                try {
+                  await auth.addAccount();
+                } catch (e) {
+                  if (context.mounted) showError(context, e);
+                }
+              },
+            ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.person_outline),
@@ -474,6 +498,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
         'android' => Icons.android,
         'ios' => Icons.phone_iphone,
         'web' => Icons.language,
+        'desktop' => Icons.desktop_windows_outlined,
         _ => Icons.devices_other,
       };
 
@@ -486,6 +511,16 @@ class _SessionsScreenState extends State<SessionsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF2AABEE)),
+                  title: const Text('Link a device', style: TextStyle(color: Color(0xFF2AABEE))),
+                  subtitle: const Text('Use ChatApp on your computer (web or desktop app)'),
+                  onTap: () async {
+                    final linked = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const LinkDeviceScreen()));
+                    if (linked == true) _load();
+                  },
+                ),
+                const Divider(),
                 ...s.where((x) => x.current).map((x) => ListTile(
                       leading: Icon(_icon(x.platform)),
                       title: Text(x.deviceName.isEmpty ? 'This device' : x.deviceName),

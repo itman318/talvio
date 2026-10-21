@@ -7,6 +7,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import '../utils/format.dart';
@@ -28,12 +29,31 @@ class MessageImage extends StatefulWidget {
 }
 
 class _MessageImageState extends State<MessageImage> {
-  late Future<File> _file;
+  Future<File>? _file;
+  bool _tapToLoad = false;
 
   @override
   void initState() {
     super.initState();
-    _file = resolveMediaFile(context, widget.message);
+    _decide();
+  }
+
+  /// Own uploads and cached photos show at once; others follow the auto-download setting.
+  Future<void> _decide() async {
+    final msg = widget.message;
+    final services = context.read<AppServices>();
+    final prefs = context.read<AppPrefs>();
+    final local = msg.localFilePath != null && File(msg.localFilePath!).existsSync();
+    final cached = local || msg.media == null || msg.media!.id == 0 ? null : await services.media.cached(msg.media!);
+    final auto = local || cached != null || await prefs.autoDownloadPhotos();
+    if (!mounted) return;
+    setState(() {
+      if (auto) {
+        _file = resolveMediaFile(context, msg);
+      } else {
+        _tapToLoad = true;
+      }
+    });
   }
 
   @override
@@ -45,7 +65,23 @@ class _MessageImageState extends State<MessageImage> {
     return SizedBox(
       width: w,
       height: h,
-      child: FutureBuilder<File>(
+      child: _tapToLoad
+          ? InkWell(
+              onTap: () => setState(() {
+                _tapToLoad = false;
+                _file = resolveMediaFile(context, widget.message);
+              }),
+              child: Container(
+                color: Colors.black26,
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.download_rounded, color: Colors.white, size: 36),
+                    Text(fileSize(m.size), style: const TextStyle(color: Colors.white)),
+                  ]),
+                ),
+              ),
+            )
+          : FutureBuilder<File>(
         future: _file,
         builder: (ctx, snap) {
           if (snap.hasData) {

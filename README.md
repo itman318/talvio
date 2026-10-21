@@ -87,6 +87,14 @@ in-app web view with signed user data. **Channel comments** under posts. **Topic
 approve/reject), Premium plans editor, Sponsored message campaigns with views/clicks/CTR, give/remove
 Premium on the user page, new switches in Settings.
 
-## Next (remaining batches)
+## Batch E — what's included
 
-E: web/desktop + QR login, multiple accounts, Urdu, image editor.
+**Web & desktop app** at `/web` (installable from Chrome/Edge as a desktop app) with **QR login**:
+open it on a computer, scan with the phone (Settings → Devices → Link a device), confirm, done.
+**Multiple accounts** on one phone (Settings → Add account, tap to switch; up to 3, configurable).
+**Photo editor** before sending (crop, rotate, draw, text), **albums** (pick up to 10 photos → one
+grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never).
+
+## Next
+
+All planned batches are done (Urdu was skipped on request). Ideas: group calls (LiveKit), CallKit, Urdu/RTL, iPad layout.

@@ -33,7 +33,7 @@ createdb chatapp_test
 TEST_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/chatapp_test npm test
 ```
 
-61 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls, `test/batchC.test.js` = secret chats, `test/batchD1.test.js` = bots/comments/topics, `test/batchD2.test.js` = premium/payments/ads) cover OTP login &
+64 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls, `test/batchC.test.js` = secret chats, `test/batchD1.test.js` = bots/comments/topics, `test/batchD2.test.js` = premium/payments/ads, `test/batchE.test.js` = QR login/albums) cover OTP login &
 token refresh, profiles & privacy, private chats, receipts, pagination, edit/delete, blocking, groups,
 media access control, forwarding, reports, admin flows, account deletion — plus channels, polls & quizzes,
 reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA — plus pins, mentions, message search, slow mode, join requests,
@@ -168,6 +168,10 @@ Authenticated routes need `Authorization: Bearer <access_token>`.
 | `GET /api/premium`, `POST /api/payments/checkout` `{plan_id, provider}` | Plans & perks; start a JazzCash / Easypaisa / manual payment |
 | `GET /api/payments/orders[/:id]`, `POST …/:id/proof` `{media_id, txn_id, sender}`, `POST …/:id/cancel` | Payment status, manual-payment screenshot |
 | `GET /api/chats/:id/sponsored`, `POST /api/ads/:id/view\|click` | Sponsored message under a big public channel |
+| **Batch E** | |
+| `POST /api/auth/qr` → `{token, qr}`, `GET /api/auth/qr/status?token=&wait=25` | Web/desktop: show a login QR, long-poll until the phone approves (tokens once) |
+| `POST /api/auth/qr/scan\|approve\|decline` `{token}` | Phone side of QR login |
+| `POST /api/chats/:id/messages` `{type:"image", media_id, album_id}` | Photos sent together (album) |
 
 Socket.IO events are documented at the top of `src/realtime/socket.js`
 (`message:send` with ack, `message:new`, receipts, typing, presence, `session:revoked`, …).
@@ -299,6 +303,15 @@ Verify init data on your server: `secret = HMAC_SHA256(key="WebAppData", msg=SHA
 - **Sponsored messages:** admin → *Sponsored messages* → campaign (text, button, link, target channels,
   view limit, end date, price). Shown under big public channels (Settings → minimum size), never to Premium users.
 - **Revenue:** admin → *Revenue* — Premium + ads income by month and by payment method.
+
+## Web & desktop app (Batch E)
+
+`https://<your server>/web` is a complete chat client for computers (no build step — plain files in
+`web-client/`). Log in by scanning the QR code with the phone (Settings → Devices → Link a device) or
+with phone number + code. Realtime through Socket.IO (falls back to polling), photos/albums, files,
+voice, polls, reactions, replies, edit/delete, drag-and-drop & paste to send files, browser notifications,
+dark mode. It is an installable PWA: in Chrome/Edge choose **Install ChatApp** to get a desktop app
+(Windows, macOS, Linux) with its own window and taskbar icon. Calls and secret chats stay on the phone.
 
 ## Scaling later
 

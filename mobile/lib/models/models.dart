@@ -232,6 +232,7 @@ class Message {
   final String? clientId;
   final int? threadId; // channel comment → id of the post
   final int? topicId; // forum topic
+  final String? albumId; // photos sent together
   int commentsCount;
   Map<String, dynamic>? replyMarkup; // bot inline keyboard
   DateTime? editedAt;
@@ -266,6 +267,7 @@ class Message {
     this.clientId,
     this.threadId,
     this.topicId,
+    this.albumId,
     this.commentsCount = 0,
     this.replyMarkup,
     this.editedAt,
@@ -309,6 +311,7 @@ class Message {
       clientId: j['client_id'] as String?,
       threadId: _intOrNull(j['thread_id']),
       topicId: _intOrNull(j['topic_id']),
+      albumId: j['album_id'] as String?,
       commentsCount: _int(j['comments_count'] ?? 0),
       replyMarkup: j['reply_markup'] == null ? null : Map<String, dynamic>.from(j['reply_markup'] as Map),
       editedAt: _date(j['edited_at']),

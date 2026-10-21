@@ -33,6 +33,10 @@ Future<void> main() async {
     calls.endLocal();
     secrets.wipeAll();
   };
+  auth.onAccountSwitch = () {
+    calls.endLocal();
+    secrets.suspend();
+  };
   services.push.onOpenCall = () {
     if (auth.status == AuthStatus.loggedIn) calls.checkActive();
   };
@@ -122,7 +126,8 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
     if (_lastStatus != auth.status && auth.status == AuthStatus.loggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.read<CallManager>().checkActive();
-        context.read<SecretStore>().start();
+        final meId = context.read<AuthState>().me?.id;
+        if (meId != null) context.read<SecretStore>().start(meId);
       });
     }
     if (_lastStatus != null && _lastStatus != auth.status) {

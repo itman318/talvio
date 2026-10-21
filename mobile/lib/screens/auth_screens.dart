@@ -55,8 +55,15 @@ class _PhoneScreenState extends State<PhoneScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final reason = context.watch<AuthState>().logoutReason;
+    final auth = context.watch<AuthState>();
+    final reason = auth.logoutReason;
     return Scaffold(
+      appBar: auth.addingAccount && auth.otherAccounts.isNotEmpty
+          ? AppBar(
+              leading: IconButton(icon: const Icon(Icons.close), tooltip: 'Cancel', onPressed: auth.cancelAddAccount),
+              title: const Text('Add account'),
+            )
+          : null,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),

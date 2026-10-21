@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../config.dart';
+import '../core/accounts.dart';
 import '../core/api_client.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
@@ -31,12 +32,29 @@ class AuthState extends ChangeNotifier {
   /// Called when this device logs out (ends any call in progress).
   void Function()? onSessionCleared;
 
+  /// Called when switching to another account on this phone (end calls, park secret chats).
+  void Function()? onAccountSwitch;
+
+  /// Accounts saved on this phone (multiple accounts).
+  final accounts = AccountStore();
+
+  /// True while the user is adding a second account (login screen shows "Back").
+  bool addingAccount = false;
+  bool _setupDone = false;
+
+  int get maxAccounts => (appConfig['max_accounts'] as num?)?.toInt() ?? 3;
+  List<StoredAccount> get otherAccounts => accounts.others(me?.id);
+
   ApiClient get api => services.api;
 
   Future<void> init() async {
-    api.onSessionEnded = (e) => _forceLogout(e.code == 'account_banned' ? _banText(e) : e.message);
-    chats.onSessionRevoked = () => _forceLogout('You were logged out from this device.');
-    await services.push.init();
+    if (!_setupDone) {
+      _setupDone = true;
+      api.onSessionEnded = (e) => _forceLogout(e.code == 'account_banned' ? _banText(e) : e.message);
+      chats.onSessionRevoked = () => _forceLogout('You were logged out from this device.');
+      await services.push.init();
+      await accounts.load();
+    }
 
     try {
       appConfig = Map<String, dynamic>.from(await api.get('/app-config') as Map);
@@ -90,6 +108,15 @@ class AuthState extends ChangeNotifier {
   Future<void> _loadMe() async {
     me = AppUser.fromJson(Map<String, dynamic>.from(await api.get('/me') as Map));
     await _storage.write(key: 'me', value: jsonEncode(_meJson(me!)));
+    await _rememberActive();
+  }
+
+  /// Records the active account in the account list (its tokens stay in ApiClient).
+  Future<void> _rememberActive() async {
+    final u = me;
+    if (u == null) return;
+    await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone, avatarUrl: u.avatarUrl));
+    addingAccount = false;
   }
 
   void _enter() {
@@ -120,9 +147,11 @@ class AuthState extends ChangeNotifier {
         'app_version': AppConfig.appVersion,
       },
     }) as Map);
+    final user = AppUser.fromJson(Map<String, dynamic>.from(data['user'] as Map));
     await api.setTokens(data['access_token'] as String, data['refresh_token'] as String, (data['expires_in'] as num).toInt());
-    me = AppUser.fromJson(Map<String, dynamic>.from(data['user'] as Map));
+    me = user;
     await _storage.write(key: 'me', value: jsonEncode(_meJson(me!)));
+    await _rememberActive();
     logoutReason = null;
     _enter();
   }
@@ -155,27 +184,93 @@ class AuthState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // ------------------------------------------------------------------ multiple accounts
+  /// Saves the active account's tokens in the list and signs out locally (the server session stays).
+  Future<void> _parkActive() async {
+    final u = me;
+    if (u != null && api.refreshToken != null) {
+      await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone, avatarUrl: u.avatarUrl, access: api.accessToken, refresh: api.refreshToken));
+    }
+    onAccountSwitch?.call();
+    services.socket.disconnect();
+    chats.stop();
+    me = null;
+    await api.clearTokens();
+    await _storage.delete(key: 'me');
+  }
+
+  /// "Add account": keeps the current one logged in and shows the login screen.
+  Future<void> addAccount() async {
+    if (accounts.list.length >= maxAccounts) {
+      throw ApiException(400, 'too_many_accounts', 'You can have up to $maxAccounts accounts on this phone');
+    }
+    await _parkActive();
+    addingAccount = true;
+    logoutReason = null;
+    status = AuthStatus.loggedOut;
+    notifyListeners();
+  }
+
+  Future<void> switchTo(int userId) async {
+    final target = accounts.byId(userId);
+    if (target == null || target.refresh == null || target.id == me?.id) return;
+    await _parkActive();
+    await api.setTokens(target.access ?? '', target.refresh!, 30);
+    await accounts.upsert(target.copyWith(clearTokens: true));
+    addingAccount = false;
+    status = AuthStatus.loading;
+    notifyListeners();
+    await init();
+  }
+
+  /// Leaving the login screen while adding an account → back to the last one.
+  Future<void> cancelAddAccount() async {
+    final others = accounts.others(null);
+    if (others.isEmpty) return;
+    await switchTo(others.last.id);
+  }
+
+  /// After logging out of the active account, continue with another saved one.
+  Future<bool> _continueWithAnother(int? removedId) async {
+    if (removedId != null) await accounts.remove(removedId);
+    final others = accounts.others(null);
+    if (others.isEmpty) return false;
+    final t = others.first;
+    await api.setTokens(t.access ?? '', t.refresh!, 30);
+    await accounts.upsert(t.copyWith(clearTokens: true));
+    status = AuthStatus.loading;
+    notifyListeners();
+    await init();
+    return true;
+  }
+
   // ------------------------------------------------------------------ logout
   Future<void> logout() async {
+    final id = me?.id;
     try {
       await api.post('/auth/logout');
     } catch (_) {}
     await _clearLocal();
+    if (await _continueWithAnother(id)) return;
     status = AuthStatus.loggedOut;
     notifyListeners();
   }
 
   Future<void> deleteAccount() async {
+    final id = me?.id;
     await api.delete('/me', {'confirm': 'DELETE'});
     await _clearLocal();
+    if (await _continueWithAnother(id)) return;
     status = AuthStatus.loggedOut;
     notifyListeners();
   }
 
   Future<void> _forceLogout(String reason) async {
     if (status == AuthStatus.loggedOut) return;
+    final id = me?.id;
     logoutReason = reason;
     await _clearLocal();
+    if (await _continueWithAnother(id)) return;
     status = AuthStatus.loggedOut;
     notifyListeners();
   }

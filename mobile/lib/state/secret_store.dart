@@ -196,8 +196,13 @@ class SecretStore extends ChangeNotifier {
 
   List<SecretChat> get sortedChats => chats.values.toList()..sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
 
-  Future<void> start() async {
-    if (_started) return;
+  /// Each account on this phone has its own secret chats (keys + history are namespaced by user id).
+  String _ns = 'none';
+
+  Future<void> start(int userId) async {
+    if (_started && _ns == '$userId') return;
+    if (_started) await suspend();
+    _ns = '$userId';
     _started = true;
     await _loadLocal();
     _sub = services.socket.events.listen(_onEvent);
@@ -206,6 +211,19 @@ class SecretStore extends ChangeNotifier {
     });
     _expiryTimer = Timer.periodic(const Duration(seconds: 1), (_) => _expire());
     sync();
+  }
+
+  /// Switching accounts: forget this account's chats in memory, keep them on disk.
+  Future<void> suspend() async {
+    await stop();
+    _saveTimer?.cancel();
+    if (_ns != 'none') await _saveLocal();
+    chats.clear();
+    messages.clear();
+    _keys.clear();
+    typingUntil.clear();
+    _storeKey = null;
+    notifyListeners();
   }
 
   Future<void> stop() async {
@@ -637,7 +655,7 @@ class SecretStore extends ChangeNotifier {
 
   Future<File> _mediaFile(int chatId, String name) async {
     final base = await getApplicationSupportDirectory();
-    final dir = Directory('${base.path}/secret/$chatId');
+    final dir = Directory('${base.path}/secret/$_ns/$chatId');
     await dir.create(recursive: true);
     return File('${dir.path}/${name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}');
   }
@@ -677,10 +695,10 @@ class SecretStore extends ChangeNotifier {
     messages.remove(chatId);
     chats.remove(chatId);
     _keys.remove(chatId);
-    await _secure.delete(key: 'secret_keys_$chatId');
+    await _secure.delete(key: '${_ns}_secret_keys_$chatId');
     try {
       final base = await getApplicationSupportDirectory();
-      final dir = Directory('${base.path}/secret/$chatId');
+      final dir = Directory('${base.path}/secret/$_ns/$chatId');
       if (await dir.exists()) await dir.delete(recursive: true);
     } catch (_) {}
   }
@@ -694,10 +712,10 @@ class SecretStore extends ChangeNotifier {
     chats.clear();
     messages.clear();
     _keys.clear();
-    await _secure.delete(key: 'secret_store_key');
+    await _secure.delete(key: '${_ns}_secret_store_key');
     try {
       final base = await getApplicationSupportDirectory();
-      final f = File('${base.path}/secret/index.bin');
+      final f = File('${base.path}/secret/$_ns/index.bin');
       if (await f.exists()) await f.delete();
     } catch (_) {}
     _storeKey = null;
@@ -734,26 +752,26 @@ class SecretStore extends ChangeNotifier {
   // ------------------------------------------------------------------ local persistence
   Future<List<int>> _key() async {
     if (_storeKey != null) return _storeKey!;
-    var k = await _secure.read(key: 'secret_store_key');
+    var k = await _secure.read(key: '${_ns}_secret_store_key');
     if (k == null) {
       k = base64Encode(E2E.randomBytes(32));
-      await _secure.write(key: 'secret_store_key', value: k);
+      await _secure.write(key: '${_ns}_secret_store_key', value: k);
     }
     return _storeKey = base64Decode(k);
   }
 
-  Future<void> _saveKeys(RatchetState s) => _secure.write(key: 'secret_keys_${s.chatId}', value: jsonEncode(s.toJson()));
+  Future<void> _saveKeys(RatchetState s) => _secure.write(key: '${_ns}_secret_keys_${s.chatId}', value: jsonEncode(s.toJson()));
 
   Future<void> _loadLocal() async {
     try {
       final base = await getApplicationSupportDirectory();
-      final f = File('${base.path}/secret/index.bin');
+      final f = File('${base.path}/secret/$_ns/index.bin');
       if (!await f.exists()) return;
       final data = jsonDecode(utf8.decode(await E2E.openLocal(await _key(), await f.readAsBytes()))) as Map<String, dynamic>;
       for (final c in (data['chats'] as List? ?? [])) {
         final chat = SecretChat.fromJson(Map<String, dynamic>.from(c as Map));
         chats[chat.id] = chat;
-        final raw = await _secure.read(key: 'secret_keys_${chat.id}');
+        final raw = await _secure.read(key: '${_ns}_secret_keys_${chat.id}');
         if (raw != null) _keys[chat.id] = RatchetState.fromJson(Map<String, dynamic>.from(jsonDecode(raw) as Map));
       }
       final msgs = Map<String, dynamic>.from((data['messages'] as Map?) ?? {});
@@ -775,7 +793,7 @@ class SecretStore extends ChangeNotifier {
   Future<void> _saveLocal() async {
     try {
       final base = await getApplicationSupportDirectory();
-      final dir = Directory('${base.path}/secret');
+      final dir = Directory('${base.path}/secret/$_ns');
       await dir.create(recursive: true);
       final data = {
         'chats': chats.values.map((c) => c.toJson()).toList(),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +18,9 @@ class AppPrefs extends ChangeNotifier {
   int lockAfterMinutes = 1; // 0 = immediately
   String? _pinHash;
 
+  /// Auto-download photos: 'always' | 'wifi' | 'never'. Videos and files always wait for a tap.
+  String autoPhotos = 'always';
+
   Future<void> load() async {
     _p = await SharedPreferences.getInstance();
     final p = _p!;
@@ -32,6 +36,7 @@ class AppPrefs extends ChangeNotifier {
     lockEnabled = _pinHash != null && (p.getBool('lock_enabled') ?? false);
     biometric = p.getBool('lock_biometric') ?? false;
     lockAfterMinutes = p.getInt('lock_after') ?? 1;
+    autoPhotos = p.getString('auto_photos') ?? 'always';
     notifyListeners();
   }
 
@@ -46,6 +51,24 @@ class AppPrefs extends ChangeNotifier {
     textScale = v;
     _p?.setDouble('text_scale', v);
     notifyListeners();
+  }
+
+  void setAutoPhotos(String v) {
+    autoPhotos = v;
+    _p?.setString('auto_photos', v);
+    notifyListeners();
+  }
+
+  /// Should a photo download by itself right now?
+  Future<bool> autoDownloadPhotos() async {
+    if (autoPhotos == 'always') return true;
+    if (autoPhotos == 'never') return false;
+    try {
+      final r = await Connectivity().checkConnectivity();
+      return r.contains(ConnectivityResult.wifi) || r.contains(ConnectivityResult.ethernet);
+    } catch (_) {
+      return false;
+    }
   }
 
   // ------------------------------------------------------------------ drafts
