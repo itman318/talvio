@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db');
+const moderation = require('./moderation.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { notFound, conflict } = require('../utils/errors');
@@ -54,6 +55,8 @@ async function createReport(reporterId, body = {}) {
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [reporterId, targetType, targetId, reason, details, JSON.stringify(snapshot)],
     );
+    const offender = targetType === 'user' ? targetId : snapshot.message && snapshot.message.sender_id;
+    await moderation.afterReport(offender).catch(() => {});
     return { ok: true, report_id: r.id };
   } catch (err) {
     if (err.code === '23505') throw conflict('already_reported', 'You already reported this. Our team will review it.');

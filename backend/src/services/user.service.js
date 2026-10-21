@@ -147,7 +147,11 @@ async function updateProfile(userId, body) {
   if (body.bio !== undefined) add('bio', v.str(body.bio, { field: 'bio', max: 140 }));
   if (body.username !== undefined) {
     const raw = typeof body.username === 'string' ? body.username.trim().replace(/^@/, '') : body.username;
-    add('username', v.validateUsername(raw));
+    const name = v.validateUsername(raw);
+    if (name && (await require('./chat.service').usernameTaken(name, { exceptUserId: userId }))) {
+      throw conflict('username_taken', 'This username is already taken');
+    }
+    add('username', name);
   }
   if (sets.length === 0) return getMe(userId);
   try {
@@ -163,8 +167,8 @@ async function updateProfile(userId, body) {
 async function checkUsername(userId, username) {
   const name = v.validateUsername(String(username || '').trim().replace(/^@/, ''));
   if (!name) throw badRequest('invalid_username', 'Username is required');
-  const row = await db.one('SELECT id FROM users WHERE lower(username) = lower($1)', [name]);
-  return { username: name, available: !row || row.id === userId };
+  const taken = await require('./chat.service').usernameTaken(name, { exceptUserId: userId });
+  return { username: name, available: !taken };
 }
 
 async function setAvatar(userId, mediaId) {

@@ -7,6 +7,7 @@ const db = require('./db');
 const { createApp } = require('./app');
 const socket = require('./realtime/socket');
 const push = require('./services/push.service');
+const messageService = require('./services/message.service');
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
@@ -29,6 +30,12 @@ function shutdown(signal) {
   });
   setTimeout(() => process.exit(1), 10000).unref();
 }
+
+// Publish scheduled messages every 15 seconds.
+const scheduler = setInterval(() => {
+  messageService.runDueScheduled().catch((err) => console.error('scheduler error', err)); // eslint-disable-line no-console
+}, 15000);
+scheduler.unref();
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

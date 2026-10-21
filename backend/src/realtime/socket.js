@@ -31,6 +31,9 @@ const { AppError } = require('../utils/errors');
    typing            { chat_id, user_id }
    presence          { user_id, online, last_seen }
    user:updated      { user_id }
+   message:reactions { chat_id, message_id, reactions, user_id, emoji }
+   message:poll      { chat_id, message_id, poll }        (counts only; keep your own my_votes)
+   support:updated   { ticket_id }   → an admin replied to your support ticket
    session:revoked   { reason }      → log out locally
 */
 
@@ -100,6 +103,8 @@ function previewText(message) {
       return '🎤 Voice message';
     case 'file':
       return `📎 ${message.media && message.media.name ? message.media.name : 'File'}`;
+    case 'poll':
+      return `📊 ${message.text}`;
     default:
       return message.text;
   }
@@ -117,6 +122,10 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   const targets = rows.map((r) => r.user_id);
   if (targets.length === 0) return;
   const chat = await db.one('SELECT type, title FROM chats WHERE id = $1', [chatId]);
+  if (chat.type === 'channel') {
+    await push.sendToUsers(targets, { title: chat.title, body: previewText(message) }, { type: 'message', chat_id: chatId, message_id: message.id });
+    return;
+  }
   const senderName = message.sender
     ? userService.displayName({ ...message.sender, status: message.sender.deleted ? 'deleted' : 'active' })
     : 'Someone';
@@ -149,6 +158,23 @@ function wireBus() {
       message_id: e.messageId,
     }),
   );
+  bus.on('message:reactions', (e) =>
+    emitToUsers(e.memberIds, 'message:reactions', {
+      chat_id: e.chatId,
+      message_id: e.messageId,
+      reactions: e.reactions,
+      user_id: e.userId,
+    }),
+  );
+  bus.on('message:poll', (e) => emitToUsers(e.memberIds, 'message:poll', { chat_id: e.chatId, message_id: e.messageId, poll: e.poll }));
+  bus.on('support:reply', (e) => {
+    emitToUsers([e.userId], 'support:updated', { ticket_id: e.ticketId });
+    if (!presence.isOnline(e.userId)) {
+      push
+        .sendToUsers([e.userId], { title: `Support: ${e.subject}`, body: e.text }, { type: 'support', ticket_id: e.ticketId })
+        .catch(() => {});
+    }
+  });
   bus.on('user:updated', async ({ userId }) => {
     try {
       const rows = await db.many(
@@ -215,7 +241,10 @@ function init(httpServer) {
 
     socket.on(
       'message:send',
-      handler(async (p) => ({ message: await messageService.sendMessage(uid, p.chat_id, p) })),
+      handler(async (p) => {
+        const r = await messageService.sendMessage(uid, p.chat_id, p);
+        return r && r.scheduled ? r : { message: r };
+      }),
     );
     socket.on(
       'message:read',

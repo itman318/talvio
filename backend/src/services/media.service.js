@@ -102,6 +102,7 @@ async function registerUpload(userId, file, body) {
 /** Returns the media row if the user may download it, otherwise throws 404. */
 async function getAccessible(userId, mediaIdRaw) {
   const mediaId = v.id(mediaIdRaw, 'media_id');
+  const storyVisible = require('./story.service').visibleSql('$2'); // lazy: avoids circular import
   const m = await db.one(
     `SELECT m.* FROM media m
      WHERE m.id = $1 AND (
@@ -112,6 +113,7 @@ async function getAccessible(userId, mediaIdRaw) {
          JOIN chat_members cm ON cm.chat_id = msg.chat_id AND cm.user_id = $2
          WHERE msg.media_id = m.id AND msg.deleted_at IS NULL AND msg.id > cm.cleared_before_id
        )
+       OR EXISTS (SELECT 1 FROM stories s WHERE s.media_id = m.id AND ${storyVisible})
      )`,
     [mediaId, userId],
   );

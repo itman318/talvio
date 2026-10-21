@@ -6,12 +6,15 @@ const settings = require('./settings.service');
 const userService = require('./user.service');
 const v = require('../utils/validate');
 const { randomToken } = require('../utils/crypto');
-const { badRequest, forbidden, notFound } = require('../utils/errors');
+const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
 
 const lazyMessages = () => require('./message.service'); // circular import guard
 
 const ADMIN_ROLES = ['owner', 'admin'];
+const MULTI_TYPES = ['group', 'channel'];
 const MAX_PINNED = 5;
+
+const isMulti = (chat) => MULTI_TYPES.includes(chat.type);
 
 // ------------------------------------------------------------------ helpers
 async function requireMember(chatIdRaw, userId) {
@@ -27,8 +30,8 @@ async function requireMember(chatIdRaw, userId) {
 }
 
 function requireGroupAdmin(chat) {
-  if (chat.type !== 'group') throw badRequest('not_a_group', 'This action is only for groups');
-  if (!ADMIN_ROLES.includes(chat.my_role)) throw forbidden('not_admin', 'Only group admins can do this');
+  if (!isMulti(chat)) throw badRequest('not_a_group', 'This action is only for groups and channels');
+  if (!ADMIN_ROLES.includes(chat.my_role)) throw forbidden('not_admin', 'Only admins can do this');
 }
 
 async function memberIds(chatId) {
@@ -49,7 +52,7 @@ async function emitUpdated(chatId, extraUserIds = []) {
 
 const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
-       c.created_by, c.created_at, c.last_message_at,
+       c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
        cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived,
        (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id) AS member_count,
        (SELECT count(*) FROM messages m
@@ -102,7 +105,12 @@ async function serializeChats(userId, rows) {
       is_saved_messages: isSaved,
       member_count: r.member_count,
       my_role: r.my_role,
-      invite_code: r.type === 'group' && ADMIN_ROLES.includes(r.my_role) ? r.invite_code : null,
+      invite_code: isMulti(r) && ADMIN_ROLES.includes(r.my_role) ? r.invite_code : null,
+      username: isPrivate ? null : r.username,
+      is_public: r.is_public,
+      signatures: r.signatures,
+      is_verified: isPrivate ? !!(peer && peer.is_verified) : r.is_verified,
+      can_post: !r.is_suspended && (r.type !== 'channel' || ADMIN_ROLES.includes(r.my_role)),
       is_suspended: r.is_suspended,
       unread_count: r.unread_count,
       read_up_to: r.read_up_to,
@@ -231,10 +239,12 @@ async function updateGroup(userId, chatIdRaw, body) {
   requireGroupAdmin(chat);
   const title = v.str(body.title, { field: 'title', min: 1, max: 128 });
   const description = v.str(body.description, { field: 'description', max: 255 });
+  const signatures = body.signatures === undefined ? null : v.bool(body.signatures, 'signatures');
   await db.query(
-    `UPDATE chats SET title = COALESCE($2, title), description = COALESCE($3, description), updated_at = now()
+    `UPDATE chats SET title = COALESCE($2, title), description = COALESCE($3, description),
+       signatures = COALESCE($4, signatures), updated_at = now()
      WHERE id = $1`,
-    [chat.id, title === undefined ? null : title, description === undefined ? null : description],
+    [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures],
   );
   if (title !== undefined && title !== chat.title) {
     await lazyMessages().createSystemMessage(chat.id, userId, { event: 'title_changed', title });
@@ -268,14 +278,18 @@ async function addMembers(userId, chatIdRaw, userIdsRaw) {
   const candidates = v.idList(userIdsRaw, 'user_ids', 200).filter((id) => !existing.has(id));
   const { ok, skipped } = await filterAddable(userId, candidates);
   const max = await settings.get('max_group_members');
-  if (existing.size + ok.length > max) throw badRequest('group_full', `A group can have at most ${max} members`);
+  if (chat.type === 'group' && existing.size + ok.length > max) {
+    throw badRequest('group_full', `A group can have at most ${max} members`);
+  }
   if (ok.length) {
     await db.query(
       `INSERT INTO chat_members (chat_id, user_id, role) SELECT $1, x, 'member' FROM unnest($2::bigint[]) AS x
        ON CONFLICT DO NOTHING`,
       [chat.id, ok],
     );
-    await lazyMessages().createSystemMessage(chat.id, userId, { event: 'members_added', user_ids: ok });
+    if (chat.type === 'group') {
+      await lazyMessages().createSystemMessage(chat.id, userId, { event: 'members_added', user_ids: ok });
+    }
     await emitUpdated(chat.id);
   }
   return { added: ok, skipped };
@@ -287,13 +301,14 @@ async function addMembers(userId, chatIdRaw, userIdsRaw) {
  */
 async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' } = {}) {
   const outcome = await db.tx(async (c) => {
-    await c.query('SELECT id FROM chats WHERE id = $1 FOR UPDATE', [chatId]);
+    const locked = await c.query('SELECT id, type FROM chats WHERE id = $1 FOR UPDATE', [chatId]);
+    const chatType = locked.rows[0] ? locked.rows[0].type : 'group';
     const del = await c.query('DELETE FROM chat_members WHERE chat_id = $1 AND user_id = $2 RETURNING role', [chatId, userId]);
     if (del.rows.length === 0) return { removed: false };
     const left = await c.query('SELECT count(*) AS n FROM chat_members WHERE chat_id = $1', [chatId]);
     if (left.rows[0].n === 0) {
       await c.query('DELETE FROM chats WHERE id = $1', [chatId]);
-      return { removed: true, chatDeleted: true };
+      return { removed: true, chatDeleted: true, chatType };
     }
     let newOwner = null;
     if (del.rows[0].role === 'owner') {
@@ -305,13 +320,15 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
       newOwner = next.rows[0].user_id;
       await c.query(`UPDATE chat_members SET role = 'owner' WHERE chat_id = $1 AND user_id = $2`, [chatId, newOwner]);
     }
-    return { removed: true, chatDeleted: false, newOwner };
+    return { removed: true, chatDeleted: false, newOwner, chatType };
   });
   if (!outcome.removed) return outcome;
   bus.emit('chat:removed', { chatId, userIds: [userId] });
   if (!outcome.chatDeleted) {
     const event = reason === 'removed' ? 'member_removed' : 'member_left';
-    await lazyMessages().createSystemMessage(chatId, by || userId, { event, user_id: userId });
+    if (outcome.chatType === 'group') {
+      await lazyMessages().createSystemMessage(chatId, by || userId, { event, user_id: userId });
+    }
     if (outcome.newOwner) {
       await lazyMessages().createSystemMessage(chatId, outcome.newOwner, { event: 'owner_changed', user_id: outcome.newOwner });
     }
@@ -336,7 +353,7 @@ async function removeMember(actorId, chatIdRaw, targetIdRaw) {
 
 async function leaveChat(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  if (chat.type === 'group') {
+  if (isMulti(chat)) {
     await removeUserFromGroup(chat.id, userId, { reason: 'left' });
   } else {
     // "Delete chat" for a private chat: hide it and clear my history.
@@ -353,8 +370,8 @@ async function leaveChat(userId, chatIdRaw) {
 
 async function setMemberRole(actorId, chatIdRaw, targetIdRaw, role) {
   const chat = await requireMember(chatIdRaw, actorId);
-  if (chat.type !== 'group') throw badRequest('not_a_group', 'This action is only for groups');
-  if (chat.my_role !== 'owner') throw forbidden('not_owner', 'Only the group owner can change admins');
+  if (!isMulti(chat)) throw badRequest('not_a_group', 'This action is only for groups and channels');
+  if (chat.my_role !== 'owner') throw forbidden('not_owner', 'Only the owner can change admins');
   const newRole = v.oneOf(role, ['admin', 'member'], 'role');
   const targetId = v.id(targetIdRaw, 'user_id');
   const r = await db.one(
@@ -368,8 +385,9 @@ async function setMemberRole(actorId, chatIdRaw, targetIdRaw, role) {
 
 async function getMembers(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
+  const adminsOnly = chat.type === 'channel' && !ADMIN_ROLES.includes(chat.my_role);
   const rows = await db.many(
-    `SELECT user_id, role, joined_at FROM chat_members WHERE chat_id = $1
+    `SELECT user_id, role, joined_at FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
      ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, joined_at
      LIMIT 5000`,
     [chat.id],
@@ -443,7 +461,7 @@ async function findByInvite(code) {
   if (typeof code !== 'string' || !/^[A-Za-z0-9_-]{8,32}$/.test(code)) {
     throw notFound('invite_invalid', 'This invite link is invalid or expired');
   }
-  const chat = await db.one(`SELECT * FROM chats WHERE invite_code = $1 AND type = 'group'`, [code]);
+  const chat = await db.one(`SELECT * FROM chats WHERE invite_code = $1 AND type IN ('group', 'channel')`, [code]);
   if (!chat || chat.is_suspended) throw notFound('invite_invalid', 'This invite link is invalid or expired');
   return chat;
 }
@@ -454,6 +472,9 @@ async function invitePreview(userId, code) {
   const me = await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, userId]);
   return {
     chat_id: chat.id,
+    type: chat.type,
+    username: chat.username,
+    is_verified: chat.is_verified,
     title: chat.title,
     description: chat.description,
     avatar_url: userService.avatarUrl(chat.avatar_media_id),
@@ -463,24 +484,184 @@ async function invitePreview(userId, code) {
 }
 
 async function joinByInvite(userId, code) {
-  const chat = await findByInvite(code);
+  return joinChat(userId, await findByInvite(code));
+}
+
+async function joinChat(userId, chat) {
   const existing = await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, userId]);
   if (!existing) {
-    const n = await db.one('SELECT count(*) AS n FROM chat_members WHERE chat_id = $1', [chat.id]);
-    const max = await settings.get('max_group_members');
-    if (n.n >= max) throw badRequest('group_full', 'This group is full');
+    if (chat.type === 'group') {
+      const n = await db.one('SELECT count(*) AS n FROM chat_members WHERE chat_id = $1', [chat.id]);
+      const max = await settings.get('max_group_members');
+      if (n.n >= max) throw badRequest('group_full', 'This group is full');
+    }
     await db.query(
       `INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
       [chat.id, userId],
     );
-    await lazyMessages().createSystemMessage(chat.id, userId, { event: 'member_joined', user_id: userId });
-    await emitUpdated(chat.id);
+    if (chat.type === 'group') {
+      await lazyMessages().createSystemMessage(chat.id, userId, { event: 'member_joined', user_id: userId });
+      await emitUpdated(chat.id);
+    } else {
+      bus.emit('chat:updated', { chatId: chat.id, memberIds: [userId] });
+    }
   }
   return getChat(userId, chat.id);
 }
 
+// ------------------------------------------------------------------ channels & public usernames
+/** Usernames are shared between users, groups and channels (like Telegram). */
+async function usernameTaken(name, { exceptUserId = 0, exceptChatId = 0 } = {}) {
+  const r = await db.one(
+    `SELECT (EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1) AND id <> $2)
+          OR EXISTS (SELECT 1 FROM chats WHERE lower(username) = lower($1) AND id <> $3)) AS taken`,
+    [name, exceptUserId, exceptChatId],
+  );
+  return r.taken;
+}
+
+async function createChannel(ownerId, body) {
+  const title = v.str(body.title, { field: 'title', min: 1, max: 128, required: true });
+  const description = v.str(body.description, { field: 'description', max: 255 }) || '';
+  const signatures = body.signatures === true;
+  let username = null;
+  if (body.username) {
+    username = v.validateUsername(String(body.username).trim().replace(/^@/, ''));
+    if (await usernameTaken(username)) throw conflict('username_taken', 'This username is already taken');
+  }
+  let chatId;
+  try {
+    chatId = await db.tx(async (c) => {
+      const r = await c.query(
+        `INSERT INTO chats (type, title, description, created_by, invite_code, username, is_public, signatures)
+         VALUES ('channel', $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [title, description, ownerId, randomToken(12), username, !!username, signatures],
+      );
+      const id = r.rows[0].id;
+      await c.query(`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'owner')`, [id, ownerId]);
+      return id;
+    });
+  } catch (err) {
+    if (err.code === '23505') throw conflict('username_taken', 'This username is already taken');
+    throw err;
+  }
+  await lazyMessages().createSystemMessage(chatId, ownerId, { event: 'channel_created', title });
+  return getChat(ownerId, chatId);
+}
+
+/** Set (public) or remove (private) the @username of a group or channel. Owner only. */
+async function setChatUsername(userId, chatIdRaw, raw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  if (!isMulti(chat)) throw badRequest('not_a_group', 'Only groups and channels can have a public link');
+  if (chat.my_role !== 'owner') throw forbidden('not_owner', 'Only the owner can change the public link');
+  let username = null;
+  if (raw !== null && raw !== undefined && raw !== '') {
+    username = v.validateUsername(String(raw).trim().replace(/^@/, ''));
+    if (await usernameTaken(username, { exceptChatId: chat.id })) throw conflict('username_taken', 'This username is already taken');
+  }
+  try {
+    await db.query('UPDATE chats SET username = $2, is_public = $3, updated_at = now() WHERE id = $1', [chat.id, username, !!username]);
+  } catch (err) {
+    if (err.code === '23505') throw conflict('username_taken', 'This username is already taken');
+    throw err;
+  }
+  await emitUpdated(chat.id);
+  return getChat(userId, chat.id);
+}
+
+function publicSummary(c, memberCount, isMember) {
+  return {
+    chat_id: c.id,
+    type: c.type,
+    title: c.title,
+    description: c.description,
+    username: c.username,
+    is_verified: c.is_verified,
+    avatar_url: userService.avatarUrl(c.avatar_media_id),
+    member_count: memberCount,
+    is_member: isMember,
+  };
+}
+
+async function publicPreview(userId, usernameRaw) {
+  const name = String(usernameRaw || '').trim().replace(/^@/, '');
+  const c = await db.one(
+    `SELECT c.*, (SELECT count(*) FROM chat_members WHERE chat_id = c.id) AS n,
+            EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = $2) AS me
+     FROM chats c WHERE lower(c.username) = lower($1) AND c.is_public AND NOT c.is_suspended`,
+    [name, userId],
+  );
+  if (!c) throw notFound('chat_not_found', 'No public group or channel with this username');
+  return publicSummary(c, c.n, c.me);
+}
+
+async function joinPublic(userId, chatIdRaw) {
+  const chat = await db.one('SELECT * FROM chats WHERE id = $1 AND is_public AND NOT is_suspended', [v.id(chatIdRaw, 'chat_id')]);
+  if (!chat) throw notFound('chat_not_found', 'This group or channel is not public');
+  return joinChat(userId, chat);
+}
+
+async function searchPublic(userId, rawQuery) {
+  const q = String(rawQuery || '').trim().replace(/^@/, '');
+  if (q.length < 2) return [];
+  const term = q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+  const rows = await db.many(
+    `SELECT c.*, (SELECT count(*) FROM chat_members WHERE chat_id = c.id) AS n,
+            EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = $2) AS me
+     FROM chats c
+     WHERE c.is_public AND NOT c.is_suspended
+       AND (lower(c.username) LIKE lower($1) || '%' OR c.title ILIKE '%' || $1 || '%')
+     ORDER BY (lower(c.username) = lower($1)) DESC, n DESC
+     LIMIT 20`,
+    [term, userId],
+  );
+  return rows.map((c) => publicSummary(c, c.n, c.me));
+}
+
+/** Channel/group statistics for admins. */
+async function chatStats(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const totals = await db.one(
+    `SELECT
+       (SELECT count(*) FROM chat_members WHERE chat_id = $1) AS members,
+       (SELECT count(*) FROM chat_members WHERE chat_id = $1 AND joined_at > now() - interval '7 days') AS joined_7d,
+       (SELECT count(*) FROM messages WHERE chat_id = $1 AND type <> 'system' AND deleted_at IS NULL
+          AND created_at > now() - interval '30 days') AS posts_30d,
+       (SELECT COALESCE(sum(views_count), 0)::bigint FROM messages WHERE chat_id = $1 AND deleted_at IS NULL) AS views_total,
+       (SELECT COALESCE(round(avg(views_count)), 0)::bigint FROM messages WHERE chat_id = $1 AND type <> 'system'
+          AND deleted_at IS NULL AND created_at > now() - interval '30 days') AS avg_views_30d,
+       (SELECT count(*) FROM message_reactions r JOIN messages m ON m.id = r.message_id
+          WHERE m.chat_id = $1 AND m.created_at > now() - interval '30 days') AS reactions_30d`,
+    [chat.id],
+  );
+  const growth = await db.many(
+    `SELECT to_char(d, 'YYYY-MM-DD') AS day, count(cm.user_id) AS count
+     FROM generate_series(current_date - 29, current_date, interval '1 day') AS d
+     LEFT JOIN chat_members cm ON cm.chat_id = $1 AND cm.joined_at >= d AND cm.joined_at < d + interval '1 day'
+     GROUP BY d ORDER BY d`,
+    [chat.id],
+  );
+  const top = await db.many(
+    `SELECT id, type, left(text, 120) AS text, views_count AS views, created_at FROM messages
+     WHERE chat_id = $1 AND type <> 'system' AND deleted_at IS NULL AND created_at > now() - interval '30 days'
+     ORDER BY views_count DESC, id DESC LIMIT 5`,
+    [chat.id],
+  );
+  return { ...totals, joins_30d: growth, top_posts: top };
+}
+
 module.exports = {
   ADMIN_ROLES,
+  MULTI_TYPES,
+  isMulti,
+  usernameTaken,
+  createChannel,
+  setChatUsername,
+  publicPreview,
+  joinPublic,
+  searchPublic,
+  chatStats,
   requireMember,
   requireGroupAdmin,
   memberIds,

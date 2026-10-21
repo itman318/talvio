@@ -5,6 +5,7 @@ const db = require('../db');
 const bus = require('../bus');
 const sms = require('./sms.service');
 const settings = require('./settings.service');
+const moderation = require('./moderation.service');
 const userService = require('./user.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
@@ -35,6 +36,9 @@ async function liftExpiredBan(u) {
 
 async function requestOtp(rawPhone, ip) {
   const phone = v.normalizePhone(rawPhone);
+  if (await moderation.isPhoneBlocked(phone)) {
+    throw forbidden('phone_not_allowed', 'This phone number cannot be used to sign up');
+  }
   rateLimit.enforce(`otp:phone1m:${phone}`, 1, 60 * 1000, 'Please wait a minute before requesting another code');
   rateLimit.enforce(`otp:phone1h:${phone}`, 5, 60 * 60 * 1000, 'Too many codes requested for this number. Try later.');
   rateLimit.enforce(`otp:ip:${ip}`, 20, 60 * 60 * 1000);

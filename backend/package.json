@@ -12,7 +12,7 @@
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
     "create-admin": "node scripts/create-admin.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

@@ -211,3 +211,172 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_by BIGINT      REFERENCES admins(id) ON DELETE SET NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- =====================================================================
+-- Phase 2 — channels, polls, reactions, folders, stories, scheduled posts,
+--           moderation, broadcast, support tickets, admin 2FA
+-- (ALTERs are idempotent so existing Phase 1 databases upgrade in place)
+-- =====================================================================
+
+-- channels + public usernames for groups/channels
+ALTER TABLE chats DROP CONSTRAINT IF EXISTS chats_type_check;
+ALTER TABLE chats ADD CONSTRAINT chats_type_check CHECK (type IN ('private', 'group', 'channel'));
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS username    VARCHAR(32);
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS is_public   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS signatures  BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS chats_username_lower_uq ON chats (lower(username)) WHERE username IS NOT NULL;
+CREATE INDEX IF NOT EXISTS chat_members_joined_idx ON chat_members (chat_id, joined_at);
+
+-- polls & views on messages
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll'));
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS views_count INT NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS messages_sender_created_idx ON messages (sender_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS message_views (
+  message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS message_reactions (
+  message_id BIGINT      NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji      VARCHAR(16) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS polls (
+  id             BIGSERIAL PRIMARY KEY,
+  message_id     BIGINT       UNIQUE REFERENCES messages(id) ON DELETE CASCADE,
+  question       VARCHAR(300) NOT NULL,
+  is_anonymous   BOOLEAN      NOT NULL DEFAULT TRUE,
+  multiple       BOOLEAN      NOT NULL DEFAULT FALSE,
+  is_quiz        BOOLEAN      NOT NULL DEFAULT FALSE,
+  correct_option INT,
+  explanation    VARCHAR(200) NOT NULL DEFAULT '',
+  closed_at      TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS poll_options (
+  poll_id BIGINT       NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  idx     INT          NOT NULL,
+  text    VARCHAR(100) NOT NULL,
+  PRIMARY KEY (poll_id, idx)
+);
+CREATE TABLE IF NOT EXISTS poll_votes (
+  poll_id    BIGINT      NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  option_idx INT         NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (poll_id, user_id, option_idx)
+);
+
+-- scheduled messages
+CREATE TABLE IF NOT EXISTS scheduled_messages (
+  id           BIGSERIAL PRIMARY KEY,
+  chat_id      BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  sender_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  payload      JSONB       NOT NULL,
+  send_at      TIMESTAMPTZ NOT NULL,
+  status       VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
+  error        TEXT,
+  message_id   BIGINT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS scheduled_due_idx ON scheduled_messages (send_at) WHERE status = 'pending';
+
+-- chat folders
+CREATE TABLE IF NOT EXISTS chat_folders (
+  id               BIGSERIAL PRIMARY KEY,
+  user_id          BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name             VARCHAR(24) NOT NULL,
+  chat_ids         JSONB       NOT NULL DEFAULT '[]',
+  include_private  BOOLEAN     NOT NULL DEFAULT FALSE,
+  include_groups   BOOLEAN     NOT NULL DEFAULT FALSE,
+  include_channels BOOLEAN     NOT NULL DEFAULT FALSE,
+  include_unread_only BOOLEAN  NOT NULL DEFAULT FALSE,
+  position         INT         NOT NULL DEFAULT 0,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_folders_user_idx ON chat_folders (user_id, position);
+
+-- stories
+CREATE TABLE IF NOT EXISTS stories (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  media_id    BIGINT       NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  caption     VARCHAR(500) NOT NULL DEFAULT '',
+  privacy     VARCHAR(10)  NOT NULL DEFAULT 'contacts' CHECK (privacy IN ('everyone', 'contacts')),
+  views_count INT          NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  expires_at  TIMESTAMPTZ  NOT NULL,
+  deleted_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS stories_user_active_idx ON stories (user_id, expires_at) WHERE deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS story_views (
+  story_id  BIGINT      NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  viewer_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji     VARCHAR(16),
+  viewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (story_id, viewer_id)
+);
+
+-- moderation
+ALTER TABLE users ADD COLUMN IF NOT EXISTS restricted_until TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS restrict_reason  TEXT;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'user';
+
+-- broadcast announcements
+CREATE TABLE IF NOT EXISTS announcements (
+  id           BIGSERIAL PRIMARY KEY,
+  title        VARCHAR(120)  NOT NULL,
+  body         VARCHAR(1000) NOT NULL,
+  target       JSONB         NOT NULL DEFAULT '{}',
+  in_app       BOOLEAN       NOT NULL DEFAULT TRUE,
+  push         BOOLEAN       NOT NULL DEFAULT FALSE,
+  recipients   INT           NOT NULL DEFAULT 0,
+  created_by   BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  expires_at   TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS announcement_dismissals (
+  announcement_id BIGINT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (announcement_id, user_id)
+);
+
+-- support tickets
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject     VARCHAR(150) NOT NULL,
+  category    VARCHAR(20)  NOT NULL DEFAULT 'other'
+              CHECK (category IN ('account', 'bug', 'abuse', 'payment', 'feature', 'other')),
+  status      VARCHAR(10)  NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'pending', 'resolved', 'closed')),
+  priority    VARCHAR(10)  NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+  assigned_to BIGINT       REFERENCES admins(id) ON DELETE SET NULL,
+  user_unread BOOLEAN      NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_tickets_status_idx ON support_tickets (status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS support_tickets_user_idx ON support_tickets (user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS support_messages (
+  id         BIGSERIAL PRIMARY KEY,
+  ticket_id  BIGINT        NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  admin_id   BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  from_user  BOOLEAN       NOT NULL,
+  text       VARCHAR(4000) NOT NULL,
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_messages_ticket_idx ON support_messages (ticket_id, id);
+
+-- admin two-factor authentication (TOTP)
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS totp_secret  TEXT;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS backup_codes JSONB;

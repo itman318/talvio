@@ -79,7 +79,62 @@ function verifyPassword(password, stored) {
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
+// ---- TOTP (RFC 6238) for admin two-factor authentication ----
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function base32Encode(buf) {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of buf) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function base32Decode(str) {
+  const clean = String(str).toUpperCase().replace(/[^A-Z2-7]/g, '');
+  let bits = 0;
+  let value = 0;
+  const out = [];
+  for (const ch of clean) {
+    value = (value << 5) | B32.indexOf(ch);
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(out);
+}
+
+function totp(secretB32, timeMs = Date.now(), step = 30, digits = 6) {
+  const counter = Math.floor(timeMs / 1000 / step);
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+  const h = crypto.createHmac('sha1', base32Decode(secretB32)).update(msg).digest();
+  const offset = h[h.length - 1] & 15;
+  const code = (h.readUInt32BE(offset) & 0x7fffffff) % 10 ** digits;
+  return String(code).padStart(digits, '0');
+}
+
+/** Accepts the current code and one step either side (clock drift). */
+function verifyTotp(secretB32, code, timeMs = Date.now()) {
+  const c = String(code || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(c)) return false;
+  return [-1, 0, 1].some((w) => safeEqual(totp(secretB32, timeMs + w * 30000), c));
+}
+
 module.exports = {
+  base32Encode,
+  totp,
+  verifyTotp,
   randomToken,
   sha256,
   hmac,

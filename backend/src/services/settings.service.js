@@ -14,6 +14,16 @@ const DEFINITIONS = {
   min_app_version: { type: 'string', default: '1.0.0', max: 20 },
   latest_app_version: { type: 'string', default: '1.0.0', max: 20 },
   support_username: { type: 'string', default: '', max: 32 },
+
+  // ---- moderation (Phase 2)
+  banned_words: { type: 'string_list', default: [], maxItems: 500, maxLength: 60 },
+  banned_words_action: { type: 'enum', default: 'block', values: ['block', 'flag'] },
+  new_account_link_hours: { type: 'integer', default: 24, min: 0, max: 720 },
+  spam_duplicate_threshold: { type: 'integer', default: 5, min: 0, max: 100 },
+  spam_restrict_minutes: { type: 'integer', default: 60, min: 1, max: 10080 },
+  auto_restrict_reports: { type: 'integer', default: 5, min: 0, max: 1000 },
+  blocked_phone_prefixes: { type: 'string_list', default: [], maxItems: 200, maxLength: 16 },
+  require_admin_2fa: { type: 'boolean', default: false },
 };
 
 let cache = null;
@@ -55,6 +65,19 @@ function validateValue(key, value) {
     if (typeof value !== 'string' || value.length > d.max) {
       throw badRequest('invalid_setting', `${key} must be text (max ${d.max} characters)`);
     }
+  }
+  if (d.type === 'enum' && !d.values.includes(value)) {
+    throw badRequest('invalid_setting', `${key} must be one of: ${d.values.join(', ')}`);
+  }
+  if (d.type === 'string_list') {
+    if (!Array.isArray(value) || value.length > d.maxItems) {
+      throw badRequest('invalid_setting', `${key} must be a list of at most ${d.maxItems} items`);
+    }
+    const cleaned = [...new Set(value.map((x) => String(x).trim().toLowerCase()).filter(Boolean))];
+    if (cleaned.some((x) => x.length > d.maxLength)) {
+      throw badRequest('invalid_setting', `Each item in ${key} can be at most ${d.maxLength} characters`);
+    }
+    return cleaned;
   }
   return value;
 }

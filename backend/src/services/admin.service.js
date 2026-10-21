@@ -10,7 +10,11 @@ const messageService = require('./message.service');
 const mediaService = require('./media.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
-const { signJwt, verifyJwt, hashPassword, verifyPassword } = require('../utils/crypto');
+const moderation = require('./moderation.service');
+const {
+  signJwt, verifyJwt, hashPassword, verifyPassword, base32Encode, verifyTotp, sha256, randomToken,
+} = require('../utils/crypto');
+const crypto = require('crypto');
 const { badRequest, unauthorized, forbidden, notFound, conflict } = require('../utils/errors');
 
 const ROLES = ['super_admin', 'moderator', 'support'];
@@ -27,8 +31,9 @@ const PERMISSIONS = {
     'groups.suspend',
     'logs.view',
     'media',
+    'support',
   ],
-  support: ['dashboard', 'users.view', 'reports.view', 'groups.view'],
+  support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support'],
 };
 
 // Used to keep login timing constant when the email does not exist.
@@ -54,6 +59,7 @@ function serializeAdmin(a) {
     is_active: a.is_active,
     last_login_at: a.last_login_at,
     created_at: a.created_at,
+    two_factor: !!a.totp_enabled,
     permissions: PERMISSIONS[a.role] || [],
   };
 }
@@ -72,7 +78,7 @@ function pageParams(query) {
 }
 
 // ------------------------------------------------------------------ auth
-async function login(emailRaw, password, ip) {
+async function login(emailRaw, password, ip, code) {
   const email = v.str(emailRaw, { field: 'email', min: 3, max: 255, required: true }).toLowerCase();
   if (typeof password !== 'string' || !password) throw badRequest('invalid_input', 'Password is required');
   rateLimit.enforce(`admin-login-ip:${ip}`, 10, 15 * 60 * 1000, 'Too many login attempts. Try again later.');
@@ -82,6 +88,13 @@ async function login(emailRaw, password, ip) {
   const ok = verifyPassword(password, admin ? admin.password_hash : DUMMY_HASH);
   if (!admin || !ok) throw unauthorized('invalid_credentials', 'Wrong email or password');
   if (!admin.is_active) throw forbidden('admin_disabled', 'This admin account is disabled');
+
+  if (admin.totp_enabled) {
+    if (!code) throw unauthorized('two_factor_required', 'Enter the 6-digit code from your authenticator app');
+    if (!verifyTotp(admin.totp_secret, code) && !(await useBackupCode(admin, code))) {
+      throw unauthorized('two_factor_invalid', 'Wrong authentication code');
+    }
+  }
 
   await db.query('UPDATE admins SET last_login_at = now() WHERE id = $1', [admin.id]);
   await log(admin.id, 'admin.login', 'admin', admin.id, null, ip);
@@ -112,6 +125,87 @@ async function changeOwnPassword(admin, body, ip) {
   return { ok: true };
 }
 
+// ------------------------------------------------------------------ two-factor authentication (TOTP)
+async function useBackupCode(admin, code) {
+  const clean = String(code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (clean.length < 8) return false;
+  const list = Array.isArray(admin.backup_codes) ? admin.backup_codes : [];
+  const h = sha256(clean);
+  if (!list.includes(h)) return false;
+  await db.query('UPDATE admins SET backup_codes = $2 WHERE id = $1', [admin.id, JSON.stringify(list.filter((x) => x !== h))]);
+  return true;
+}
+
+async function twoFactorSetup(admin) {
+  if (admin.totp_enabled) throw badRequest('already_enabled', 'Two-factor authentication is already on');
+  const secret = base32Encode(crypto.randomBytes(20));
+  await db.query('UPDATE admins SET totp_secret = $2 WHERE id = $1', [admin.id, secret]);
+  const label = encodeURIComponent(`ChatApp Admin:${admin.email}`);
+  return { secret, otpauth_url: `otpauth://totp/${label}?secret=${secret}&issuer=ChatApp%20Admin&digits=6&period=30` };
+}
+
+async function twoFactorEnable(admin, code, ip) {
+  const fresh = await db.one('SELECT * FROM admins WHERE id = $1', [admin.id]);
+  if (fresh.totp_enabled) throw badRequest('already_enabled', 'Two-factor authentication is already on');
+  if (!fresh.totp_secret) throw badRequest('setup_required', 'Start the setup first');
+  if (!verifyTotp(fresh.totp_secret, code)) throw badRequest('two_factor_invalid', 'Wrong code — check your phone’s time and try again');
+  const codes = Array.from({ length: 8 }, () => randomToken(8).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10).padEnd(10, '0'));
+  await db.query('UPDATE admins SET totp_enabled = TRUE, backup_codes = $2 WHERE id = $1', [
+    admin.id,
+    JSON.stringify(codes.map((c) => sha256(c))),
+  ]);
+  await log(admin.id, 'admin.2fa_enabled', 'admin', admin.id, null, ip);
+  return { ok: true, backup_codes: codes };
+}
+
+async function twoFactorDisable(admin, body, ip) {
+  if (!verifyPassword(body.password || '', admin.password_hash)) throw badRequest('invalid_credentials', 'Wrong password');
+  if (!admin.totp_enabled) return { ok: true };
+  if (!verifyTotp(admin.totp_secret, body.code) && !(await useBackupCode(admin, body.code))) {
+    throw badRequest('two_factor_invalid', 'Wrong authentication code');
+  }
+  if (await settings.get('require_admin_2fa')) {
+    throw forbidden('two_factor_required_by_policy', 'Two-factor authentication is required for all admins');
+  }
+  await db.query('UPDATE admins SET totp_enabled = FALSE, totp_secret = NULL, backup_codes = NULL WHERE id = $1', [admin.id]);
+  await log(admin.id, 'admin.2fa_disabled', 'admin', admin.id, null, ip);
+  return { ok: true };
+}
+
+// ------------------------------------------------------------------ restrictions (temporary mute)
+async function restrictUser(admin, userIdRaw, body = {}, ip) {
+  const id = v.id(userIdRaw, 'user_id');
+  const minutes = parseInt(body.minutes, 10);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525600) throw badRequest('invalid_input', 'minutes must be 1–525600');
+  const reason = v.str(body.reason, { field: 'reason', max: 300 }) || 'Restricted by moderators';
+  const u = await db.one(`SELECT id FROM users WHERE id = $1 AND status <> 'deleted'`, [id]);
+  if (!u) throw notFound('user_not_found', 'User not found');
+  await db.query(
+    'UPDATE users SET restricted_until = now() + make_interval(mins => $2), restrict_reason = $3 WHERE id = $1',
+    [id, minutes, reason],
+  );
+  await log(admin.id, 'user.restrict', 'user', id, { minutes, reason }, ip);
+  return { ok: true };
+}
+
+async function unrestrictUser(admin, userIdRaw, ip) {
+  const id = v.id(userIdRaw, 'user_id');
+  await moderation.liftRestriction(id);
+  await log(admin.id, 'user.unrestrict', 'user', id, null, ip);
+  return { ok: true };
+}
+
+async function setChatVerified(admin, chatIdRaw, value, ip) {
+  const id = v.id(chatIdRaw, 'chat_id');
+  const verified = v.bool(value, 'verified');
+  const c = await db.one(`UPDATE chats SET is_verified = $2 WHERE id = $1 AND type <> 'private' RETURNING id`, [id, verified]);
+  if (!c) throw notFound('chat_not_found', 'Group or channel not found');
+  const memberIds = (await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1', [id])).map((r) => r.user_id);
+  bus.emit('chat:updated', { chatId: id, memberIds });
+  await log(admin.id, verified ? 'group.verify' : 'group.unverify', 'chat', id, null, ip);
+  return { ok: true };
+}
+
 // ------------------------------------------------------------------ dashboard
 async function dashboard() {
   const c = await db.one(`
@@ -127,6 +221,10 @@ async function dashboard() {
       (SELECT count(*) FROM messages WHERE type <> 'system') AS messages_total,
       (SELECT count(*) FROM messages WHERE type <> 'system' AND created_at >= date_trunc('day', now())) AS messages_today,
       (SELECT count(*) FROM chats WHERE type = 'group') AS groups_total,
+      (SELECT count(*) FROM chats WHERE type = 'channel') AS channels_total,
+      (SELECT count(*) FROM users WHERE restricted_until > now()) AS users_restricted,
+      (SELECT count(*) FROM support_tickets WHERE status = 'open') AS tickets_open,
+      (SELECT count(*) FROM stories WHERE deleted_at IS NULL AND expires_at > now()) AS stories_active,
       (SELECT count(*) FROM chats WHERE type = 'private') AS private_chats_total,
       (SELECT count(*) FROM reports WHERE status = 'open') AS reports_open,
       (SELECT COALESCE(sum(size_bytes), 0)::bigint FROM media) AS storage_bytes
@@ -151,6 +249,7 @@ async function listUsers(query = {}) {
   const where = [];
   const status = query.status || 'all';
   if (status === 'all') where.push(`u.status <> 'deleted'`);
+  else if (status === 'restricted') where.push(`u.restricted_until > now()`);
   else {
     params.push(v.oneOf(status, ['active', 'banned', 'deleted'], 'status'));
     where.push(`u.status = $${params.length}`);
@@ -167,7 +266,7 @@ async function listUsers(query = {}) {
   const total = await db.one(`SELECT count(*) AS n FROM users u ${whereSql}`, params);
   const rows = await db.many(
     `SELECT u.id, u.phone, u.username, u.first_name, u.last_name, u.status, u.is_verified, u.ban_reason,
-            u.banned_until, u.last_seen_at, u.created_at, u.avatar_media_id
+            u.banned_until, u.last_seen_at, u.created_at, u.avatar_media_id, u.restricted_until, u.restrict_reason
      FROM users u ${whereSql} ORDER BY u.id DESC LIMIT ${limit} OFFSET ${offset}`,
     params,
   );
@@ -288,7 +387,7 @@ async function listReports(query = {}) {
   }
   const total = await db.one(`SELECT count(*) AS n FROM reports r ${where}`, params);
   const rows = await db.many(
-    `SELECT r.id, r.target_type, r.target_id, r.reason, r.details, r.status, r.action_taken, r.created_at, r.resolved_at,
+    `SELECT r.id, r.target_type, r.target_id, r.reason, r.details, r.status, r.action_taken, r.created_at, r.resolved_at, r.source,
             r.snapshot, u.id AS reporter_id, u.first_name AS reporter_first_name, u.username AS reporter_username,
             (SELECT count(*) FROM reports x WHERE x.target_type = r.target_type AND x.target_id = r.target_id
                AND x.status = 'open') AS open_reports_on_target
@@ -334,7 +433,7 @@ async function reportDetail(reportIdRaw) {
   return out;
 }
 
-const REPORT_ACTIONS = ['dismiss', 'warn_only', 'delete_message', 'ban_user', 'delete_message_and_ban', 'suspend_chat'];
+const REPORT_ACTIONS = ['dismiss', 'warn_only', 'delete_message', 'ban_user', 'delete_message_and_ban', 'suspend_chat', 'restrict_user'];
 
 async function resolveReport(admin, reportIdRaw, body = {}, ip) {
   const id = v.id(reportIdRaw, 'report_id');
@@ -362,9 +461,13 @@ async function resolveReport(admin, reportIdRaw, body = {}, ip) {
     if (!offenderId) throw badRequest('invalid_action', 'No user to ban for this report');
     await banUser(admin, offenderId, { reason: body.ban_reason || `Report #${id}: ${r.reason}`, duration_hours: body.ban_hours }, ip);
   }
+  if (action === 'restrict_user') {
+    if (!offenderId) throw badRequest('invalid_action', 'No user to restrict for this report');
+    await restrictUser(admin, offenderId, { minutes: body.restrict_minutes || 24 * 60, reason: `Report #${id}: ${r.reason}` }, ip);
+  }
   if (action === 'suspend_chat') {
     const chat = chatId ? await db.one('SELECT id, type FROM chats WHERE id = $1', [chatId]) : null;
-    if (!chat || chat.type !== 'group') throw badRequest('invalid_action', 'Only groups can be suspended');
+    if (!chat || chat.type === 'private') throw badRequest('invalid_action', 'Only groups and channels can be suspended');
     await setGroupSuspended(admin, chat.id, true, `Report #${id}`, ip);
   }
 
@@ -382,17 +485,18 @@ async function resolveReport(admin, reportIdRaw, body = {}, ip) {
 async function listGroups(query = {}) {
   const { limit, page, offset } = pageParams(query);
   const params = [];
-  const where = [`c.type = 'group'`];
+  const type = query.type || 'all';
+  const where = [type === 'all' ? `c.type IN ('group', 'channel')` : `c.type = '${type === 'channel' ? 'channel' : 'group'}'`];
   if (query.status === 'suspended') where.push('c.is_suspended');
   const q = String(query.q || '').trim();
   if (q) {
     params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
-    where.push(`c.title ILIKE $${params.length}`);
+    where.push(`(c.title ILIKE $${params.length} OR c.username ILIKE $${params.length})`);
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
   const total = await db.one(`SELECT count(*) AS n FROM chats c ${whereSql}`, params);
   const rows = await db.many(
-    `SELECT c.id, c.title, c.description, c.is_suspended, c.suspend_reason, c.created_at, c.last_message_at,
+    `SELECT c.id, c.type, c.username, c.is_public, c.is_verified, c.title, c.description, c.is_suspended, c.suspend_reason, c.created_at, c.last_message_at,
             c.avatar_media_id, (SELECT count(*) FROM chat_members WHERE chat_id = c.id) AS member_count,
             o.id AS owner_id, o.first_name AS owner_first_name, o.username AS owner_username
      FROM chats c
@@ -413,7 +517,7 @@ async function setGroupSuspended(admin, chatIdRaw, suspended, reason, ip) {
   const id = v.id(chatIdRaw, 'chat_id');
   const c = await db.one(
     `UPDATE chats SET is_suspended = $2, suspend_reason = $3, updated_at = now()
-     WHERE id = $1 AND type = 'group' RETURNING id`,
+     WHERE id = $1 AND type IN ('group', 'channel') RETURNING id`,
     [id, suspended, suspended ? reason || null : null],
   );
   if (!c) throw notFound('chat_not_found', 'Group not found');
@@ -426,7 +530,7 @@ async function setGroupSuspended(admin, chatIdRaw, suspended, reason, ip) {
 async function deleteGroup(admin, chatIdRaw, ip) {
   const id = v.id(chatIdRaw, 'chat_id');
   const memberIds = (await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1', [id])).map((r) => r.user_id);
-  const c = await db.one(`DELETE FROM chats WHERE id = $1 AND type = 'group' RETURNING id, title`, [id]);
+  const c = await db.one(`DELETE FROM chats WHERE id = $1 AND type IN ('group', 'channel') RETURNING id, title`, [id]);
   if (!c) throw notFound('chat_not_found', 'Group not found');
   bus.emit('chat:removed', { chatId: id, userIds: memberIds });
   await log(admin.id, 'group.delete', 'chat', id, { title: c.title }, ip);
@@ -478,16 +582,25 @@ async function updateAdmin(actor, adminIdRaw, body = {}, ip) {
   if (body.role !== undefined) changes.role = v.oneOf(body.role, ROLES, 'role');
   if (body.is_active !== undefined) changes.is_active = v.bool(body.is_active, 'is_active');
   if (body.password) changes.password_hash = hashPassword(v.str(body.password, { field: 'password', min: 10, max: 200, trim: false }));
+  if (body.reset_2fa === true) {
+    changes.totp_enabled = false;
+    changes.totp_secret = null;
+    changes.backup_codes = null;
+  }
   if (id === actor.id && (changes.is_active === false || (changes.role && changes.role !== 'super_admin'))) {
     throw badRequest('invalid_input', 'You cannot disable or demote yourself');
   }
   const keys = Object.keys(changes);
   if (!keys.length) return serializeAdmin(target);
   const sets = keys.map((k, i) => `${k} = $${i + 2}`);
-  const bump = changes.role || changes.is_active === false || changes.password_hash ? ', token_version = token_version + 1' : '';
+  const bump = changes.role || changes.is_active === false || changes.password_hash || body.reset_2fa === true
+    ? ', token_version = token_version + 1'
+    : '';
   const a = await db.one(`UPDATE admins SET ${sets.join(', ')}${bump} WHERE id = $1 RETURNING *`, [id, ...keys.map((k) => changes[k])]);
   const logged = { ...changes };
   if (logged.password_hash) logged.password_hash = '(changed)';
+  delete logged.totp_secret;
+  delete logged.backup_codes;
   await log(actor.id, 'admin.update', 'admin', id, logged, ip);
   return serializeAdmin(a);
 }
@@ -516,6 +629,12 @@ async function listLogs(query = {}) {
 }
 
 module.exports = {
+  twoFactorSetup,
+  twoFactorEnable,
+  twoFactorDisable,
+  restrictUser,
+  unrestrictUser,
+  setChatVerified,
   ROLES,
   PERMISSIONS,
   can,

@@ -30,6 +30,10 @@ function requireAdmin(perm) {
     const token = bearer(req);
     if (!token) throw unauthorized();
     req.admin = await adminService.authenticate(token);
+    // Policy: every admin must turn on 2FA before using the panel (only /me routes stay open).
+    if (!req.admin.totp_enabled && !req.path.startsWith('/me') && (await settings.get('require_admin_2fa'))) {
+      throw new AppError(403, 'two_factor_setup_required', 'Turn on two-factor authentication to continue');
+    }
     if (perm) adminService.requirePerm(req.admin, perm);
     next();
   });

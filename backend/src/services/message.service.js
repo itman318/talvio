@@ -6,11 +6,12 @@ const settings = require('./settings.service');
 const userService = require('./user.service');
 const chatService = require('./chat.service');
 const mediaService = require('./media.service');
+const moderation = require('./moderation.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file'];
+const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file', 'poll'];
 const MEDIA_KINDS_FOR_TYPE = {
   image: ['image'],
   video: ['video'],
@@ -20,6 +21,7 @@ const MEDIA_KINDS_FOR_TYPE = {
 const MAX_TEXT = 4096;
 const MAX_CAPTION = 1024;
 const BROADCAST_VIEWER = 0; // serialize as a stranger would see it (privacy-safe for fan-out)
+const REACTIONS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '👏', '🙏', '🎉', '👎'];
 
 const VISIBLE_SQL = `m.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $USER AND h.message_id = m.id)`;
@@ -40,9 +42,83 @@ function minimalUser(u) {
   };
 }
 
-/** Converts message rows to API objects (batched lookups for media, replies, senders). */
+function nameOf(serializedUser) {
+  if (!serializedUser) return 'Deleted Account';
+  return userService.displayName({ ...serializedUser, status: serializedUser.deleted ? 'deleted' : 'active' });
+}
+
+// ------------------------------------------------------------------ polls & reactions (read side)
+async function loadPolls(viewerId, messageIds) {
+  const map = new Map();
+  if (!messageIds.length) return map;
+  const polls = await db.many('SELECT * FROM polls WHERE message_id = ANY($1::bigint[])', [messageIds]);
+  if (!polls.length) return map;
+  const pollIds = polls.map((p) => p.id);
+  const options = await db.many('SELECT poll_id, idx, text FROM poll_options WHERE poll_id = ANY($1::bigint[]) ORDER BY idx', [pollIds]);
+  const counts = await db.many(
+    'SELECT poll_id, option_idx, count(*) AS n FROM poll_votes WHERE poll_id = ANY($1::bigint[]) GROUP BY poll_id, option_idx',
+    [pollIds],
+  );
+  const voters = await db.many(
+    'SELECT poll_id, count(DISTINCT user_id) AS n FROM poll_votes WHERE poll_id = ANY($1::bigint[]) GROUP BY poll_id',
+    [pollIds],
+  );
+  const mine = viewerId
+    ? await db.many('SELECT poll_id, option_idx FROM poll_votes WHERE poll_id = ANY($1::bigint[]) AND user_id = $2', [pollIds, viewerId])
+    : [];
+  for (const p of polls) {
+    const myVotes = mine.filter((x) => x.poll_id === p.id).map((x) => x.option_idx);
+    const closed = !!p.closed_at;
+    const reveal = p.is_quiz && (closed || myVotes.length > 0);
+    map.set(p.message_id, {
+      id: p.id,
+      question: p.question,
+      options: options
+        .filter((o) => o.poll_id === p.id)
+        .map((o) => ({ text: o.text, votes: (counts.find((c) => c.poll_id === p.id && c.option_idx === o.idx) || { n: 0 }).n })),
+      total_voters: (voters.find((x) => x.poll_id === p.id) || { n: 0 }).n,
+      anonymous: p.is_anonymous,
+      multiple: p.multiple,
+      quiz: p.is_quiz,
+      closed,
+      my_votes: myVotes,
+      correct_option: reveal ? p.correct_option : null,
+      explanation: reveal ? p.explanation : null,
+    });
+  }
+  return map;
+}
+
+async function loadReactions(viewerId, messageIds) {
+  const map = new Map();
+  if (!messageIds.length) return map;
+  const rows = await db.many(
+    `SELECT message_id, emoji, count(*) AS n FROM message_reactions WHERE message_id = ANY($1::bigint[])
+     GROUP BY message_id, emoji ORDER BY n DESC`,
+    [messageIds],
+  );
+  const mine = viewerId
+    ? await db.many('SELECT message_id, emoji FROM message_reactions WHERE message_id = ANY($1::bigint[]) AND user_id = $2', [messageIds, viewerId])
+    : [];
+  for (const r of rows) {
+    if (!map.has(r.message_id)) map.set(r.message_id, { list: [], mine: null });
+    map.get(r.message_id).list.push({ emoji: r.emoji, count: r.n });
+  }
+  for (const r of mine) {
+    if (!map.has(r.message_id)) map.set(r.message_id, { list: [], mine: null });
+    map.get(r.message_id).mine = r.emoji;
+  }
+  return map;
+}
+
+/** Converts message rows to API objects (batched lookups for media, replies, senders, polls, reactions). */
 async function serializeRows(viewerId, rows) {
   if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const chatIds = [...new Set(rows.map((r) => r.chat_id))];
+  const chats = await db.many('SELECT id, type, signatures FROM chats WHERE id = ANY($1::bigint[])', [chatIds]);
+  const chatMap = new Map(chats.map((c) => [c.id, c]));
+
   const replyIds = [...new Set(rows.map((r) => r.reply_to_id).filter(Boolean))];
   const replies = replyIds.length
     ? await db.many('SELECT id, sender_id, type, text, media_id, deleted_at FROM messages WHERE id = ANY($1::bigint[])', [replyIds])
@@ -55,29 +131,41 @@ async function serializeRows(viewerId, rows) {
 
   const userIds = [...rows.map((r) => r.sender_id), ...replies.map((r) => r.sender_id)].filter(Boolean);
   const users = await userService.getUsersMap(viewerId, userIds);
+  const polls = await loadPolls(viewerId, rows.filter((r) => r.type === 'poll').map((r) => r.id));
+  const reactions = await loadReactions(viewerId, ids);
 
   return rows.map((m) => {
+    const chat = chatMap.get(m.chat_id) || { type: 'private' };
+    const isChannel = chat.type === 'channel';
     const r = m.reply_to_id ? replyMap.get(m.reply_to_id) : null;
     const replyUser = r && r.sender_id ? users.get(r.sender_id) : null;
+    const sender = m.sender_id ? users.get(m.sender_id) : null;
+    const react = reactions.get(m.id);
     return {
       id: m.id,
       chat_id: m.chat_id,
-      sender_id: m.sender_id,
-      sender: minimalUser(m.sender_id ? users.get(m.sender_id) : null),
+      // Channel posts are authored by the channel itself; admins stay anonymous unless signatures are on.
+      sender_id: isChannel ? null : m.sender_id,
+      sender: isChannel ? null : minimalUser(sender),
+      author_signature: isChannel && chat.signatures && m.type !== 'system' ? nameOf(sender) : null,
       type: m.type,
       text: m.text,
       media: m.media_id ? mediaService.serialize(mediaMap.get(m.media_id)) : null,
+      poll: m.type === 'poll' ? polls.get(m.id) || null : null,
       reply_to: r
         ? {
             id: r.id,
-            sender_id: r.sender_id,
-            sender_name: replyUser ? userService.displayName({ ...replyUser, status: replyUser.deleted ? 'deleted' : 'active' }) : 'Deleted Account',
+            sender_id: isChannel ? null : r.sender_id,
+            sender_name: isChannel ? '' : nameOf(replyUser),
             type: r.type,
             text: r.deleted_at ? '' : String(r.text || '').slice(0, 120),
             deleted: !!r.deleted_at,
           }
         : null,
       forwarded_from: m.forwarded_from_name ? { user_id: m.forwarded_from_user_id, name: m.forwarded_from_name } : null,
+      reactions: react ? react.list : [],
+      my_reaction: react ? react.mine : null,
+      views: m.views_count || 0,
       meta: m.meta || null,
       client_id: m.client_id || null,
       edited_at: iso(m.edited_at),
@@ -115,14 +203,25 @@ async function listMessages(userId, chatIdRaw, query = {}) {
   return { messages: await serializeRows(userId, rows), has_more: rows.length === lim };
 }
 
+async function getVisibleMessage(userId, messageIdRaw) {
+  const m = await db.one('SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL', [v.id(messageIdRaw, 'message_id')]);
+  if (!m) throw notFound('message_not_found', 'Message not found');
+  const chat = await chatService.requireMember(m.chat_id, userId);
+  if (m.id <= chat.cleared_before_id) throw notFound('message_not_found', 'Message not found');
+  return { m, chat };
+}
+
 // ------------------------------------------------------------------ sending
-/** Throws if `userId` may not post in `chat` (suspended group, blocked / deleted peer). */
+/** Throws if `userId` may not post in `chat` (suspended, channel subscriber, blocked / deleted peer). */
 async function assertCanSend(userId, chat) {
   if (chat.is_suspended) throw forbidden('chat_suspended', 'This group has been suspended');
+  if (chat.type === 'channel' && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
+    throw forbidden('not_admin', 'Only channel admins can post');
+  }
   if (chat.type === 'private') {
     const peerId = await chatService.privatePeerId(chat.id, userId);
     if (peerId) {
-      const peer = await db.one('SELECT id, status, banned_until FROM users WHERE id = $1', [peerId]);
+      const peer = await db.one('SELECT id, status FROM users WHERE id = $1', [peerId]);
       if (!peer || peer.status === 'deleted') throw forbidden('peer_deleted', 'You can’t message a deleted account');
       if (await userService.isBlockedEither(userId, peerId)) {
         throw forbidden('blocked', 'You can’t send messages to this user');
@@ -133,6 +232,72 @@ async function assertCanSend(userId, chat) {
 
 function cleanText(text) {
   return typeof text === 'string' ? text.replace(/\r\n?/g, '\n').trim() : '';
+}
+
+function parsePoll(raw) {
+  if (!raw || typeof raw !== 'object') throw badRequest('invalid_poll', 'Poll details are required');
+  const question = v.str(raw.question, { field: 'question', min: 1, max: 300, required: true });
+  if (!Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 10) {
+    throw badRequest('invalid_poll', 'A poll needs 2 to 10 options');
+  }
+  const options = raw.options.map((o) => v.str(String(o), { field: 'option', min: 1, max: 100 }));
+  if (new Set(options.map((o) => o.toLowerCase())).size !== options.length) {
+    throw badRequest('invalid_poll', 'Poll options must be different');
+  }
+  const quiz = raw.quiz === true;
+  const poll = {
+    question,
+    options,
+    anonymous: raw.anonymous !== false,
+    multiple: !quiz && raw.multiple === true,
+    quiz,
+    correct_option: null,
+    explanation: '',
+  };
+  if (quiz) {
+    const c = Number(raw.correct_option);
+    if (!Number.isInteger(c) || c < 0 || c >= options.length) {
+      throw badRequest('invalid_poll', 'Choose the correct answer for the quiz');
+    }
+    poll.correct_option = c;
+    poll.explanation = v.str(raw.explanation, { field: 'explanation', max: 200 }) || '';
+  }
+  return poll;
+}
+
+/**
+ * Validates a send request and returns what to insert (no side effects).
+ * Shared by direct sends and scheduled posts.
+ */
+async function prepareMessage(userId, chat, body) {
+  const type = v.oneOf(body.type || 'text', SEND_TYPES, 'type');
+  const text = cleanText(body.text);
+  const out = { type, text, mediaId: null, replyToId: null, poll: null };
+
+  if (type === 'text') {
+    if (!text) throw badRequest('empty_message', 'Message is empty');
+    if (text.length > MAX_TEXT) throw badRequest('message_too_long', `Messages can be at most ${MAX_TEXT} characters`);
+  } else if (type === 'poll') {
+    if (chat.type === 'private') throw badRequest('invalid_poll', 'Polls can be sent in groups and channels');
+    out.poll = parsePoll(body.poll);
+    out.text = out.poll.question;
+  } else {
+    if (text.length > MAX_CAPTION) throw badRequest('caption_too_long', `Captions can be at most ${MAX_CAPTION} characters`);
+    const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
+    if (!media) throw notFound('media_not_found', 'Upload the file first');
+    if (!MEDIA_KINDS_FOR_TYPE[type].includes(media.kind)) throw badRequest('invalid_media', `This file can't be sent as ${type}`);
+    out.mediaId = media.id;
+  }
+
+  if (body.reply_to_id) {
+    const r = await db.one('SELECT id FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [
+      v.id(body.reply_to_id, 'reply_to_id'),
+      chat.id,
+    ]);
+    if (!r) throw notFound('reply_not_found', 'The message you are replying to no longer exists');
+    out.replyToId = r.id;
+  }
+  return out;
 }
 
 /** Low-level insert used by send / forward / system messages. Emits message:new. */
@@ -147,6 +312,7 @@ async function insertMessage({
   fwdUserId = null,
   fwdName = null,
   meta = null,
+  poll = null,
 }) {
   let row;
   try {
@@ -158,6 +324,16 @@ async function insertMessage({
         [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null],
       );
       const m = r.rows[0];
+      if (poll) {
+        const p = await c.query(
+          `INSERT INTO polls (message_id, question, is_anonymous, multiple, is_quiz, correct_option, explanation)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+          [m.id, poll.question, poll.anonymous, poll.multiple, poll.quiz, poll.correct_option, poll.explanation],
+        );
+        for (let i = 0; i < poll.options.length; i += 1) {
+          await c.query('INSERT INTO poll_options (poll_id, idx, text) VALUES ($1, $2, $3)', [p.rows[0].id, i, poll.options[i]]);
+        }
+      }
       await c.query('UPDATE chats SET last_message_id = $2, last_message_at = $3, updated_at = now() WHERE id = $1', [
         chatId,
         m.id,
@@ -192,42 +368,41 @@ async function createSystemMessage(chatId, actorId, meta) {
   return insertMessage({ chatId, senderId: actorId, type: 'system', meta });
 }
 
-async function sendMessage(userId, chatIdRaw, body = {}) {
-  rateLimit.enforce(`msg:${userId}`, 30, 10 * 1000, 'You are sending messages too fast');
+/**
+ * Sends a message, or schedules it when body.schedule_at is given (returns { scheduled }).
+ * internal: { meta, skipRateLimit } — only set by server code, never from request bodies.
+ */
+async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
+  if (!internal.skipRateLimit) rateLimit.enforce(`msg:${userId}`, 30, 10 * 1000, 'You are sending messages too fast');
   const chat = await chatService.requireMember(chatIdRaw, userId);
   await assertCanSend(userId, chat);
+  const sender = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
 
-  const type = v.oneOf(body.type || 'text', SEND_TYPES, 'type');
   const clientId = body.client_id ? v.str(String(body.client_id), { field: 'client_id', max: 64 }) : null;
   if (clientId) {
     const existing = await db.one('SELECT * FROM messages WHERE sender_id = $1 AND client_id = $2', [userId, clientId]);
     if (existing) return (await serializeRows(userId, [existing]))[0];
   }
 
-  const text = cleanText(body.text);
-  let mediaId = null;
-  if (type === 'text') {
-    if (!text) throw badRequest('empty_message', 'Message is empty');
-    if (text.length > MAX_TEXT) throw badRequest('message_too_long', `Messages can be at most ${MAX_TEXT} characters`);
-  } else {
-    if (text.length > MAX_CAPTION) throw badRequest('caption_too_long', `Captions can be at most ${MAX_CAPTION} characters`);
-    const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
-    if (!media) throw notFound('media_not_found', 'Upload the file first');
-    if (!MEDIA_KINDS_FOR_TYPE[type].includes(media.kind)) throw badRequest('invalid_media', `This file can't be sent as ${type}`);
-    mediaId = media.id;
-  }
+  const prepared = await prepareMessage(userId, chat, body);
+  const texts = [prepared.text, ...(prepared.poll ? prepared.poll.options : [])];
+  const flags = await moderation.checkOutgoing(sender, texts);
 
-  let replyToId = null;
-  if (body.reply_to_id) {
-    const r = await db.one('SELECT id FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [
-      v.id(body.reply_to_id, 'reply_to_id'),
-      chat.id,
-    ]);
-    if (!r) throw notFound('reply_not_found', 'The message you are replying to no longer exists');
-    replyToId = r.id;
-  }
+  if (body.schedule_at) return { scheduled: await schedule(userId, chat, body) };
 
-  return insertMessage({ chatId: chat.id, senderId: userId, type, text, mediaId, replyToId, clientId });
+  const message = await insertMessage({
+    chatId: chat.id,
+    senderId: userId,
+    type: prepared.type,
+    text: prepared.text,
+    mediaId: prepared.mediaId,
+    replyToId: prepared.replyToId,
+    clientId,
+    poll: prepared.poll,
+    meta: internal.meta || null,
+  });
+  moderation.afterSend(sender, message, flags).catch((err) => console.error('moderation error', err)); // eslint-disable-line no-console
+  return message;
 }
 
 async function forwardMessages(userId, body = {}) {
@@ -236,10 +411,11 @@ async function forwardMessages(userId, body = {}) {
   const targets = v.idList(body.to_chat_ids, 'to_chat_ids', 10);
   if (!ids.length || !targets.length) throw badRequest('invalid_input', 'Nothing to forward');
   rateLimit.enforce(`fwd:${userId}`, 20, 60 * 1000, 'You are forwarding too fast');
+  moderation.assertNotRestricted(await db.one('SELECT * FROM users WHERE id = $1', [userId]));
 
   const rows = await db.many(
     `SELECT m.* FROM messages m
-     WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type <> 'system'
+     WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type NOT IN ('system', 'poll')
        AND ${VISIBLE_SQL.replace(/\$USER/g, '$4')}
      ORDER BY m.id`,
     [from.id, ids, from.cleared_before_id, userId],
@@ -259,14 +435,16 @@ async function forwardMessages(userId, body = {}) {
   let count = 0;
   for (const chat of targetChats) {
     for (const r of rows) {
+      // Forwarded channel posts show the channel's name, not the admin who posted.
+      const fromName = from.type === 'channel' ? from.title : userService.displayName(senderMap.get(r.sender_id));
       await insertMessage({
         chatId: chat.id,
         senderId: userId,
         type: r.type,
         text: r.text,
         mediaId: r.media_id,
-        fwdUserId: r.forwarded_from_user_id || r.sender_id,
-        fwdName: r.forwarded_from_name || userService.displayName(senderMap.get(r.sender_id)),
+        fwdUserId: from.type === 'channel' ? null : r.forwarded_from_user_id || r.sender_id,
+        fwdName: r.forwarded_from_name || fromName,
       });
       count += 1;
     }
@@ -278,8 +456,9 @@ async function forwardMessages(userId, body = {}) {
 async function editMessage(userId, messageIdRaw, body = {}) {
   const m = await db.one('SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL', [v.id(messageIdRaw, 'message_id')]);
   if (!m) throw notFound('message_not_found', 'Message not found');
-  await chatService.requireMember(m.chat_id, userId);
-  if (m.sender_id !== userId || m.type === 'system' || m.forwarded_from_name) {
+  const chat = await chatService.requireMember(m.chat_id, userId);
+  const channelAdmin = chat.type === 'channel' && chatService.ADMIN_ROLES.includes(chat.my_role);
+  if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll'].includes(m.type) || m.forwarded_from_name) {
     throw forbidden('cannot_edit', 'You can only edit your own messages');
   }
   const hours = await settings.get('message_edit_window_hours');
@@ -291,16 +470,21 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   const max = m.type === 'text' ? MAX_TEXT : MAX_CAPTION;
   if (text.length > max) throw badRequest('message_too_long', `At most ${max} characters`);
   if (text === m.text) return (await serializeRows(userId, [m]))[0];
+  const flags = await moderation.checkOutgoing(await db.one('SELECT * FROM users WHERE id = $1', [userId]), [text]);
 
   const row = await db.one('UPDATE messages SET text = $2, edited_at = now() WHERE id = $1 RETURNING *', [m.id, text]);
   const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
   bus.emit('message:edited', { chatId: m.chat_id, message, memberIds: await chatService.memberIds(m.chat_id) });
+  if (flags.flaggedWord) {
+    const sender = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
+    moderation.afterSend(sender, message, flags).catch(() => {});
+  }
   return message;
 }
 
 /**
  * Deletes messages. forEveryone: own messages anywhere; in private chats both sides' messages;
- * in groups admins may delete any message. Otherwise "delete for me" (hidden only for this user).
+ * in groups/channels admins may delete any message. Otherwise "delete for me".
  */
 async function deleteMessages(userId, chatIdRaw, body = {}) {
   const chat = await chatService.requireMember(chatIdRaw, userId);
@@ -314,9 +498,9 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
   const found = rows.map((r) => r.id);
 
   if (forEveryone) {
-    const isAdmin = chat.type === 'group' && chatService.ADMIN_ROLES.includes(chat.my_role);
+    const isAdmin = chatService.isMulti(chat) && chatService.ADMIN_ROLES.includes(chat.my_role);
     for (const r of rows) {
-      const own = r.sender_id === userId && r.type !== 'system';
+      const own = r.sender_id === userId && r.type !== 'system' && chat.type !== 'channel';
       const allowed = own || isAdmin || (chat.type === 'private' && r.type !== 'system');
       if (!allowed) throw forbidden('cannot_delete', 'You can only delete your own messages for everyone');
     }
@@ -349,6 +533,186 @@ async function adminDeleteMessage(messageId) {
   return !!m;
 }
 
+// ------------------------------------------------------------------ reactions, views, polls
+async function react(userId, messageIdRaw, emoji) {
+  const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
+  if (m.type === 'system') throw badRequest('invalid_input', 'You can’t react to this message');
+  rateLimit.enforce(`react:${userId}`, 60, 60 * 1000, 'Slow down');
+  if (emoji === null || emoji === undefined || emoji === '') {
+    await db.query('DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2', [m.id, userId]);
+  } else {
+    v.oneOf(emoji, REACTIONS, 'emoji');
+    await db.query(
+      `INSERT INTO message_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)
+       ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()`,
+      [m.id, userId, emoji],
+    );
+  }
+  const summary = (await loadReactions(userId, [m.id])).get(m.id) || { list: [], mine: null };
+  bus.emit('message:reactions', {
+    chatId: chat.id,
+    messageId: m.id,
+    reactions: summary.list,
+    memberIds: await chatService.memberIds(chat.id),
+    userId,
+  });
+  return { reactions: summary.list, my_reaction: summary.mine };
+}
+
+/** Counts a view once per user (used for channel post view counters). */
+async function recordViews(userId, chatIdRaw, messageIdsRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  const ids = v.idList(messageIdsRaw, 'message_ids', 100);
+  if (!ids.length) return { views: {} };
+  const fresh = await db.many(
+    `INSERT INTO message_views (message_id, user_id)
+     SELECT m.id, $2 FROM messages m WHERE m.chat_id = $1 AND m.id = ANY($3::bigint[]) AND m.deleted_at IS NULL
+     ON CONFLICT DO NOTHING RETURNING message_id`,
+    [chat.id, userId, ids],
+  );
+  if (fresh.length) {
+    await db.query('UPDATE messages SET views_count = views_count + 1 WHERE id = ANY($1::bigint[])', [fresh.map((r) => r.message_id)]);
+  }
+  const rows = await db.many('SELECT id, views_count FROM messages WHERE chat_id = $1 AND id = ANY($2::bigint[])', [chat.id, ids]);
+  return { views: Object.fromEntries(rows.map((r) => [r.id, r.views_count])) };
+}
+
+async function pollFor(userId, messageIdRaw) {
+  const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
+  if (m.type !== 'poll') throw badRequest('not_a_poll', 'This message is not a poll');
+  const poll = await db.one('SELECT * FROM polls WHERE message_id = $1', [m.id]);
+  if (!poll) throw notFound('poll_not_found', 'Poll not found');
+  return { m, chat, poll };
+}
+
+async function emitPoll(chat, messageId) {
+  const summary = (await loadPolls(BROADCAST_VIEWER, [messageId])).get(messageId);
+  bus.emit('message:poll', { chatId: chat.id, messageId, poll: summary, memberIds: await chatService.memberIds(chat.id) });
+}
+
+async function vote(userId, messageIdRaw, optionsRaw) {
+  const { m, chat, poll } = await pollFor(userId, messageIdRaw);
+  if (poll.closed_at) throw forbidden('poll_closed', 'This poll is closed');
+  if (!Array.isArray(optionsRaw)) throw badRequest('invalid_input', 'options must be a list');
+  const n = (await db.one('SELECT count(*) AS n FROM poll_options WHERE poll_id = $1', [poll.id])).n;
+  const options = [...new Set(optionsRaw.map(Number))];
+  if (options.some((o) => !Number.isInteger(o) || o < 0 || o >= n)) throw badRequest('invalid_input', 'Invalid option');
+  if (!poll.multiple && options.length > 1) throw badRequest('invalid_input', 'Choose one option');
+  const already = await db.one('SELECT count(*) AS n FROM poll_votes WHERE poll_id = $1 AND user_id = $2', [poll.id, userId]);
+  if (poll.is_quiz) {
+    if (already.n > 0) throw forbidden('already_voted', 'You already answered this quiz');
+    if (options.length !== 1) throw badRequest('invalid_input', 'Choose one answer');
+  }
+  await db.tx(async (c) => {
+    await c.query('DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2', [poll.id, userId]);
+    for (const o of options) {
+      await c.query('INSERT INTO poll_votes (poll_id, user_id, option_idx) VALUES ($1, $2, $3)', [poll.id, userId, o]);
+    }
+  });
+  await emitPoll(chat, m.id);
+  return (await loadPolls(userId, [m.id])).get(m.id);
+}
+
+async function closePoll(userId, messageIdRaw) {
+  const { m, chat, poll } = await pollFor(userId, messageIdRaw);
+  const isAdmin = chatService.ADMIN_ROLES.includes(chat.my_role);
+  if (m.sender_id !== userId && !isAdmin) throw forbidden('not_allowed', 'Only the poll creator or admins can close it');
+  if (!poll.closed_at) {
+    await db.query('UPDATE polls SET closed_at = now() WHERE id = $1', [poll.id]);
+    await emitPoll(chat, m.id);
+  }
+  return (await loadPolls(userId, [m.id])).get(m.id);
+}
+
+async function pollVoters(userId, messageIdRaw, optionRaw) {
+  const { poll } = await pollFor(userId, messageIdRaw);
+  if (poll.is_anonymous) throw forbidden('anonymous_poll', 'Votes in this poll are anonymous');
+  const option = Number(optionRaw);
+  if (!Number.isInteger(option) || option < 0) throw badRequest('invalid_input', 'Invalid option');
+  const rows = await db.many(
+    'SELECT user_id FROM poll_votes WHERE poll_id = $1 AND option_idx = $2 ORDER BY created_at LIMIT 200',
+    [poll.id, option],
+  );
+  const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
+  return rows.map((r) => users.get(r.user_id)).filter(Boolean);
+}
+
+// ------------------------------------------------------------------ scheduled messages
+function serializeScheduled(s) {
+  const p = s.payload || {};
+  return {
+    id: s.id,
+    chat_id: s.chat_id,
+    send_at: iso(s.send_at),
+    status: s.status,
+    error: s.error || null,
+    type: p.type || 'text',
+    text: p.type === 'poll' && p.poll ? p.poll.question : p.text || '',
+    created_at: iso(s.created_at),
+  };
+}
+
+async function schedule(userId, chat, body) {
+  const at = new Date(body.schedule_at);
+  if (Number.isNaN(at.getTime())) throw badRequest('invalid_input', 'schedule_at must be a date');
+  if (at.getTime() < Date.now() + 30 * 1000) throw badRequest('invalid_input', 'Pick a time at least 1 minute from now');
+  if (at.getTime() > Date.now() + 365 * 24 * 3600 * 1000) throw badRequest('invalid_input', 'You can schedule up to a year ahead');
+  const pending = await db.one(`SELECT count(*) AS n FROM scheduled_messages WHERE sender_id = $1 AND status = 'pending'`, [userId]);
+  if (pending.n >= 100) throw badRequest('too_many_scheduled', 'You can have at most 100 scheduled messages');
+  const payload = {
+    type: body.type || 'text',
+    text: typeof body.text === 'string' ? body.text : '',
+    media_id: body.media_id || null,
+    reply_to_id: body.reply_to_id || null,
+    poll: body.type === 'poll' ? body.poll : null,
+  };
+  const row = await db.one(
+    'INSERT INTO scheduled_messages (chat_id, sender_id, payload, send_at) VALUES ($1, $2, $3, $4) RETURNING *',
+    [chat.id, userId, JSON.stringify(payload), at.toISOString()],
+  );
+  return serializeScheduled(row);
+}
+
+async function listScheduled(userId, chatIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  const rows = await db.many(
+    `SELECT * FROM scheduled_messages WHERE chat_id = $1 AND sender_id = $2 AND status <> 'sent' ORDER BY send_at`,
+    [chat.id, userId],
+  );
+  return rows.map(serializeScheduled);
+}
+
+async function cancelScheduled(userId, idRaw) {
+  const r = await db.one(
+    `DELETE FROM scheduled_messages WHERE id = $1 AND sender_id = $2 AND status <> 'sent' RETURNING id`,
+    [v.id(idRaw, 'id'), userId],
+  );
+  if (!r) throw notFound('scheduled_not_found', 'Scheduled message not found');
+  return { ok: true };
+}
+
+/** Publishes due scheduled messages. Called every few seconds by the server. */
+async function runDueScheduled(limit = 50) {
+  const due = await db.many(
+    `UPDATE scheduled_messages SET status = 'sent'
+     WHERE id IN (SELECT id FROM scheduled_messages WHERE status = 'pending' AND send_at <= now()
+                  ORDER BY send_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+     RETURNING *`,
+    [limit],
+  );
+  let sent = 0;
+  for (const s of due) {
+    try {
+      const msg = await sendMessage(s.sender_id, s.chat_id, { ...s.payload, client_id: `sched-${s.id}` }, { skipRateLimit: true });
+      await db.query('UPDATE scheduled_messages SET message_id = $2 WHERE id = $1', [s.id, msg.id]);
+      sent += 1;
+    } catch (err) {
+      await db.query(`UPDATE scheduled_messages SET status = 'failed', error = $2 WHERE id = $1`, [s.id, String(err.message).slice(0, 300)]);
+    }
+  }
+  return sent;
+}
+
 // ------------------------------------------------------------------ receipts
 async function chatMaxMessageId(chatId) {
   const r = await db.one('SELECT COALESCE(max(id), 0) AS id FROM messages WHERE chat_id = $1', [chatId]);
@@ -365,7 +729,8 @@ async function markRead(userId, chatIdRaw, messageIdRaw) {
      RETURNING last_read_message_id`,
     [chat.id, userId, target],
   );
-  if (r) {
+  // Channels don't show read receipts, so skip the fan-out to every subscriber.
+  if (r && chat.type !== 'channel') {
     bus.emit('receipt:read', { chatId: chat.id, userId, messageId: target, memberIds: await chatService.memberIds(chat.id) });
   }
   return { last_read_message_id: r ? r.last_read_message_id : chat.last_read_message_id };
@@ -379,7 +744,7 @@ async function markDelivered(userId, chatIdRaw, messageIdRaw) {
      WHERE chat_id = $1 AND user_id = $2 AND last_delivered_message_id < $3 RETURNING chat_id`,
     [chat.id, userId, target],
   );
-  if (r) {
+  if (r && chat.type !== 'channel') {
     bus.emit('receipt:delivered', { chatId: chat.id, userId, messageId: target, memberIds: await chatService.memberIds(chat.id) });
   }
   return { ok: true };
@@ -391,10 +756,11 @@ async function markAllDelivered(userId) {
     `UPDATE chat_members cm SET last_delivered_message_id = c.last_message_id
      FROM chats c
      WHERE c.id = cm.chat_id AND cm.user_id = $1 AND c.last_message_id > cm.last_delivered_message_id
-     RETURNING cm.chat_id, cm.last_delivered_message_id`,
+     RETURNING cm.chat_id, cm.last_delivered_message_id, c.type`,
     [userId],
   );
   for (const r of rows) {
+    if (r.type === 'channel') continue;
     bus.emit('receipt:delivered', {
       chatId: r.chat_id,
       userId,
@@ -406,6 +772,7 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  REACTIONS,
   serializeRows,
   serializeByIds,
   listMessages,
@@ -415,6 +782,14 @@ module.exports = {
   deleteMessages,
   adminDeleteMessage,
   createSystemMessage,
+  react,
+  recordViews,
+  vote,
+  closePoll,
+  pollVoters,
+  listScheduled,
+  cancelScheduled,
+  runDueScheduled,
   markRead,
   markDelivered,
   markAllDelivered,
