@@ -85,7 +85,7 @@ jobs:
           git add -A && git commit -qm "CI report ${{ github.sha }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-logs
 
-      - name: Publish APK to Releases (tag: android-latest)
+      - name: Publish APK to Releases (android-latest)
         if: steps.build.outcome == 'success'
         working-directory: .
         env:
