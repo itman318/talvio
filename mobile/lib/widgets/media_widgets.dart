@@ -175,7 +175,10 @@ class _VideoScreenState extends State<VideoScreen> {
       final c = VideoPlayerController.file(f);
       await c.initialize();
       await c.play();
-      if (!mounted) return c.dispose();
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
       setState(() => _c = c);
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not play this video');

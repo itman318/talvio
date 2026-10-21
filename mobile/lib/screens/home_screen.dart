@@ -312,7 +312,7 @@ class ChatTile extends StatelessWidget {
     }
 
     Widget? tick;
-    if (mine && last != null && !chat.isSavedMessages && !chat.isChannel) {
+    if (mine && !chat.isSavedMessages && !chat.isChannel) {
       if (last.sendState == SendState.sending) {
         tick = const Icon(Icons.schedule, size: 14, color: Colors.black45);
       } else if (last.sendState == SendState.failed) {

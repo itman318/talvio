@@ -250,7 +250,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
       if (story.media.kind == 'video') {
         final c = VideoPlayerController.file(f);
         await c.initialize();
-        if (!mounted || story != _story) return c.dispose();
+        if (!mounted || story != _story) {
+          await c.dispose();
+          return;
+        }
         _video = c;
         _progress.duration = c.value.duration.inMilliseconds > 0 ? c.value.duration : const Duration(seconds: 15);
         await c.play();

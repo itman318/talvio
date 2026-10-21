@@ -9,7 +9,6 @@ import 'screens/auth_screens.dart';
 import 'screens/call_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/folder_support_screens.dart';
-import 'screens/home_screen.dart';
 import 'screens/root_shell.dart';
 import 'state/auth_state.dart';
 import 'state/call_manager.dart';
