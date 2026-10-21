@@ -4,17 +4,19 @@
 
   const PERMISSIONS = {
     super_admin: ['*'],
-    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media', 'support'],
+    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media', 'support', 'users.export'],
     support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support'],
   };
   const NAV = [
     { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
     { id: 'users', label: 'Users', perm: 'users.view' },
     { id: 'reports', label: 'Reports', perm: 'reports.view' },
+    { id: 'appeals', label: 'Ban appeals', perm: 'users.view' },
     { id: 'groups', label: 'Groups & channels', perm: 'groups.view' },
     { id: 'support', label: 'Support', perm: 'support' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast' },
     { id: 'settings', label: 'Settings', perm: 'settings' },
+    { id: 'pages', label: 'Pages & FAQ', perm: 'settings' },
     { id: 'admins', label: 'Admin team', perm: 'admins' },
     { id: 'logs', label: 'Activity log', perm: 'logs.view' },
   ];
@@ -387,6 +389,7 @@
         stat('Groups', fmtNum(d.groups_total)),
         stat('Channels', fmtNum(d.channels_total)),
         stat('Open tickets', fmtNum(d.tickets_open)),
+        stat('Pending appeals', fmtNum(d.appeals_pending)),
         stat('Restricted users', fmtNum(d.users_restricted)),
         stat('Active stories', fmtNum(d.stories_active)),
         stat('Private chats', fmtNum(d.private_chats_total)),
@@ -463,6 +466,31 @@
       if (can('users.verify')) {
         actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/verify`, { verified: !u.is_verified }), u.is_verified ? 'Badge removed' : 'Verified badge added')) reload(); } }, u.is_verified ? 'Remove verified badge' : 'Give verified badge'));
       }
+      if (can('users.export')) {
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: async () => {
+            const data = await action(() => api('GET', `/users/${id}/export`), 'Export ready');
+            if (!data) return;
+            const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+            el('a', { href: url, download: `user-${id}-data.json` }).click();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+          },
+        }, 'Export data'));
+      }
+      if (can('users.username')) {
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: () => {
+            const input = el('input', { type: 'text', value: u.username || '', placeholder: 'username (empty = remove)' });
+            modal('Set username', [el('p', { class: 'muted' }, 'Admins can assign reserved usernames such as “support”.'), el('div', { class: 'field' }, input)], 'Save', async () => {
+              const r = await action(() => api('PUT', `/users/${id}/username`, { username: input.value.trim().replace(/^@/, '') || null }), 'Username updated');
+              if (r) reload();
+              return !!r;
+            });
+          },
+        }, 'Set username'));
+      }
       if (can('users.delete')) {
         actions.push(el('button', {
           class: 'btn danger',
@@ -501,6 +529,22 @@
         d.sessions.length ? d.sessions.map((s) => el('div', { class: 'bubble' },
           el('small', {}, [s.platform || 'unknown', s.app_version ? `v${s.app_version}` : null, `IP ${s.ip || '—'}`].filter(Boolean).join(' · ')),
           `${s.device_name || 'Unknown device'} — last active ${ago(s.last_active_at)}`)) : el('div', { class: 'muted' }, 'No active devices')),
+      el('section', {}, el('h4', {}, 'Moderator notes'),
+        (() => {
+          const input = el('textarea', { rows: 2, placeholder: 'Private note for the admin team…' });
+          const add = el('button', { class: 'btn small', onclick: async () => {
+            if (!input.value.trim()) return;
+            if (await action(() => api('POST', `/users/${id}/notes`, { text: input.value.trim() }), 'Note added')) reload();
+          } }, 'Add note');
+          return el('div', {}, el('div', { class: 'field' }, input), add);
+        })(),
+        d.notes.map((n) => el('div', { class: 'bubble', style: 'margin-top:6px' },
+          el('small', {}, `${n.admin_name || 'Admin'} · ${fmtDate(n.created_at)} · `,
+            el('a', { href: '#', onclick: async (e) => { e.preventDefault(); if (await action(() => api('DELETE', `/notes/${n.id}`), 'Note deleted')) reload(); } }, 'delete')),
+          n.text))),
+      d.appeals.length ? el('section', {}, el('h4', {}, 'Ban appeals'),
+        d.appeals.map((a) => el('div', { class: 'bubble' }, el('small', {}, `${a.status} · ${fmtDate(a.created_at)}`), a.message,
+          a.admin_reply ? el('div', { class: 'muted' }, `Reply: ${a.admin_reply}`) : null))) : null,
       el('section', {}, el('h4', {}, 'Admin history'),
         d.logs.length ? d.logs.map((l) => el('div', { class: 'bubble' },
           el('small', {}, `${fmtDate(l.created_at)} · ${l.admin_name || l.admin_email || 'system'}`),
@@ -639,6 +683,23 @@
               },
             }, 'Suspend'));
         }
+        if (can('groups.transfer')) {
+          acts.push(el('button', {
+            class: 'btn small',
+            onclick: async () => {
+              const members = await action(() => api('GET', `/groups/${g.id}/members?limit=500`));
+              if (!members) return;
+              const sel = el('select', {}, members.filter((m) => m.role !== 'owner').map((m) => el('option', { value: m.id },
+                `${`${m.first_name || ''} ${m.last_name || ''}`.trim() || 'User'} ${m.username ? `@${m.username}` : ''} (#${m.id}) — ${m.role}`)));
+              modal(`Transfer “${g.title}”`, [el('p', { class: 'muted' }, 'Use this for ownership disputes. The current owner becomes an admin.'),
+                el('div', { class: 'field' }, el('label', {}, 'New owner'), sel)], 'Transfer', async () => {
+                const r = await action(() => api('POST', `/groups/${g.id}/transfer`, { user_id: Number(sel.value) }), 'Ownership transferred');
+                if (r) load();
+                return !!r;
+              }, true);
+            },
+          }, 'Transfer owner'));
+        }
         if (can('groups.verify')) {
           acts.push(el('button', {
             class: 'btn small',
@@ -697,11 +758,19 @@
     auto_restrict_reports: ['Auto-restrict after reports from this many people (24h)', '0 = off. Restriction lasts 24h pending your review.'],
     blocked_phone_prefixes: ['Blocked phone prefixes', 'One per line, e.g. +1900. These numbers cannot sign up.'],
     require_admin_2fa: ['Require 2FA for all admins', 'Admins must turn on two-factor authentication before using the panel.'],
+    reserved_usernames: ['Reserved usernames', 'One per line. Users can’t take these; admins can assign them from the user page.'],
+    blocked_ips: ['Blocked IP addresses', 'One per line. Exact IP, or a prefix ending with "." such as 203.0.113.'],
+    feature_channels: ['Channels', 'Allow users to create channels.'],
+    feature_stories: ['Stories', 'Allow users to post stories.'],
+    feature_polls: ['Polls & quizzes', ''],
+    feature_voice_messages: ['Voice messages', ''],
+    feature_location: ['Location sharing', ''],
   };
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
-    ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes']],
-    ['Security', ['require_admin_2fa']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location']],
+    ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
+    ['Security', ['require_admin_2fa', 'blocked_ips']],
   ];
 
   async function pageSettings() {
@@ -749,12 +818,75 @@
     main.replaceChildren(head('Settings', save), ...sections);
   }
 
+  // ------------------------------------------------------------------ ban appeals
+  const appealsState = { status: 'pending', page: 1 };
+  async function pageAppeals() {
+    const tabs = el('div', { class: 'tabs' }, [['pending', 'Pending'], ['accepted', 'Accepted'], ['rejected', 'Rejected'], ['all', 'All']].map(([v, l]) => el('button', {
+      class: appealsState.status === v ? 'active' : '',
+      onclick: () => { appealsState.status = v; appealsState.page = 1; pageAppeals(); },
+    }, l)));
+    const box = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Ban appeals'), tabs, box);
+    const data = await action(() => api('GET', `/appeals?${new URLSearchParams({ status: appealsState.status, page: appealsState.page })}`));
+    if (!data) return;
+    const decide = (a, accept) => {
+      const reply = el('textarea', { rows: 3, placeholder: accept ? 'Optional message, e.g. “Your account is restored.”' : 'Reason shown to the user' });
+      modal(accept ? 'Accept appeal & unban' : 'Reject appeal', [el('div', { class: 'field' }, reply)], accept ? 'Unban user' : 'Reject', async () => {
+        const r = await action(() => api('POST', `/appeals/${a.id}/resolve`, { accept, reply: reply.value.trim() || undefined }), accept ? 'User unbanned' : 'Appeal rejected');
+        if (r) pageAppeals();
+        return !!r;
+      }, !accept);
+    };
+    const rows = data.appeals.map((a) => el('tr', {},
+      el('td', { class: 'num' }, a.id),
+      el('td', {}, `${`${a.first_name || ''} ${a.last_name || ''}`.trim() || '—'}`, el('div', { class: 'muted' }, a.username ? `@${a.username}` : a.phone),
+        el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(a.user_id); } }, 'Open user')),
+      el('td', {}, el('div', { class: 'muted' }, `Ban: ${a.ban_reason || '—'}`), a.message),
+      el('td', {}, el('span', { class: `chip ${a.status === 'pending' ? 'warn' : a.status === 'accepted' ? 'ok' : 'bad'}` }, a.status),
+        a.admin_reply ? el('div', { class: 'muted' }, a.admin_reply) : null),
+      el('td', { class: 'muted' }, ago(a.created_at)),
+      el('td', {}, a.status === 'pending' && can('users.ban')
+        ? el('div', { class: 'btn-row' }, el('button', { class: 'btn small primary', onclick: () => decide(a, true) }, 'Accept'), el('button', { class: 'btn small danger', onclick: () => decide(a, false) }, 'Reject'))
+        : (a.resolved_by_name ? el('span', { class: 'muted' }, `by ${a.resolved_by_name}`) : null))));
+    box.replaceChildren(table(['#', 'User', 'Appeal', 'Status', 'When', ''], rows, 'No appeals here'),
+      pager(data, (p) => { appealsState.page = p; pageAppeals(); }));
+  }
+
+  // ------------------------------------------------------------------ content pages
+  const PAGE_SLUGS = [['terms', 'Terms of Service'], ['privacy', 'Privacy Policy'], ['faq', 'Frequently Asked Questions'], ['about', 'About']];
+  async function pagePages() {
+    main.replaceChildren(head('Pages & FAQ'), el('div', { class: 'muted' }, 'Loading…'));
+    const list = await action(() => api('GET', '/pages'));
+    if (!list) return;
+    const cards = PAGE_SLUGS.map(([slug, defaultTitle]) => {
+      const existing = list.find((p) => p.slug === slug);
+      const title = el('input', { type: 'text', value: existing ? existing.title : defaultTitle, maxlength: 120 });
+      const body = el('textarea', { rows: 10, placeholder: 'Write the text here. Blank line = new paragraph. Start a line with "# " for a heading.' }, existing ? existing.body : '');
+      const save = el('button', { class: 'btn primary small' }, 'Save');
+      save.addEventListener('click', async () => {
+        save.disabled = true;
+        await action(() => api('PUT', `/pages/${slug}`, { title: title.value, body: body.value }), `${title.value} saved`);
+        save.disabled = false;
+      });
+      return el('div', { class: 'card', style: 'max-width:760px;margin-bottom:12px' },
+        el('div', { class: 'btn-row', style: 'justify-content:space-between;align-items:center;margin-bottom:8px' },
+          el('strong', {}, defaultTitle),
+          el('a', { href: `/p/${slug}`, target: '_blank', rel: 'noopener' }, `Public link: /p/${slug}`)),
+        el('div', { class: 'field' }, el('label', {}, 'Title'), title),
+        el('div', { class: 'field' }, el('label', {}, 'Text'), body),
+        el('div', { class: 'muted', style: 'font-size:12px;margin-bottom:8px' }, existing ? `Last updated ${fmtDate(existing.updated_at)}` : 'Not written yet'),
+        save);
+    });
+    main.replaceChildren(head('Pages & FAQ'), el('p', { class: 'muted' }, 'Shown in the app under Settings and as public web pages (use the Privacy link in your Play Store / App Store listing).'), ...cards);
+  }
+
   // ------------------------------------------------------------------ broadcast
   async function pageBroadcast() {
     const title = el('input', { type: 'text', maxlength: 120, placeholder: 'e.g. Eid Mubarak!' });
     const body = el('textarea', { rows: 4, maxlength: 1000, placeholder: 'Message shown to users' });
     const prefix = el('input', { type: 'text', placeholder: 'All countries (or e.g. +92)' });
     const platform = el('select', {}, el('option', { value: '' }, 'All platforms'), el('option', { value: 'android' }, 'Android only'), el('option', { value: 'ios' }, 'iOS only'));
+    const versionBelow = el('input', { type: 'text', placeholder: 'Any version (or e.g. 1.2.0)' });
     const inApp = el('input', { type: 'checkbox', checked: true, id: 'b-inapp' });
     const push = el('input', { type: 'checkbox', id: 'b-push' });
     const hours = el('select', {}, el('option', { value: '24' }, '1 day'), el('option', { value: '168' }, '7 days'), el('option', { value: '720' }, '30 days'), el('option', { value: '' }, 'Until I expire it'));
@@ -766,7 +898,7 @@
         const r = await action(() => api('POST', '/announcements', {
           title: title.value.trim(),
           body: body.value.trim(),
-          target: { phone_prefix: prefix.value.trim() || undefined, platform: platform.value || undefined },
+          target: { phone_prefix: prefix.value.trim() || undefined, platform: platform.value || undefined, app_version_below: versionBelow.value.trim() || undefined },
           in_app: inApp.checked,
           push: push.checked,
           expires_hours: hours.value ? Number(hours.value) : null,
@@ -784,6 +916,7 @@
         el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px' },
           el('div', { class: 'field' }, el('label', {}, 'Phone prefix'), prefix),
           el('div', { class: 'field' }, el('label', {}, 'Platform'), platform)),
+        el('div', { class: 'field' }, el('label', {}, 'Only users on an app version older than'), versionBelow),
         el('label', { class: 'check', for: 'b-inapp' }, inApp, 'Show as a banner in the app'),
         el('label', { class: 'check', for: 'b-push' }, push, 'Send a push notification'),
         el('div', { class: 'field' }, el('label', {}, 'Banner visible for'), hours),
@@ -797,7 +930,7 @@
       history.replaceChildren(table(['Sent', 'Title', 'Audience', 'Recipients', 'Dismissed', 'Status', ''], data.announcements.map((a) => el('tr', {},
         el('td', { class: 'muted' }, fmtDate(a.created_at)),
         el('td', {}, el('strong', {}, a.title), el('div', { class: 'muted', style: 'max-width:320px' }, a.body.slice(0, 120))),
-        el('td', {}, [a.target.phone_prefix || 'All countries', a.target.platform || 'all platforms', a.push ? 'push' : null, a.in_app ? 'banner' : null].filter(Boolean).join(' · ')),
+        el('td', {}, [a.target.phone_prefix || 'All countries', a.target.platform || 'all platforms', a.target.app_version_below ? `app < ${a.target.app_version_below}` : null, a.push ? 'push' : null, a.in_app ? 'banner' : null].filter(Boolean).join(' · ')),
         el('td', { class: 'num' }, fmtNum(a.recipients)),
         el('td', { class: 'num' }, fmtNum(a.dismissed)),
         el('td', {}, active(a) ? el('span', { class: 'chip ok' }, 'Showing') : el('span', { class: 'chip' }, a.in_app ? 'Expired' : 'Push only')),
@@ -947,6 +1080,8 @@
     groups: pageGroups,
     settings: pageSettings,
     broadcast: pageBroadcast,
+    appeals: pageAppeals,
+    pages: pagePages,
     support: pageSupport,
     admins: pageAdmins,
     logs: pageLogs,
