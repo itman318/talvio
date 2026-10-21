@@ -48,6 +48,10 @@ jobs:
           flutter create . --org com.talvio --project-name chatapp --platforms=android
           dart run tool/patch_platforms.dart
           rm -f test/widget_test.dart  # template test for the default counter app
+          # keep Gradle within the runner's memory (the default -Xmx8G can get the runner killed)
+          sed -i '/org.gradle.jvmargs/d' android/gradle.properties
+          printf '%s\n' 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g' 'org.gradle.workers.max=2' 'kotlin.daemon.jvmargs=-Xmx1g' >> android/gradle.properties
+          cat android/gradle.properties
 
       - name: Get packages
         run: flutter pub get
@@ -66,7 +70,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          { flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
+          { flutter build apk --release --split-per-abi --target-platform android-arm64 \
               --dart-define=API_BASE=${{ vars.API_BASE || 'http://10.0.2.2:4000' }}; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
       - name: Save report to ci-logs branch
@@ -87,7 +91,6 @@ jobs:
           name: talvio-android
           path: |
             mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            mobile/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
           retention-days: 30
 
       - name: Fail if analyze or build failed
