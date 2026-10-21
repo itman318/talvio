@@ -18,6 +18,9 @@ class PushService {
   /// Called with a chat id when the user taps a notification.
   void Function(int chatId)? onOpenChat;
 
+  /// Called when the user taps a support-reply notification.
+  void Function()? onOpenSupport;
+
   Future<void> init() async {
     try {
       if (Firebase.apps.isEmpty) await Firebase.initializeApp();
@@ -57,6 +60,10 @@ class PushService {
   }
 
   void _handleTap(RemoteMessage m) {
+    if (m.data['type'] == 'support') {
+      onOpenSupport?.call();
+      return;
+    }
     final id = int.tryParse('${m.data['chat_id']}');
     if (id != null) onOpenChat?.call(id);
   }

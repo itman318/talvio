@@ -33,6 +33,13 @@ class ChatStore extends ChangeNotifier {
   final Map<int, int> _lastReadSent = {};
   final Map<int, AppUser> userCache = {};
   final Map<int, List<GroupMember>> members = {};
+  List<ChatFolder> folders = [];
+  List<StoryGroup> stories = [];
+  List<Announcement> announcements = [];
+  final Map<int, Set<int>> _viewsSent = {};
+
+  /// Bumped whenever an admin answers a support ticket (screens listen and refresh).
+  final supportUpdates = ValueNotifier<int>(0);
 
   StreamSubscription<SocketEvent>? _eventSub;
   StreamSubscription<bool>? _connSub;
@@ -53,6 +60,9 @@ class ChatStore extends ChangeNotifier {
     });
     _typingTimer = Timer.periodic(const Duration(seconds: 2), (_) => _expireTyping());
     loadChats().catchError((_) {});
+    loadFolders().catchError((_) {});
+    loadStories().catchError((_) {});
+    loadAnnouncements().catchError((_) {});
   }
 
   void stop() {
@@ -70,6 +80,10 @@ class ChatStore extends ChangeNotifier {
     _lastReadSent.clear();
     userCache.clear();
     members.clear();
+    folders = [];
+    stories = [];
+    announcements = [];
+    _viewsSent.clear();
     myId = null;
   }
 
@@ -568,6 +582,212 @@ class ChatStore extends ChangeNotifier {
     return c;
   }
 
+
+  // ------------------------------------------------------------------ reactions
+  static const reactionEmojis = ['👍', '❤️', '🔥', '😂', '😮', '😢', '👏', '🙏', '🎉', '👎'];
+
+  Message? _findMessage(int chatId, int messageId) {
+    final list = _messages[chatId];
+    if (list == null) return null;
+    for (final m in list) {
+      if (m.id == messageId) return m;
+    }
+    return null;
+  }
+
+  /// Sets (or clears with null / same emoji) this user's reaction.
+  Future<void> react(Message m, String? emoji) async {
+    final next = emoji == m.myReaction ? null : emoji;
+    final r = Map<String, dynamic>.from(await api.put('/messages/${m.id}/reaction', {'emoji': next}) as Map);
+    m.reactions = ReactionCount.listFrom(r['reactions']);
+    m.myReaction = r['my_reaction'] as String?;
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ polls
+  Future<void> sendPoll(int chatId, Map<String, dynamic> poll) async {
+    await api.post('/chats/$chatId/messages', {'type': 'poll', 'poll': poll, 'client_id': _newClientId()});
+  }
+
+  Future<void> vote(Message m, List<int> options) async {
+    final p = PollInfo.fromJson(Map<String, dynamic>.from(await api.post('/messages/${m.id}/vote', {'options': options}) as Map));
+    _applyPoll(m, p, own: true);
+  }
+
+  Future<void> closePoll(Message m) async {
+    final p = PollInfo.fromJson(Map<String, dynamic>.from(await api.post('/messages/${m.id}/poll/close') as Map));
+    _applyPoll(m, p, own: true);
+  }
+
+  Future<List<AppUser>> pollVoters(Message m, int option) async {
+    final data = await api.get('/messages/${m.id}/poll/voters', query: {'option': '$option'}) as List;
+    return data.map((j) => AppUser.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+  }
+
+  void _applyPoll(Message m, PollInfo p, {required bool own}) {
+    final current = m.poll;
+    if (current == null) return;
+    current.mergeCounts(p);
+    if (own) current.myVotes = p.myVotes;
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ channels & public chats
+  Future<Chat> createChannel({required String title, String description = '', String? username, String? avatarPath}) async {
+    var chat = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/channel', {
+      'title': title,
+      'description': description,
+      if (username != null && username.isNotEmpty) 'username': username,
+    }) as Map));
+    if (avatarPath != null) {
+      try {
+        chat = await setGroupAvatar(chat.id, avatarPath);
+      } catch (_) {}
+    }
+    _upsertChat(chat);
+    return chat;
+  }
+
+  Future<List<Map<String, dynamic>>> searchPublic(String q) async {
+    final data = await api.get('/chats/search', query: {'q': q}) as List;
+    return data.map((j) => Map<String, dynamic>.from(j as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> publicPreview(String username) async =>
+      Map<String, dynamic>.from(await api.get('/chats/public/${Uri.encodeComponent(username)}') as Map);
+
+  Future<Chat> joinPublic(int chatId) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/$chatId/join') as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<Chat> setChatUsername(int chatId, String? username) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.put('/chats/$chatId/username', {'username': username}) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<Chat> setSignatures(int chatId, bool on) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.patch('/chats/$chatId', {'signatures': on}) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  Future<Map<String, dynamic>> stats(int chatId) async => Map<String, dynamic>.from(await api.get('/chats/$chatId/stats') as Map);
+
+  /// Reports channel posts as seen (each post counted once per user on the server).
+  Future<void> recordViews(int chatId, Iterable<Message> visible) async {
+    final sent = _viewsSent.putIfAbsent(chatId, () => {});
+    final ids = visible.where((m) => !m.isLocal && !m.isSystem && !sent.contains(m.id)).map((m) => m.id).take(100).toList();
+    if (ids.isEmpty) return;
+    sent.addAll(ids);
+    try {
+      final r = Map<String, dynamic>.from(await api.post('/chats/$chatId/views', {'message_ids': ids}) as Map);
+      final views = Map<String, dynamic>.from(r['views'] as Map);
+      views.forEach((k, v) => _findMessage(chatId, int.parse(k))?.views = (v as num).toInt());
+      notifyListeners();
+    } catch (_) {
+      sent.removeAll(ids);
+    }
+  }
+
+  // ------------------------------------------------------------------ scheduled messages
+  Future<void> scheduleText(int chatId, String text, DateTime at) async {
+    await api.post('/chats/$chatId/messages', {'type': 'text', 'text': text, 'schedule_at': at.toUtc().toIso8601String()});
+  }
+
+  Future<List<Map<String, dynamic>>> listScheduled(int chatId) async {
+    final data = await api.get('/chats/$chatId/scheduled') as List;
+    return data.map((j) => Map<String, dynamic>.from(j as Map)).toList();
+  }
+
+  Future<void> cancelScheduled(int id) async => api.delete('/scheduled/$id');
+
+  // ------------------------------------------------------------------ folders
+  Future<void> loadFolders() async {
+    final data = await api.get('/folders') as List;
+    folders = data.map((j) => ChatFolder.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    notifyListeners();
+  }
+
+  Future<void> saveFolder(ChatFolder? existing, Map<String, dynamic> body) async {
+    if (existing == null) {
+      await api.post('/folders', body);
+    } else {
+      await api.patch('/folders/${existing.id}', body);
+    }
+    await loadFolders();
+  }
+
+  Future<void> deleteFolder(int id) async {
+    await api.delete('/folders/$id');
+    await loadFolders();
+  }
+
+  Future<void> reorderFolders(List<int> ids) async {
+    final data = await api.put('/folders/order', {'folder_ids': ids}) as List;
+    folders = data.map((j) => ChatFolder.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    notifyListeners();
+  }
+
+
+  // ------------------------------------------------------------------ stories
+  Future<void> loadStories() async {
+    final data = await api.get('/stories') as List;
+    stories = data.map((j) => StoryGroup.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    notifyListeners();
+  }
+
+  /// type: image | video. privacy: contacts | everyone
+  Future<void> postStory(String path, {required String type, String caption = '', String privacy = 'contacts', String? mime}) async {
+    final m = await api.upload(path, kind: type, mime: mime);
+    await api.post('/stories', {'media_id': m['id'], 'caption': caption, 'privacy': privacy});
+    await loadStories();
+  }
+
+  Future<void> markStoryViewed(StoryItem s, {String? emoji}) async {
+    if (s.userId == myId) return;
+    if (s.viewed && emoji == null) return;
+    s.viewed = true;
+    await api.post('/stories/${s.id}/view', {if (emoji != null) 'emoji': emoji});
+  }
+
+  Future<void> deleteStory(StoryItem s) async {
+    await api.delete('/stories/${s.id}');
+    await loadStories();
+  }
+
+  Future<List<Map<String, dynamic>>> storyViewers(StoryItem s) async {
+    final data = await api.get('/stories/${s.id}/viewers') as List;
+    return data.map((j) => Map<String, dynamic>.from(j as Map)).toList();
+  }
+
+  Future<void> replyToStory(StoryItem s, String text) async {
+    await api.post('/stories/${s.id}/reply', {'text': text});
+  }
+
+  /// Re-evaluates "unseen" rings after viewing.
+  void refreshStoryRings() {
+    for (final g in stories) {
+      g.hasUnseen = g.user.id != myId && g.stories.any((s) => !s.viewed);
+    }
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ announcements
+  Future<void> loadAnnouncements() async {
+    final data = await api.get('/announcements') as List;
+    announcements = data.map((j) => Announcement.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    notifyListeners();
+  }
+
+  Future<void> dismissAnnouncement(Announcement a) async {
+    announcements.remove(a);
+    notifyListeners();
+    await api.post('/announcements/${a.id}/dismiss');
+  }
+
   // ------------------------------------------------------------------ typing & names
   String userName(int? id) {
     if (id == null) return 'Someone';
@@ -649,6 +869,22 @@ class ChatStore extends ChangeNotifier {
           refreshChat(c.id);
         }
         break;
+      case 'message:reactions':
+        final rm = _findMessage(_int(d['chat_id']), _int(d['message_id']));
+        if (rm != null) {
+          rm.reactions = ReactionCount.listFrom(d['reactions']);
+          notifyListeners();
+        }
+        break;
+      case 'message:poll':
+        final pm = _findMessage(_int(d['chat_id']), _int(d['message_id']));
+        if (pm != null && d['poll'] != null) {
+          _applyPoll(pm, PollInfo.fromJson(Map<String, dynamic>.from(d['poll'] as Map)), own: false);
+        }
+        break;
+      case 'support:updated':
+        supportUpdates.value++;
+        break;
       case 'session:revoked':
         onSessionRevoked?.call();
         break;
@@ -688,21 +924,23 @@ class ChatStore extends ChangeNotifier {
 
   void _onNewMessage(Message m) {
     _cacheSenders([m]);
+    // Channel posts carry no sender id, so a matching optimistic copy is how we know it's ours.
+    final hadLocal = m.clientId != null && (_messages[m.chatId]?.any((x) => x.isLocal && x.clientId == m.clientId) ?? false);
     _insertIncoming(m);
-    final mine = m.senderId == myId && !m.isSystem;
+    final mine = (m.senderId == myId && !m.isSystem) || hadLocal;
     final chat = chatById(m.chatId);
     if (chat == null) {
       refreshChat(m.chatId);
     } else {
       if ((chat.lastMessage?.id ?? 0) <= m.id || chat.lastMessage!.isLocal) chat.lastMessage = m;
-      if (!mine && m.senderId != myId) {
+      if (!mine && (m.senderId != myId || m.senderId == null)) {
         final viewing = activeChatId == m.chatId && appInForeground;
         if (!viewing) chat.unreadCount += 1;
         _typing[m.chatId]?.remove(m.senderId);
       }
       _sortChats();
     }
-    if (m.senderId != myId) {
+    if (!mine && m.senderId != myId) {
       socket.emit('message:delivered', {'chat_id': m.chatId, 'message_id': m.id});
       if (activeChatId == m.chatId) markChatRead(m.chatId);
     }

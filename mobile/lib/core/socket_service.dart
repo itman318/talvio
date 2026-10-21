@@ -31,6 +31,9 @@ class SocketService {
     'typing',
     'presence',
     'user:updated',
+    'message:reactions',
+    'message:poll',
+    'support:updated',
     'session:revoked',
   ];
 

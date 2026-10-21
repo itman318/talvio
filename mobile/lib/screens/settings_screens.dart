@@ -10,6 +10,7 @@ import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import 'folder_support_screens.dart';
 import 'home_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -58,8 +59,17 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Archived chats'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchivedChatsScreen())),
           ),
-          if (support.isNotEmpty)
-            ListTile(leading: const Icon(Icons.help_outline), title: const Text('Help & support'), subtitle: Text('Message @$support')),
+          ListTile(
+            leading: const Icon(Icons.folder_outlined),
+            title: const Text('Chat folders'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FoldersScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.help_outline),
+            title: const Text('Help & support'),
+            subtitle: support.isNotEmpty ? Text('Or message @$support') : null,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportListScreen())),
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout),

@@ -18,6 +18,13 @@ String chatListTime(DateTime t) {
 
 String messageTime(DateTime t) => DateFormat.Hm().format(t);
 
+/// 950 → "950", 1200 → "1.2K", 3400000 → "3.4M"
+String compactNumber(int n) {
+  if (n < 1000) return '$n';
+  if (n < 1000000) return '${(n / 1000).toStringAsFixed(n < 10000 ? 1 : 0)}K';
+  return '${(n / 1000000).toStringAsFixed(1)}M';
+}
+
 String dateSeparator(DateTime t) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
@@ -67,6 +74,8 @@ String systemText(Message m, ChatStore store) {
   switch (meta['event']) {
     case 'group_created':
       return '$actor created the group “${meta['title'] ?? ''}”';
+    case 'channel_created':
+      return 'Channel “${meta['title'] ?? ''}” created';
     case 'title_changed':
       return '$actor changed the group name to “${meta['title'] ?? ''}”';
     case 'photo_changed':

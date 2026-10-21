@@ -18,6 +18,7 @@ import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
+import 'channel_screens.dart';
 import 'forward_screen.dart';
 import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
@@ -105,6 +106,26 @@ class _ChatScreenState extends State<ChatScreen> {
     await _store.sendText(chatId, text, replyTo: reply);
   }
 
+  /// Long-press on send: pick a date & time and schedule the typed text.
+  Future<void> _scheduleCurrent() async {
+    final text = _text.text.trim();
+    if (text.isEmpty) return;
+    final now = DateTime.now();
+    final day = await showDatePicker(context: context, firstDate: now, lastDate: now.add(const Duration(days: 365)), initialDate: now);
+    if (day == null || !mounted) return;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now.add(const Duration(minutes: 10))));
+    if (time == null || !mounted) return;
+    final at = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    try {
+      await _store.scheduleText(chatId, text, at);
+      _text.clear();
+      setState(() {});
+      if (mounted) showInfo(context, 'Scheduled for ${chatListTime(at)} ${messageTime(at)}');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   bool _checkSize(String path) {
     final maxMb = (context.read<AuthState>().appConfig['max_upload_mb'] as num?)?.toInt() ?? 50;
     if (File(path).lengthSync() > maxMb * 1024 * 1024) {
@@ -153,10 +174,23 @@ class _ChatScreenState extends State<ChatScreen> {
           ListTile(leading: const Icon(Icons.photo_camera), title: const Text('Camera'), onTap: () => Navigator.pop(ctx, 'camera')),
           ListTile(leading: const Icon(Icons.videocam), title: const Text('Video'), onTap: () => Navigator.pop(ctx, 'video')),
           ListTile(leading: const Icon(Icons.attach_file), title: const Text('File'), onTap: () => Navigator.pop(ctx, 'file')),
+          if (_store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false)
+            ListTile(leading: const Icon(Icons.poll_outlined), title: const Text('Poll or quiz'), onTap: () => Navigator.pop(ctx, 'poll')),
         ]),
       ),
     );
     if (choice == null) return;
+    if (choice == 'poll') {
+      if (!mounted) return;
+      final poll = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => const CreatePollScreen()));
+      if (poll == null) return;
+      try {
+        await _store.sendPoll(chatId, poll);
+      } catch (e) {
+        if (mounted) showError(context, e);
+      }
+      return;
+    }
     try {
       final picker = ImagePicker();
       switch (choice) {
@@ -224,7 +258,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ------------------------------------------------------------------ message menu
   Future<void> _messageMenu(Message m, Chat chat) async {
-    final mine = m.senderId == _store.myId;
+    final mine = m.senderId == _store.myId && !chat.isChannel;
+    final channelAdmin = chat.isChannel && chat.isAdmin;
     if (m.isLocal) {
       if (m.sendState != SendState.failed) return;
       final a = await showModalBottomSheet<String>(
@@ -241,22 +276,61 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     if (m.isSystem) return;
-    final canEdit = mine && m.forwardedFromName == null && (m.type == 'text' || m.text.isNotEmpty);
+    final canEdit = (mine || channelAdmin) && m.forwardedFromName == null && m.type != 'poll' && (m.type == 'text' || m.text.isNotEmpty);
+    final poll = m.poll;
+    final canClosePoll = poll != null && !poll.closed && (mine || chat.isAdmin);
     final a = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Wrap(children: [
-          if (!chat.isSuspended) ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(ctx, 'reply')),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: Wrap(
+              spacing: 2,
+              children: ChatStore.reactionEmojis
+                  .map((e) => InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => Navigator.pop(ctx, 'react:$e'),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: m.myReaction == e ? const Color(0x332AABEE) : null,
+                          ),
+                          child: Text(e, style: const TextStyle(fontSize: 24)),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+          const Divider(height: 1),
+          if (canClosePoll) ListTile(leading: const Icon(Icons.stop_circle_outlined), title: const Text('Stop poll'), onTap: () => Navigator.pop(ctx, 'close_poll')),
+          if (chat.canPost) ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(ctx, 'reply')),
           if (m.text.isNotEmpty) ListTile(leading: const Icon(Icons.copy), title: const Text('Copy text'), onTap: () => Navigator.pop(ctx, 'copy')),
           if (canEdit) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
-          ListTile(leading: const Icon(Icons.forward), title: const Text('Forward'), onTap: () => Navigator.pop(ctx, 'forward')),
+          if (m.type != 'poll') ListTile(leading: const Icon(Icons.forward), title: const Text('Forward'), onTap: () => Navigator.pop(ctx, 'forward')),
           ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Delete'), onTap: () => Navigator.pop(ctx, 'delete')),
-          if (!mine) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
+          if (!mine && !channelAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
         ]),
       ),
     );
     if (!mounted || a == null) return;
+    if (a.startsWith('react:')) {
+      _store.react(m, a.substring(6)).catchError((e) {
+        if (mounted) showError(context, e);
+      });
+      return;
+    }
     switch (a) {
+      case 'close_poll':
+        if (await confirm(context, 'Stop poll?', 'Nobody will be able to vote after this. Results become final.', ok: 'Stop poll')) {
+          try {
+            await _store.closePoll(m);
+          } catch (e) {
+            if (mounted) showError(context, e);
+          }
+        }
+        break;
       case 'reply':
         setState(() {
           _replyTo = m;
@@ -278,7 +352,7 @@ class _ChatScreenState extends State<ChatScreen> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])));
         break;
       case 'delete':
-        await _delete(m, chat, mine);
+        await _delete(m, chat, mine || channelAdmin);
         break;
       case 'report':
         await showReportDialog(context, targetType: 'message', targetId: m.id);
@@ -338,16 +412,23 @@ class _ChatScreenState extends State<ChatScreen> {
         case 'report':
           await showReportDialog(
             context,
-            targetType: chat.isGroup ? 'chat' : 'user',
-            targetId: chat.isGroup ? chat.id : chat.peer!.id,
+            targetType: chat.isMulti ? 'chat' : 'user',
+            targetId: chat.isMulti ? chat.id : chat.peer!.id,
           );
           break;
+        case 'scheduled':
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => ScheduledScreen(chatId: chatId)));
+          break;
+        case 'stats':
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat)));
+          break;
         case 'leave':
+          final what = chat.isChannel ? 'channel' : 'group';
           final ok = await confirm(
             context,
-            chat.isGroup ? 'Leave group?' : 'Delete chat?',
-            chat.isGroup ? 'You will stop receiving messages from this group.' : 'The chat history will be removed for you.',
-            ok: chat.isGroup ? 'Leave' : 'Delete',
+            chat.isMulti ? 'Leave $what?' : 'Delete chat?',
+            chat.isMulti ? 'You will stop receiving messages from this $what.' : 'The chat history will be removed for you.',
+            ok: chat.isMulti ? 'Leave' : 'Delete',
             danger: true,
           );
           if (ok) {
@@ -362,7 +443,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _openInfo(Chat chat) {
-    if (chat.isGroup) {
+    if (chat.isMulti) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => GroupInfoScreen(chatId: chat.id)));
     } else if (chat.peer != null) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: chat.peer!.id)));
@@ -386,7 +467,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (typing != null) {
       subtitle = typing;
     } else if (chat.isGroup) {
-      subtitle = '${chat.memberCount} members';
+      subtitle = chat.isChannel ? '${chat.memberCount} subscribers' : '${chat.memberCount} members';
     } else if (chat.peer != null) {
       subtitle = lastSeenText(chat.peer!);
     } else {
@@ -423,9 +504,11 @@ class _ChatScreenState extends State<ChatScreen> {
             itemBuilder: (_) => [
               PopupMenuItem(value: 'mute', child: Text(chat.isMuted ? 'Unmute' : 'Mute')),
               const PopupMenuItem(value: 'clear', child: Text('Clear history')),
+              if (chat.canPost) const PopupMenuItem(value: 'scheduled', child: Text('Scheduled messages')),
+              if (chat.isMulti && chat.isAdmin) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
               if (chat.peer != null) PopupMenuItem(value: 'block', child: Text(chat.peer!.blocked ? 'Unblock user' : 'Block user')),
               if (!chat.isSavedMessages) const PopupMenuItem(value: 'report', child: Text('Report')),
-              PopupMenuItem(value: 'leave', child: Text(chat.isGroup ? 'Leave group' : 'Delete chat')),
+              PopupMenuItem(value: 'leave', child: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'))),
             ],
           ),
         ],
@@ -452,6 +535,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return Center(child: SystemBubble(text: _error ?? (chat.isSavedMessages ? 'Save notes, links and files here' : 'No messages here yet. Say hi! 👋')));
     }
     final hasMore = store.hasMore(chatId);
+    if (chat.isChannel) {
+      // Count views for the posts on screen (server ignores repeats).
+      WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, messages.take(40)));
+    }
     return ListView.builder(
       controller: _scroll,
       reverse: true,
@@ -467,7 +554,7 @@ class _ChatScreenState extends State<ChatScreen> {
             older.createdAt.year != m.createdAt.year ||
             older.createdAt.month != m.createdAt.month ||
             older.createdAt.day != m.createdAt.day;
-        final mine = m.senderId == store.myId;
+        final mine = chat.isChannel ? m.isLocal : m.senderId == store.myId;
         final showSender = chat.isGroup && !mine && (older == null || older.senderId != m.senderId || older.isSystem || newDay);
         return Column(
           children: [
@@ -491,6 +578,19 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _bottomBar(Chat chat) {
+    if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
+      return SafeArea(
+        top: false,
+        child: Container(
+          color: Colors.white,
+          width: double.infinity,
+          child: TextButton(
+            onPressed: () => _chatMenu('mute', chat),
+            child: Text(chat.isMuted ? 'Unmute' : 'Mute', style: const TextStyle(fontSize: 16)),
+          ),
+        ),
+      );
+    }
     String? blockedText;
     Widget? blockedAction;
     if (chat.isSuspended) {
@@ -584,7 +684,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   if (_text.text.trim().isNotEmpty || _editing != null)
-                    IconButton(icon: Icon(_editing != null ? Icons.check : Icons.send, color: const Color(0xFF2AABEE)), onPressed: _send)
+                    GestureDetector(
+                      onLongPress: _editing == null ? _scheduleCurrent : null,
+                      child: IconButton(
+                        icon: Icon(_editing != null ? Icons.check : Icons.send, color: const Color(0xFF2AABEE)),
+                        tooltip: 'Send (hold to schedule)',
+                        onPressed: _send,
+                      ),
+                    )
                   else
                     IconButton(icon: const Icon(Icons.mic_none), onPressed: _startRecording, tooltip: 'Record voice message'),
                 ],

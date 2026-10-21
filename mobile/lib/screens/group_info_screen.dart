@@ -8,6 +8,7 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/report_dialog.dart';
+import 'channel_screens.dart';
 import 'new_chat_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -56,6 +57,26 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     );
     if (v == null) return;
     await _run(() => _store.updateGroup(chat.id, title: title ? v : null, description: title ? null : v));
+  }
+
+  Future<void> _editUsername(Chat chat) async {
+    final ctrl = TextEditingController(text: chat.username ?? '');
+    final v = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Public link'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: ctrl, autofocus: true, maxLength: 32, decoration: const InputDecoration(prefixText: '@', hintText: 'username')),
+          const Text('Leave empty to make it private.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim().replaceFirst('@', '')), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (v == null) return;
+    await _run(() => _store.setChatUsername(chat.id, v.isEmpty ? null : v), v.isEmpty ? 'Now private' : 'Public link saved');
   }
 
   Future<void> _changePhoto(Chat chat) async {
@@ -153,12 +174,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     final store = context.watch<ChatStore>();
     final chat = store.chatById(widget.chatId);
     if (chat == null) {
-      return Scaffold(appBar: AppBar(), body: const Center(child: Text('You are no longer a member of this group')));
+      return Scaffold(appBar: AppBar(), body: const Center(child: Text('You are no longer a member here')));
     }
     final members = store.members[chat.id] ?? [];
+    final what = chat.isChannel ? 'channel' : 'group';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Group info'),
+        title: Text(chat.isChannel ? 'Channel info' : 'Group info'),
         actions: [
           if (chat.isAdmin) IconButton(icon: const Icon(Icons.edit), onPressed: () => _editText(chat, title: true)),
         ],
@@ -174,11 +196,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           ),
           const SizedBox(height: 12),
           Text(chat.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
-          Text('${chat.memberCount} members', textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+          Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
           if (chat.isSuspended)
             const Padding(
               padding: EdgeInsets.all(8),
-              child: Text('This group is suspended', textAlign: TextAlign.center, style: TextStyle(color: Colors.red)),
+              child: Text('Suspended by moderators', textAlign: TextAlign.center, style: TextStyle(color: Colors.red)),
             ),
           const Divider(height: 32),
           ListTile(
@@ -186,6 +208,36 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             title: Text(chat.description.isEmpty ? (chat.isAdmin ? 'Add a description' : 'No description') : chat.description),
             onTap: chat.isAdmin ? () => _editText(chat, title: false) : null,
           ),
+          if (chat.username != null || chat.isOwner)
+            ListTile(
+              leading: const Icon(Icons.alternate_email),
+              title: Text(chat.username != null ? '@${chat.username}' : 'Make this $what public'),
+              subtitle: Text(chat.username != null ? 'Public link — anyone can find and join' : 'Private — joins only with an invite code'),
+              trailing: chat.username != null
+                  ? IconButton(
+                      icon: const Icon(Icons.copy),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: '@${chat.username}'));
+                        if (context.mounted) showInfo(context, 'Copied');
+                      },
+                    )
+                  : null,
+              onTap: chat.isOwner ? () => _editUsername(chat) : null,
+            ),
+          if (chat.isChannel && chat.isAdmin)
+            SwitchListTile(
+              secondary: const Icon(Icons.draw_outlined),
+              title: const Text('Sign messages'),
+              subtitle: const Text('Show the admin’s name on posts'),
+              value: chat.signatures,
+              onChanged: (v) => _run(() => _store.setSignatures(chat.id, v)),
+            ),
+          if (chat.isAdmin)
+            ListTile(
+              leading: const Icon(Icons.insights),
+              title: const Text('Statistics'),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat))),
+            ),
           SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),
             title: const Text('Notifications'),
@@ -216,9 +268,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           if (chat.isAdmin && !chat.isSuspended)
             ListTile(
               leading: const Icon(Icons.person_add, color: Color(0xFF2AABEE)),
-              title: const Text('Add members', style: TextStyle(color: Color(0xFF2AABEE))),
+              title: Text(chat.isChannel ? 'Add subscribers' : 'Add members', style: const TextStyle(color: Color(0xFF2AABEE))),
               onTap: () => _addMembers(chat),
             ),
+          if (chat.isChannel && !chat.isAdmin)
+            const Padding(padding: EdgeInsets.fromLTRB(16, 8, 16, 0), child: Text('Admins', style: TextStyle(fontWeight: FontWeight.w600))),
           ...members.map((m) => ListTile(
                 leading: Avatar(id: m.user.id, name: m.user.name, url: m.user.avatarAbsolute, size: 42),
                 title: Text(m.user.id == store.myId ? '${m.user.name} (you)' : m.user.name),
@@ -231,14 +285,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.flag_outlined),
-            title: const Text('Report group'),
+            title: Text('Report $what'),
             onTap: () => showReportDialog(context, targetType: 'chat', targetId: chat.id),
           ),
           ListTile(
             leading: const Icon(Icons.exit_to_app, color: Colors.red),
-            title: const Text('Leave group', style: TextStyle(color: Colors.red)),
+            title: Text('Leave $what', style: const TextStyle(color: Colors.red)),
             onTap: () async {
-              if (!await confirm(context, 'Leave group?', 'You will stop receiving messages from “${chat.title}”.', ok: 'Leave', danger: true)) return;
+              if (!await confirm(context, 'Leave $what?', 'You will stop receiving messages from “${chat.title}”.', ok: 'Leave', danger: true)) return;
               try {
                 await _store.leaveOrDelete(chat.id);
                 if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);

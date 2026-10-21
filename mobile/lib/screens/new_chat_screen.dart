@@ -5,20 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../config.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import 'channel_screens.dart';
 import 'chat_screen.dart';
 
 /// Search field + results for finding users by @username or phone number.
 class UserSearch extends StatefulWidget {
-  const UserSearch({super.key, required this.onTap, this.selectedIds = const {}, this.header});
+  const UserSearch({super.key, required this.onTap, this.selectedIds = const {}, this.header, this.includePublic = false});
 
   final void Function(AppUser user) onTap;
   final Set<int> selectedIds;
   final Widget? header;
+  /// Also search public groups & channels by name / @username.
+  final bool includePublic;
 
   @override
   State<UserSearch> createState() => _UserSearchState();
@@ -28,6 +32,7 @@ class _UserSearchState extends State<UserSearch> {
   final _q = TextEditingController();
   Timer? _debounce;
   List<AppUser> _results = [];
+  List<Map<String, dynamic>> _public = [];
   List<AppUser> _contacts = [];
   bool _loading = false;
 
@@ -53,14 +58,22 @@ class _UserSearchState extends State<UserSearch> {
 
   Future<void> _search(String q) async {
     if (q.length < 2) {
-      setState(() => _results = []);
+      setState(() {
+        _results = [];
+        _public = [];
+      });
       return;
     }
     setState(() => _loading = true);
     try {
+      final store = context.read<ChatStore>();
       final data = await context.read<AppServices>().api.get('/users/search', query: {'q': q});
+      final pub = widget.includePublic && !q.startsWith('+') ? await store.searchPublic(q) : <Map<String, dynamic>>[];
       if (!mounted) return;
-      setState(() => _results = (data as List).map((j) => AppUser.fromJson(Map<String, dynamic>.from(j as Map))).toList());
+      setState(() {
+        _results = (data as List).map((j) => AppUser.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+        _public = pub;
+      });
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -94,8 +107,26 @@ class _UserSearchState extends State<UserSearch> {
               if (widget.header != null && _q.text.isEmpty) widget.header!,
               if (_q.text.trim().length < 2 && _contacts.isNotEmpty)
                 const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Contacts', style: TextStyle(fontWeight: FontWeight.w600))),
-              if (_q.text.trim().length >= 2 && !_loading && _results.isEmpty)
-                const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('No users found'))),
+              if (_q.text.trim().length >= 2 && !_loading && _results.isEmpty && _public.isEmpty)
+                const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Nothing found'))),
+              if (_public.isNotEmpty && _q.text.trim().length >= 2) ...[
+                const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Public groups & channels', style: TextStyle(fontWeight: FontWeight.w600))),
+                ..._public.map((c) => ListTile(
+                      leading: Avatar(
+                        id: (c['chat_id'] as num).toInt(),
+                        name: '${c['title']}',
+                        url: c['avatar_url'] == null ? null : AppConfig.absolute(c['avatar_url'] as String),
+                      ),
+                      title: Row(children: [
+                        Flexible(child: Text('${c['title']}', overflow: TextOverflow.ellipsis)),
+                        if (c['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Color(0xFF2AABEE))),
+                      ]),
+                      subtitle: Text('@${c['username']} · ${c['member_count']} ${c['type'] == 'channel' ? 'subscribers' : 'members'}'),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PublicChatPreviewScreen(info: c))),
+                    )),
+                if (_results.isNotEmpty)
+                  const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('People', style: TextStyle(fontWeight: FontWeight.w600))),
+              ],
               ...showing.map((u) => ListTile(
                     leading: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute),
                     title: Text(u.name),
@@ -130,6 +161,7 @@ class NewChatScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('New message')),
       body: UserSearch(
+        includePublic: true,
         onTap: (u) => _openWith(context, u.id),
         header: Column(children: [
           ListTile(
@@ -138,13 +170,18 @@ class NewChatScreen extends StatelessWidget {
             onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewGroupScreen())),
           ),
           ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.campaign)),
+            title: const Text('New channel'),
+            onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewChannelScreen())),
+          ),
+          ListTile(
             leading: const CircleAvatar(child: Icon(Icons.bookmark)),
             title: const Text('Saved Messages'),
             onTap: () => _openWith(context, myId),
           ),
           ListTile(
             leading: const CircleAvatar(child: Icon(Icons.link)),
-            title: const Text('Join group with invite code'),
+            title: const Text('Join with invite code'),
             onTap: () => showJoinGroupDialog(context),
           ),
           const Divider(height: 1),

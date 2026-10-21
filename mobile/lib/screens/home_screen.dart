@@ -6,9 +6,12 @@ import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import 'channel_screens.dart';
 import 'chat_screen.dart';
+import 'folder_support_screens.dart';
 import 'new_chat_screen.dart';
 import 'settings_screens.dart';
+import 'story_screens.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,13 +23,48 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _searching = false;
   final _search = TextEditingController();
+  int? _folderId; // null = all chats
+
+  Future<void> _refresh(ChatStore store) async {
+    try {
+      await Future.wait([store.loadChats(), store.loadStories(), store.loadAnnouncements(), store.loadFolders()]);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  Future<void> _compose() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(leading: const Icon(Icons.person_outline), title: const Text('New message'), onTap: () => Navigator.pop(ctx, 'chat')),
+          ListTile(leading: const Icon(Icons.group_add_outlined), title: const Text('New group'), onTap: () => Navigator.pop(ctx, 'group')),
+          ListTile(leading: const Icon(Icons.campaign_outlined), title: const Text('New channel'), onTap: () => Navigator.pop(ctx, 'channel')),
+        ]),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    final Widget page = switch (choice) {
+      'group' => const NewGroupScreen(),
+      'channel' => const NewChannelScreen(),
+      _ => const NewChatScreen(),
+    };
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
     final auth = context.watch<AuthState>();
     final q = _search.text.trim().toLowerCase();
-    final chats = q.isEmpty ? store.chats : store.chats.where((c) => c.title.toLowerCase().contains(q)).toList();
+    ChatFolder? folder;
+    for (final f in store.folders) {
+      if (f.id == _folderId) folder = f;
+    }
+    var chats = folder == null ? store.chats : store.chats.where(folder.matches).toList();
+    if (q.isNotEmpty) chats = chats.where((c) => c.title.toLowerCase().contains(q)).toList();
+    final showStories = q.isEmpty && folder == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -48,18 +86,46 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'archived') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchivedChatsScreen()));
-              } else if (v == 'settings') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-              }
+              final Widget page = switch (v) {
+                'archived' => const ArchivedChatsScreen(),
+                'folders' => const FoldersScreen(),
+                'support' => const SupportListScreen(),
+                _ => const SettingsScreen(),
+              };
+              Navigator.push(context, MaterialPageRoute(builder: (_) => page));
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'archived', child: Text('Archived chats')),
+              PopupMenuItem(value: 'folders', child: Text('Chat folders')),
+              PopupMenuItem(value: 'support', child: Text('Help & support')),
               PopupMenuItem(value: 'settings', child: Text('Settings')),
             ],
           ),
         ],
+        bottom: store.folders.isEmpty
+            ? null
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(44),
+                child: SizedBox(
+                  height: 44,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    children: [
+                      _FolderChip(label: 'All', selected: _folderId == null, onTap: () => setState(() => _folderId = null)),
+                      ...store.folders.map((f) {
+                        final unread = store.chats.where(f.matches).where((c) => !c.isMuted).fold<int>(0, (s, c) => s + c.unreadCount);
+                        return _FolderChip(
+                          label: unread > 0 ? '${f.name}  $unread' : f.name,
+                          selected: _folderId == f.id,
+                          onTap: () => setState(() => _folderId = f.id),
+                          onLongPress: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EditFolderScreen(folder: f))),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
       ),
       body: Column(
         children: [
@@ -70,32 +136,75 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: const Text('A new version of the app is available. Please update from the store.'),
             ),
+          ...store.announcements.map((a) => Container(
+                width: double.infinity,
+                color: const Color(0xFFFFF4D6),
+                padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+                child: Row(children: [
+                  const Icon(Icons.campaign, color: Colors.orange),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(a.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(a.body),
+                    ]),
+                  ),
+                  IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => store.dismissAnnouncement(a).catchError((_) {})),
+                ]),
+              )),
           Expanded(
             child: !store.chatsLoaded
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
-                    onRefresh: () => store.loadChats().catchError((e) {
-                      if (context.mounted) showError(context, e);
-                    }),
-                    child: chats.isEmpty
-                        ? ListView(children: const [
-                            SizedBox(height: 140),
-                            Icon(Icons.forum_outlined, size: 64, color: Colors.black26),
-                            SizedBox(height: 12),
-                            Center(child: Text('No chats yet.\nTap the pencil to start messaging.', textAlign: TextAlign.center)),
-                          ])
-                        : ListView.separated(
-                            itemCount: chats.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 80),
-                            itemBuilder: (ctx, i) => ChatTile(chat: chats[i]),
-                          ),
+                    onRefresh: () => _refresh(store),
+                    child: ListView.builder(
+                      itemCount: chats.length + (showStories ? 1 : 0) + (chats.isEmpty ? 1 : 0),
+                      itemBuilder: (ctx, i) {
+                        if (showStories && i == 0) return const Column(children: [StoryBar(), Divider(height: 1)]);
+                        final idx = i - (showStories ? 1 : 0);
+                        if (idx >= chats.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 80),
+                            child: Column(children: [
+                              const Icon(Icons.forum_outlined, size: 64, color: Colors.black26),
+                              const SizedBox(height: 12),
+                              Text(folder == null ? 'No chats yet.\nTap the pencil to start messaging.' : 'No chats in this folder.',
+                                  textAlign: TextAlign.center),
+                            ]),
+                          );
+                        }
+                        return Column(children: [
+                          ChatTile(chat: chats[idx]),
+                          const Divider(height: 1, indent: 80),
+                        ]);
+                      },
+                    ),
                   ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewChatScreen())),
+        onPressed: _compose,
         child: const Icon(Icons.edit),
+      ),
+    );
+  }
+}
+
+class _FolderChip extends StatelessWidget {
+  const _FolderChip({required this.label, required this.selected, required this.onTap, this.onLongPress});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
       ),
     );
   }
@@ -117,13 +226,13 @@ class ChatTile extends StatelessWidget {
       if (last.isSystem) {
         preview = systemText(last, store);
       } else {
-        final prefix = mine ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
+        final prefix = mine && !chat.isChannel ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
         preview = '$prefix${last.preview}';
       }
     }
 
     Widget? tick;
-    if (mine && last != null && !chat.isSavedMessages) {
+    if (mine && last != null && !chat.isSavedMessages && !chat.isChannel) {
       if (last.sendState == SendState.sending) {
         tick = const Icon(Icons.schedule, size: 14, color: Colors.black45);
       } else if (last.sendState == SendState.failed) {
@@ -145,8 +254,9 @@ class ChatTile extends StatelessWidget {
       title: Row(
         children: [
           if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group, size: 16)),
+          if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign, size: 16)),
           Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
-          if (chat.peer?.isVerified == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Color(0xFF2AABEE))),
+          if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Color(0xFF2AABEE))),
           if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off, size: 15, color: Colors.black38)),
           const Spacer(),
           if (tick != null) Padding(padding: const EdgeInsets.only(right: 4), child: tick),
@@ -206,7 +316,7 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
         ),
         ListTile(
           leading: const Icon(Icons.delete_outline, color: Colors.red),
-          title: Text(chat.isGroup ? 'Leave group' : 'Delete chat', style: const TextStyle(color: Colors.red)),
+          title: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'), style: const TextStyle(color: Colors.red)),
           onTap: () => Navigator.pop(ctx, 'delete'),
         ),
       ]),
@@ -227,9 +337,9 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
       case 'delete':
         final ok = await confirm(
           context,
-          chat.isGroup ? 'Leave group?' : 'Delete chat?',
-          chat.isGroup ? 'You will stop receiving messages from “${chat.title}”.' : 'The chat history will be removed for you.',
-          ok: chat.isGroup ? 'Leave' : 'Delete',
+          chat.isMulti ? 'Leave “${chat.title}”?' : 'Delete chat?',
+          chat.isMulti ? 'You will stop receiving messages from “${chat.title}”.' : 'The chat history will be removed for you.',
+          ok: chat.isMulti ? 'Leave' : 'Delete',
           danger: true,
         );
         if (ok) await store.leaveOrDelete(chat.id);

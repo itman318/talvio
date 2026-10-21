@@ -5,6 +5,7 @@ import 'config.dart';
 import 'core/services.dart';
 import 'screens/auth_screens.dart';
 import 'screens/chat_screen.dart';
+import 'screens/folder_support_screens.dart';
 import 'screens/home_screen.dart';
 import 'state/auth_state.dart';
 import 'state/chat_store.dart';
@@ -19,6 +20,10 @@ void main() {
   services.push.onOpenChat = (chatId) {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
+  };
+  services.push.onOpenSupport = () {
+    if (auth.status != AuthStatus.loggedIn) return;
+    navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SupportListScreen()));
   };
   auth.init();
 
@@ -63,6 +68,10 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       store.setForeground(true);
       if (auth.status == AuthStatus.loggedIn && !services.socket.isConnected) {
         services.api.refreshTokens().then((_) => services.socket.connect()).catchError((_) {});
+      }
+      if (auth.status == AuthStatus.loggedIn) {
+        store.loadStories().catchError((_) {});
+        store.loadAnnouncements().catchError((_) {});
       }
     } else if (state == AppLifecycleState.paused) {
       store.setForeground(false);
