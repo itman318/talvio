@@ -1,4 +1,4 @@
-# ChatApp (Telegram-style messaging)
+# Talvio — messaging app
 
 | Folder | What | Tech |
 |---|---|---|

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// ChatApp's own look ("Ember"): warm coral + ink, rounded "pebble" bubbles, soft dotted chat wallpaper.
+/// Talvio's own look ("Ember"): warm coral + ink, rounded "pebble" bubbles, soft dotted chat wallpaper.
 /// Change these constants to re-brand the whole app.
 class Brand {
   Brand._();

@@ -22,7 +22,7 @@ push.init();
 
 server.listen(config.port, () => {
   // eslint-disable-next-line no-console
-  console.log(`ChatApp API listening on http://localhost:${config.port}  (admin panel: /admin)`);
+  console.log(`Talvio API listening on http://localhost:${config.port}  (admin panel: /admin)`);
   if (config.otp.devMode) console.log('OTP dev mode is ON — codes are returned in the API response'); // eslint-disable-line no-console
 });
 

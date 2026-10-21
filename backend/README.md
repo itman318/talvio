@@ -1,4 +1,4 @@
-# ChatApp backend — Node.js + PostgreSQL + Socket.IO
+# Talvio backend — Node.js + PostgreSQL + Socket.IO
 
 One server process provides:
 
@@ -310,7 +310,7 @@ Verify init data on your server: `secret = HMAC_SHA256(key="WebAppData", msg=SHA
 `web-client/`). Log in by scanning the QR code with the phone (Settings → Devices → Link a device) or
 with phone number + code. Realtime through Socket.IO (falls back to polling), photos/albums, files,
 voice, polls, reactions, replies, edit/delete, drag-and-drop & paste to send files, browser notifications,
-dark mode. It is an installable PWA: in Chrome/Edge choose **Install ChatApp** to get a desktop app
+dark mode. It is an installable PWA: in Chrome/Edge choose **Install Talvio** to get a desktop app
 (Windows, macOS, Linux) with its own window and taskbar icon. Calls and secret chats stay on the phone.
 
 ## Scaling later

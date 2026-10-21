@@ -1,4 +1,4 @@
-/* ChatApp Web / Desktop — dependency-free single page app.
+/* Talvio Web / Desktop — dependency-free single page app.
  * Login with a QR code (scan with the phone) or phone number + code. Realtime via Socket.IO
  * (falls back to polling). All user content is rendered with textContent — never innerHTML. */
 (() => {
@@ -307,14 +307,14 @@
     $app.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'login-card' },
       el('div', { class: 'login-steps' },
         brandMark(56),
-        el('h1', {}, 'Use ChatApp on your computer'),
+        el('h1', {}, 'Use Talvio on your computer'),
         message ? el('p', { style: 'color:var(--danger)' }, message) : null,
         el('ol', {},
-          el('li', {}, 'Open ChatApp on your phone'),
+          el('li', {}, 'Open Talvio on your phone'),
           el('li', {}, 'Go to Settings → Devices → Link a device'),
           el('li', {}, 'Point your phone at this screen')),
         tabs,
-        el('p', { class: 'muted' }, 'Tip: install it as a desktop app from your browser menu (“Install ChatApp”).')),
+        el('p', { class: 'muted' }, 'Tip: install it as a desktop app from your browser menu (“Install Talvio”).')),
       qrPane, phonePane)));
     buildPhoneLogin(phonePane);
 
@@ -472,7 +472,7 @@
   }
   function updateTitle() {
     const n = S.chats.reduce((s, c) => s + (c.is_muted ? 0 : c.unread_count || 0), 0);
-    document.title = n ? `(${n}) ChatApp` : 'ChatApp';
+    document.title = n ? `(${n}) Talvio` : 'Talvio';
   }
 
   // ------------------------------------------------------------------ chat list

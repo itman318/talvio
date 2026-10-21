@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
 import '../state/auth_state.dart';
@@ -106,7 +107,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
           : ListView(padding: const EdgeInsets.all(20), children: [
               const Icon(Icons.star_rounded, size: 72, color: premiumColor),
               const SizedBox(height: 8),
-              Text('ChatApp Premium', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+              Text('${AppConfig.appName} Premium', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
               if (info['is_premium'] == true)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),

@@ -331,7 +331,7 @@
     const allowed = NAV.filter((n) => can(n.perm));
     if (!allowed.some((n) => n.id === state.page)) state.page = allowed[0] ? allowed[0].id : 'dashboard';
     const side = el('nav', { class: 'side' },
-      el('div', { class: 'brand' }, 'Chat Admin'),
+      el('div', { class: 'brand' }, 'Talvio Admin'),
       allowed.map((n) => el('button', {
         class: n.id === state.page ? 'active' : '',
         onclick: () => { state.page = n.id; location.hash = n.id; renderLayout(); },

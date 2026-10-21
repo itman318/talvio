@@ -143,8 +143,8 @@ async function twoFactorSetup(admin) {
   if (admin.totp_enabled) throw badRequest('already_enabled', 'Two-factor authentication is already on');
   const secret = base32Encode(crypto.randomBytes(20));
   await db.query('UPDATE admins SET totp_secret = $2 WHERE id = $1', [admin.id, secret]);
-  const label = encodeURIComponent(`ChatApp Admin:${admin.email}`);
-  return { secret, otpauth_url: `otpauth://totp/${label}?secret=${secret}&issuer=ChatApp%20Admin&digits=6&period=30` };
+  const label = encodeURIComponent(`Talvio Admin:${admin.email}`);
+  return { secret, otpauth_url: `otpauth://totp/${label}?secret=${secret}&issuer=Talvio%20Admin&digits=6&period=30` };
 }
 
 async function twoFactorEnable(admin, code, ip) {

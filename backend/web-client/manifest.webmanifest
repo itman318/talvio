@@ -1,7 +1,7 @@
 {
-  "name": "ChatApp",
-  "short_name": "ChatApp",
-  "description": "ChatApp for your computer",
+  "name": "Talvio",
+  "short_name": "Talvio",
+  "description": "Talvio for your computer",
   "start_url": "/web/",
   "scope": "/web/",
   "display": "standalone",

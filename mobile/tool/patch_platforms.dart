@@ -58,8 +58,10 @@ void _android() {
   if (!xml.contains('usesCleartextTraffic')) {
     xml = xml.replaceFirst('<application', '<application\n        android:usesCleartextTraffic="true"');
   }
+  // Name under the icon on the home screen
+  xml = xml.replaceFirst(RegExp(r'android:label="[^"]*"'), 'android:label="Talvio"');
   manifest.writeAsStringSync(xml);
-  stdout.writeln('✓ AndroidManifest.xml: permissions added');
+  stdout.writeln('✓ AndroidManifest.xml: permissions added, label = Talvio');
 
   for (final name in ['android/app/build.gradle', 'android/app/build.gradle.kts']) {
     final f = File(name);
@@ -119,7 +121,10 @@ void _ios() {
     // Development only (http://). Remove once your server uses https://.
     add.write('\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>\n');
   }
-  if (add.isNotEmpty) {
+  // Name under the icon on the home screen
+  s = s.replaceFirstMapped(RegExp(r'(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)'), (m) => '${m[1]}Talvio${m[2]}');
+  if (!s.contains('CFBundleDisplayName')) add.write('\t<key>CFBundleDisplayName</key>\n\t<string>Talvio</string>\n');
+  {
     final i = s.lastIndexOf('</dict>');
     s = s.substring(0, i) + add.toString() + s.substring(i);
     plist.writeAsStringSync(s);

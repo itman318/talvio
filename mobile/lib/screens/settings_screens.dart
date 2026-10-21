@@ -515,7 +515,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
                 ListTile(
                   leading: const Icon(Icons.qr_code_scanner, color: Brand.primary),
                   title: const Text('Link a device', style: TextStyle(color: Brand.primary)),
-                  subtitle: const Text('Use ChatApp on your computer (web or desktop app)'),
+                  subtitle: const Text('Use ${AppConfig.appName} on your computer (web or desktop app)'),
                   onTap: () async {
                     final linked = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const LinkDeviceScreen()));
                     if (linked == true) _load();
