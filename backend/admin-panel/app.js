@@ -689,6 +689,10 @@
             onclick: async () => {
               const members = await action(() => api('GET', `/groups/${g.id}/members?limit=500`));
               if (!members) return;
+              if (!members.some((m) => m.role !== 'owner')) {
+                toast('Nobody else is in this group yet', true);
+                return;
+              }
               const sel = el('select', {}, members.filter((m) => m.role !== 'owner').map((m) => el('option', { value: m.id },
                 `${`${m.first_name || ''} ${m.last_name || ''}`.trim() || 'User'} ${m.username ? `@${m.username}` : ''} (#${m.id}) — ${m.role}`)));
               modal(`Transfer “${g.title}”`, [el('p', { class: 'muted' }, 'Use this for ownership disputes. The current owner becomes an admin.'),
