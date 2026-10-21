@@ -1048,6 +1048,14 @@ class ChatStore extends ChangeNotifier {
   }
 
   void _onNewMessage(Message m) {
+    if (m.threadId != null) {
+      // a comment under a channel post: not part of the channel timeline
+      for (final x in _messages[m.chatId] ?? <Message>[]) {
+        if (x.id == m.threadId) x.commentsCount += 1;
+      }
+      notifyListeners();
+      return;
+    }
     _cacheSenders([m]);
     // Channel posts carry no sender id, so a matching optimistic copy is how we know it's ours.
     final hadLocal = m.clientId != null && (_messages[m.chatId]?.any((x) => x.isLocal && x.clientId == m.clientId) ?? false);

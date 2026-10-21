@@ -61,11 +61,14 @@ The app runs without Firebase; push is simply off. To enable it:
 | `lib/state/call_manager.dart` | Batch B: WebRTC calls (signaling, ICE restart, mute/speaker/camera) |
 | `lib/screens/call_screen.dart`, `calls_screen.dart` | Call UI, call history, call entries in chats |
 | `lib/core/e2e.dart`, `lib/state/secret_store.dart`, `lib/screens/secret_screens.dart` | Batch C: secret chats — crypto, encrypted local storage, UI |
+| `lib/widgets/bot_widgets.dart`, `lib/screens/bot_screens.dart` | Batch D: inline buttons, mini apps (web view), My bots |
+| `lib/screens/thread_screen.dart` | Channel comments and group topics |
+| `lib/screens/premium_screens.dart` | Premium plans, JazzCash/Easypaisa checkout, manual payment proof |
 | `lib/core/prefs.dart` | Device settings: theme, text size, drafts, app lock |
 | `lib/screens/more_screens.dart` | Batch A: invite links, join requests, contacts sync, appearance, app lock, storage, legal pages, ban appeal |
 | `lib/widgets/` | Message bubble, avatar, media players, report dialog, `extras.dart` (dark-mode chat colours, @mention/link text, location card) |
 
-`patch_platforms.dart` also adds camera/microphone/network permissions for calls (and iOS background audio), location, contacts and fingerprint/Face ID permissions and switches
+`patch_platforms.dart` also adds the `chatapp://` link (back from the payment page), camera/microphone/network permissions for calls (and iOS background audio), location, contacts and fingerprint/Face ID permissions and switches
 `MainActivity` to `FlutterFragmentActivity` (needed for fingerprint unlock). If you created the
 platform folders before Batch A, run it again.
 

@@ -20,6 +20,10 @@ class AppUser {
   final bool isContact;
   final bool blocked;
   final Map<String, String>? privacy; // only for "me"
+  final bool isBot;
+  final bool isPremium;
+  final DateTime? premiumUntil; // only for "me"
+  final Map<String, dynamic>? limits; // only for "me": {premium, upload_mb, folders, ads}
 
   AppUser({
     required this.id,
@@ -37,6 +41,10 @@ class AppUser {
     this.isContact = false,
     this.blocked = false,
     this.privacy,
+    this.isBot = false,
+    this.isPremium = false,
+    this.premiumUntil,
+    this.limits,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
@@ -55,6 +63,10 @@ class AppUser {
         isContact: j['is_contact'] == true,
         blocked: j['blocked'] == true,
         privacy: j['privacy'] == null ? null : Map<String, String>.from(j['privacy'] as Map),
+        isBot: j['is_bot'] == true,
+        isPremium: j['is_premium'] == true,
+        premiumUntil: _date(j['premium_until']),
+        limits: j['limits'] == null ? null : Map<String, dynamic>.from(j['limits'] as Map),
       );
 
   String get name {
@@ -218,6 +230,10 @@ class Message {
   final List<int> mentions;
   final Map<String, dynamic>? meta;
   final String? clientId;
+  final int? threadId; // channel comment → id of the post
+  final int? topicId; // forum topic
+  int commentsCount;
+  Map<String, dynamic>? replyMarkup; // bot inline keyboard
   DateTime? editedAt;
   final DateTime createdAt;
 
@@ -248,6 +264,10 @@ class Message {
     this.mentions = const [],
     this.meta,
     this.clientId,
+    this.threadId,
+    this.topicId,
+    this.commentsCount = 0,
+    this.replyMarkup,
     this.editedAt,
     required this.createdAt,
     this.sendState = SendState.sent,
@@ -287,12 +307,23 @@ class Message {
       mentions: ((j['mentions'] as List?) ?? []).map(_int).toList(),
       meta: j['meta'] == null ? null : Map<String, dynamic>.from(j['meta'] as Map),
       clientId: j['client_id'] as String?,
+      threadId: _intOrNull(j['thread_id']),
+      topicId: _intOrNull(j['topic_id']),
+      commentsCount: _int(j['comments_count'] ?? 0),
+      replyMarkup: j['reply_markup'] == null ? null : Map<String, dynamic>.from(j['reply_markup'] as Map),
       editedAt: _date(j['edited_at']),
       createdAt: _date(j['created_at']) ?? DateTime.now(),
     );
   }
 
   bool get isSystem => type == 'system';
+
+  /// Rows of inline buttons sent by a bot: each {text, callback_data | url | web_app:{url}}.
+  List<List<Map<String, dynamic>>> get inlineKeyboard {
+    final rows = replyMarkup?['inline_keyboard'];
+    if (rows is! List) return const [];
+    return rows.whereType<List>().map((r) => r.whereType<Map>().map((b) => Map<String, dynamic>.from(b)).toList()).toList();
+  }
 
   /// {lat, lng, title} for location messages.
   Map<String, dynamic>? get location =>
@@ -410,6 +441,10 @@ class Chat {
   int slowModeSec;
   bool joinApproval;
   int pendingRequests;
+  bool commentsEnabled;
+  bool isForum;
+  final bool isBot;
+  final BotInfo? bot;
   bool markedUnread;
   int unreadMentions;
   Message? pinnedMessage;
@@ -445,6 +480,10 @@ class Chat {
     this.slowModeSec = 0,
     this.joinApproval = false,
     this.pendingRequests = 0,
+    this.commentsEnabled = false,
+    this.isForum = false,
+    this.isBot = false,
+    this.bot,
     this.markedUnread = false,
     this.unreadMentions = 0,
     this.pinnedMessage,
@@ -481,6 +520,10 @@ class Chat {
         slowModeSec: _int(j['slow_mode_sec'] ?? 0),
         joinApproval: j['join_approval'] == true,
         pendingRequests: _int(j['pending_requests'] ?? 0),
+        commentsEnabled: j['comments_enabled'] == true,
+        isForum: j['is_forum'] == true,
+        isBot: j['is_bot'] == true,
+        bot: j['bot'] == null ? null : BotInfo.fromJson(Map<String, dynamic>.from(j['bot'] as Map)),
         markedUnread: j['marked_unread'] == true,
         unreadMentions: _int(j['unread_mentions'] ?? 0),
         pinnedMessage: j['pinned_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['pinned_message'] as Map)),
@@ -691,5 +734,89 @@ class SupportMessage {
         fromUser: j['from_user'] == true,
         text: j['text'] as String,
         createdAt: _date(j['created_at']) ?? DateTime.now(),
+      );
+}
+
+
+/// Public info about a bot (shown in its chat).
+class BotInfo {
+  final String about;
+  final List<(String, String)> commands; // (command, description)
+  final String? menuUrl;
+  BotInfo({this.about = '', this.commands = const [], this.menuUrl});
+
+  factory BotInfo.fromJson(Map<String, dynamic> j) => BotInfo(
+        about: (j['about'] ?? '') as String,
+        commands: ((j['commands'] as List?) ?? [])
+            .whereType<Map>()
+            .map((c) => ('${c['command']}', '${c['description'] ?? ''}'))
+            .toList(),
+        menuUrl: j['menu_url'] as String?,
+      );
+}
+
+/// A bot I own (Settings → My bots).
+class MyBot {
+  final int id;
+  String name;
+  final String username;
+  String about;
+  List<Map<String, dynamic>> commands;
+  String? menuUrl;
+  bool groupPrivacy;
+  final String status;
+  final String? webhookUrl;
+  final String? webhookError;
+  final int pendingUpdates;
+
+  MyBot({
+    required this.id,
+    required this.name,
+    required this.username,
+    this.about = '',
+    this.commands = const [],
+    this.menuUrl,
+    this.groupPrivacy = true,
+    this.status = 'active',
+    this.webhookUrl,
+    this.webhookError,
+    this.pendingUpdates = 0,
+  });
+
+  factory MyBot.fromJson(Map<String, dynamic> j) => MyBot(
+        id: _int(j['id']),
+        name: (j['name'] ?? '') as String,
+        username: (j['username'] ?? '') as String,
+        about: (j['about'] ?? '') as String,
+        commands: ((j['commands'] as List?) ?? []).whereType<Map>().map((c) => Map<String, dynamic>.from(c)).toList(),
+        menuUrl: j['menu_url'] as String?,
+        groupPrivacy: j['group_privacy'] != false,
+        status: (j['status'] ?? 'active') as String,
+        webhookUrl: j['webhook_url'] as String?,
+        webhookError: j['webhook_error'] as String?,
+        pendingUpdates: _int(j['pending_updates'] ?? 0),
+      );
+}
+
+/// A forum topic in a group.
+class Topic {
+  final int id; // 0 = General
+  final String title;
+  final int iconColor;
+  bool isClosed;
+  bool isPinned;
+  final int messageCount;
+  final Message? lastMessage;
+
+  Topic({required this.id, required this.title, this.iconColor = 0, this.isClosed = false, this.isPinned = false, this.messageCount = 0, this.lastMessage});
+
+  factory Topic.fromJson(Map<String, dynamic> j) => Topic(
+        id: _int(j['id'] ?? 0),
+        title: (j['title'] ?? 'General') as String,
+        iconColor: _int(j['icon_color'] ?? 0),
+        isClosed: j['is_closed'] == true,
+        isPinned: j['is_pinned'] == true,
+        messageCount: _int(j['message_count'] ?? 0),
+        lastMessage: j['last_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['last_message'] as Map)),
       );
 }

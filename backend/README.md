@@ -33,7 +33,7 @@ createdb chatapp_test
 TEST_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/chatapp_test npm test
 ```
 
-49 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls, `test/batchC.test.js` = secret chats) cover OTP login &
+61 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls, `test/batchC.test.js` = secret chats, `test/batchD1.test.js` = bots/comments/topics, `test/batchD2.test.js` = premium/payments/ads) cover OTP login &
 token refresh, profiles & privacy, private chats, receipts, pagination, edit/delete, blocking, groups,
 media access control, forwarding, reports, admin flows, account deletion — plus channels, polls & quizzes,
 reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA — plus pins, mentions, message search, slow mode, join requests,
@@ -159,6 +159,15 @@ Authenticated routes need `Authorization: Bearer <access_token>`.
 | `POST /api/secret-chats` `{user_id, public_key}`, `POST …/:id/accept` `{public_key}`, `POST …/:id/close` | Key exchange, decline / close |
 | `POST /api/secret-chats/:id/messages` `{ciphertext, media_id?, ttl_sec, client_id}` | Relay an encrypted message to the other device |
 | `POST /api/secret-chats/:id/ack` `{message_ids}`, `POST …/:id/read` `{max_id}` | Delivered (server deletes the ciphertext) / read |
+| **Batch D** | |
+| `GET/POST /api/bots`, `PATCH/DELETE /api/bots/:id`, `POST /api/bots/:id/token` | My bots (create → token) |
+| `POST /api/messages/:id/callback` `{data}` | Press an inline button (answer arrives as socket `bot:callback_answer`) |
+| `POST /api/bots/:id/web-app`, `POST /api/bots/:id/web-app-data` | Mini app launch data / send data to the bot |
+| `GET /api/chats/:id/messages?thread_id=` · send with `{thread_id}` · `PATCH /api/chats/:id {comments_enabled}` | Channel comments |
+| `GET/POST /api/chats/:id/topics`, `PATCH/DELETE …/topics/:topicId` · `?topic_id=` / `{topic_id}` · `PATCH {is_forum}` | Group topics |
+| `GET /api/premium`, `POST /api/payments/checkout` `{plan_id, provider}` | Plans & perks; start a JazzCash / Easypaisa / manual payment |
+| `GET /api/payments/orders[/:id]`, `POST …/:id/proof` `{media_id, txn_id, sender}`, `POST …/:id/cancel` | Payment status, manual-payment screenshot |
+| `GET /api/chats/:id/sponsored`, `POST /api/ads/:id/view\|click` | Sponsored message under a big public channel |
 
 Socket.IO events are documented at the top of `src/realtime/socket.js`
 (`message:send` with ack, `message:new`, receipts, typing, presence, `session:revoked`, …).
@@ -247,6 +256,49 @@ End-to-end encrypted chats between **one device on each side** (like Telegram):
 
 Admins and the server **cannot read secret chats** — the panel only shows counts, and the feature can be
 switched off in Settings → Features. Reports about a secret chat need the user to include what they saw.
+
+## Bots (Batch D)
+
+Users create bots in the app (Settings → My bots) and get a token. The Bot API is Telegram-style:
+
+```bash
+curl https://chat.example.com/bot<TOKEN>/getMe
+curl "https://chat.example.com/bot<TOKEN>/getUpdates?timeout=30"          # long polling
+curl -X POST https://chat.example.com/bot<TOKEN>/sendMessage -H 'Content-Type: application/json' \
+  -d '{"chat_id": 42, "text": "Kaun sa shehar?", "reply_markup": {"inline_keyboard": [[{"text":"Lahore","callback_data":"lhr"}]]}}'
+curl -X POST https://chat.example.com/bot<TOKEN>/setWebhook -d url=https://yourbot.example.com/hook -d secret_token=abc
+```
+
+Methods: getMe, getUpdates, setWebhook, deleteWebhook, getWebhookInfo, sendMessage, sendPhoto, sendDocument
+(multipart field `photo` / `document`), editMessageText, editMessageReplyMarkup, deleteMessage,
+answerCallbackQuery, setMyCommands, getMyCommands, deleteMyCommands, getChat. Updates: `message`,
+`callback_query`, and `message.web_app_data`. Webhooks get the header `X-ChatApp-Bot-Api-Secret-Token`.
+
+**Mini apps:** a `web_app` button (or the bot's menu URL) opens the page inside the app with
+`#chatAppData=<init data>` and `window.ChatApp = { initData, user, close(), sendData(text) }`.
+Verify init data on your server: `secret = HMAC_SHA256(key="WebAppData", msg=SHA256_HEX(token))`,
+`hash = HEX(HMAC_SHA256(key=secret, msg=data_check_string))` where data_check_string is every field except
+`hash`, sorted, as `key=value` lines joined by `\n`.
+
+## Premium, payments & ads (Batch D)
+
+- **Premium plans** are edited in the admin panel (default: 1 month Rs 299, 12 months Rs 2,999).
+  Perks: ⭐ badge, bigger uploads (Settings → Premium & payments), 30 chat folders, no sponsored messages.
+- **Manual payments** (works from day one): the user sends money to your JazzCash/Easypaisa/bank account,
+  uploads the screenshot + transaction ID, and you approve it under *Payments*. Edit the instructions in Settings.
+- **JazzCash** hosted page: set `JAZZCASH_MERCHANT_ID`, `JAZZCASH_PASSWORD`, `JAZZCASH_INTEGRITY_SALT`
+  and `PUBLIC_URL`. Return URL: `https://<server>/pay/jazzcash/return`. Activation is automatic after the
+  signed callback (pp_ResponseCode `000`).
+- **Easypaisa** hosted page: set `EASYPAISA_STORE_ID`, `EASYPAISA_HASH_KEY`; add `EASYPAISA_USERNAME`,
+  `EASYPAISA_PASSWORD`, `EASYPAISA_ACCOUNT_NUM` for automatic confirmation via the Inquire API — without
+  them, Easypaisa payments wait for an admin under *Payments → To review*.
+- Both gateways start in **sandbox** mode (`*_SANDBOX=true`). Test a full payment in sandbox with your own
+  merchant credentials, then set `*_SANDBOX=false`. Field names and hash rules follow the JazzCash
+  "Page Redirection 1.1" and Easypaisa "Easypay" hosted-checkout guides — if your merchant account uses
+  a different version, adjust `src/services/payments/*.js`.
+- **Sponsored messages:** admin → *Sponsored messages* → campaign (text, button, link, target channels,
+  view limit, end date, price). Shown under big public channels (Settings → minimum size), never to Premium users.
+- **Revenue:** admin → *Revenue* — Premium + ads income by month and by payment method.
 
 ## Scaling later
 

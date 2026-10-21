@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
@@ -279,6 +280,22 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               leading: const Icon(Icons.insights),
               title: const Text('Statistics'),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat))),
+            ),
+          if (chat.isChannel && chat.isAdmin && context.read<AuthState>().feature('channel_comments'))
+            SwitchListTile(
+              secondary: const Icon(Icons.forum_outlined),
+              title: const Text('Comments'),
+              subtitle: const Text('Subscribers can comment under posts'),
+              value: chat.commentsEnabled,
+              onChanged: (v) => _run(() => _store.patchChat(chat.id, {'comments_enabled': v})),
+            ),
+          if (chat.isGroup && chat.isAdmin && context.read<AuthState>().feature('topics'))
+            SwitchListTile(
+              secondary: const Icon(Icons.topic_outlined),
+              title: const Text('Topics'),
+              subtitle: const Text('Split the group into topics like “Help” and “Off-topic”'),
+              value: chat.isForum,
+              onChanged: (v) => _run(() => _store.patchChat(chat.id, {'is_forum': v})),
             ),
           if (chat.isGroup && chat.isAdmin) ...[
             ListTile(

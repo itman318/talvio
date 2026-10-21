@@ -215,6 +215,7 @@ class AuthState extends ChangeNotifier {
         'avatar_url': u.avatarUrl,
         'phone': u.phone,
         'is_verified': u.isVerified,
+        'is_premium': u.isPremium,
         'privacy': u.privacy,
       };
 

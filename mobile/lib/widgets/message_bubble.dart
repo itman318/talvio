@@ -7,6 +7,8 @@ import 'media_widgets.dart';
 import 'extras.dart';
 import 'poll_view.dart';
 import '../screens/calls_screen.dart';
+import '../screens/thread_screen.dart';
+import 'bot_widgets.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -18,6 +20,7 @@ class MessageBubble extends StatelessWidget {
     this.onLongPress,
     this.onTap,
     this.onReplyTap,
+    this.commentMode = false,
   });
 
   final Message message;
@@ -28,12 +31,17 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onReplyTap;
 
+  /// Rendering a comment under a channel post (shows real authors, no channel header).
+  final bool commentMode;
+
+  bool get _asChannel => chat.isChannel && !commentMode;
+
   Widget _ticks(BuildContext context) {
     final m = message;
     final colors = ChatColors.of(context);
     if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: colors.meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
-    if (chat.isSavedMessages || chat.isChannel) return const SizedBox.shrink();
+    if (chat.isSavedMessages || _asChannel) return const SizedBox.shrink();
     if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Color(0xFF2AABEE));
     if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: colors.meta);
     return Icon(Icons.done, size: 15, color: colors.meta);
@@ -71,12 +79,12 @@ class MessageBubble extends StatelessWidget {
     final colors = ChatColors.of(context);
 
     final children = <Widget>[
-      if (chat.isChannel && !isMine)
+      if (_asChannel && !isMine)
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
           child: Text(chat.title, style: const TextStyle(color: Color(0xFF2AABEE), fontWeight: FontWeight.w600, fontSize: 13)),
         ),
-      if (showSender && !isMine && !chat.isChannel)
+      if (showSender && !isMine && !_asChannel)
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
           child: Text(m.sender?.name ?? 'Deleted Account',
@@ -119,11 +127,12 @@ class MessageBubble extends StatelessWidget {
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
       if (hasText) MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.3, color: Theme.of(context).colorScheme.onSurface)),
       ReactionChips(message: m),
+      if (m.replyMarkup != null) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
       const SizedBox(height: 2),
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (chat.isChannel && !m.isLocal) ...[
+          if (_asChannel && !m.isLocal) ...[
             Icon(Icons.visibility_outlined, size: 13, color: colors.meta),
             Text(' ${compactNumber(m.views)}  ', style: TextStyle(fontSize: 11, color: colors.meta)),
           ],
@@ -135,6 +144,19 @@ class MessageBubble extends StatelessWidget {
       ),
       if (m.sendState == SendState.failed && m.errorText != null)
         Text(m.errorText!, style: TextStyle(color: scheme.error, fontSize: 12)),
+      if (_asChannel && chat.commentsEnabled && !m.isLocal && !m.isSystem && m.threadId == null)
+        InkWell(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ThreadScreen(chat: chat, root: m))),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.chat_bubble_outline, size: 15, color: accent),
+              const SizedBox(width: 6),
+              Text(m.commentsCount == 0 ? 'Leave a comment' : '${m.commentsCount} comment${m.commentsCount == 1 ? '' : 's'}',
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 13)),
+            ]),
+          ),
+        ),
     ];
 
     return Align(

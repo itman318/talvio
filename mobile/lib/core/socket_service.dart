@@ -49,6 +49,8 @@ class SocketService {
     'secret:typing',
     'secret:deleted',
     'secret:notify',
+    'bot:callback_answer',
+    'payment:updated',
   ];
 
   void connect() {

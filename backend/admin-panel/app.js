@@ -14,6 +14,11 @@
     { id: 'appeals', label: 'Ban appeals', perm: 'users.view' },
     { id: 'groups', label: 'Groups & channels', perm: 'groups.view' },
     { id: 'calls', label: 'Calls', perm: 'calls.view' },
+    { id: 'bots', label: 'Bots', perm: 'users.view' },
+    { id: 'revenue', label: 'Revenue', perm: 'payments' },
+    { id: 'payments', label: 'Payments', perm: 'payments' },
+    { id: 'plans', label: 'Premium plans', perm: 'payments' },
+    { id: 'ads', label: 'Sponsored messages', perm: 'payments' },
     { id: 'support', label: 'Support', perm: 'support' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast' },
     { id: 'settings', label: 'Settings', perm: 'settings' },
@@ -389,6 +394,10 @@
         stat('Calls today', fmtNum(d.calls_today)),
         stat('Calls right now', fmtNum(d.calls_active)),
         stat('Secret chats', fmtNum(d.secret_chats_active)),
+        stat('Premium users', fmtNum(d.premium_users)),
+        stat('Revenue this month', `Rs ${fmtNum(d.revenue_month_pkr)}`),
+        stat('Payments to review', fmtNum(d.payments_to_review)),
+        stat('Bots', fmtNum(d.bots_total)),
         stat('Secret messages today', fmtNum(d.secret_messages_today)),
         stat('Total messages', fmtNum(d.messages_total)),
         stat('Groups', fmtNum(d.groups_total)),
@@ -470,6 +479,26 @@
       }
       if (can('users.verify')) {
         actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/verify`, { verified: !u.is_verified }), u.is_verified ? 'Badge removed' : 'Verified badge added')) reload(); } }, u.is_verified ? 'Remove verified badge' : 'Give verified badge'));
+      }
+      if (can('payments') && !u.is_bot && u.status === 'active') {
+        const premium = u.premium_until && new Date(u.premium_until) > new Date();
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: () => {
+            const months = el('select', {}, [1, 3, 6, 12].map((m) => el('option', { value: m }, `${m} month${m > 1 ? 's' : ''}`)));
+            modal(premium ? 'Extend Premium' : 'Give Premium', [el('div', { class: 'field' }, el('label', {}, 'Length'), months)], 'Give', async () => {
+              const r = await action(() => api('POST', `/users/${id}/premium`, { months: Number(months.value) }), 'Premium given');
+              if (r) reload();
+              return !!r;
+            });
+          },
+        }, premium ? 'Extend Premium' : 'Give Premium'));
+        if (premium) {
+          actions.push(el('button', {
+            class: 'btn',
+            onclick: async () => { if (await action(() => api('POST', `/users/${id}/premium`, { months: 0 }), 'Premium removed')) reload(); },
+          }, 'Remove Premium'));
+        }
       }
       if (can('users.export')) {
         actions.push(el('button', {
@@ -780,12 +809,25 @@
     call_ring_timeout_sec: ['Ring for (seconds)', 'After this the call counts as missed.'],
     call_max_minutes: ['Longest call (minutes)', 'Calls are cut off after this.'],
     stun_urls: ['STUN servers', 'One per line, e.g. stun:stun.l.google.com:19302'],
+    feature_bots: ['Bots & mini apps', 'Users can create bots with the Bot API.'],
+    max_bots_per_user: ['Bots per user', ''],
+    feature_channel_comments: ['Channel comments', 'Channel admins can turn on comments under posts.'],
+    feature_topics: ['Topics in groups', 'Group admins can split a group into topics.'],
+    feature_premium: ['Premium', 'Show Premium plans and accept payments.'],
+    premium_upload_mb: ['Premium upload limit (MB)', 'Free users get “Max upload size”.'],
+    payment_manual_enabled: ['Accept manual payments', 'User sends money to your account and uploads a screenshot; you approve it under Payments.'],
+    payment_manual_instructions: ['Manual payment instructions', 'Shown to the user: account number, title, what to write in the note.'],
+    feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Premium users).'],
+    ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
     feature_secret_chats: ['Secret chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
     turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
   };
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
-    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_secret_chats']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics']],
+    ['Bots', ['feature_bots', 'max_bots_per_user']],
+    ['Premium & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions']],
+    ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
     ['Security', ['require_admin_2fa', 'blocked_ips']],
@@ -1166,12 +1208,205 @@
       pager(data, (p) => { callsState.page = p; pageCalls(); }));
   }
 
+  // ------------------------------------------------------------------ bots
+  const botsState = { q: '', page: 1 };
+  async function pageBots() {
+    const search = el('input', { type: 'search', placeholder: 'Search bots…', value: botsState.q,
+      oninput: debounce((e) => { botsState.q = e.target.value.trim(); botsState.page = 1; pageBots(); }, 350) });
+    const box = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Bots'), el('div', { class: 'toolbar' }, search), box);
+    const data = await action(() => api('GET', `/bots?${new URLSearchParams({ q: botsState.q, page: botsState.page })}`));
+    if (!data) return;
+    const rows = data.bots.map((b) => el('tr', {},
+      el('td', {}, el('b', {}, b.name), el('div', { class: 'muted' }, `@${b.username}`)),
+      el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(b.owner.id); } }, b.owner.name || `#${b.owner.id}`),
+        b.owner.username ? el('div', { class: 'muted' }, `@${b.owner.username}`) : null),
+      el('td', { class: 'num' }, fmtNum(b.chats)),
+      el('td', {}, b.webhook_url ? 'Webhook' : 'Polling', b.webhook_error ? el('div', { class: 'muted', style: 'color:#d93025' }, b.webhook_error) : null),
+      el('td', { class: 'num' }, fmtNum(b.pending_updates)),
+      el('td', {}, el('span', { class: `chip ${b.status === 'active' ? 'ok' : 'bad'}` }, b.status), b.disabled_reason ? el('div', { class: 'muted' }, b.disabled_reason) : null),
+      el('td', { class: 'muted' }, b.last_used_at ? ago(b.last_used_at) : 'never'),
+      el('td', {}, can('users.ban') ? el('button', {
+        class: `btn small ${b.status === 'active' ? 'danger' : ''}`,
+        onclick: () => {
+          if (b.status !== 'active') {
+            action(() => api('POST', `/bots/${b.id}/status`, { active: true }), 'Bot enabled').then((r) => { if (r) pageBots(); });
+            return;
+          }
+          const reason = el('input', { type: 'text', placeholder: 'Reason (shown to the developer)' });
+          modal(`Disable @${b.username}?`, [el('div', { class: 'field' }, reason)], 'Disable', async () => {
+            const r = await action(() => api('POST', `/bots/${b.id}/status`, { active: false, reason: reason.value.trim() }), 'Bot disabled');
+            if (r) pageBots();
+            return !!r;
+          }, true);
+        },
+      }, b.status === 'active' ? 'Disable' : 'Enable') : null)));
+    box.replaceChildren(table(['Bot', 'Owner', 'Chats', 'Mode', 'Queue', 'Status', 'Last used', ''], rows, 'No bots yet'),
+      pager(data, (p) => { botsState.page = p; pageBots(); }));
+  }
+
+  // ------------------------------------------------------------------ revenue
+  const rs = (n) => `Rs ${fmtNum(n)}`;
+  async function pageRevenue() {
+    main.replaceChildren(head('Revenue'), el('div', { class: 'muted' }, 'Loading…'));
+    const d = await action(() => api('GET', '/revenue'));
+    if (!d) return;
+    const stat = (label, value) => el('div', { class: 'card stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+    const PROVIDERS = { jazzcash: 'JazzCash', easypaisa: 'Easypaisa', manual: 'Manual transfer', admin: 'Given by admin' };
+    main.replaceChildren(
+      head('Revenue', el('button', { class: 'btn', onclick: pageRevenue }, 'Refresh')),
+      el('div', { class: 'stats' },
+        stat('Total earned', rs(d.total)),
+        stat('Premium this month', rs(d.premium_this_month)),
+        stat('Premium (all time)', rs(d.premium_total)),
+        stat('Ads (all time)', rs(d.ads_total)),
+        stat('Premium users now', fmtNum(d.premium_users)),
+        stat('Payments (30 days)', fmtNum(d.payments_30d)),
+        stat('Waiting for review', fmtNum(d.to_review))),
+      el('div', { class: 'charts' },
+        barChart('Premium income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.premium_pkr }))),
+        barChart('Ad income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.ads_pkr })))),
+      el('h3', { style: 'margin:16px 0 8px;font-size:15px' }, 'By payment method'),
+      table(['Method', 'Payments', 'Amount'], d.by_provider.map((p) => el('tr', {},
+        el('td', {}, PROVIDERS[p.provider] || p.provider), el('td', { class: 'num' }, fmtNum(p.payments)), el('td', { class: 'num' }, rs(p.amount_pkr)))), 'No payments yet'));
+  }
+
+  // ------------------------------------------------------------------ payments
+  const payState = { status: 'review', page: 1 };
+  const PAY_STATUS = { pending: ['Waiting', 'warn'], review: ['To review', 'warn'], paid: ['Paid', 'ok'], failed: ['Failed', 'bad'], cancelled: ['Cancelled', ''], rejected: ['Rejected', 'bad'] };
+  async function pagePayments() {
+    const tabs = el('div', { class: 'tabs' }, [['review', 'To review'], ['paid', 'Paid'], ['pending', 'Waiting'], ['failed', 'Failed'], ['rejected', 'Rejected'], ['all', 'All']].map(([v, l]) => el('button', {
+      class: payState.status === v ? 'active' : '',
+      onclick: () => { payState.status = v; payState.page = 1; pagePayments(); },
+    }, l)));
+    const box = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Payments'), tabs, box);
+    const data = await action(() => api('GET', `/payments?${new URLSearchParams({ status: payState.status, page: payState.page })}`));
+    if (!data) return;
+    const review = (o) => {
+      const proof = el('div', { class: 'muted' }, o.proof_media_id ? 'Loading screenshot…' : 'No screenshot');
+      if (o.proof_media_id) mediaPreview({ admin_url: `/api/admin/media/${o.proof_media_id}`, mime: 'image/png', name: 'proof' }).then((n) => proof.replaceWith(n));
+      const note = el('input', { type: 'text', placeholder: 'Note (reason if rejecting)' });
+      const info = el('div', {},
+        el('p', {}, `${o.user.name} · ${rs(o.amount_pkr)} · ${o.months} month(s) · ${o.provider}`),
+        o.proof_txn_id ? el('p', {}, `Transaction ID: ${o.proof_txn_id}${o.proof_sender ? ` · from ${o.proof_sender}` : ''}`) : null,
+        o.provider_message ? el('p', { class: 'muted' }, o.provider_message) : null,
+        proof, el('div', { class: 'field', style: 'margin-top:10px' }, note));
+      openDrawer(el('div', {}, el('h3', {}, `Payment #${o.id}`), info,
+        el('div', { class: 'btn-row', style: 'margin-top:12px' },
+          el('button', { class: 'btn primary', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/approve`, { note: note.value.trim() }), 'Approved — Premium is active')) { closeDrawer(); pagePayments(); } } }, 'Approve'),
+          el('button', { class: 'btn danger', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/reject`, { note: note.value.trim() }), 'Rejected')) { closeDrawer(); pagePayments(); } } }, 'Reject'))));
+    };
+    const rows = data.orders.map((o) => {
+      const [label, cls] = PAY_STATUS[o.status] || [o.status, ''];
+      return el('tr', {},
+        el('td', { class: 'num' }, o.id),
+        el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(o.user.id); } }, o.user.name || `#${o.user.id}`), el('div', { class: 'muted' }, o.user.phone || '')),
+        el('td', { class: 'num' }, rs(o.amount_pkr)),
+        el('td', {}, `${o.months} mo`),
+        el('td', {}, o.provider, el('div', { class: 'muted' }, o.txn_ref)),
+        el('td', {}, el('span', { class: `chip ${cls}` }, label), o.provider_message ? el('div', { class: 'muted' }, o.provider_message) : null),
+        el('td', { class: 'muted' }, ago(o.created_at)),
+        el('td', {}, ['review', 'pending'].includes(o.status) ? el('button', { class: 'btn small primary', onclick: () => review(o) }, 'Review') : (o.reviewer ? el('span', { class: 'muted' }, `by ${o.reviewer}`) : null)));
+    });
+    box.replaceChildren(table(['#', 'User', 'Amount', 'Plan', 'Method', 'Status', 'When', ''], rows, 'Nothing here'),
+      pager(data, (p) => { payState.page = p; pagePayments(); }));
+  }
+
+  // ------------------------------------------------------------------ premium plans
+  async function pagePlans() {
+    main.replaceChildren(head('Premium plans'), el('div', { class: 'muted' }, 'Loading…'));
+    const plans = await action(() => api('GET', '/plans'));
+    if (!plans) return;
+    const edit = (p) => {
+      const name = el('input', { type: 'text', value: p ? p.name : '', placeholder: 'e.g. 6 months' });
+      const months = el('input', { type: 'number', min: 1, max: 60, value: p ? p.months : 1 });
+      const price = el('input', { type: 'number', min: 0, value: p ? p.price_pkr : 299 });
+      const active = el('input', { type: 'checkbox', checked: p ? p.is_active : true, id: 'plan-active' });
+      modal(p ? 'Edit plan' : 'New plan', [
+        el('div', { class: 'field' }, el('label', {}, 'Name'), name),
+        el('div', { class: 'field' }, el('label', {}, 'Months'), months),
+        el('div', { class: 'field' }, el('label', {}, 'Price (Rs)'), price),
+        el('label', { class: 'check', for: 'plan-active' }, active, 'Available to buy'),
+      ], 'Save', async () => {
+        const body = { name: name.value.trim(), months: Number(months.value), price_pkr: Number(price.value), is_active: active.checked, sort: Number(months.value) };
+        const r = await action(() => api(p ? 'PUT' : 'POST', p ? `/plans/${p.id}` : '/plans', body), 'Plan saved');
+        if (r) pagePlans();
+        return !!r;
+      });
+    };
+    const rows = plans.map((p) => el('tr', {},
+      el('td', {}, p.name), el('td', { class: 'num' }, p.months), el('td', { class: 'num' }, rs(p.price_pkr)), el('td', { class: 'num' }, rs(p.per_month_pkr)),
+      el('td', {}, el('span', { class: `chip ${p.is_active ? 'ok' : ''}` }, p.is_active ? 'On sale' : 'Hidden')),
+      el('td', {}, el('button', { class: 'btn small', onclick: () => edit(p) }, 'Edit'))));
+    main.replaceChildren(head('Premium plans', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New plan')),
+      el('p', { class: 'muted' }, 'Premium gives: ⭐ badge, bigger uploads (Settings → Premium & payments), 30 chat folders, no sponsored messages.'),
+      table(['Plan', 'Months', 'Price', 'Per month', 'Status', ''], rows, 'No plans'));
+  }
+
+  // ------------------------------------------------------------------ sponsored messages
+  async function pageAds() {
+    main.replaceChildren(head('Sponsored messages'), el('div', { class: 'muted' }, 'Loading…'));
+    const list = await action(() => api('GET', '/ads'));
+    if (!list) return;
+    const AD_STATUS = { active: ['Running', 'ok'], paused: ['Paused', 'warn'], ended: ['Ended', ''] };
+    const edit = (c) => {
+      const f = (label, input, help) => el('div', { class: 'field' }, el('label', {}, label), input, help ? el('div', { class: 'muted', style: 'font-size:12px' }, help) : null);
+      const advertiser = el('input', { type: 'text', value: c ? c.advertiser : '', maxlength: 80 });
+      const text = el('textarea', { rows: 3, maxlength: 300 }, c ? c.text : '');
+      const btn = el('input', { type: 'text', value: c ? c.button_text : 'Open', maxlength: 30 });
+      const url = el('input', { type: 'url', value: c ? c.url : 'https://' });
+      const targets = el('input', { type: 'text', value: c ? c.target_chat_ids.join(', ') : '', placeholder: 'empty = all big public channels' });
+      const minSubs = el('input', { type: 'number', min: 0, value: c ? c.min_subscribers : 0 });
+      const maxImp = el('input', { type: 'number', min: 1, value: c && c.max_impressions ? c.max_impressions : '', placeholder: 'no limit' });
+      const ends = el('input', { type: 'date', value: c && c.ends_at ? c.ends_at.slice(0, 10) : '' });
+      const price = el('input', { type: 'number', min: 0, value: c ? c.price_pkr : 0 });
+      const status = el('select', {}, Object.entries(AD_STATUS).map(([k, [l]]) => el('option', { value: k, selected: c && c.status === k ? true : null }, l)));
+      modal(c ? 'Edit campaign' : 'New campaign', [
+        f('Advertiser', advertiser), f('Text', text), f('Button text', btn), f('Link', url),
+        f('Only these channel IDs', targets, 'Comma separated chat IDs (see Groups & channels)'), f('Minimum subscribers', minSubs),
+        f('Stop after this many views', maxImp), f('End date', ends), f('Price paid by advertiser (Rs)', price, 'Counted in Revenue'), f('Status', status),
+      ], 'Save', async () => {
+        const body = {
+          advertiser: advertiser.value.trim(), text: text.value.trim(), button_text: btn.value.trim(), url: url.value.trim(),
+          target_chat_ids: targets.value.split(',').map((x) => x.trim()).filter(Boolean).map(Number),
+          min_subscribers: Number(minSubs.value || 0), max_impressions: maxImp.value ? Number(maxImp.value) : null,
+          ends_at: ends.value ? new Date(`${ends.value}T23:59:59`).toISOString() : null, price_pkr: Number(price.value || 0), status: status.value,
+        };
+        const r = await action(() => api(c ? 'PUT' : 'POST', c ? `/ads/${c.id}` : '/ads', body), 'Campaign saved');
+        if (r) pageAds();
+        return !!r;
+      });
+    };
+    const rows = list.map((c) => {
+      const [label, cls] = AD_STATUS[c.status] || [c.status, ''];
+      return el('tr', {},
+        el('td', {}, el('b', {}, c.advertiser), el('div', { class: 'muted' }, c.text)),
+        el('td', {}, el('span', { class: `chip ${cls}` }, label), c.ends_at ? el('div', { class: 'muted' }, `until ${new Date(c.ends_at).toLocaleDateString()}`) : null),
+        el('td', { class: 'num' }, `${fmtNum(c.impressions)}${c.max_impressions ? ` / ${fmtNum(c.max_impressions)}` : ''}`),
+        el('td', { class: 'num' }, fmtNum(c.clicks)),
+        el('td', { class: 'num' }, `${c.ctr}%`),
+        el('td', { class: 'num' }, rs(c.price_pkr)),
+        el('td', {}, el('div', { class: 'btn-row' },
+          el('button', { class: 'btn small', onclick: () => edit(c) }, 'Edit'),
+          el('button', { class: 'btn small danger', onclick: async () => { if (await action(() => api('DELETE', `/ads/${c.id}`), 'Deleted')) pageAds(); } }, 'Delete'))));
+    });
+    main.replaceChildren(head('Sponsored messages', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New campaign')),
+      el('p', { class: 'muted' }, 'Shown at the end of big public channels, never to Premium users. Turn on in Settings → Sponsored messages.'),
+      table(['Campaign', 'Status', 'Views', 'Clicks', 'CTR', 'Price', ''], rows, 'No campaigns yet'));
+  }
+
   const PAGES = {
     dashboard: pageDashboard,
     users: pageUsers,
     reports: pageReports,
     groups: pageGroups,
     calls: pageCalls,
+    bots: pageBots,
+    revenue: pageRevenue,
+    payments: pagePayments,
+    plans: pagePlans,
+    ads: pageAds,
     settings: pageSettings,
     broadcast: pageBroadcast,
     appeals: pageAppeals,

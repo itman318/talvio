@@ -22,6 +22,10 @@ import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
+import 'premium_screens.dart';
+import 'thread_screen.dart';
+import '../widgets/bot_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'secret_screens.dart';
 import 'channel_screens.dart';
 import 'forward_screen.dart';
@@ -57,6 +61,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   int get chatId => widget.chatId;
 
+  Map<String, dynamic>? _ad; // sponsored message under a channel
+  bool _adSeen = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _chat = await _store.getChat(chatId);
       await _store.openChat(chatId);
       if (_chat!.isGroup) _store.loadMembers(chatId).catchError((_) => <GroupMember>[]);
+      if (_chat!.isChannel && _chat!.isPublic && mounted) _loadAd();
     } catch (e) {
       _error = '$e';
     }
@@ -92,6 +100,54 @@ class _ChatScreenState extends State<ChatScreen> {
     _text.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAd() async {
+    try {
+      final r = await context.read<AppServices>().api.get('/chats/$chatId/sponsored') as Map;
+      if (mounted && r['ad'] != null) setState(() => _ad = Map<String, dynamic>.from(r['ad'] as Map));
+    } catch (_) {}
+  }
+
+  Widget _adCard() {
+    final ad = _ad!;
+    final api = context.read<AppServices>().api;
+    if (!_adSeen) {
+      _adSeen = true;
+      api.post('/ads/${ad['id']}/view').catchError((_) => null);
+    }
+    final colors = ChatColors.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 6, 40, 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: colors.other, borderRadius: BorderRadius.circular(14)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Sponsored · ${ad['advertiser']}', style: TextStyle(fontSize: 12, color: colors.meta, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text('${ad['text']}', style: const TextStyle(fontSize: 15)),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () async {
+              try {
+                final r = await api.post('/ads/${ad['id']}/click') as Map;
+                final url = '${r['url'] ?? ad['url']}';
+                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+              } catch (_) {}
+            },
+            child: Text('${ad['button_text']}'),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
+            child: const Text('Remove ads with Premium ⭐', style: TextStyle(fontSize: 12)),
+          ),
+        ),
+      ]),
+    );
   }
 
   // ------------------------------------------------------------------ sending
@@ -536,11 +592,14 @@ class _ChatScreenState extends State<ChatScreen> {
         body: Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator()),
       );
     }
+    if (chat.isForum) return TopicsScreen(chat: chat);
     final messages = store.messagesOf(chatId);
     final typing = store.typingText(chat);
     final auth = context.watch<AuthState>();
     String subtitle;
-    if (typing != null) {
+    if (chat.isBot) {
+      subtitle = 'bot';
+    } else if (typing != null) {
       subtitle = typing;
     } else if (chat.isGroup) {
       subtitle = chat.isChannel ? '${chat.memberCount} subscribers' : '${chat.memberCount} members';
@@ -564,7 +623,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17)),
+                    Row(children: [
+                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17))),
+                      if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Color(0xFF8E6CEF))),
+                    ]),
                     if (subtitle.isNotEmpty)
                       Text(subtitle,
                           style: TextStyle(fontSize: 13, color: typing != null || chat.peer?.online == true ? const Color(0xFF2AABEE) : Colors.black54)),
@@ -575,7 +637,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         actions: [
-          if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && auth.feature('calls')) ...[
+          if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('calls')) ...[
             if (auth.feature('video_calls'))
               IconButton(
                 tooltip: 'Video call',
@@ -595,7 +657,7 @@ class _ChatScreenState extends State<ChatScreen> {
               const PopupMenuItem(value: 'clear', child: Text('Clear history')),
               if (chat.canPost) const PopupMenuItem(value: 'scheduled', child: Text('Scheduled messages')),
               if (chat.isMulti && chat.isAdmin) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
-              if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && auth.feature('secret_chats'))
+              if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('secret_chats'))
                 const PopupMenuItem(value: 'secret', child: Text('Start secret chat')),
               if (chat.peer != null) PopupMenuItem(value: 'block', child: Text(chat.peer!.blocked ? 'Unblock user' : 'Block user')),
               if (!chat.isSavedMessages) const PopupMenuItem(value: 'report', child: Text('Report')),
@@ -623,6 +685,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _messageList(Chat chat, List<Message> messages, ChatStore store) {
     if (_loading && messages.isEmpty) return const Center(child: CircularProgressIndicator());
+    if (messages.isEmpty && chat.isBot) {
+      return BotIntro(chat: chat, onStart: () => _store.sendText(chatId, '/start'));
+    }
     if (messages.isEmpty) {
       return Center(child: SystemBubble(text: _error ?? (chat.isSavedMessages ? 'Save notes, links and files here' : 'No messages here yet. Say hi! 👋')));
     }
@@ -635,8 +700,10 @@ class _ChatScreenState extends State<ChatScreen> {
       controller: _scroll,
       reverse: true,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: messages.length + (hasMore ? 1 : 0),
-      itemBuilder: (ctx, i) {
+      itemCount: messages.length + (hasMore ? 1 : 0) + (_ad != null ? 1 : 0),
+      itemBuilder: (ctx, idx) {
+        if (_ad != null && idx == 0) return _adCard();
+        final i = _ad != null ? idx - 1 : idx;
         if (i == messages.length) {
           return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
         }
@@ -829,6 +896,24 @@ class _ChatScreenState extends State<ChatScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (_editing == null && chat.isBot && chat.bot?.menuUrl != null)
+                    IconButton(
+                      tooltip: 'Open app',
+                      icon: const Icon(Icons.apps),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => MiniAppScreen(botId: chat.peer!.id, url: chat.bot!.menuUrl!, title: chat.title)),
+                      ),
+                    ),
+                  if (_editing == null && chat.isBot && (chat.bot?.commands.isNotEmpty ?? false))
+                    IconButton(
+                      tooltip: 'Commands',
+                      icon: const Icon(Icons.terminal),
+                      onPressed: () async {
+                        final c = await pickBotCommand(context, chat.bot!);
+                        if (c != null) _store.sendText(chatId, c);
+                      },
+                    ),
                   if (_editing == null) IconButton(icon: const Icon(Icons.attach_file), onPressed: _attach),
                   if (_editing != null) const SizedBox(width: 12),
                   Expanded(

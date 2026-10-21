@@ -75,7 +75,18 @@ encrypted photos and files; delete for both; screenshots blocked; no forwarding;
 emoji to compare; nothing stays on the server after delivery; closed automatically on logout.
 Admin panel: on/off switch and counts only (content can't be read by anyone but the two phones).
 
+## Batch D — what's included
+
+**Bots & mini apps:** create bots in the app (token like BotFather), Telegram-style Bot API (long polling
+or webhooks), commands menu, START screen, inline buttons (callback / link / mini app), mini apps in an
+in-app web view with signed user data. **Channel comments** under posts. **Topics** in groups.
+**Premium** (⭐ badge, bigger uploads, more folders, no ads) with **JazzCash**, **Easypaisa** and
+**manual transfer + screenshot** payments. **Sponsored messages** in big public channels.
+
+**Admin panel:** Bots (disable/enable), Revenue (by month & method), Payments (review screenshots,
+approve/reject), Premium plans editor, Sponsored message campaigns with views/clicks/CTR, give/remove
+Premium on the user page, new switches in Settings.
+
 ## Next (remaining batches)
 
-D: bots, channel comments, topics, premium,
-payments (JazzCash/Easypaisa), ads · E: web/desktop + QR login, multiple accounts, Urdu, image editor.
+E: web/desktop + QR login, multiple accounts, Urdu, image editor.

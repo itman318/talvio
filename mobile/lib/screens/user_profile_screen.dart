@@ -76,8 +76,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Flexible(child: Text(u.name, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center)),
                   if (u.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Color(0xFF2AABEE))),
+                  if (u.isPremium) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.star_rounded, color: Color(0xFF8E6CEF))),
                 ]),
-                Text(lastSeenText(u), textAlign: TextAlign.center, style: TextStyle(color: u.online ? const Color(0xFF2AABEE) : Colors.black54)),
+                Text(u.isBot ? 'bot' : lastSeenText(u), textAlign: TextAlign.center, style: TextStyle(color: u.online ? const Color(0xFF2AABEE) : Colors.black54)),
                 const SizedBox(height: 16),
                 if (!u.deleted && u.id != myId)
                   Padding(

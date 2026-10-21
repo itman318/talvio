@@ -13,6 +13,8 @@ import '../widgets/avatar.dart';
 import 'folder_support_screens.dart';
 import 'home_screen.dart';
 import 'more_screens.dart';
+import 'premium_screens.dart';
+import 'bot_screens.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -55,6 +57,19 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Devices'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SessionsScreen())),
           ),
+          if (auth.feature('premium'))
+            ListTile(
+              leading: const Icon(Icons.star_rounded, color: premiumColor),
+              title: const Text('Premium'),
+              subtitle: Text(auth.me?.isPremium == true ? 'Active' : 'Bigger uploads, more folders, no ads'),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
+            ),
+          if (auth.feature('bots'))
+            ListTile(
+              leading: const Icon(Icons.smart_toy_outlined),
+              title: const Text('My bots'),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyBotsScreen())),
+            ),
           ListTile(
             leading: const Icon(Icons.pin_outlined),
             title: const Text('App lock'),
