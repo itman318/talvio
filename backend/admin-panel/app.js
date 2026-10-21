@@ -4,14 +4,16 @@
 
   const PERMISSIONS = {
     super_admin: ['*'],
-    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media'],
-    support: ['dashboard', 'users.view', 'reports.view', 'groups.view'],
+    moderator: ['dashboard', 'users.view', 'users.ban', 'users.logout', 'users.verify', 'reports', 'groups.view', 'groups.suspend', 'logs.view', 'media', 'support'],
+    support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support'],
   };
   const NAV = [
     { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
     { id: 'users', label: 'Users', perm: 'users.view' },
     { id: 'reports', label: 'Reports', perm: 'reports.view' },
-    { id: 'groups', label: 'Groups', perm: 'groups.view' },
+    { id: 'groups', label: 'Groups & channels', perm: 'groups.view' },
+    { id: 'support', label: 'Support', perm: 'support' },
+    { id: 'broadcast', label: 'Broadcast', perm: 'broadcast' },
     { id: 'settings', label: 'Settings', perm: 'settings' },
     { id: 'admins', label: 'Admin team', perm: 'admins' },
     { id: 'logs', label: 'Activity log', perm: 'logs.view' },
@@ -79,7 +81,12 @@
       logout();
       throw new Error('Your session expired, please log in again');
     }
-    if (!res.ok) throw new Error((data && data.error && data.error.message) || `Request failed (${res.status})`);
+    if (!res.ok) {
+      const err = new Error((data && data.error && data.error.message) || `Request failed (${res.status})`);
+      err.code = data && data.error && data.error.code;
+      if (err.code === 'two_factor_setup_required') setTimeout(() => securityModal(true), 0);
+      throw err;
+    }
     return data;
   }
 
@@ -116,6 +123,9 @@
   const fullName = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ') || '(no name)';
 
   function statusChip(u) {
+    if (u.status === 'active' && u.restricted_until && new Date(u.restricted_until) > new Date()) {
+      return el('span', { class: 'chip warn' }, `Restricted until ${new Date(u.restricted_until).toLocaleString()}`);
+    }
     if (u.status === 'banned') return el('span', { class: 'chip bad' }, u.banned_until ? `Banned until ${new Date(u.banned_until).toLocaleDateString()}` : 'Banned');
     if (u.status === 'deleted') return el('span', { class: 'chip' }, 'Deleted');
     return el('span', { class: 'chip ok' }, u.online ? 'Online' : 'Active');
@@ -205,16 +215,27 @@
   function renderLogin() {
     const email = el('input', { type: 'email', placeholder: 'admin@example.com', autocomplete: 'username', required: true });
     const password = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password', required: true });
+    const code = el('input', { type: 'text', placeholder: '6-digit code or backup code', autocomplete: 'one-time-code', inputmode: 'numeric' });
+    const codeField = el('div', { class: 'field', hidden: true }, el('label', {}, 'Authentication code'), code);
     const submit = el('button', { class: 'btn primary', type: 'submit' }, 'Log in');
     const form = el('form', { class: 'login' },
       el('h1', {}, 'Admin Panel'), el('p', {}, 'Sign in to manage users, reports and settings.'),
       el('div', { class: 'field' }, el('label', {}, 'Email'), email),
       el('div', { class: 'field' }, el('label', {}, 'Password'), password),
+      codeField,
       submit);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       submit.disabled = true;
-      const r = await action(() => api('POST', '/login', { email: email.value, password: password.value }));
+      let r;
+      try {
+        r = await api('POST', '/login', { email: email.value, password: password.value, code: code.value.trim() || undefined });
+      } catch (err) {
+        if (err.code === 'two_factor_required') {
+          codeField.hidden = false;
+          code.focus();
+        } else toast(err.message, true);
+      }
       submit.disabled = false;
       if (r) {
         state.token = r.token;
@@ -248,6 +269,54 @@
     });
   }
 
+  let securityOpen = false;
+  async function securityModal(forced) {
+    if (securityOpen) return;
+    securityOpen = true;
+    try {
+      const me = await api('GET', '/me');
+      state.admin = me;
+      if (me.two_factor) {
+        const pw = el('input', { type: 'password', autocomplete: 'current-password' });
+        const code = el('input', { type: 'text', inputmode: 'numeric', placeholder: '123456' });
+        await modal('Two-factor authentication', [
+          el('p', {}, el('span', { class: 'chip ok' }, 'On'), ' Your account asks for a code from your authenticator app at login.'),
+          el('p', { class: 'muted' }, 'To turn it off, confirm your password and a current code.'),
+          el('div', { class: 'field' }, el('label', {}, 'Password'), pw),
+          el('div', { class: 'field' }, el('label', {}, 'Code'), code),
+        ], 'Turn off 2FA', async () => !!(await action(() => api('POST', '/me/2fa/disable', { password: pw.value, code: code.value }), 'Two-factor authentication turned off')), true);
+        return;
+      }
+      const setup = await action(() => api('POST', '/me/2fa/setup'));
+      if (!setup) return;
+      const code = el('input', { type: 'text', inputmode: 'numeric', placeholder: '123456', autocomplete: 'one-time-code' });
+      let backup = null;
+      await modal(forced ? 'Two-factor authentication is required' : 'Turn on two-factor authentication', [
+        forced ? el('p', {}, 'The admin team requires 2FA. Set it up to continue.') : null,
+        el('p', {}, '1. Open Google Authenticator, Microsoft Authenticator or Authy and choose “Enter a setup key”.'),
+        el('div', { class: 'field' }, el('label', {}, 'Setup key'), el('input', { type: 'text', value: setup.secret, readonly: true, onclick: (e) => e.target.select() })),
+        el('p', { class: 'muted', style: 'font-size:12px;word-break:break-all' }, setup.otpauth_url),
+        el('p', {}, '2. Enter the 6-digit code the app shows.'),
+        el('div', { class: 'field' }, code),
+      ], 'Turn on', async () => {
+        const r = await action(() => api('POST', '/me/2fa/enable', { code: code.value.trim() }), 'Two-factor authentication is on');
+        if (r) backup = r.backup_codes;
+        return !!r;
+      });
+      if (backup) {
+        await modal('Save your backup codes', [
+          el('p', {}, 'Each code works once if you lose your phone. Store them somewhere safe — they won’t be shown again.'),
+          el('pre', { class: 'bubble', style: 'font-size:15px;letter-spacing:.05em' }, backup.join('\n')),
+        ], 'I saved them', async () => true);
+        if (forced) render();
+      }
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      securityOpen = false;
+    }
+  }
+
   // ------------------------------------------------------------------ layout
   let main;
   function renderLayout() {
@@ -260,6 +329,7 @@
         onclick: () => { state.page = n.id; location.hash = n.id; renderLayout(); },
       }, n.label, n.id === 'reports' && state.openReports ? el('span', { class: 'badge' }, state.openReports) : null)),
       el('div', { class: 'spacer' }),
+      el('button', { onclick: () => securityModal(false) }, state.admin.two_factor ? 'Security (2FA on)' : 'Turn on 2FA'),
       el('button', { onclick: changePassword }, 'Change password'),
       el('button', { onclick: logout }, 'Log out'),
       el('div', { class: 'who' }, state.admin.name || state.admin.email, el('br'), state.admin.role.replace('_', ' ')));
@@ -315,6 +385,10 @@
         stat('Messages today', fmtNum(d.messages_today)),
         stat('Total messages', fmtNum(d.messages_total)),
         stat('Groups', fmtNum(d.groups_total)),
+        stat('Channels', fmtNum(d.channels_total)),
+        stat('Open tickets', fmtNum(d.tickets_open)),
+        stat('Restricted users', fmtNum(d.users_restricted)),
+        stat('Active stories', fmtNum(d.stories_active)),
         stat('Private chats', fmtNum(d.private_chats_total)),
         stat('Open reports', fmtNum(d.reports_open)),
         stat('Banned users', fmtNum(d.users_banned)),
@@ -327,7 +401,7 @@
   async function pageUsers() {
     const search = el('input', { type: 'text', placeholder: 'Search name, @username, phone or ID', value: usersState.q, style: 'flex:1;min-width:220px' });
     const status = el('select', {},
-      ['all', 'active', 'banned', 'deleted'].map((s) => el('option', { value: s, selected: usersState.status === s ? true : null }, s[0].toUpperCase() + s.slice(1))));
+      ['all', 'active', 'restricted', 'banned', 'deleted'].map((s) => el('option', { value: s, selected: usersState.status === s ? true : null }, s[0].toUpperCase() + s.slice(1))));
     const listBox = el('div', {});
     main.replaceChildren(head('Users'), el('div', { class: 'toolbar' }, search, status), listBox);
 
@@ -364,6 +438,25 @@
           ? el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/unban`), 'User unbanned')) reload(); } }, 'Unban')
           : el('button', { class: 'btn danger', onclick: () => banModal(id, '', reload) }, 'Ban'));
       }
+      if (can('users.ban') && u.status === 'active') {
+        const restricted = u.restricted_until && new Date(u.restricted_until) > new Date();
+        actions.push(restricted
+          ? el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/unrestrict`), 'Restriction lifted')) reload(); } }, 'Lift restriction')
+          : el('button', {
+            class: 'btn',
+            onclick: () => {
+              const minutes = el('select', {}, el('option', { value: '60' }, '1 hour'), el('option', { value: '1440' }, '1 day'), el('option', { value: '10080' }, '7 days'));
+              const reason = el('input', { type: 'text', placeholder: 'Reason (shown to the user)' });
+              modal('Restrict user', [el('p', { class: 'muted' }, 'The user can read but cannot send messages until the time ends.'),
+                el('div', { class: 'field' }, el('label', {}, 'Duration'), minutes), el('div', { class: 'field' }, el('label', {}, 'Reason'), reason)],
+              'Restrict', async () => {
+                const r = await action(() => api('POST', `/users/${id}/restrict`, { minutes: Number(minutes.value), reason: reason.value }), 'User restricted');
+                if (r) reload();
+                return !!r;
+              }, true);
+            },
+          }, 'Restrict (mute)'));
+      }
       if (can('users.logout')) {
         actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/logout-all`), 'Logged out from all devices')) reload(); } }, 'Log out all devices'));
       }
@@ -395,7 +488,10 @@
         el('div', {}, 'Bio'), el('div', {}, u.bio || '—'),
         el('div', {}, 'Joined'), el('div', {}, fmtDate(u.created_at)),
         el('div', {}, 'Last seen'), el('div', {}, u.online ? 'Online now' : fmtDate(u.last_seen_at)),
-        u.status === 'banned' ? [el('div', {}, 'Ban reason'), el('div', {}, u.ban_reason || '—')] : null)),
+        u.status === 'banned' ? [el('div', {}, 'Ban reason'), el('div', {}, u.ban_reason || '—')] : null,
+        u.restricted_until && new Date(u.restricted_until) > new Date()
+          ? [el('div', {}, 'Restricted'), el('div', {}, `until ${fmtDate(u.restricted_until)} — ${u.restrict_reason || ''}`)]
+          : null)),
       el('section', {}, el('h4', {}, 'Activity'), el('div', { class: 'kv' },
         el('div', {}, 'Messages sent'), el('div', {}, fmtNum(d.stats.messages_sent)),
         el('div', {}, 'Groups'), el('div', {}, fmtNum(d.stats.groups)),
@@ -435,11 +531,11 @@
     if (reportsState.status === 'open') { state.openReports = data.total; }
     const rows = data.reports.map((r) => el('tr', { class: 'clickable', onclick: () => openReport(r.id) },
       el('td', { class: 'num' }, r.id),
-      el('td', {}, el('span', { class: 'chip warn' }, REASONS[r.reason] || r.reason)),
+      el('td', {}, el('span', { class: 'chip warn' }, REASONS[r.reason] || r.reason), r.source === 'auto' ? el('span', { class: 'chip info', style: 'margin-left:4px' }, 'Auto') : null),
       el('td', {}, r.target_type),
       el('td', { style: 'max-width:340px' }, reportSummary(r).slice(0, 140)),
       el('td', {}, r.open_reports_on_target > 1 ? el('span', { class: 'chip bad' }, `${r.open_reports_on_target} reports`) : '1'),
-      el('td', {}, r.reporter_first_name || (r.reporter_username ? `@${r.reporter_username}` : '—')),
+      el('td', {}, r.source === 'auto' ? 'System' : (r.reporter_first_name || (r.reporter_username ? `@${r.reporter_username}` : '—'))),
       el('td', {}, r.status === 'open' ? el('span', { class: 'chip warn' }, 'Open') : el('span', { class: 'chip ok' }, `${r.status} · ${r.action_taken || ''}`)),
       el('td', { class: 'muted' }, ago(r.created_at))));
     listBox.replaceChildren(
@@ -492,13 +588,13 @@
     const canResolve = r.status === 'open' && can('reports.resolve');
     const buttons = [resolve('dismiss', 'Dismiss')];
     if (r.target_type === 'message') buttons.push(resolve('delete_message', 'Delete message'), resolve('delete_message_and_ban', 'Delete + ban sender'));
-    if (r.target_type !== 'chat') buttons.push(resolve('ban_user', 'Ban user'));
-    if (r.target_type === 'chat') buttons.push(resolve('suspend_chat', 'Suspend group'));
+    if (r.target_type !== 'chat') buttons.push(resolve('restrict_user', 'Restrict 1 day'), resolve('ban_user', 'Ban user'));
+    if (r.target_type === 'chat') buttons.push(resolve('suspend_chat', 'Suspend group/channel'));
     buttons.push(resolve('warn_only', 'Mark handled'));
 
     openDrawer([
       el('h3', {}, `Report #${r.id} — ${REASONS[r.reason] || r.reason}`),
-      el('div', { class: 'muted' }, `${r.target_type} #${r.target_id} · reported ${fmtDate(r.created_at)} by ${r.reporter_first_name || ''} ${r.reporter_username ? `@${r.reporter_username}` : ''}`),
+      el('div', { class: 'muted' }, `${r.target_type} #${r.target_id} · reported ${fmtDate(r.created_at)} by ${r.source === 'auto' ? 'automatic moderation' : `${r.reporter_first_name || ''} ${r.reporter_username ? `@${r.reporter_username}` : ''}`}`),
       r.details ? el('section', {}, el('h4', {}, 'Reporter says'), el('div', { class: 'bubble' }, r.details)) : null,
       el('section', {}, el('h4', {}, 'Evidence (saved when reported)'), evidence),
       canResolve
@@ -513,15 +609,17 @@
   }
 
   // ------------------------------------------------------------------ groups
-  const groupsState = { q: '', status: 'all', page: 1 };
+  const groupsState = { q: '', status: 'all', type: 'all', page: 1 };
   async function pageGroups() {
-    const search = el('input', { type: 'text', placeholder: 'Search group title', value: groupsState.q, style: 'flex:1;min-width:220px' });
-    const status = el('select', {}, el('option', { value: 'all' }, 'All groups'), el('option', { value: 'suspended', selected: groupsState.status === 'suspended' ? true : null }, 'Suspended'));
+    const search = el('input', { type: 'text', placeholder: 'Search title or @username', value: groupsState.q, style: 'flex:1;min-width:220px' });
+    const type = el('select', {}, [['all', 'Groups & channels'], ['group', 'Groups'], ['channel', 'Channels']]
+      .map(([v, l]) => el('option', { value: v, selected: groupsState.type === v ? true : null }, l)));
+    const status = el('select', {}, el('option', { value: 'all' }, 'Any status'), el('option', { value: 'suspended', selected: groupsState.status === 'suspended' ? true : null }, 'Suspended'));
     const listBox = el('div', {});
-    main.replaceChildren(head('Groups'), el('div', { class: 'toolbar' }, search, status), listBox);
+    main.replaceChildren(head('Groups & channels'), el('div', { class: 'toolbar' }, search, type, status), listBox);
 
     async function load() {
-      const q = new URLSearchParams({ q: groupsState.q, status: groupsState.status, page: groupsState.page });
+      const q = new URLSearchParams({ q: groupsState.q, status: groupsState.status, type: groupsState.type, page: groupsState.page });
       const data = await action(() => api('GET', `/groups?${q}`));
       if (!data) return;
       const rows = data.groups.map((g) => {
@@ -541,6 +639,12 @@
               },
             }, 'Suspend'));
         }
+        if (can('groups.verify')) {
+          acts.push(el('button', {
+            class: 'btn small',
+            onclick: async () => { if (await action(() => api('POST', `/groups/${g.id}/verify`, { verified: !g.is_verified }), g.is_verified ? 'Badge removed' : 'Verified badge added')) load(); },
+          }, g.is_verified ? 'Unverify' : 'Verify'));
+        }
         if (can('groups.delete')) {
           acts.push(el('button', {
             class: 'btn small danger',
@@ -553,7 +657,11 @@
         }
         return el('tr', {},
           el('td', { class: 'num' }, g.id),
-          el('td', {}, g.title, g.is_suspended ? el('span', { class: 'chip bad', style: 'margin-left:6px' }, 'Suspended') : null),
+          el('td', {}, g.title,
+            g.is_verified ? el('span', { class: 'chip info', style: 'margin-left:6px' }, 'Verified') : null,
+            g.is_suspended ? el('span', { class: 'chip bad', style: 'margin-left:6px' }, 'Suspended') : null,
+            g.username ? el('div', { class: 'muted' }, `@${g.username}`) : null),
+          el('td', {}, el('span', { class: 'chip' }, g.type)),
           el('td', { class: 'num' }, fmtNum(g.member_count)),
           el('td', {}, g.owner_id ? `${g.owner_first_name || ''} ${g.owner_username ? `@${g.owner_username}` : ''} (#${g.owner_id})` : '—'),
           el('td', { class: 'muted' }, ago(g.last_message_at)),
@@ -561,11 +669,12 @@
           el('td', {}, el('div', { class: 'btn-row' }, acts)));
       });
       listBox.replaceChildren(
-        table(['ID', 'Title', 'Members', 'Owner', 'Last activity', 'Created', ''], rows, 'No groups found'),
+        table(['ID', 'Title', 'Type', 'Members', 'Owner', 'Last activity', 'Created', ''], rows, 'Nothing found'),
         pager(data, (p) => { groupsState.page = p; load(); }));
     }
     search.addEventListener('input', debounce(() => { groupsState.q = search.value.trim(); groupsState.page = 1; load(); }, 300));
     status.addEventListener('change', () => { groupsState.status = status.value; groupsState.page = 1; load(); });
+    type.addEventListener('change', () => { groupsState.type = type.value; groupsState.page = 1; load(); });
     load();
   }
 
@@ -580,35 +689,188 @@
     min_app_version: ['Minimum app version', 'Older apps are asked to update.'],
     latest_app_version: ['Latest app version', 'Apps below this see an optional update notice.'],
     support_username: ['Support username', 'Shown in the app for help (without @).'],
+    banned_words: ['Banned words & phrases', 'One per line. Matches whole words, any case (Urdu works too).'],
+    banned_words_action: ['When a banned word is used', '“Block” stops the message. “Flag” sends it but opens an automatic report.'],
+    new_account_link_hours: ['New accounts can send links after (hours)', '0 = no limit. Stops fresh spam accounts posting links.'],
+    spam_duplicate_threshold: ['Copy-paste spam: same text to this many chats in 10 min', '0 = off. The sender is restricted automatically.'],
+    spam_restrict_minutes: ['Automatic restriction length (minutes)', ''],
+    auto_restrict_reports: ['Auto-restrict after reports from this many people (24h)', '0 = off. Restriction lasts 24h pending your review.'],
+    blocked_phone_prefixes: ['Blocked phone prefixes', 'One per line, e.g. +1900. These numbers cannot sign up.'],
+    require_admin_2fa: ['Require 2FA for all admins', 'Admins must turn on two-factor authentication before using the panel.'],
   };
+  const SETTING_SECTIONS = [
+    ['General', ['registration_open', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
+    ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes']],
+    ['Security', ['require_admin_2fa']],
+  ];
 
   async function pageSettings() {
     main.replaceChildren(head('Settings'), el('div', { class: 'muted' }, 'Loading…'));
     const d = await action(() => api('GET', '/settings'));
     if (!d) return;
     const inputs = {};
-    const fields = Object.entries(d.definitions).map(([key, def]) => {
+    const field = (key) => {
+      const def = d.definitions[key];
+      if (!def) return null;
       const [label, help] = SETTING_LABELS[key] || [key, ''];
       const value = d.settings[key];
+      const helpEl = help ? el('div', { class: 'muted', style: 'font-size:12px' }, help) : null;
       if (def.type === 'boolean') {
         inputs[key] = el('input', { type: 'checkbox', checked: value, id: `s-${key}` });
         return el('div', {}, el('label', { class: 'check', for: `s-${key}` }, inputs[key], label), help ? el('div', { class: 'muted', style: 'margin:-8px 0 12px 26px;font-size:12px' }, help) : null);
       }
-      inputs[key] = el('input', { type: def.type === 'integer' ? 'number' : 'text', value: String(value), min: def.min, max: def.max, maxlength: def.max && def.type === 'string' ? def.max : null });
-      return el('div', { class: 'field' }, el('label', {}, label), inputs[key], help ? el('div', { class: 'muted', style: 'font-size:12px' }, help) : null);
-    });
+      if (def.type === 'enum') {
+        inputs[key] = el('select', {}, def.values.map((x) => el('option', { value: x, selected: x === value ? true : null }, x[0].toUpperCase() + x.slice(1))));
+      } else if (def.type === 'string_list') {
+        inputs[key] = el('textarea', { rows: 5, placeholder: 'One per line' }, (value || []).join('\n'));
+      } else {
+        inputs[key] = el('input', { type: def.type === 'integer' ? 'number' : 'text', value: String(value), min: def.min, max: def.max, maxlength: def.max && def.type === 'string' ? def.max : null });
+      }
+      return el('div', { class: 'field' }, el('label', {}, label), inputs[key], helpEl);
+    };
+    const sections = SETTING_SECTIONS.map(([title, keys]) => el('div', { class: 'card', style: 'max-width:620px;margin-bottom:12px' },
+      el('h3', { style: 'margin:0 0 12px;font-size:15px' }, title), keys.map(field)));
     const save = el('button', { class: 'btn primary' }, 'Save settings');
     save.addEventListener('click', async () => {
       const body = {};
       for (const [key, def] of Object.entries(d.definitions)) {
         const inp = inputs[key];
-        body[key] = def.type === 'boolean' ? inp.checked : def.type === 'integer' ? parseInt(inp.value, 10) : inp.value;
+        if (!inp) continue;
+        if (def.type === 'boolean') body[key] = inp.checked;
+        else if (def.type === 'integer') body[key] = parseInt(inp.value, 10);
+        else if (def.type === 'string_list') body[key] = inp.value.split('\n').map((x) => x.trim()).filter(Boolean);
+        else body[key] = inp.value;
       }
       save.disabled = true;
-      await action(() => api('PUT', '/settings', body), 'Settings saved');
+      const r = await action(() => api('PUT', '/settings', body), 'Settings saved');
       save.disabled = false;
+      if (r) pageSettings();
     });
-    main.replaceChildren(head('Settings'), el('div', { class: 'card', style: 'max-width:560px' }, fields, save));
+    main.replaceChildren(head('Settings', save), ...sections);
+  }
+
+  // ------------------------------------------------------------------ broadcast
+  async function pageBroadcast() {
+    const title = el('input', { type: 'text', maxlength: 120, placeholder: 'e.g. Eid Mubarak!' });
+    const body = el('textarea', { rows: 4, maxlength: 1000, placeholder: 'Message shown to users' });
+    const prefix = el('input', { type: 'text', placeholder: 'All countries (or e.g. +92)' });
+    const platform = el('select', {}, el('option', { value: '' }, 'All platforms'), el('option', { value: 'android' }, 'Android only'), el('option', { value: 'ios' }, 'iOS only'));
+    const inApp = el('input', { type: 'checkbox', checked: true, id: 'b-inapp' });
+    const push = el('input', { type: 'checkbox', id: 'b-push' });
+    const hours = el('select', {}, el('option', { value: '24' }, '1 day'), el('option', { value: '168' }, '7 days'), el('option', { value: '720' }, '30 days'), el('option', { value: '' }, 'Until I expire it'));
+    const send = el('button', { class: 'btn primary' }, 'Send broadcast');
+    const history = el('div', {});
+    send.addEventListener('click', async () => {
+      if (!title.value.trim() || !body.value.trim()) return toast('Title and message are required', true);
+      const ok = await modal('Send broadcast?', [el('p', {}, `“${title.value.trim()}” will be ${push.checked ? 'pushed and ' : ''}shown to every matching user.`)], 'Send', async () => {
+        const r = await action(() => api('POST', '/announcements', {
+          title: title.value.trim(),
+          body: body.value.trim(),
+          target: { phone_prefix: prefix.value.trim() || undefined, platform: platform.value || undefined },
+          in_app: inApp.checked,
+          push: push.checked,
+          expires_hours: hours.value ? Number(hours.value) : null,
+        }));
+        if (r) toast(`Sent to ${fmtNum(r.recipients)} users`);
+        return !!r;
+      });
+      if (ok) { title.value = ''; body.value = ''; loadHistory(); }
+      return undefined;
+    });
+    main.replaceChildren(head('Broadcast'),
+      el('div', { class: 'card', style: 'max-width:620px;margin-bottom:16px' },
+        el('div', { class: 'field' }, el('label', {}, 'Title'), title),
+        el('div', { class: 'field' }, el('label', {}, 'Message'), body),
+        el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px' },
+          el('div', { class: 'field' }, el('label', {}, 'Phone prefix'), prefix),
+          el('div', { class: 'field' }, el('label', {}, 'Platform'), platform)),
+        el('label', { class: 'check', for: 'b-inapp' }, inApp, 'Show as a banner in the app'),
+        el('label', { class: 'check', for: 'b-push' }, push, 'Send a push notification'),
+        el('div', { class: 'field' }, el('label', {}, 'Banner visible for'), hours),
+        send),
+      el('h3', { style: 'font-size:15px' }, 'History'), history);
+
+    async function loadHistory() {
+      const data = await action(() => api('GET', '/announcements'));
+      if (!data) return;
+      const active = (a) => a.in_app && (!a.expires_at || new Date(a.expires_at) > new Date());
+      history.replaceChildren(table(['Sent', 'Title', 'Audience', 'Recipients', 'Dismissed', 'Status', ''], data.announcements.map((a) => el('tr', {},
+        el('td', { class: 'muted' }, fmtDate(a.created_at)),
+        el('td', {}, el('strong', {}, a.title), el('div', { class: 'muted', style: 'max-width:320px' }, a.body.slice(0, 120))),
+        el('td', {}, [a.target.phone_prefix || 'All countries', a.target.platform || 'all platforms', a.push ? 'push' : null, a.in_app ? 'banner' : null].filter(Boolean).join(' · ')),
+        el('td', { class: 'num' }, fmtNum(a.recipients)),
+        el('td', { class: 'num' }, fmtNum(a.dismissed)),
+        el('td', {}, active(a) ? el('span', { class: 'chip ok' }, 'Showing') : el('span', { class: 'chip' }, a.in_app ? 'Expired' : 'Push only')),
+        el('td', {}, active(a) ? el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('POST', `/announcements/${a.id}/expire`), 'Banner removed')) loadHistory(); } }, 'Stop showing') : null))), 'No broadcasts yet'));
+    }
+    loadHistory();
+  }
+
+  // ------------------------------------------------------------------ support tickets
+  const supportState = { status: 'active', page: 1, mine: false, q: '' };
+  const PRIORITY_CHIP = { urgent: 'bad', high: 'warn', normal: '', low: '' };
+  async function pageSupport() {
+    const tabs = el('div', { class: 'tabs' }, [['active', 'Open & waiting'], ['resolved', 'Resolved'], ['closed', 'Closed'], ['all', 'All']].map(([v, l]) => el('button', {
+      class: supportState.status === v ? 'active' : '',
+      onclick: () => { supportState.status = v; supportState.page = 1; pageSupport(); },
+    }, l)));
+    const mine = el('input', { type: 'checkbox', checked: supportState.mine, id: 'sp-mine' });
+    const search = el('input', { type: 'text', placeholder: 'Search subject, phone, @username', value: supportState.q, style: 'flex:1;min-width:220px' });
+    const listBox = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Support'), tabs, el('div', { class: 'toolbar' }, search, el('label', { class: 'check', for: 'sp-mine', style: 'margin:0' }, mine, 'Assigned to me')), listBox);
+    mine.addEventListener('change', () => { supportState.mine = mine.checked; pageSupport(); });
+    search.addEventListener('input', debounce(() => { supportState.q = search.value.trim(); supportState.page = 1; load(); }, 300));
+
+    async function load() {
+      const q = new URLSearchParams({ status: supportState.status, page: supportState.page, mine: supportState.mine, q: supportState.q });
+      const data = await action(() => api('GET', `/support?${q}`));
+      if (!data) return;
+      const rows = data.tickets.map((t) => el('tr', { class: 'clickable', onclick: () => openTicket(t.id) },
+        el('td', { class: 'num' }, t.id),
+        el('td', {}, el('strong', {}, t.subject), el('div', { class: 'muted' }, t.category)),
+        el('td', {}, `${t.first_name || ''} ${t.last_name || ''}`.trim() || '—', el('div', { class: 'muted' }, t.username ? `@${t.username}` : t.phone)),
+        el('td', {}, el('span', { class: `chip ${t.status === 'open' ? 'warn' : t.status === 'pending' ? 'info' : 'ok'}` }, t.status),
+          t.awaiting_admin && ['open', 'pending'].includes(t.status) ? el('span', { class: 'chip bad', style: 'margin-left:4px' }, 'Needs reply') : null),
+        el('td', {}, el('span', { class: `chip ${PRIORITY_CHIP[t.priority]}` }, t.priority)),
+        el('td', {}, t.assigned_name || el('span', { class: 'muted' }, 'Unassigned')),
+        el('td', { class: 'muted' }, ago(t.updated_at))));
+      listBox.replaceChildren(table(['#', 'Subject', 'User', 'Status', 'Priority', 'Assigned', 'Updated'], rows, 'No tickets here'),
+        pager(data, (p) => { supportState.page = p; load(); }));
+    }
+    load();
+  }
+
+  async function openTicket(id) {
+    const d = await action(() => api('GET', `/support/${id}`));
+    if (!d) return;
+    const t = d.ticket;
+    const reply = el('textarea', { rows: 4, placeholder: 'Write a reply to the user…' });
+    const statusSel = el('select', {}, [['pending', 'Send & wait for user'], ['resolved', 'Send & mark resolved'], ['open', 'Send & keep open']]
+      .map(([v, l]) => el('option', { value: v }, l)));
+    const priority = el('select', {}, ['low', 'normal', 'high', 'urgent'].map((p) => el('option', { value: p, selected: p === t.priority ? true : null }, p)));
+    priority.addEventListener('change', async () => { await action(() => api('PATCH', `/support/${id}`, { priority: priority.value }), 'Priority updated'); });
+    const send = el('button', { class: 'btn primary' }, 'Send reply');
+    send.addEventListener('click', async () => {
+      if (!reply.value.trim()) return undefined;
+      send.disabled = true;
+      const r = await action(() => api('POST', `/support/${id}/reply`, { text: reply.value.trim(), status: statusSel.value }), 'Reply sent');
+      send.disabled = false;
+      if (r) { openTicket(id); if (state.page === 'support') pageSupport(); }
+      return undefined;
+    });
+    const setStatus = (s) => el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { status: s }), `Marked ${s}`)) { openTicket(id); pageSupport(); } } }, s[0].toUpperCase() + s.slice(1));
+    openDrawer([
+      el('h3', {}, `#${t.id} — ${t.subject}`),
+      el('div', { class: 'muted' }, `${t.category} · opened ${fmtDate(t.created_at)} by ${`${t.first_name || ''} ${t.last_name || ''}`.trim()} (${t.phone}${t.username ? `, @${t.username}` : ''})`),
+      el('section', {}, el('div', { class: 'btn-row', style: 'align-items:center' },
+        el('span', { class: 'chip' }, t.status), 'Priority', priority,
+        t.assigned_to === state.admin.id ? null : el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { assigned_to: state.admin.id }), 'Assigned to you')) openTicket(id); } }, 'Assign to me'),
+        setStatus('resolved'), setStatus('closed'))),
+      el('section', {}, el('h4', {}, 'Conversation'), d.messages.map((m) => el('div', { class: m.from_user ? 'bubble' : 'bubble hl' },
+        el('small', {}, `${m.from_user ? 'User' : (m.admin_name || 'Admin')} · ${fmtDate(m.created_at)}`), m.text))),
+      t.status === 'closed' ? el('section', {}, el('div', { class: 'muted' }, 'This ticket is closed.'))
+        : el('section', {}, el('h4', {}, 'Reply'), el('div', { class: 'field' }, reply), el('div', { class: 'btn-row' }, statusSel, send)),
+    ]);
   }
 
   // ------------------------------------------------------------------ admins
@@ -621,14 +883,15 @@
       el('td', {}, a.email),
       el('td', {}, a.role.replace('_', ' ')),
       el('td', {}, a.is_active ? el('span', { class: 'chip ok' }, 'Active') : el('span', { class: 'chip' }, 'Disabled')),
+      el('td', {}, a.two_factor ? el('span', { class: 'chip ok' }, 'On') : el('span', { class: 'chip warn' }, 'Off')),
       el('td', { class: 'muted' }, ago(a.last_login_at)),
       el('td', {}, a.id === state.admin.id ? null : el('button', { class: 'btn small', onclick: () => editAdmin(a) }, 'Edit'))));
     main.replaceChildren(
       head('Admin team', el('button', { class: 'btn primary', onclick: () => editAdmin(null) }, 'Add admin')),
-      table(['Name', 'Email', 'Role', 'Status', 'Last login', ''], rows),
+      table(['Name', 'Email', 'Role', 'Status', '2FA', 'Last login', ''], rows),
       el('div', { class: 'card', style: 'margin-top:12px' },
         el('strong', {}, 'Roles'), el('br'),
-        'Super admin: everything. Moderator: users (ban, verify, log out), reports, groups (suspend), activity log. Support: read-only access to users, reports and groups.'));
+        'Super admin: everything. Moderator: users (ban, restrict, verify, log out), reports, groups & channels (suspend), support tickets, activity log. Support: support tickets plus read-only users, reports and groups.'));
   }
 
   function editAdmin(a) {
@@ -637,15 +900,17 @@
     const role = el('select', {}, ['moderator', 'support', 'super_admin'].map((r) => el('option', { value: r, selected: a && a.role === r ? true : null }, r.replace('_', ' '))));
     const password = el('input', { type: 'password', placeholder: a ? 'Leave empty to keep current' : 'Min 10 characters', autocomplete: 'new-password' });
     const active = el('input', { type: 'checkbox', checked: a ? a.is_active : true, id: 'adm-active' });
+    const reset2fa = el('input', { type: 'checkbox', id: 'adm-2fa' });
     modal(a ? `Edit ${a.email}` : 'Add admin', [
       el('div', { class: 'field' }, el('label', {}, 'Name'), name),
       el('div', { class: 'field' }, el('label', {}, 'Email'), email),
       el('div', { class: 'field' }, el('label', {}, 'Role'), role),
       el('div', { class: 'field' }, el('label', {}, a ? 'Reset password' : 'Password'), password),
       a ? el('label', { class: 'check', for: 'adm-active' }, active, 'Active') : null,
+      a && a.two_factor ? el('label', { class: 'check', for: 'adm-2fa' }, reset2fa, 'Reset 2FA (lost phone)') : null,
     ], a ? 'Save' : 'Create admin', async () => {
       const r = a
-        ? await action(() => api('PATCH', `/admins/${a.id}`, { name: name.value, role: role.value, is_active: active.checked, password: password.value || undefined }), 'Admin updated')
+        ? await action(() => api('PATCH', `/admins/${a.id}`, { name: name.value, role: role.value, is_active: active.checked, password: password.value || undefined, reset_2fa: reset2fa.checked || undefined }), 'Admin updated')
         : await action(() => api('POST', '/admins', { name: name.value, email: email.value, role: role.value, password: password.value }), 'Admin created');
       if (r) pageAdmins();
       return !!r;
@@ -681,6 +946,8 @@
     reports: pageReports,
     groups: pageGroups,
     settings: pageSettings,
+    broadcast: pageBroadcast,
+    support: pageSupport,
     admins: pageAdmins,
     logs: pageLogs,
   };
