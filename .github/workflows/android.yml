@@ -85,13 +85,17 @@ jobs:
           git add -A && git commit -qm "CI report ${{ github.sha }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-logs
 
-      - uses: actions/upload-artifact@v4
+      - name: Publish APK to Releases (tag: android-latest)
         if: steps.build.outcome == 'success'
-        with:
-          name: talvio-android
-          path: |
-            mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          retention-days: 30
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk talvio.apk
+          gh release delete android-latest --yes --cleanup-tag -R "${{ github.repository }}" || true
+          gh release create android-latest talvio.apk -R "${{ github.repository }}" --target "${{ github.sha }}" \
+            --prerelease --title "Talvio Android (test build #${{ github.run_number }})" \
+            --notes "Built from ${{ github.sha }}. Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only — set the API_BASE variable)' }}"
 
       - name: Fail if analyze or build failed
         if: steps.analyze.outcome != 'success' || steps.build.outcome != 'success'
