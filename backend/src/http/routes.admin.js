@@ -9,6 +9,8 @@ const appeals = require('../services/appeal.service');
 const content = require('../services/content.service');
 const calls = require('../services/call.service');
 const bots = require('../services/bot.service');
+const payments = require('../services/payment.service');
+const ads = require('../services/ads.service');
 const db = require('../db');
 const v = require('../utils/validate');
 const { notFound } = require('../utils/errors');
@@ -23,6 +25,32 @@ router.post('/me/password', requireAdmin(), h(async (req, res) => res.json(await
 router.post('/me/2fa/setup', requireAdmin(), h(async (req, res) => res.json(await admin.twoFactorSetup(req.admin))));
 router.post('/me/2fa/enable', requireAdmin(), h(async (req, res) => res.json(await admin.twoFactorEnable(req.admin, req.body.code, req.ip))));
 router.post('/me/2fa/disable', requireAdmin(), h(async (req, res) => res.json(await admin.twoFactorDisable(req.admin, req.body, req.ip))));
+
+// ---- money: payments, premium, plans, ads, revenue (super admins, or admins with the 'payments' permission)
+router.get('/revenue', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminRevenue())));
+router.get('/payments', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminListOrders(req.query))));
+router.post('/payments/:id/approve', requireAdmin('payments'), h(async (req, res) => {
+  const r = await payments.adminApprove(req.admin.id, req.params.id, req.body.note);
+  await admin.log(req.admin.id, 'payment.approve', 'payment', r.id, { amount_pkr: r.amount_pkr }, req.ip);
+  res.json(r);
+}));
+router.post('/payments/:id/reject', requireAdmin('payments'), h(async (req, res) => {
+  const r = await payments.adminReject(req.admin.id, req.params.id, req.body.note);
+  await admin.log(req.admin.id, 'payment.reject', 'payment', r.id, { note: req.body.note || null }, req.ip);
+  res.json(r);
+}));
+router.post('/users/:id/premium', requireAdmin('payments'), h(async (req, res) => {
+  const r = req.body.months === 0 ? await payments.adminRevoke(req.params.id) : await payments.adminGrant(req.admin.id, req.params.id, req.body.months);
+  await admin.log(req.admin.id, req.body.months === 0 ? 'premium.revoke' : 'premium.grant', 'user', parseInt(req.params.id, 10), { months: req.body.months }, req.ip);
+  res.json(r);
+}));
+router.get('/plans', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminPlans())));
+router.post('/plans', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminSavePlan(null, req.body))));
+router.put('/plans/:id', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminSavePlan(req.params.id, req.body))));
+router.get('/ads', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminList())));
+router.post('/ads', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminSave(req.admin.id, null, req.body))));
+router.put('/ads/:id', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminSave(req.admin.id, req.params.id, req.body))));
+router.delete('/ads/:id', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminDelete(req.params.id))));
 
 router.get('/bots', requireAdmin('users.view'), h(async (req, res) => res.json(await bots.adminList(req.query))));
 router.post('/bots/:id/status', requireAdmin('users.ban'), h(async (req, res) => {

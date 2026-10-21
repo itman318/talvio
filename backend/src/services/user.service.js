@@ -91,6 +91,7 @@ function serialize(u, viewerId, rel) {
     bio: u.bio,
     is_verified: u.is_verified,
     is_bot: !!u.is_bot,
+    is_premium: !!(u.premium_until && new Date(u.premium_until) > new Date()),
     avatar_url: can(u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
     phone: can(u.privacy_phone) ? u.phone : null,
     online: canSeeSeen && presence.isOnline(u.id),
@@ -106,6 +107,7 @@ function serialize(u, viewerId, rel) {
       calls: u.privacy_calls || 'everyone',
     };
     out.created_at = new Date(u.created_at).toISOString();
+    out.premium_until = u.premium_until ? new Date(u.premium_until).toISOString() : null;
   } else {
     out.is_contact = r.iHaveThem.has(u.id);
     out.blocked = r.iBlocked.has(u.id);
@@ -134,7 +136,9 @@ async function getUser(viewerId, userId) {
 async function getMe(userId) {
   const u = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
   if (!u) throw notFound('user_not_found', 'User not found');
-  return serialize(u, userId);
+  const me = serialize(u, userId);
+  me.limits = await require('./payment.service').limitsFor(userId); // lazy: avoids circular import
+  return me;
 }
 
 async function updateProfile(userId, body) {

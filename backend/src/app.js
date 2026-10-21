@@ -28,6 +28,9 @@ function createApp() {
   // Bot API (Telegram-style): /bot<token>/<method>
   app.all('/bot:token/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
 
+  // Payment pages for JazzCash / Easypaisa hosted checkout
+  app.use('/pay', require('./http/routes.pay'));
+
   app.use('/api/admin', adminRoutes.router);
   app.use('/api', userRoutes.router);
 

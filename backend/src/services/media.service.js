@@ -69,7 +69,7 @@ async function registerUpload(userId, file, body) {
     if (!mimeAllowed(kind, mime, file.originalname)) {
       throw badRequest('invalid_file_type', `This file type is not allowed for ${kind}`);
     }
-    const maxMb = await settings.get('max_upload_mb');
+    const maxMb = (await require('./payment.service').limitsFor(userId)).upload_mb; // lazy: avoids circular import
     if (file.size > maxMb * 1024 * 1024) {
       throw badRequest('file_too_large', `File is larger than ${maxMb} MB`);
     }

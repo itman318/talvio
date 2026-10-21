@@ -65,6 +65,25 @@ const config = {
 
   firebaseServiceAccountPath: env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
 
+  // Public https address of this server — used for payment return URLs, e.g. https://chat.example.com
+  publicUrl: (env.PUBLIC_URL || `http://localhost:${int('PORT', 4000)}`).replace(/\/$/, ''),
+
+  // Payment gateways (leave empty to hide a gateway). *_SANDBOX=true uses the test environment.
+  jazzcash: {
+    merchantId: env.JAZZCASH_MERCHANT_ID || '',
+    password: env.JAZZCASH_PASSWORD || '',
+    integritySalt: env.JAZZCASH_INTEGRITY_SALT || '',
+    sandbox: env.JAZZCASH_SANDBOX !== 'false',
+  },
+  easypaisa: {
+    storeId: env.EASYPAISA_STORE_ID || '',
+    hashKey: env.EASYPAISA_HASH_KEY || '',
+    username: env.EASYPAISA_USERNAME || '', // for the "inquire transaction" API (payment confirmation)
+    password: env.EASYPAISA_PASSWORD || '',
+    accountNum: env.EASYPAISA_ACCOUNT_NUM || '',
+    sandbox: env.EASYPAISA_SANDBOX !== 'false',
+  },
+
   // Calls (WebRTC). TURN_SECRET = coturn "static-auth-secret" (time-limited credentials);
   // or TURN_USERNAME / TURN_PASSWORD for a fixed account. URLs can also be set in the admin panel.
   turn: {

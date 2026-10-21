@@ -10,7 +10,7 @@ const { AppError } = require('../utils/errors');
 
 async function parseMultipart(req, res) {
   if (!req.is('multipart/form-data')) return null;
-  const maxMb = Math.min(await settings.get('max_upload_mb'), config.uploadHardLimitMb);
+  const maxMb = Math.min(await settings.get('max_upload_mb'), config.uploadHardLimitMb); // bots: the normal limit
   return new Promise((resolve, reject) => {
     multer({ storage, limits: { fileSize: maxMb * 1024 * 1024, files: 1, fields: 30 } }).fields([
       { name: 'photo', maxCount: 1 },

@@ -50,6 +50,18 @@ const DEFINITIONS = {
   max_bots_per_user: { type: 'integer', default: 20, min: 0, max: 1000 },
   feature_channel_comments: { type: 'boolean', default: true },
   feature_topics: { type: 'boolean', default: true },
+
+  // ---- Batch D2
+  feature_premium: { type: 'boolean', default: true },
+  premium_upload_mb: { type: 'integer', default: 500, min: 1, max: 2048 },
+  payment_manual_enabled: { type: 'boolean', default: true },
+  payment_manual_instructions: {
+    type: 'string',
+    default: 'Send the amount to our JazzCash / Easypaisa account 03XX-XXXXXXX (Account title: Your Company), then upload the screenshot and transaction ID.',
+    max: 1000,
+  },
+  feature_ads: { type: 'boolean', default: false },
+  ads_min_subscribers: { type: 'integer', default: 1000, min: 0, max: 100000000 },
 };
 
 const FEATURE_KEYS = [
@@ -64,6 +76,8 @@ const FEATURE_KEYS = [
   'feature_bots',
   'feature_channel_comments',
   'feature_topics',
+  'feature_premium',
+  'feature_ads',
 ];
 
 let cache = null;
@@ -168,6 +182,7 @@ async function publicConfig() {
       bots: s.feature_bots,
       channel_comments: s.feature_channel_comments,
       topics: s.feature_topics,
+      premium: s.feature_premium,
     },
     call_ring_timeout_sec: s.call_ring_timeout_sec,
   };

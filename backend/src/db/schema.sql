@@ -611,3 +611,71 @@ CREATE TABLE IF NOT EXISTS chat_topics (
 CREATE INDEX IF NOT EXISTS chat_topics_chat_idx ON chat_topics (chat_id);
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS topic_id BIGINT REFERENCES chat_topics(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS messages_topic_idx ON messages (topic_id, id) WHERE topic_id IS NOT NULL;
+
+-- =====================================================================
+-- Batch D2: premium, payments (JazzCash / Easypaisa / manual), sponsored messages, revenue
+-- =====================================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS premium_plans (
+  id          BIGSERIAL    PRIMARY KEY,
+  name        VARCHAR(60)  NOT NULL,
+  months      INTEGER      NOT NULL CHECK (months BETWEEN 1 AND 60),
+  price_pkr   INTEGER      NOT NULL CHECK (price_pkr >= 0),
+  is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+  sort        INTEGER      NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+INSERT INTO premium_plans (name, months, price_pkr, sort)
+SELECT * FROM (VALUES ('1 month', 1, 299, 1), ('12 months', 12, 2999, 2)) AS p(name, months, price_pkr, sort)
+WHERE NOT EXISTS (SELECT 1 FROM premium_plans);
+
+CREATE TABLE IF NOT EXISTS payment_orders (
+  id               BIGSERIAL    PRIMARY KEY,
+  user_id          BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id          BIGINT       REFERENCES premium_plans(id) ON DELETE SET NULL,
+  months           INTEGER      NOT NULL,
+  amount_pkr       INTEGER      NOT NULL,
+  provider         VARCHAR(12)  NOT NULL CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin')),
+  status           VARCHAR(10)  NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'review', 'paid', 'failed', 'cancelled', 'rejected')),
+  txn_ref          VARCHAR(40)  NOT NULL UNIQUE,
+  provider_ref     VARCHAR(100),
+  provider_message VARCHAR(300),
+  raw_response     JSONB,
+  proof_media_id   BIGINT       REFERENCES media(id) ON DELETE SET NULL,
+  proof_txn_id     VARCHAR(60),
+  proof_sender     VARCHAR(60),
+  review_note      VARCHAR(300),
+  reviewed_by      BIGINT       REFERENCES admins(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  paid_at          TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS payment_orders_user_idx ON payment_orders (user_id, id DESC);
+CREATE INDEX IF NOT EXISTS payment_orders_status_idx ON payment_orders (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS ad_campaigns (
+  id               BIGSERIAL     PRIMARY KEY,
+  advertiser       VARCHAR(80)   NOT NULL,
+  text             VARCHAR(300)  NOT NULL,
+  button_text      VARCHAR(30)   NOT NULL DEFAULT 'Open',
+  url              VARCHAR(500)  NOT NULL,
+  target_chat_ids  JSONB         NOT NULL DEFAULT '[]',   -- empty = all eligible public channels
+  min_subscribers  INTEGER       NOT NULL DEFAULT 0,
+  status           VARCHAR(10)   NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'ended')),
+  starts_at        TIMESTAMPTZ,
+  ends_at          TIMESTAMPTZ,
+  max_impressions  INTEGER,
+  impressions      INTEGER       NOT NULL DEFAULT 0,
+  clicks           INTEGER       NOT NULL DEFAULT 0,
+  price_pkr        INTEGER       NOT NULL DEFAULT 0,
+  created_by       BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ad_views (
+  campaign_id  BIGINT   NOT NULL REFERENCES ad_campaigns(id) ON DELETE CASCADE,
+  user_id      BIGINT   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day          DATE     NOT NULL DEFAULT current_date,
+  clicked      BOOLEAN  NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (campaign_id, user_id, day)
+);

@@ -25,6 +25,8 @@ const callService = require('../services/call.service');
 const secretService = require('../services/secret.service');
 const botService = require('../services/bot.service');
 const topicService = require('../services/topic.service');
+const paymentService = require('../services/payment.service');
+const adsService = require('../services/ads.service');
 const settings = require('../services/settings.service');
 const { randomToken } = require('../utils/crypto');
 const { badRequest } = require('../utils/errors');
@@ -152,6 +154,19 @@ router.post('/calls/:id/accept', h(async (req, res) => res.json(await callServic
 router.post('/calls/:id/decline', h(async (req, res) => res.json(await callService.declineCall(req.userId, req.params.id))));
 router.post('/calls/:id/hangup', h(async (req, res) => res.json(await callService.hangup(req.userId, req.params.id, req.body.reason))));
 router.post('/calls/:id/rate', h(async (req, res) => res.json(await callService.rateCall(req.userId, req.params.id, req.body))));
+// ---- premium & payments
+router.get('/premium', h(async (req, res) => res.json(await paymentService.premiumInfo(req.userId))));
+router.post('/payments/checkout', h(async (req, res) => res.json(await paymentService.checkout(req.userId, req.body))));
+router.get('/payments/orders', h(async (req, res) => res.json(await paymentService.listMyOrders(req.userId))));
+router.get('/payments/orders/:id', h(async (req, res) => res.json(await paymentService.getOrder(req.userId, req.params.id))));
+router.post('/payments/orders/:id/cancel', h(async (req, res) => res.json(await paymentService.cancelOrder(req.userId, req.params.id))));
+router.post('/payments/orders/:id/proof', h(async (req, res) => res.json(await paymentService.submitProof(req.userId, req.params.id, req.body))));
+
+// ---- sponsored messages
+router.get('/chats/:id/sponsored', h(async (req, res) => res.json(await adsService.sponsoredFor(req.userId, req.params.id))));
+router.post('/ads/:id/view', h(async (req, res) => res.json(await adsService.recordView(req.userId, req.params.id))));
+router.post('/ads/:id/click', h(async (req, res) => res.json(await adsService.recordClick(req.userId, req.params.id))));
+
 // ---- bots (my bots) & mini apps
 router.get('/bots', h(async (req, res) => res.json(await botService.listMyBots(req.userId))));
 router.post('/bots', h(async (req, res) => res.json(await botService.createBot(req.userId, req.body))));
@@ -239,7 +254,7 @@ const storage = multer.diskStorage({
 });
 
 router.post('/media', h(async (req, res, next) => {
-  const maxMb = Math.min(await settings.get('max_upload_mb'), config.uploadHardLimitMb);
+  const maxMb = (await paymentService.limitsFor(req.userId)).upload_mb;
   multer({ storage, limits: { fileSize: maxMb * 1024 * 1024, files: 1, fields: 10 } }).single('file')(req, res, (err) => {
     if (err) return next(err);
     return mediaService

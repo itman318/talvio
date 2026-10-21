@@ -45,7 +45,10 @@ async function list(userId) {
 async function create(userId, body = {}) {
   const name = v.str(body.name, { field: 'name', min: 1, max: 24, required: true });
   const n = await db.one('SELECT count(*) AS n FROM chat_folders WHERE user_id = $1', [userId]);
-  if (n.n >= MAX_FOLDERS) throw badRequest('too_many_folders', `You can have up to ${MAX_FOLDERS} folders`);
+  const max = (await require('./payment.service').limitsFor(userId)).folders;
+  if (Number(n.n) >= max) {
+    throw badRequest('too_many_folders', `You can have up to ${max} folders${max === MAX_FOLDERS ? ' (Premium: more)' : ''}`);
+  }
   const flags = readFlags(body, { include_private: false, include_groups: false, include_channels: false, include_unread_only: false });
   const chatIds = await ownChatIds(userId, body.chat_ids);
   if (!chatIds.length && !flags.include_private && !flags.include_groups && !flags.include_channels) {
