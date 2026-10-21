@@ -311,6 +311,7 @@ class PrivacyScreen extends StatelessWidget {
     'avatar': 'Profile photo',
     'phone': 'Phone number',
     'group_add': 'Who can add me to groups',
+    'calls': 'Who can call me',
   };
 
   Future<void> _change(BuildContext context, String key, String current) async {

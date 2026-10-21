@@ -58,11 +58,13 @@ The app runs without Firebase; push is simply off. To enable it:
 | `lib/state/auth_state.dart` | Login / logout / maintenance / forced update |
 | `lib/state/chat_store.dart` | Chats, messages, optimistic sending, receipts, typing, presence |
 | `lib/screens/` | All screens (`channel_screens.dart`, `story_screens.dart`, `folder_support_screens.dart` are Phase 2) |
+| `lib/state/call_manager.dart` | Batch B: WebRTC calls (signaling, ICE restart, mute/speaker/camera) |
+| `lib/screens/call_screen.dart`, `calls_screen.dart` | Call UI, call history, call entries in chats |
 | `lib/core/prefs.dart` | Device settings: theme, text size, drafts, app lock |
 | `lib/screens/more_screens.dart` | Batch A: invite links, join requests, contacts sync, appearance, app lock, storage, legal pages, ban appeal |
 | `lib/widgets/` | Message bubble, avatar, media players, report dialog, `extras.dart` (dark-mode chat colours, @mention/link text, location card) |
 
-`patch_platforms.dart` also adds location, contacts and fingerprint/Face ID permissions and switches
+`patch_platforms.dart` also adds camera/microphone/network permissions for calls (and iOS background audio), location, contacts and fingerprint/Face ID permissions and switches
 `MainActivity` to `FlutterFragmentActivity` (needed for fingerprint unlock). If you created the
 platform folders before Batch A, run it again.
 

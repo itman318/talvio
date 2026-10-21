@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 
 import '../core/services.dart';
 import '../models/models.dart';
+import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/report_dialog.dart';
+import 'calls_screen.dart';
 import 'chat_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -79,7 +81,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 if (!u.deleted && u.id != myId)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: FilledButton.icon(
+                    child: Row(children: [
+                      Expanded(
+                        child: FilledButton.icon(
                       icon: const Icon(Icons.chat_bubble_outline),
                       label: const Text('Message'),
                       onPressed: () async {
@@ -93,6 +97,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         }
                       },
                     ),
+                      ),
+                      if (context.read<AuthState>().feature('calls')) ...[
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: 'Call',
+                          icon: const Icon(Icons.call_outlined),
+                          onPressed: () => startCall(context, u, video: false),
+                        ),
+                        if (context.read<AuthState>().feature('video_calls'))
+                          IconButton.filledTonal(
+                            tooltip: 'Video call',
+                            icon: const Icon(Icons.videocam_outlined),
+                            onPressed: () => startCall(context, u, video: true),
+                          ),
+                      ],
+                    ]),
                   ),
                 const Divider(height: 32),
                 if (u.phone != null)

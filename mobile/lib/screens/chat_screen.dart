@@ -21,6 +21,7 @@ import '../widgets/avatar.dart';
 import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
+import 'calls_screen.dart';
 import 'channel_screens.dart';
 import 'forward_screen.dart';
 import 'group_info_screen.dart';
@@ -366,7 +367,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (chat.canPost) ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(ctx, 'reply')),
           if (m.text.isNotEmpty) ListTile(leading: const Icon(Icons.copy), title: const Text('Copy text'), onTap: () => Navigator.pop(ctx, 'copy')),
           if (canEdit) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
-          if (m.type != 'poll') ListTile(leading: const Icon(Icons.forward), title: const Text('Forward'), onTap: () => Navigator.pop(ctx, 'forward')),
+          if (m.type != 'poll' && m.type != 'call') ListTile(leading: const Icon(Icons.forward), title: const Text('Forward'), onTap: () => Navigator.pop(ctx, 'forward')),
           ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Delete'), onTap: () => Navigator.pop(ctx, 'delete')),
           if (!mine && !channelAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
         ]),
@@ -533,6 +534,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     final messages = store.messagesOf(chatId);
     final typing = store.typingText(chat);
+    final auth = context.watch<AuthState>();
     String subtitle;
     if (typing != null) {
       subtitle = typing;
@@ -569,6 +571,19 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         actions: [
+          if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && auth.feature('calls')) ...[
+            if (auth.feature('video_calls'))
+              IconButton(
+                tooltip: 'Video call',
+                icon: const Icon(Icons.videocam_outlined),
+                onPressed: () => startCall(context, chat.peer!, video: true),
+              ),
+            IconButton(
+              tooltip: 'Call',
+              icon: const Icon(Icons.call_outlined),
+              onPressed: () => startCall(context, chat.peer!, video: false),
+            ),
+          ],
           PopupMenuButton<String>(
             onSelected: (a) => _chatMenu(a, chat),
             itemBuilder: (_) => [

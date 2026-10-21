@@ -33,7 +33,7 @@ createdb chatapp_test
 TEST_DATABASE_URL=postgres://user:pass@127.0.0.1:5432/chatapp_test npm test
 ```
 
-38 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A) cover OTP login &
+45 end-to-end tests (`test/services.test.js` = Phase 1, `test/phase2.test.js` = Phase 2, `test/batchA.test.js` = Batch A, `test/batchB.test.js` = calls) cover OTP login &
 token refresh, profiles & privacy, private chats, receipts, pagination, edit/delete, blocking, groups,
 media access control, forwarding, reports, admin flows, account deletion — plus channels, polls & quizzes,
 reactions, scheduled posts, folders, stories, automatic moderation, support tickets, broadcasts and admin 2FA — plus pins, mentions, message search, slow mode, join requests,
@@ -148,6 +148,12 @@ Authenticated routes need `Authorization: Bearer <access_token>`.
 | `GET /api/me/export` | Download my data (JSON) |
 | `POST /api/appeals` `{appeal_token, message}` | Banned user appeals (token comes with the `account_banned` error at login) |
 | `GET /api/pages/:slug` (`terms`, `privacy`, `faq`, `about`) — also as HTML at `/p/:slug` | Legal pages & FAQ |
+| **Batch B — calls** | |
+| `POST /api/calls` `{user_id\|chat_id, video}` → `{call, ice_servers}` | Start a call (same as socket `call:start`; status `busy` = line busy) |
+| `POST /api/calls/:id/accept\|decline\|hangup\|rate` | Answer, decline, hang up, rate 1–5 after the call |
+| `GET /api/calls?missed=1&before=`, `POST /api/calls/delete` `{ids\|all}` | Call history |
+| `GET /api/calls/active`, `GET /api/calls/ice-servers` | Ringing/ongoing call (after opening a call notification), STUN/TURN list |
+| `PUT /api/me/privacy` `{calls}` | Who can call me: everyone / contacts / nobody |
 
 Socket.IO events are documented at the top of `src/realtime/socket.js`
 (`message:send` with ack, `message:new`, receipts, typing, presence, `session:revoked`, …).
@@ -177,6 +183,49 @@ Settings → Security → *Require 2FA for all admins* forces everyone to set it
 another admin's 2FA from *Admin team* if they lose their phone.
 
 Scheduled messages are published by the server every 15 seconds (no cron job needed).
+
+## Voice & video calls (Batch B)
+
+Calls are one-to-one WebRTC calls. The server only rings, relays the WebRTC offer/answer/ICE
+messages over Socket.IO (`call:start`, `call:accept`, `call:signal`, `call:hangup`, …, see
+`src/realtime/socket.js`) and keeps the history — audio and video go directly between the two
+phones, or through your TURN server when a direct path isn't possible.
+
+**Install a TURN server (coturn) — needed for reliable calls on mobile data:**
+
+```bash
+sudo apt install coturn
+sudo nano /etc/turnserver.conf
+```
+```
+listening-port=3478
+tls-listening-port=5349
+fingerprint
+use-auth-secret
+static-auth-secret=PUT_A_LONG_RANDOM_SECRET_HERE
+realm=turn.yourdomain.com
+cert=/etc/letsencrypt/live/turn.yourdomain.com/fullchain.pem
+pkey=/etc/letsencrypt/live/turn.yourdomain.com/privkey.pem
+no-multicast-peers
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+```
+```bash
+sudo sed -i 's/#TURNSERVER_ENABLED=1/TURNSERVER_ENABLED=1/' /etc/default/coturn
+sudo systemctl restart coturn
+sudo ufw allow 3478 && sudo ufw allow 5349 && sudo ufw allow 49152:65535/udp
+```
+Then in the backend `.env`: `TURN_SECRET=` (same secret) and
+`TURN_URLS=turn:turn.yourdomain.com:3478?transport=udp,turn:turn.yourdomain.com:3478?transport=tcp,turns:turn.yourdomain.com:5349`.
+The admin panel → *Calls* page shows whether TURN is configured.
+
+Admin panel → Settings → *Calls*: switch voice/video calls on or off, ring time, longest call, extra STUN/TURN URLs.
+Admin panel → *Calls*: live and past calls, answer rate, average length and rating, failed calls, force-end a call.
+
+Not included yet: group calls (needs an SFU such as LiveKit) and the native iOS CallKit / Android
+full-screen incoming-call UI when the app is closed — today a closed app gets a push notification,
+and tapping it opens the ringing call.
 
 ## Scaling later
 

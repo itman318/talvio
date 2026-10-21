@@ -11,6 +11,7 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'channel_screens.dart';
+import 'calls_screen.dart';
 import 'chat_screen.dart';
 import 'folder_support_screens.dart';
 import 'new_chat_screen.dart';
@@ -125,11 +126,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 'archived' => const ArchivedChatsScreen(),
                 'folders' => const FoldersScreen(),
                 'support' => const SupportListScreen(),
+                'calls' => const CallsScreen(),
                 _ => const SettingsScreen(),
               };
               Navigator.push(context, MaterialPageRoute(builder: (_) => page));
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'calls', child: Text('Calls')),
               PopupMenuItem(value: 'archived', child: Text('Archived chats')),
               PopupMenuItem(value: 'folders', child: Text('Chat folders')),
               PopupMenuItem(value: 'support', child: Text('Help & support')),

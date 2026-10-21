@@ -41,6 +41,11 @@ dependencies:
   local_auth: ^2.3.0
   crypto: ^3.0.5
 
+  # Batch B: calls
+  flutter_webrtc: ^0.12.6
+  wakelock_plus: ^1.2.8
+  flutter_ringtone_player: ^4.0.0+4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

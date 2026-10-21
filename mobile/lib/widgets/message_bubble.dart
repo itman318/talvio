@@ -6,6 +6,7 @@ import 'avatar.dart';
 import 'media_widgets.dart';
 import 'extras.dart';
 import 'poll_view.dart';
+import '../screens/calls_screen.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -53,6 +54,8 @@ class MessageBubble extends StatelessWidget {
         return PollView(message: m, accent: accent);
       case 'location':
         return LocationView(message: m, accent: accent);
+      case 'call':
+        return CallLogBubble(message: m, isMine: isMine, peer: chat.peer, accent: accent);
       default:
         return const SizedBox.shrink();
     }

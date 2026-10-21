@@ -28,6 +28,12 @@ void _android() {
     'android.permission.ACCESS_COARSE_LOCATION',
     'android.permission.READ_CONTACTS',
     'android.permission.USE_BIOMETRIC',
+    'android.permission.CAMERA',
+    'android.permission.MODIFY_AUDIO_SETTINGS',
+    'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.CHANGE_NETWORK_STATE',
+    'android.permission.BLUETOOTH_CONNECT',
+    'android.permission.WAKE_LOCK',
   ];
   for (final p in perms) {
     if (!xml.contains(p)) {
@@ -88,6 +94,10 @@ void _ios() {
   keys.forEach((k, v) {
     if (!s.contains(k)) add.write('\t<key>$k</key>\n\t<string>$v</string>\n');
   });
+  if (!s.contains('UIBackgroundModes')) {
+    // keeps the call audio running when the screen locks / the app goes to the background
+    add.write('\t<key>UIBackgroundModes</key>\n\t<array>\n\t\t<string>audio</string>\n\t\t<string>remote-notification</string>\n\t</array>\n');
+  }
   if (!s.contains('NSAllowsArbitraryLoads')) {
     // Development only (http://). Remove once your server uses https://.
     add.write('\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>\n');

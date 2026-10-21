@@ -55,7 +55,19 @@ and a reserved-usernames list, group members & owner transfer, IP blacklist, fea
 (channels, stories, polls, voice messages, location), Terms/Privacy/FAQ editor, broadcasts to app
 versions below X.
 
+## Batch B — what's included
+
+**User app:** one-to-one voice and video calls (WebRTC) — ringing screen with ringtone, accept /
+decline, mute, speaker, camera on/off, flip camera, auto-reconnect when the network changes,
+"line busy", missed-call notifications, call entries inside the chat, a Calls screen (all / missed,
+call back, delete), call buttons in the chat and profile, rate the call quality, privacy
+"who can call me".
+
+**Admin panel:** Calls page (calls now/today, answer rate, average length & rating, failed calls,
+14-day charts, call log with filters, force-end), call settings (on/off, video on/off, ring time,
+max length, STUN/TURN servers), calls on the dashboard and user page.
+
 ## Next (remaining batches)
 
-B: voice/video calls · C: secret end-to-end chats · D: bots, channel comments, topics, premium,
+C: secret end-to-end chats · D: bots, channel comments, topics, premium,
 payments (JazzCash/Easypaisa), ads · E: web/desktop + QR login, multiple accounts, Urdu, image editor.

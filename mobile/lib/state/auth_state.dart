@@ -28,6 +28,9 @@ class AuthState extends ChangeNotifier {
   /// Device prefs; drafts and app lock are cleared on logout.
   AppPrefs? prefs;
 
+  /// Called when this device logs out (ends any call in progress).
+  void Function()? onSessionCleared;
+
   ApiClient get api => services.api;
 
   Future<void> init() async {
@@ -178,6 +181,7 @@ class AuthState extends ChangeNotifier {
   }
 
   Future<void> _clearLocal() async {
+    onSessionCleared?.call();
     services.socket.disconnect();
     await services.push.unregister();
     chats.stop();

@@ -35,6 +35,10 @@ class SocketService {
     'message:poll',
     'support:updated',
     'session:revoked',
+    'call:incoming',
+    'call:accepted',
+    'call:signal',
+    'call:ended',
   ];
 
   void connect() {

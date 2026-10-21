@@ -6,10 +6,12 @@ import 'core/prefs.dart';
 import 'core/services.dart';
 import 'screens/more_screens.dart';
 import 'screens/auth_screens.dart';
+import 'screens/call_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/folder_support_screens.dart';
 import 'screens/home_screen.dart';
 import 'state/auth_state.dart';
+import 'state/call_manager.dart';
 import 'state/chat_store.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -21,6 +23,14 @@ Future<void> main() async {
   final services = AppServices();
   final chats = ChatStore(services);
   final auth = AuthState(services, chats)..prefs = prefs;
+  final calls = CallManager(services);
+  calls.onShowCallScreen = () {
+    navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
+  };
+  auth.onSessionCleared = calls.endLocal;
+  services.push.onOpenCall = () {
+    if (auth.status == AuthStatus.loggedIn) calls.checkActive();
+  };
   services.push.onOpenChat = (chatId) {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
@@ -38,6 +48,7 @@ Future<void> main() async {
         ChangeNotifierProvider<AppPrefs>.value(value: prefs),
         ChangeNotifierProvider<ChatStore>.value(value: chats),
         ChangeNotifierProvider<AuthState>.value(value: auth),
+        ChangeNotifierProvider<CallManager>.value(value: calls),
       ],
       child: const ChatApp(),
     ),
@@ -85,6 +96,7 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
         services.api.refreshTokens().then((_) => services.socket.connect()).catchError((_) {});
       }
       if (auth.status == AuthStatus.loggedIn) {
+        context.read<CallManager>().checkActive();
         store.loadStories().catchError((_) {});
         store.loadAnnouncements().catchError((_) {});
       }
@@ -101,6 +113,9 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
     final prefs = context.watch<AppPrefs>();
+    if (_lastStatus != auth.status && auth.status == AuthStatus.loggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => context.read<CallManager>().checkActive());
+    }
     if (_lastStatus != null && _lastStatus != auth.status) {
       // Login state changed (e.g. logged out from another device): drop any pushed screens.
       WidgetsBinding.instance.addPostFrameCallback((_) => navigatorKey.currentState?.popUntil((r) => r.isFirst));
