@@ -15,6 +15,7 @@ import '../widgets/avatar.dart';
 import 'channel_screens.dart';
 import 'chat_screen.dart';
 import 'more_screens.dart';
+import '../theme/brand.dart';
 
 /// Search field + results for finding users by @username or phone number.
 class UserSearch extends StatefulWidget {
@@ -121,7 +122,7 @@ class _UserSearchState extends State<UserSearch> {
                       ),
                       title: Row(children: [
                         Flexible(child: Text('${c['title']}', overflow: TextOverflow.ellipsis)),
-                        if (c['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Color(0xFF2AABEE))),
+                        if (c['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
                       ]),
                       subtitle: Text('@${c['username']} · ${c['member_count']} ${c['type'] == 'channel' ? 'subscribers' : 'members'}'),
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PublicChatPreviewScreen(info: c))),
@@ -133,7 +134,7 @@ class _UserSearchState extends State<UserSearch> {
                     leading: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute),
                     title: Text(u.name),
                     subtitle: Text(u.username != null ? '@${u.username}' : lastSeenText(u)),
-                    trailing: widget.selectedIds.contains(u.id) ? const Icon(Icons.check_circle, color: Color(0xFF2AABEE)) : null,
+                    trailing: widget.selectedIds.contains(u.id) ? const Icon(Icons.check_circle, color: Brand.primary) : null,
                     onTap: () => widget.onTap(u),
                   )),
             ],
@@ -343,7 +344,7 @@ class _GroupDetailsScreenState extends State<_GroupDetailsScreen> {
               },
               child: CircleAvatar(
                 radius: 32,
-                backgroundColor: const Color(0xFF2AABEE),
+                backgroundColor: Brand.primary,
                 backgroundImage: _avatar != null ? FileImage(File(_avatar!)) : null,
                 child: _avatar == null ? const Icon(Icons.add_a_photo, color: Colors.white) : null,
               ),

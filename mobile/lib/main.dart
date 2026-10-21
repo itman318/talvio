@@ -10,10 +10,12 @@ import 'screens/call_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/folder_support_screens.dart';
 import 'screens/home_screen.dart';
+import 'screens/root_shell.dart';
 import 'state/auth_state.dart';
 import 'state/call_manager.dart';
 import 'state/chat_store.dart';
 import 'state/secret_store.dart';
+import 'theme/brand.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -139,7 +141,7 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       AuthStatus.loading => const SplashScreen(),
       AuthStatus.loggedOut => const PhoneScreen(),
       AuthStatus.needsProfile => const ProfileSetupScreen(),
-      AuthStatus.loggedIn => const HomeScreen(),
+      AuthStatus.loggedIn => const RootShell(),
       AuthStatus.maintenance => MessageScreen(
           icon: Icons.build_circle_outlined,
           title: 'Under maintenance',
@@ -157,17 +159,8 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       title: AppConfig.appName,
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF2AABEE),
-        appBarTheme: const AppBarTheme(centerTitle: false),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF2AABEE),
-        brightness: Brightness.dark,
-        appBarTheme: const AppBarTheme(centerTitle: false),
-      ),
+      theme: Brand.light(),
+      darkTheme: Brand.dark(),
       themeMode: prefs.themeMode,
       builder: (context, child) {
         final mq = MediaQuery.of(context);

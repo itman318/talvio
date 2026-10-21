@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
+import '../theme/brand.dart';
 
 /// Photo editor before sending: crop, rotate, draw, add text. Returns the path of the edited JPEG
 /// (or the original path if nothing was changed), or null when cancelled.
@@ -188,7 +189,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             onPressed: _saving ? null : _done,
             child: _saving
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(widget.sendLabel, style: const TextStyle(color: Color(0xFF2AABEE), fontSize: 16, fontWeight: FontWeight.w600)),
+                : Text(widget.sendLabel, style: const TextStyle(color: Brand.primary, fontSize: 16, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -268,7 +269,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                 margin: const EdgeInsets.symmetric(horizontal: 5),
                 width: 28,
                 height: 28,
-                decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: c == _color ? const Color(0xFF2AABEE) : Colors.white54, width: c == _color ? 3 : 1)),
+                decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: c == _color ? Brand.primary : Colors.white54, width: c == _color ? 3 : 1)),
               ),
             )),
         if (_tool == _Tool.draw)
@@ -287,9 +288,9 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(i, color: active ? const Color(0xFF2AABEE) : Colors.white),
+                Icon(i, color: active ? Brand.primary : Colors.white),
                 const SizedBox(height: 4),
-                Text(label, style: TextStyle(color: active ? const Color(0xFF2AABEE) : Colors.white70, fontSize: 12)),
+                Text(label, style: TextStyle(color: active ? Brand.primary : Colors.white70, fontSize: 12)),
               ]),
             ),
           ),

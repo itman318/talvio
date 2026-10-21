@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
+import '../theme/brand.dart';
 
 /// Colours that follow light / dark mode for chat surfaces.
 class ChatColors {
@@ -16,9 +17,10 @@ class ChatColors {
 
   static ChatColors of(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    // Ember palette: warm peach for my messages, clean cards for others, dotted warm wallpaper behind.
     return dark
-        ? ChatColors._(const Color(0xFF0E1621), const Color(0xFF2B5278), const Color(0xFF182533), const Color(0xFF17212B), Colors.white60)
-        : ChatColors._(const Color(0xFFDCE6EE), const Color(0xFFE6F4FF), Colors.white, Colors.white, Colors.black45);
+        ? ChatColors._(const Color(0xFF121120), const Color(0xFF452A3F), const Color(0xFF221F36), const Color(0xFF17162A), Colors.white60)
+        : ChatColors._(const Color(0xFFF5EEE7), const Color(0xFFFFE3D6), Colors.white, Colors.white, const Color(0xFF8C8296));
   }
 }
 
@@ -33,7 +35,7 @@ class MessageText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = style ?? DefaultTextStyle.of(context).style;
-    final accent = Theme.of(context).brightness == Brightness.dark ? const Color(0xFF6AB2F2) : const Color(0xFF2481CC);
+    final accent = Theme.of(context).brightness == Brightness.dark ? Brand.primaryLight : Brand.primaryDeep;
     final spans = <InlineSpan>[];
     var last = 0;
     for (final m in _mentionRe.allMatches(text)) {

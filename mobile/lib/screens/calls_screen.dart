@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../state/call_manager.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import '../theme/brand.dart';
 
 /// Starts a call after the usual checks (feature switch, already on a call).
 Future<void> startCall(BuildContext context, AppUser user, {required bool video}) async {
@@ -162,7 +163,7 @@ class _CallsScreenState extends State<CallsScreen> {
       trailing: peer == null || peer.deleted
           ? null
           : IconButton(
-              icon: Icon(c.video ? Icons.videocam_outlined : Icons.call_outlined, color: const Color(0xFF2AABEE)),
+              icon: Icon(c.video ? Icons.videocam_outlined : Icons.call_outlined, color: Brand.primary),
               onPressed: () => startCall(context, peer, video: c.video),
             ),
       onLongPress: () async {

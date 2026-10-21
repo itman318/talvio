@@ -1,19 +1,12 @@
 import 'package:flutter/material.dart';
 
-const _palette = [
-  Color(0xFFE57373),
-  Color(0xFFF06292),
-  Color(0xFFBA68C8),
-  Color(0xFF7986CB),
-  Color(0xFF4FC3F7),
-  Color(0xFF4DB6AC),
-  Color(0xFF81C784),
-  Color(0xFFFFB74D),
-];
+import '../theme/brand.dart';
 
-Color colorForId(int id) => _palette[id.abs() % _palette.length];
+/// Solid accent per user (names, reply bars); the avatar itself uses the matching gradient.
+Color colorForId(int id) => Brand.avatarGradients[id.abs() % Brand.avatarGradients.length][1];
+List<Color> gradientForId(int id) => Brand.avatarGradients[id.abs() % Brand.avatarGradients.length];
 
-/// Round avatar: network image (public avatar URL) or coloured initials.
+/// Ember avatar: soft rounded square ("squircle") with a gradient + initials, or the photo.
 class Avatar extends StatelessWidget {
   const Avatar({super.key, required this.id, required this.name, this.url, this.size = 48, this.icon});
 
@@ -37,13 +30,17 @@ class Avatar extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: colorForId(id), shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: gradientForId(id), begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(size * 0.34),
+      ),
       child: icon != null
           ? Icon(icon, color: Colors.white, size: size * 0.5)
           : Text(_initials, style: TextStyle(color: Colors.white, fontSize: size * 0.38, fontWeight: FontWeight.w600)),
     );
     if (url == null) return fallback;
-    return ClipOval(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.34),
       child: Image.network(
         url!,
         width: size,

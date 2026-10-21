@@ -9,6 +9,7 @@ import 'poll_view.dart';
 import '../screens/calls_screen.dart';
 import '../screens/thread_screen.dart';
 import 'bot_widgets.dart';
+import '../theme/brand.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -42,7 +43,7 @@ class MessageBubble extends StatelessWidget {
     if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: colors.meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
     if (chat.isSavedMessages || _asChannel) return const SizedBox.shrink();
-    if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Color(0xFF2AABEE));
+    if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Brand.primary);
     if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: colors.meta);
     return Icon(Icons.done, size: 15, color: colors.meta);
   }
@@ -74,7 +75,7 @@ class MessageBubble extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final m = message;
     final bg = isMine ? ChatColors.of(context).mine : ChatColors.of(context).other;
-    final accent = isMine ? const Color(0xFF2AABEE) : colorForId(m.senderId ?? 0);
+    final accent = isMine ? Brand.primary : colorForId(m.senderId ?? 0);
     final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
     final colors = ChatColors.of(context);
 
@@ -82,7 +83,7 @@ class MessageBubble extends StatelessWidget {
       if (_asChannel && !isMine)
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
-          child: Text(chat.title, style: const TextStyle(color: Color(0xFF2AABEE), fontWeight: FontWeight.w600, fontSize: 13)),
+          child: Text(chat.title, style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600, fontSize: 13)),
         ),
       if (showSender && !isMine && !_asChannel)
         Padding(
@@ -167,16 +168,18 @@ class MessageBubble extends StatelessWidget {
         child: Container(
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
             color: bg,
+            // "Pebble" bubbles: very round, with a soft inner corner instead of a tail.
             borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(14),
-              topRight: const Radius.circular(14),
-              bottomLeft: Radius.circular(isMine ? 14 : 4),
-              bottomRight: Radius.circular(isMine ? 4 : 14),
+              topLeft: Radius.circular(isMine ? 20 : 8),
+              topRight: Radius.circular(isMine ? 8 : 20),
+              bottomLeft: const Radius.circular(20),
+              bottomRight: const Radius.circular(20),
             ),
-            boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 2, offset: Offset(0, 1))],
+            border: isMine ? Border.all(color: Brand.primary.withAlpha(40)) : null,
+            boxShadow: const [BoxShadow(color: Color(0x10301A10), blurRadius: 8, offset: Offset(0, 2))],
           ),
           child: Column(
             crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,

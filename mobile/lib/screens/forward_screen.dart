@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import '../theme/brand.dart';
 
 /// Pick up to 10 chats to forward messages to.
 class ForwardScreen extends StatefulWidget {
@@ -47,7 +48,7 @@ class _ForwardScreenState extends State<ForwardScreen> {
           return ListTile(
             leading: Avatar(id: c.id, name: c.title, url: c.avatarAbsolute, icon: c.isSavedMessages ? Icons.bookmark : null),
             title: Text(c.title),
-            trailing: Icon(selected ? Icons.check_circle : Icons.circle_outlined, color: selected ? const Color(0xFF2AABEE) : Colors.black26),
+            trailing: Icon(selected ? Icons.check_circle : Icons.circle_outlined, color: selected ? Brand.primary : Colors.black26),
             onTap: () => setState(() {
               if (selected) {
                 _selected.remove(c.id);
@@ -62,7 +63,7 @@ class _ForwardScreenState extends State<ForwardScreen> {
           ? null
           : FloatingActionButton(
               onPressed: _busy ? null : _send,
-              child: _busy ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.send),
+              child: _busy ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.arrow_upward_rounded),
             ),
     );
   }

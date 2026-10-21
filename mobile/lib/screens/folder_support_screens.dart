@@ -7,6 +7,7 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/extras.dart';
+import '../theme/brand.dart';
 
 // ================================================================== chat folders
 class FoldersScreen extends StatelessWidget {
@@ -239,7 +240,7 @@ class _SupportListScreenState extends State<SupportListScreen> {
                       children: t
                           .map((x) => ListTile(
                                 leading: Icon(x.unread ? Icons.mark_email_unread : Icons.mail_outline,
-                                    color: x.unread ? const Color(0xFF2AABEE) : null),
+                                    color: x.unread ? Brand.primary : null),
                                 title: Text(x.subject, style: TextStyle(fontWeight: x.unread ? FontWeight.bold : FontWeight.normal)),
                                 subtitle: Text('${_statusText(x.status)}${x.lastMessage != null ? ' · ${x.lastMessage}' : ''}',
                                     maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -421,7 +422,7 @@ class _TicketScreenState extends State<TicketScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          if (!m.fromUser) const Text('Support team', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2AABEE), fontSize: 13)),
+                          if (!m.fromUser) const Text('Support team', style: TextStyle(fontWeight: FontWeight.w600, color: Brand.primary, fontSize: 13)),
                           Text(m.text),
                           const SizedBox(height: 2),
                           Text('${chatListTime(m.createdAt)} ${messageTime(m.createdAt)}', style: TextStyle(fontSize: 11, color: cc.meta)),
@@ -446,7 +447,7 @@ class _TicketScreenState extends State<TicketScreen> {
                     decoration: const InputDecoration(hintText: 'Write a message…', border: InputBorder.none),
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.send, color: Color(0xFF2AABEE)), onPressed: _send),
+                IconButton(icon: const Icon(Icons.arrow_upward_rounded, color: Brand.primary), onPressed: _send),
               ]),
             ),
           ),

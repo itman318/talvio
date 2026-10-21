@@ -95,6 +95,14 @@ open it on a computer, scan with the phone (Settings → Devices → Link a devi
 **Photo editor** before sending (crop, rotate, draw, text), **albums** (pick up to 10 photos → one
 grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never).
 
+## Design — "Ember" (our own look)
+
+- **Palette:** coral `#F2603D` → rose `#E9447A` gradient, mint `#12B3A3` for online, warm neutrals (`#FBF8F5`), deep ink dark mode (`#121120`). All in `mobile/lib/theme/brand.dart` (`Brand`), `backend/web-client/web.css` and `backend/admin-panel/style.css` — change once, re-skins everything.
+- **Shapes:** squircle avatars with gradients, "pebble" message bubbles (round, soft inner corner, no tail), dotted warm chat wallpaper, rounded-square send button with an up-arrow, gradient story rings.
+- **Navigation:** bottom bar (Chats · Calls · Settings) in the app (`screens/root_shell.dart`); brand mark (`BrandMark`) on splash, login and chat list header; new app icon (`web-client/icon.svg`).
+- App name comes from `AppConfig.appName`. Flutter now needs Dart ≥ 3.6 (Flutter 3.27+).
+- Fixes in this pass: web sender-name colour crash after palette change, login background height, attach button styling, dark-mode tile subtitles.
+
 ## Next
 
 All planned batches are done (Urdu was skipped on request). Ideas: group calls (LiveKit), CallKit, Urdu/RTL, iPad layout.

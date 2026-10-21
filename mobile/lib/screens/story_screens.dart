@@ -13,6 +13,7 @@ import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import '../theme/brand.dart';
 
 /// Horizontal row of story avatars at the top of the chat list.
 class StoryBar extends StatelessWidget {
@@ -50,7 +51,7 @@ class StoryBar extends StatelessWidget {
           ...others.map((g) => _StoryAvatar(
                 user: g.user,
                 label: g.user.firstName.isEmpty ? g.user.name : g.user.firstName,
-                ring: g.hasUnseen ? const Color(0xFF2AABEE) : Colors.black26,
+                ring: g.hasUnseen ? Brand.primary : Colors.black26,
                 onTap: () => openStories(context, groups, groups.indexOf(g)),
               )),
         ],
@@ -79,14 +80,23 @@ class _StoryAvatar extends StatelessWidget {
           Stack(children: [
             Container(
               padding: const EdgeInsets.all(2.5),
-              decoration: BoxDecoration(shape: BoxShape.circle, border: ring == null ? null : Border.all(color: ring!, width: 2.5)),
-              child: Avatar(id: user.id, name: user.name, url: user.avatarAbsolute, size: 52),
+              // Unseen stories get the Ember gradient ring; seen ones a quiet outline.
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: ring == Brand.primary ? Brand.storyGradient : null,
+                border: ring == null || ring == Brand.primary ? null : Border.all(color: ring!, width: 2),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(20)),
+                child: Avatar(id: user.id, name: user.name, url: user.avatarAbsolute, size: 50),
+              ),
             ),
             if (badge)
               const Positioned(
                 right: 0,
                 bottom: 0,
-                child: CircleAvatar(radius: 10, backgroundColor: Color(0xFF2AABEE), child: Icon(Icons.add, size: 14, color: Colors.white)),
+                child: CircleAvatar(radius: 10, backgroundColor: Brand.primary, child: Icon(Icons.add, size: 14, color: Colors.white)),
               ),
           ]),
           const SizedBox(height: 3),
@@ -466,7 +476,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
                         showInfo(context, '❤️ sent');
                       },
                     ),
-                    IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: _sendReply),
+                    IconButton(icon: const Icon(Icons.arrow_upward_rounded, color: Colors.white), onPressed: _sendReply),
                   ]),
               ]),
             ),

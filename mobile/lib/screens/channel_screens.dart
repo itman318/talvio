@@ -10,6 +10,7 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
+import '../theme/brand.dart';
 
 // ------------------------------------------------------------------ create poll / quiz
 /// Returns the poll JSON ({question, options, anonymous, multiple, quiz, correct_option, explanation}).
@@ -277,7 +278,7 @@ class _Bars extends StatelessWidget {
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     height: v == 0 ? 2 : 110 * v / maxV,
-                    color: v == 0 ? Colors.black12 : const Color(0xFF2AABEE),
+                    color: v == 0 ? Colors.black12 : Brand.primary,
                   ),
                 ),
               ))
@@ -344,7 +345,7 @@ class _NewChannelScreenState extends State<NewChannelScreen> {
               },
               child: CircleAvatar(
                 radius: 32,
-                backgroundColor: const Color(0xFF2AABEE),
+                backgroundColor: Brand.primary,
                 backgroundImage: _avatar != null ? FileImage(File(_avatar!)) : null,
                 child: _avatar == null ? const Icon(Icons.add_a_photo, color: Colors.white) : null,
               ),
@@ -446,7 +447,7 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Flexible(child: Text('${i['title']}', style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center)),
-            if (i['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Color(0xFF2AABEE))),
+            if (i['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Brand.primary)),
           ]),
           Text(
             '${i['username'] != null ? '@${i['username']} · ' : ''}${i['member_count']} ${isChannel ? 'subscribers' : 'members'}',

@@ -3,6 +3,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 
 import '../state/call_manager.dart';
+import '../theme/brand.dart';
 import '../widgets/avatar.dart';
 
 /// Full-screen call UI: ringing (in/out), connecting, in call (voice or video), ended + rating.
@@ -50,7 +51,7 @@ class _CallScreenState extends State<CallScreen> {
     return PopScope(
       canPop: c.phase == CallPhase.idle || c.phase == CallPhase.ended,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0E1621),
+        backgroundColor: Brand.ink,
         body: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: showRemoteVideo ? () => setState(() => _controlsVisible = !_controlsVisible) : null,
@@ -72,7 +73,7 @@ class _CallScreenState extends State<CallScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xFF2B5278), Color(0xFF0E1621)],
+                      colors: [Color(0xFF5B2A3A), Brand.ink],
                     ),
                   ),
                 ),
@@ -212,7 +213,7 @@ class _RoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = color ?? (active ? Colors.white : Colors.white.withAlpha(40));
-    final fg = color != null ? Colors.white : (active ? const Color(0xFF0E1621) : Colors.white);
+    final fg = color != null ? Colors.white : (active ? Brand.ink : Colors.white);
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Material(
         color: bg,

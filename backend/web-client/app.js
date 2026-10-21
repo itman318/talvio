@@ -36,7 +36,7 @@
     return s;
   };
   const ICONS = {
-    send: 'M2.01 21 23 12 2.01 3 2 10l15 2-15 2z',
+    send: 'M12 4.5 5 11.5l1.6 1.6 4.3-4.3V20h2.2V8.8l4.3 4.3 1.6-1.6z',
     attach: 'M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z',
     menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
     back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
@@ -52,10 +52,17 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
-  const COLORS = ['#e57373', '#f06292', '#ba68c8', '#7986cb', '#4fc3f7', '#4db6ac', '#81c784', '#ffb74d', '#a1887f', '#90a4ae'];
+  // Ember avatar gradients (match the mobile app's Brand.avatarGradients).
+  const GRADS = [['#FF8A65', '#F2603D'], ['#F06292', '#E9447A'], ['#9575CD', '#6C4FE0'], ['#4DD0C4', '#12B3A3'],
+    ['#FFCA6B', '#FF9F43'], ['#64B5F6', '#3F7FE0'], ['#81C784', '#3FA66B'], ['#A1887F', '#7B5E57']];
+  const brandMark = (size = 40) => {
+    const box = el('span', { class: 'brand-mark', style: `width:${size}px;height:${size}px` });
+    box.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="27" cy="27" rx="17" ry="14" fill="#fff"/><ellipse cx="40" cy="40" rx="13" ry="11" fill="#fff" fill-opacity=".55"/><circle cx="21" cy="27" r="2.6" fill="#F2603D"/><circle cx="27" cy="27" r="2.6" fill="#F2603D"/><circle cx="33" cy="27" r="2.6" fill="#F2603D"/></svg>';
+    return box;
+  };
   const initials = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
   function avatar(id, name, url, size = 48) {
-    const style = `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.38)}px;background:${COLORS[Math.abs(Number(id) || 0) % COLORS.length]}`;
+    const style = `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.38)}px;border-radius:${Math.round(size * 0.34)}px;background:linear-gradient(135deg,${GRADS[Math.abs(Number(id) || 0) % GRADS.length].join(',')})`;
     if (url) {
       const img = el('img', { class: 'avatar', style, alt: '' });
       mediaUrl(url).then((u) => { if (u) img.src = u; }).catch(() => {});
@@ -299,6 +306,7 @@
     }
     $app.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'login-card' },
       el('div', { class: 'login-steps' },
+        brandMark(56),
         el('h1', {}, 'Use ChatApp on your computer'),
         message ? el('p', { style: 'color:var(--danger)' }, message) : null,
         el('ol', {},
@@ -439,7 +447,7 @@
     sideList = el('div', { class: 'chat-list' });
     mainPane = el('div', { class: 'main' }, el('div', { class: 'empty-main' }, 'Select a chat to start messaging'));
     layout = el('div', { class: 'layout' },
-      el('aside', { class: 'side' }, el('div', { class: 'side-head' }, menuBtn, searchInput), sideList),
+      el('aside', { class: 'side' }, el('div', { class: 'side-head' }, menuBtn, brandMark(32), searchInput), sideList),
       mainPane);
     $app.replaceChildren(layout);
   }
@@ -678,7 +686,7 @@
     const showSender = c.type === 'group' && !mine && (!prev || prev.sender_id !== m.sender_id || prev.type === 'system');
     const body = [];
     if (c.type === 'channel' && !m.thread_id) body.push(el('div', { class: 'who', style: 'color:var(--accent-dark)' }, c.title));
-    else if (showSender) body.push(el('div', { class: 'who', style: `color:${COLORS[(m.sender_id || 0) % COLORS.length]}` }, userName(m.sender)));
+    else if (showSender) body.push(el('div', { class: 'who', style: `color:${GRADS[(m.sender_id || 0) % GRADS.length][1]}` }, userName(m.sender)));
     if (m.forwarded_from) body.push(el('div', { class: 'fwd' }, `Forwarded from ${m.forwarded_from.name}`));
     if (m.reply_to) {
       body.push(el('div', { class: 'reply', onclick: () => scrollToMessage(m.reply_to.id) },

@@ -12,6 +12,7 @@ import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
 import 'secret_screens.dart';
 import 'chat_screen.dart';
+import '../theme/brand.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key, required this.userId});
@@ -75,10 +76,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 const SizedBox(height: 12),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Flexible(child: Text(u.name, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center)),
-                  if (u.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Color(0xFF2AABEE))),
-                  if (u.isPremium) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.star_rounded, color: Color(0xFF8E6CEF))),
+                  if (u.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Brand.primary)),
+                  if (u.isPremium) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.star_rounded, color: Brand.premium)),
                 ]),
-                Text(u.isBot ? 'bot' : lastSeenText(u), textAlign: TextAlign.center, style: TextStyle(color: u.online ? const Color(0xFF2AABEE) : Colors.black54)),
+                Text(u.isBot ? 'bot' : lastSeenText(u), textAlign: TextAlign.center, style: TextStyle(color: u.online ? Brand.primary : Colors.black54)),
                 const SizedBox(height: 16),
                 if (!u.deleted && u.id != myId)
                   Padding(

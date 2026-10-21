@@ -11,7 +11,6 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'channel_screens.dart';
-import 'calls_screen.dart';
 import 'secret_screens.dart';
 import '../state/secret_store.dart';
 import 'chat_screen.dart';
@@ -19,6 +18,7 @@ import 'folder_support_screens.dart';
 import 'new_chat_screen.dart';
 import 'settings_screens.dart';
 import 'story_screens.dart';
+import '../theme/brand.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -113,7 +113,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: const InputDecoration(hintText: 'Search chats and messages', border: InputBorder.none),
                 onChanged: _onSearch,
               )
-            : Text(store.connected || !store.chatsLoaded ? 'Chats' : 'Connecting…'),
+            : Row(children: [
+                const BrandMark(size: 30),
+                const SizedBox(width: 10),
+                Text(store.connected || !store.chatsLoaded ? AppConfig.appName : 'Connecting…',
+                    style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+              ]),
         actions: [
           IconButton(
             icon: Icon(_searching ? Icons.close : Icons.search),
@@ -129,17 +134,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 'archived' => const ArchivedChatsScreen(),
                 'folders' => const FoldersScreen(),
                 'support' => const SupportListScreen(),
-                'calls' => const CallsScreen(),
                 _ => const SettingsScreen(),
               };
               Navigator.push(context, MaterialPageRoute(builder: (_) => page));
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'calls', child: Text('Calls')),
               PopupMenuItem(value: 'archived', child: Text('Archived chats')),
               PopupMenuItem(value: 'folders', child: Text('Chat folders')),
               PopupMenuItem(value: 'support', child: Text('Help & support')),
-              PopupMenuItem(value: 'settings', child: Text('Settings')),
             ],
           ),
         ],
@@ -203,10 +205,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         : ListView.builder(
                       itemCount: chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i) {
-                        if (showStories && i == 0) return const Column(children: [StoryBar(), Divider(height: 1)]);
+                        if (showStories && i == 0) return const StoryBar();
                         final si = i - (showStories ? 1 : 0);
                         if (si < secrets.length) {
-                          return Column(children: [SecretChatTile(chat: secrets[si]), const Divider(height: 1, indent: 80)]);
+                          return SecretChatTile(chat: secrets[si]);
                         }
                         final idx = si - secrets.length;
                         if (idx >= chats.length) {
@@ -215,15 +217,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(children: [
                               const Icon(Icons.forum_outlined, size: 64, color: Colors.black26),
                               const SizedBox(height: 12),
-                              Text(folder == null ? 'No chats yet.\nTap the pencil to start messaging.' : 'No chats in this folder.',
+                              Text(folder == null ? 'No chats yet.\nTap + to start a conversation.' : 'No chats in this folder.',
                                   textAlign: TextAlign.center),
                             ]),
                           );
                         }
-                        return Column(children: [
-                          ChatTile(chat: chats[idx]),
-                          const Divider(height: 1, indent: 80),
-                        ]);
+                        return ChatTile(chat: chats[idx]);
                       },
                     ),
                   ),
@@ -232,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _compose,
-        child: const Icon(Icons.edit),
+        child: const Icon(Icons.add_comment_rounded),
       ),
     );
   }
@@ -320,7 +319,7 @@ class ChatTile extends StatelessWidget {
         tick = const Icon(Icons.error, size: 15, color: Colors.red);
       } else {
         tick = Icon(last.id <= chat.deliveredUpTo ? Icons.done_all : Icons.done,
-            size: 16, color: last.id <= chat.readUpTo ? const Color(0xFF2AABEE) : Colors.black45);
+            size: 16, color: last.id <= chat.readUpTo ? Brand.primary : Colors.black45);
       }
     }
 
@@ -337,7 +336,7 @@ class ChatTile extends StatelessWidget {
           if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group, size: 16)),
           if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign, size: 16)),
           Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
-          if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Color(0xFF2AABEE))),
+          if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
           if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off, size: 15, color: Colors.black38)),
           const Spacer(),
           if (tick != null) Padding(padding: const EdgeInsets.only(right: 4), child: tick),
@@ -360,7 +359,7 @@ class ChatTile extends StatelessWidget {
                     typing ?? preview,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: typing != null ? const TextStyle(color: Color(0xFF2AABEE)) : null,
+                    style: typing != null ? const TextStyle(color: Brand.primary) : null,
                   ),
           ),
           if (chat.unreadMentions > 0)
@@ -369,7 +368,7 @@ class ChatTile extends StatelessWidget {
               width: 22,
               height: 22,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(color: Color(0xFF2AABEE), shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: Brand.primary, shape: BoxShape.circle),
               child: const Text('@', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           if (chat.unreadCount > 0)
@@ -377,7 +376,7 @@ class ChatTile extends StatelessWidget {
               margin: const EdgeInsets.only(left: 6),
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: chat.isMuted ? Colors.black38 : const Color(0xFF2AABEE),
+                color: chat.isMuted ? Colors.black38 : Brand.primary,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text('${chat.unreadCount > 999 ? '999+' : chat.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 12)),
@@ -387,7 +386,7 @@ class ChatTile extends StatelessWidget {
               margin: const EdgeInsets.only(left: 6),
               width: 14,
               height: 14,
-              decoration: BoxDecoration(color: chat.isMuted ? Colors.black38 : const Color(0xFF2AABEE), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: chat.isMuted ? Colors.black38 : Brand.primary, shape: BoxShape.circle),
             )
           else if (chat.isPinned)
             const Icon(Icons.push_pin, size: 16, color: Colors.black38),

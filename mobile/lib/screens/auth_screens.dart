@@ -11,6 +11,7 @@ import '../core/api_client.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
 import 'more_screens.dart';
+import '../theme/brand.dart';
 
 // ------------------------------------------------------------------ phone number
 class PhoneScreen extends StatefulWidget {
@@ -69,7 +70,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
           padding: const EdgeInsets.all(24),
           children: [
             const SizedBox(height: 40),
-            const Icon(Icons.send_rounded, size: 72, color: Color(0xFF2AABEE)),
+            const BrandMark(size: 84),
             const SizedBox(height: 16),
             Text('Your phone number', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
@@ -293,7 +294,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               onTap: _pick,
               child: CircleAvatar(
                 radius: 52,
-                backgroundColor: const Color(0xFF2AABEE),
+                backgroundColor: Brand.primary,
                 backgroundImage: _avatarPath != null ? FileImage(File(_avatarPath!)) : null,
                 child: _avatarPath == null ? const Icon(Icons.add_a_photo, color: Colors.white, size: 34) : null,
               ),
@@ -331,7 +332,7 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Scaffold(
-        body: Center(child: Icon(Icons.send_rounded, size: 72, color: Color(0xFF2AABEE))),
+        body: Center(child: BrandMark(size: 84)),
       );
 }
 
@@ -351,7 +352,7 @@ class MessageScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 64, color: const Color(0xFF2AABEE)),
+                  Icon(icon, size: 64, color: Brand.primary),
                   const SizedBox(height: 16),
                   Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
                   const SizedBox(height: 8),

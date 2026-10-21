@@ -16,6 +16,7 @@ import 'more_screens.dart';
 import 'premium_screens.dart';
 import 'bot_screens.dart';
 import 'link_device_screen.dart';
+import '../theme/brand.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -512,8 +513,8 @@ class _SessionsScreenState extends State<SessionsScreen> {
           : ListView(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF2AABEE)),
-                  title: const Text('Link a device', style: TextStyle(color: Color(0xFF2AABEE))),
+                  leading: const Icon(Icons.qr_code_scanner, color: Brand.primary),
+                  title: const Text('Link a device', style: TextStyle(color: Brand.primary)),
                   subtitle: const Text('Use ChatApp on your computer (web or desktop app)'),
                   onTap: () async {
                     final linked = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const LinkDeviceScreen()));

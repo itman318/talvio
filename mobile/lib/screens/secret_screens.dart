@@ -15,8 +15,9 @@ import '../state/secret_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/extras.dart';
+import '../theme/brand.dart';
 
-const _green = Color(0xFF34A853);
+const _green = Brand.accent;
 
 /// Opens (or starts) a secret chat with [user].
 Future<void> startSecretChat(BuildContext context, AppUser user) async {
@@ -317,7 +318,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                     },
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.send, color: _green), onPressed: _sendText),
+                IconButton(icon: const Icon(Icons.arrow_upward_rounded, color: _green), onPressed: _sendText),
               ]),
             ),
           )

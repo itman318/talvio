@@ -33,6 +33,7 @@ import 'channel_screens.dart';
 import 'forward_screen.dart';
 import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
+import '../theme/brand.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.chatId, this.initial});
@@ -643,11 +644,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     Row(children: [
                       Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17))),
-                      if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Color(0xFF8E6CEF))),
+                      if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
                     ]),
                     if (subtitle.isNotEmpty)
                       Text(subtitle,
-                          style: TextStyle(fontSize: 13, color: typing != null || chat.peer?.online == true ? const Color(0xFF2AABEE) : Colors.black54)),
+                          style: TextStyle(fontSize: 13, color: typing != null || chat.peer?.online == true ? Brand.primary : Colors.black54)),
                   ],
                 ),
               ),
@@ -684,7 +685,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: ChatWallpaper(
+        child: Column(
         children: [
           if (!store.connected)
             Container(
@@ -697,6 +699,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(child: _messageList(chat, messages, store)),
           _bottomBar(chat),
         ],
+      ),
       ),
     );
   }
@@ -783,12 +786,12 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black12))),
           child: Row(children: [
-            Container(width: 3, height: 34, color: const Color(0xFF2AABEE)),
+            Container(width: 3, height: 34, color: Brand.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(chat.pinnedCount > 1 ? 'Pinned message (${chat.pinnedCount})' : 'Pinned message',
-                    style: const TextStyle(color: Color(0xFF2AABEE), fontWeight: FontWeight.w600, fontSize: 13)),
+                    style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600, fontSize: 13)),
                 Text(p.preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
               ]),
             ),
@@ -894,13 +897,13 @@ class _ChatScreenState extends State<ChatScreen> {
               Container(
                 padding: const EdgeInsets.fromLTRB(12, 6, 0, 0),
                 child: Row(children: [
-                  Icon(_editing != null ? Icons.edit : Icons.reply, color: const Color(0xFF2AABEE)),
+                  Icon(_editing != null ? Icons.edit : Icons.reply, color: Brand.primary),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(
                         _editing != null ? 'Edit message' : 'Reply to ${banner.sender?.name ?? _store.userName(banner.senderId)}',
-                        style: const TextStyle(color: Color(0xFF2AABEE), fontWeight: FontWeight.w600, fontSize: 13),
+                        style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600, fontSize: 13),
                       ),
                       Text(banner.preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
                     ]),
@@ -924,7 +927,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const Spacer(),
                   TextButton(onPressed: () => _stopRecording(send: false), child: const Text('Cancel')),
                   IconButton(
-                    icon: const Icon(Icons.send, color: Color(0xFF2AABEE)),
+                    icon: const Icon(Icons.arrow_upward_rounded, color: Brand.primary),
                     onPressed: () => _stopRecording(send: true),
                   ),
                 ]),
@@ -974,8 +977,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (_text.text.trim().isNotEmpty || _editing != null)
                     GestureDetector(
                       onLongPress: _editing == null ? _sendOptions : null,
-                      child: IconButton(
-                        icon: Icon(_editing != null ? Icons.check : Icons.send, color: const Color(0xFF2AABEE)),
+                      child: IconButton.filled(
+                        style: IconButton.styleFrom(
+                          backgroundColor: Brand.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: Icon(_editing != null ? Icons.check : Icons.arrow_upward_rounded, color: Colors.white),
                         tooltip: 'Send (hold to schedule)',
                         onPressed: _send,
                       ),

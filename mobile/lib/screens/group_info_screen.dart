@@ -13,6 +13,7 @@ import 'channel_screens.dart';
 import 'more_screens.dart';
 import 'new_chat_screen.dart';
 import 'user_profile_screen.dart';
+import '../theme/brand.dart';
 
 class GroupInfoScreen extends StatefulWidget {
   const GroupInfoScreen({super.key, required this.chatId});
@@ -316,7 +317,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 leading: const Icon(Icons.person_search_outlined),
                 title: const Text('Join requests'),
                 trailing: chat.pendingRequests > 0
-                    ? CircleAvatar(radius: 12, backgroundColor: const Color(0xFF2AABEE), child: Text('${chat.pendingRequests}', style: const TextStyle(fontSize: 12, color: Colors.white)))
+                    ? CircleAvatar(radius: 12, backgroundColor: Brand.primary, child: Text('${chat.pendingRequests}', style: const TextStyle(fontSize: 12, color: Colors.white)))
                     : null,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))),
               ),
@@ -357,8 +358,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           const Divider(),
           if (chat.isAdmin && !chat.isSuspended)
             ListTile(
-              leading: const Icon(Icons.person_add, color: Color(0xFF2AABEE)),
-              title: Text(chat.isChannel ? 'Add subscribers' : 'Add members', style: const TextStyle(color: Color(0xFF2AABEE))),
+              leading: const Icon(Icons.person_add, color: Brand.primary),
+              title: Text(chat.isChannel ? 'Add subscribers' : 'Add members', style: const TextStyle(color: Brand.primary)),
               onTap: () => _addMembers(chat),
             ),
           if (chat.isChannel && !chat.isAdmin)
@@ -369,7 +370,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 subtitle: Text(lastSeenText(m.user)),
                 trailing: m.role == 'member'
                     ? null
-                    : Text(m.role == 'owner' ? 'owner' : 'admin', style: const TextStyle(color: Color(0xFF2AABEE))),
+                    : Text(m.role == 'owner' ? 'owner' : 'admin', style: const TextStyle(color: Brand.primary)),
                 onTap: () => _memberActions(chat, m),
               )),
           const Divider(),

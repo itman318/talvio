@@ -10,8 +10,9 @@ import '../core/services.dart';
 import '../core/socket_service.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
+import '../theme/brand.dart';
 
-const premiumColor = Color(0xFF8E6CEF);
+const premiumColor = Brand.premium;
 
 String _date(String? iso) {
   if (iso == null) return '';

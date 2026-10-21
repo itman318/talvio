@@ -13,6 +13,7 @@ import '../widgets/avatar.dart';
 import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import 'group_info_screen.dart';
+import '../theme/brand.dart';
 
 const topicColors = [
   Color(0xFF6FB9F0), Color(0xFFFFD67E), Color(0xFFCB86DB), Color(0xFF8EEE98),
@@ -196,8 +197,8 @@ class _ThreadScreenState extends State<ThreadScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: _sending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send),
-                      color: const Color(0xFF2AABEE),
+                      icon: _sending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.arrow_upward_rounded),
+                      color: Brand.primary,
                       onPressed: _send,
                     ),
                   ])

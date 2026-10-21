@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import 'avatar.dart';
+import '../theme/brand.dart';
 
 /// Poll / quiz inside a message bubble: vote, see results, quiz feedback.
 class PollView extends StatefulWidget {
@@ -184,7 +185,7 @@ class ReactionChips extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: mine ? const Color(0xFF2AABEE) : Colors.black.withAlpha(15),
+                color: mine ? Brand.primary : Colors.black.withAlpha(15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text('${r.emoji} ${r.count}', style: TextStyle(fontSize: 13, color: mine ? Colors.white : Colors.black87)),

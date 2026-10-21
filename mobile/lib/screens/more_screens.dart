@@ -18,6 +18,7 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
+import '../theme/brand.dart';
 
 // ================================================================== invite links
 class InviteLinksScreen extends StatefulWidget {
@@ -128,7 +129,7 @@ class _InviteLinksScreenState extends State<InviteLinksScreen> {
                   if (l['expires_at'] != null && !expired) 'expires ${chatListTime(DateTime.parse(l['expires_at'] as String).toLocal())}',
                 ];
                 return ListTile(
-                  leading: Icon(Icons.link, color: expired ? Colors.black26 : const Color(0xFF2AABEE)),
+                  leading: Icon(Icons.link, color: expired ? Colors.black26 : Brand.primary),
                   title: Text('${l['name']}'.isEmpty ? '${l['code']}' : '${l['name']}', style: TextStyle(color: expired ? Colors.black38 : null)),
                   subtitle: Text(parts.join(' · ')),
                   trailing: expired
@@ -532,7 +533,7 @@ class _LockScreenState extends State<LockScreen> {
     return Scaffold(
       body: SafeArea(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.lock_outline, size: 48, color: Color(0xFF2AABEE)),
+          const Icon(Icons.lock_outline, size: 48, color: Brand.primary),
           const SizedBox(height: 12),
           Text(_wrong ? 'Wrong PIN, try again' : 'Enter your PIN', style: TextStyle(fontSize: 18, color: _wrong ? Colors.red : null)),
           const SizedBox(height: 16),
@@ -544,7 +545,7 @@ class _LockScreenState extends State<LockScreen> {
                 margin: const EdgeInsets.all(6),
                 width: 14,
                 height: 14,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: i < _pin.length ? const Color(0xFF2AABEE) : Colors.black12),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: i < _pin.length ? Brand.primary : Colors.black12),
               ),
             ),
           ),
