@@ -1,2 +1,12 @@
 node_modules/
 .env
+backend/uploads/
+backend/test/shim/
+mobile/android/
+mobile/ios/
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins*
+mobile/pubspec.lock
+*.zip
+.DS_Store

@@ -9,7 +9,7 @@ Phase 2: channels, public search & join, polls & quizzes, reactions, scheduled m
 
 ## First-time setup
 
-Requirements: Flutter 3.22+ (Dart 3.4+), Android Studio and/or Xcode.
+Requirements: Flutter 3.27+ (Dart 3.6+), Android Studio and/or Xcode.
 
 ```bash
 cd mobile
