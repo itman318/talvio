@@ -28,12 +28,14 @@ jobs:
       - name: Download latest APK
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download android-latest -p talvio.apk -R "${{ github.repository }}"
+        run: |
+          gh release download android-latest -p talvio-x86_64-emulator.apk -R "${{ github.repository }}"
+          mv talvio-x86_64-emulator.apk talvio.apk
 
       - name: Run on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 33
           target: google_apis
           arch: x86_64
           disable-animations: true

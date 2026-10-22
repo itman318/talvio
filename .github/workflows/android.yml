@@ -71,7 +71,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          { flutter build apk --release --split-per-abi --target-platform android-arm64 \
+          { flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 \
               --dart-define=API_BASE=${{ vars.API_BASE || 'http://10.0.2.2:4000' }}; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
       - name: Save report to ci-logs branch
@@ -93,8 +93,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk talvio.apk
+          cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk talvio-x86_64-emulator.apk
           gh release delete android-latest --yes --cleanup-tag -R "${{ github.repository }}" || true
-          gh release create android-latest talvio.apk -R "${{ github.repository }}" --target "${{ github.sha }}" \
+          gh release create android-latest talvio.apk talvio-x86_64-emulator.apk -R "${{ github.repository }}" --target "${{ github.sha }}" \
             --prerelease --title "Talvio Android (test build #${{ github.run_number }})" \
             --notes "Built from ${{ github.sha }}. Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only — set the API_BASE variable)' }}"
 
