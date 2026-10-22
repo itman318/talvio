@@ -10,6 +10,7 @@ import 'dart:io';
 void main() {
   _android();
   _pluginCompileSdk();
+  _noMinify();
   _ios();
   stdout.writeln('\nDone. Next: flutter pub get && flutter run --dart-define=API_BASE=http://<your-server>:4000');
 }
@@ -175,4 +176,31 @@ $s''');
     return;
   }
   stdout.writeln('✓ android/build.gradle: plugins compile against SDK 36');
+}
+
+/// R8 strips plugin classes that are only reached through JNI (e.g. shared_preferences'
+/// SharedPreferencesApiRegistrar), which crashes the release app on launch. Keep all code.
+void _noMinify() {
+  const marker = 'talvio-no-minify';
+  for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
+    final f = File(name);
+    if (!f.existsSync()) continue;
+    var s = f.readAsStringSync();
+    if (s.contains(marker)) return;
+    final kts = name.endsWith('.kts');
+    final bt = s.indexOf('buildTypes');
+    final i = bt < 0 ? -1 : s.indexOf(RegExp(r'release\s*\{'), bt);
+    if (i < 0) {
+      stderr.writeln('! $name: release build type not found — disable minify by hand');
+      return;
+    }
+    final at = s.indexOf('{', i) + 1;
+    final add = kts
+        ? '\n            // $marker\n            isMinifyEnabled = false\n            isShrinkResources = false'
+        : '\n            // $marker\n            minifyEnabled false\n            shrinkResources false';
+    s = s.substring(0, at) + add + s.substring(at);
+    f.writeAsStringSync(s);
+    stdout.writeln('✓ $name: R8 minify/shrink off for release');
+    return;
+  }
 }

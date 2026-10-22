@@ -52,6 +52,7 @@ jobs:
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties
           printf '%s\n' 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g' 'org.gradle.workers.max=2' 'kotlin.daemon.jvmargs=-Xmx1g' >> android/gradle.properties
           cat android/gradle.properties
+          sed -n '/buildTypes/,/^    }/p' android/app/build.gradle* || true
 
       - name: Get packages
         run: flutter pub get
