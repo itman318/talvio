@@ -119,13 +119,18 @@ class BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    // Align(1,1) keeps the mark square even inside a Column that stretches its children.
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: Container(
       width: size,
       height: size,
       decoration: BoxDecoration(gradient: Brand.heroGradient, borderRadius: BorderRadius.circular(size * 0.3), boxShadow: [
         BoxShadow(color: Brand.primary.withAlpha(90), blurRadius: size * 0.35, offset: Offset(0, size * 0.12)),
       ]),
       child: CustomPaint(painter: _MarkPainter()),
+      ),
     );
   }
 }
@@ -133,7 +138,7 @@ class BrandMark extends StatelessWidget {
 class _MarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size s) {
-    final w = s.width;
+    final w = s.shortestSide;
     final back = RRect.fromRectAndCorners(
       Rect.fromLTWH(w * 0.36, w * 0.22, w * 0.42, w * 0.34),
       topLeft: Radius.circular(w * 0.17), topRight: Radius.circular(w * 0.17), bottomLeft: Radius.circular(w * 0.17), bottomRight: Radius.circular(w * 0.05),
