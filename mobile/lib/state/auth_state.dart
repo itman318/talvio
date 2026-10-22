@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -47,12 +48,29 @@ class AuthState extends ChangeNotifier {
 
   ApiClient get api => services.api;
 
+  /// Startup: never leaves the app stuck on the splash screen, even if a plugin throws.
   Future<void> init() async {
+    try {
+      await _init();
+    } catch (e, st) {
+      debugPrint('Auth init failed: $e\n$st');
+      if (status == AuthStatus.loading) {
+        status = AuthStatus.loggedOut;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _init() async {
     if (!_setupDone) {
       _setupDone = true;
       api.onSessionEnded = (e) => _forceLogout(e.code == 'account_banned' ? _banText(e) : e.message);
       chats.onSessionRevoked = () => _forceLogout('You were logged out from this device.');
-      await services.push.init();
+      try {
+        await services.push.init().timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('Push init skipped: $e');
+      }
       await accounts.load();
     }
 

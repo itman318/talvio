@@ -1,0 +1,51 @@
+# Starts the latest released APK on an Android emulator and saves a screenshot + logcat
+# to the ci-smoke branch (used to debug start-up problems without a phone).
+name: Emulator smoke test
+
+on:
+  workflow_run:
+    workflows: [Android APK]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Download latest APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download android-latest -p talvio.apk -R "${{ github.repository }}"
+
+      - name: Run on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/smoke.sh
+
+      - name: Save to ci-smoke branch
+        if: always()
+        run: |
+          mkdir -p ci-smoke && cd ci-smoke
+          echo "sha=${{ github.sha }} run=${{ github.run_id }}" > status.txt
+          git init -q -b ci-smoke
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "smoke ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-smoke

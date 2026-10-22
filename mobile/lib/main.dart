@@ -20,8 +20,33 @@ final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await _start();
+  } catch (e, st) {
+    // Never leave the user on the launch screen: show what went wrong instead.
+    debugPrint('Startup failed: $e\n$st');
+    runApp(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: SafeArea(
+          child: ListView(padding: const EdgeInsets.all(24), children: [
+            const Text('Talvio could not start', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            SelectableText('$e\n\n$st', style: const TextStyle(fontSize: 12)),
+          ]),
+        ),
+      ),
+    ));
+  }
+}
+
+Future<void> _start() async {
   final prefs = AppPrefs();
-  await prefs.load();
+  try {
+    await prefs.load().timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('Prefs not loaded: $e');
+  }
   final services = AppServices();
   final chats = ChatStore(services);
   final auth = AuthState(services, chats)..prefs = prefs;
