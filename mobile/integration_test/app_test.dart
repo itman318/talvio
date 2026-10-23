@@ -48,7 +48,7 @@ void main() {
     await settle(t, 600);
 
     await t.enterText(find.widgetWithText(TextField, 'Email address'), email);
-    await t.tap(find.text('Next'));
+    await t.testTextInput.receiveAction(TextInputAction.go); // keyboard "Go" (the button can be under the keyboard)
     await pumpUntil(t, find.textContaining('Dev mode code:'), what: 'OTP screen with dev code');
     await snap(t, 'otp');
     final codeText = (find.textContaining('Dev mode code:').evaluate().first.widget as Text).data!;
@@ -60,6 +60,9 @@ void main() {
     await pumpUntil(t, find.text('Your profile'), what: 'profile screen');
     await snap(t, 'profile');
     await t.enterText(find.widgetWithText(TextField, 'First name (required)'), 'Muhammad');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await settle(t, 800);
+    await t.ensureVisible(find.text('Continue'));
     await t.tap(find.text('Continue'));
 
     await pumpUntil(t, find.text('Sana Ahmed'), seconds: 40, what: 'chat list with seeded chat');
