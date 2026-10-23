@@ -287,7 +287,6 @@ class CallManager extends ChangeNotifier {
     );
     if (await FlutterForegroundTask.isRunningService) return;
     await FlutterForegroundTask.startService(
-      serviceTypes: [ForegroundServiceTypes.mediaProjection],
       notificationTitle: 'Talvio',
       notificationText: 'You are sharing your screen',
     );

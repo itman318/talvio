@@ -63,15 +63,16 @@ class PrayerReminders {
           plan.add((t.fajr.subtract(const Duration(minutes: 30)), 'Sehri ends in 30 minutes', 'Sehri until ${_hm(t.fajr)}.'));
           plan.add((t.maghrib, 'Iftar time', 'Iftar now — ${_hm(t.maghrib)}. Ramadan Mubarak!'));
         }
-        for (final (when, title, body) in plan) {
-          if (!when.isAfter(now)) continue;
+        for (final (at, title, body) in plan) {
+          if (!at.isAfter(now)) continue;
           await _plugin.zonedSchedule(
             id++,
             title,
             body,
-            tz.TZDateTime.from(when.toUtc(), tz.UTC),
+            tz.TZDateTime.from(at.toUtc(), tz.UTC),
             const NotificationDetails(android: _channel, iOS: DarwinNotificationDetails()),
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
           );
         }
       }
