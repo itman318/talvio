@@ -98,7 +98,7 @@ async function main() {
   const st = packs && packs[0] && packs[0].stickers;
   if (st && st.length) await call('POST', `/chats/${s.id}/messages`, { type: 'sticker', sticker_id: st[0].id }, sana.token);
   await say(s.id, me, 'Shukriya! Koi masla ho to batana');
-  await say(s.id, sana, 'Ye link dekho: https://github.com');
+  await say(s.id, sana, 'Sticker pack bohat cute hai 😄');
   if (st && st.length > 3) await call('POST', `/chats/${s.id}/messages`, { type: 'sticker', sticker_id: st[3].id }, me.token);
 
   const am = await call('POST', '/chats/private', { user_id: me.id }, ammi.token);
