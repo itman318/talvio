@@ -1086,6 +1086,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = context.read<AuthState>();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final bg = dark ? const Color(0xFF12152A) : Colors.white;
+    // small phones: keep room for the messages above
+    final pickerH = (MediaQuery.of(context).size.height * 0.25).clamp(140.0, 300.0);
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
@@ -1094,13 +1096,13 @@ class _ChatScreenState extends State<ChatScreen> {
         TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
         Divider(height: 1, color: dark ? Colors.white10 : const Color(0xFFE9ECF3)),
         SizedBox(
-          height: 300,
+          height: pickerH,
           child: EmojiPicker(
             textEditingController: _text,
             onEmojiSelected: (_, __) => setState(() {}),
             onBackspacePressed: () => setState(() {}),
             config: Config(
-              height: 300,
+              height: pickerH,
               checkPlatformCompatibility: true,
               emojiViewConfig: EmojiViewConfig(
                 backgroundColor: bg,

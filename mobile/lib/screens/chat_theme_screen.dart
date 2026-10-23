@@ -112,7 +112,7 @@ class _ChatThemeScreenState extends State<ChatThemeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'doodle', label: Text('Doodles'), icon: Icon(Icons.gesture_rounded)),
+              ButtonSegment(value: 'doodle', label: Text('Doodle'), icon: Icon(Icons.gesture_rounded)),
               ButtonSegment(value: 'dots', label: Text('Dots'), icon: Icon(Icons.grain_rounded)),
               ButtonSegment(value: 'none', label: Text('Plain'), icon: Icon(Icons.crop_square_rounded)),
             ],
