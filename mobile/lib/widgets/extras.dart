@@ -17,10 +17,10 @@ class ChatColors {
 
   static ChatColors of(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    // Ember palette: warm peach for my messages, clean cards for others, dotted warm wallpaper behind.
+    // Ink & Coral: my messages in deep ink (light text), others on clean white cards.
     return dark
-        ? ChatColors._(const Color(0xFF121120), const Color(0xFF452A3F), const Color(0xFF221F36), const Color(0xFF17162A), Colors.white60)
-        : ChatColors._(const Color(0xFFF5EEE7), const Color(0xFFFFE3D6), Colors.white, Colors.white, const Color(0xFF8C8296));
+        ? ChatColors._(const Color(0xFF0B0D17), const Color(0xFF2A3052), const Color(0xFF171A2C), const Color(0xFF131628), Colors.white60)
+        : ChatColors._(const Color(0xFFEEF1F7), Brand.ink, Colors.white, Colors.white, const Color(0xFF7D8399));
   }
 }
 

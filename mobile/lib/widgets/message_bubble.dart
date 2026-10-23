@@ -39,13 +39,13 @@ class MessageBubble extends StatelessWidget {
 
   Widget _ticks(BuildContext context) {
     final m = message;
-    final colors = ChatColors.of(context);
-    if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: colors.meta);
+    final meta = isMine ? Colors.white.withAlpha(150) : ChatColors.of(context).meta;
+    if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
     if (chat.isSavedMessages || _asChannel) return const SizedBox.shrink();
-    if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Brand.primary);
-    if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: colors.meta);
-    return Icon(Icons.done, size: 15, color: colors.meta);
+    if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Brand.accent);
+    if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: meta);
+    return Icon(Icons.done, size: 15, color: meta);
   }
 
   Widget _body(BuildContext context, Color accent) {
@@ -73,11 +73,15 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final m = message;
     final bg = isMine ? ChatColors.of(context).mine : ChatColors.of(context).other;
-    final accent = isMine ? Brand.primary : colorForId(m.senderId ?? 0);
+    // My bubbles are deep ink with light text, so they use the dark theme inside.
+    final accent = isMine ? Brand.primaryLight : colorForId(m.senderId ?? 0);
     final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
     final colors = ChatColors.of(context);
+    final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
+    final textColor = isMine ? Colors.white : scheme.onSurface;
 
     final children = <Widget>[
       if (_asChannel && !isMine)
@@ -118,7 +122,7 @@ class MessageBubble extends StatelessWidget {
                       : (m.replyTo!.text.isNotEmpty ? m.replyTo!.text : _typeLabel(m.replyTo!.type)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
+                  style: TextStyle(fontSize: 13, color: textColor.withAlpha(210)),
                 ),
               ],
             ),
@@ -126,7 +130,7 @@ class MessageBubble extends StatelessWidget {
         ),
       if (m.type != 'text') _body(context, accent),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
-      if (hasText) MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.3, color: Theme.of(context).colorScheme.onSurface)),
+      if (hasText) MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor)),
       ReactionChips(message: m),
       if (m.replyMarkup != null) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
       const SizedBox(height: 2),
@@ -134,12 +138,12 @@ class MessageBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_asChannel && !m.isLocal) ...[
-            Icon(Icons.visibility_outlined, size: 13, color: colors.meta),
-            Text(' ${compactNumber(m.views)}  ', style: TextStyle(fontSize: 11, color: colors.meta)),
+            Icon(Icons.visibility_outlined, size: 13, color: meta),
+            Text(' ${compactNumber(m.views)}  ', style: TextStyle(fontSize: 11, color: meta)),
           ],
-          if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: colors.meta)),
-          if (m.editedAt != null) Text('edited · ', style: TextStyle(fontSize: 11, color: colors.meta)),
-          Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11, color: colors.meta)),
+          if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
+          if (m.editedAt != null) Text('edited · ', style: TextStyle(fontSize: 11, color: meta)),
+          Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11, color: meta)),
           if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
         ],
       ),
@@ -170,7 +174,8 @@ class MessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
-            color: bg,
+            color: isMine && !dark ? null : bg,
+            gradient: isMine && !dark ? Brand.mineGradient : null,
             // "Pebble" bubbles: very round, with a soft inner corner instead of a tail.
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(isMine ? 20 : 8),
@@ -178,18 +183,23 @@ class MessageBubble extends StatelessWidget {
               bottomLeft: const Radius.circular(20),
               bottomRight: const Radius.circular(20),
             ),
-            border: isMine ? Border.all(color: Brand.primary.withAlpha(40)) : null,
-            boxShadow: const [BoxShadow(color: Color(0x10301A10), blurRadius: 8, offset: Offset(0, 2))],
+            border: isMine || dark ? null : Border.all(color: const Color(0xFFE6E9F1)),
+            boxShadow: [BoxShadow(color: (isMine ? Brand.ink : const Color(0xFF1B2138)).withAlpha(isMine ? 40 : 14), blurRadius: 10, offset: const Offset(0, 3))],
           ),
-          child: Column(
-            crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: children,
+          child: Theme(
+            data: isMine ? _inkTheme : Theme.of(context),
+            child: Column(
+              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: children,
+            ),
           ),
         ),
       ),
     );
   }
+
+  static final ThemeData _inkTheme = Brand.dark();
 
   static String _typeLabel(String type) => switch (type) {
         'image' => 'Photo',

@@ -73,7 +73,7 @@ class _CallScreenState extends State<CallScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xFF5B2A3A), Brand.ink],
+                      colors: [Color(0xFF2A3152), Brand.ink],
                     ),
                   ),
                 ),

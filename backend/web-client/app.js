@@ -53,11 +53,11 @@
   }
 
   // Ember avatar gradients (match the mobile app's Brand.avatarGradients).
-  const GRADS = [['#FF8A65', '#F2603D'], ['#F06292', '#E9447A'], ['#9575CD', '#6C4FE0'], ['#4DD0C4', '#12B3A3'],
-    ['#FFCA6B', '#FF9F43'], ['#64B5F6', '#3F7FE0'], ['#81C784', '#3FA66B'], ['#A1887F', '#7B5E57']];
+  const GRADS = [['#FF8A6E', '#E2553A'], ['#EE6A9A', '#C8366E'], ['#8E7CF0', '#5B49D6'], ['#34CDB6', '#0E9A86'],
+    ['#F7C56B', '#E29A2E'], ['#5DA9F0', '#2F6FD0'], ['#6FCB8C', '#2F9D5A'], ['#8A93B4', '#4E5675']];
   const brandMark = (size = 40) => {
     const box = el('span', { class: 'brand-mark', style: `width:${size}px;height:${size}px` });
-    box.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="27" cy="27" rx="17" ry="14" fill="#fff"/><ellipse cx="40" cy="40" rx="13" ry="11" fill="#fff" fill-opacity=".55"/><circle cx="21" cy="27" r="2.6" fill="#F2603D"/><circle cx="27" cy="27" r="2.6" fill="#F2603D"/><circle cx="33" cy="27" r="2.6" fill="#F2603D"/></svg>';
+    box.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="tvg" x1="0" x2="1"><stop offset="0" stop-color="#FF8A6E"/><stop offset=".5" stop-color="#EF5A3C"/><stop offset="1" stop-color="#E0417A"/></linearGradient></defs><rect x="23" y="12.8" width="28.2" height="23" rx="11.5" fill="url(#tvg)"/><rect x="11.5" y="24.3" width="30.7" height="24.3" rx="12" fill="#fff"/><circle cx="19.8" cy="36.5" r="2.2" fill="#151A2E"/><circle cx="26.9" cy="36.5" r="2.2" fill="#151A2E"/><circle cx="33.9" cy="36.5" r="2.2" fill="#151A2E"/></svg>';
     return box;
   };
   const initials = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
