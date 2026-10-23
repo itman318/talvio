@@ -36,7 +36,6 @@ Future<void> exportChat(BuildContext context, Chat chat) async {
       ..writeln('Exported ${fmt.format(DateTime.now())} · ${all.length} messages')
       ..writeln();
     for (final m in all) {
-      if (m.deleted) continue;
       final who = m.isSystem ? '' : '${m.sender?.name ?? (m.senderId == null ? chat.title : 'Someone')}: ';
       final body = m.type == 'text' ? m.text : m.preview;
       b.writeln('[${fmt.format(m.createdAt.toLocal())}] $who$body');

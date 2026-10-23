@@ -136,7 +136,10 @@
       case 'voice': return '🎤 Voice message';
       case 'file': return `📎 ${(m.media && m.media.name) || 'File'}`;
       case 'poll': return `📊 ${m.text}`;
-      case 'location': return '📍 Location';
+      case 'location': return m.meta && m.meta.live ? '📍 Live location' : '📍 Location';
+      case 'sticker': return `${(m.meta && m.meta.sticker && m.meta.sticker.emoji) || '🙂'} Sticker`;
+      case 'gif': return m.text ? `GIF · ${m.text}` : 'GIF';
+      case 'contact': return `👤 ${m.text || 'Contact'}`;
       case 'call': {
         const c = (m.meta && m.meta.call) || {};
         if (c.status === 'missed' || c.status === 'busy') return '📞 Missed call';
@@ -287,6 +290,11 @@
   function remember(users) {
     for (const u of users) if (u && u.id) S.users.set(u.id, { ...(S.users.get(u.id) || {}), ...u });
   }
+  function disappearLabel(sec) {
+    if (sec % 86400 === 0) { const d = sec / 86400; return d === 1 ? '24 hours' : d === 7 ? '1 week' : d === 90 ? '90 days' : `${d} days`; }
+    if (sec % 3600 === 0) { const h = sec / 3600; return h === 1 ? '1 hour' : `${h} hours`; }
+    return `${Math.round(sec / 60)} min`;
+  }
   function systemText(m) {
     const meta = m.meta || {};
     const actor = userName(S.users.get(m.sender_id) || m.sender);
@@ -302,6 +310,7 @@
       case 'member_joined': return `${who(meta.user_id)} joined the group`;
       case 'message_pinned': return `${actor} pinned a message`;
       case 'topic_created': return `${actor} created the topic “${meta.title || ''}”`;
+      case 'disappearing_changed': return meta.seconds ? `${actor} turned on disappearing messages (${disappearLabel(meta.seconds)})` : `${actor} turned off disappearing messages`;
       default: return 'Group updated';
     }
   }
@@ -731,7 +740,7 @@
     }
     if (album) body.push(albumView(album));
     else body.push(...mediaView(m));
-    const text = album ? album.map((x) => x.text).filter(Boolean).join('\n') : m.type === 'poll' || m.type === 'location' || m.type === 'call' ? '' : m.text;
+    const text = album ? album.map((x) => x.text).filter(Boolean).join('\n') : ['poll', 'location', 'call', 'sticker', 'contact'].includes(m.type) ? '' : m.text;
     if (text) body.push(el('div', { class: 'text' }, linkify(text)));
     if (m.link_preview && m.type === 'text') {
       const lp = m.link_preview;
@@ -758,7 +767,7 @@
     if (c.type === 'channel' && c.comments_enabled && !m.thread_id) {
       body.push(el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px' }, `💬 ${m.comments_count || 0} comments — open on your phone to reply`));
     }
-    const b = el('div', { class: `bubble${m.pending ? ' pending' : ''}`, 'data-id': m.id, oncontextmenu: (e) => messageMenu(e, c, m) }, body);
+    const b = el('div', { class: `bubble${m.pending ? ' pending' : ''}${m.type === 'sticker' ? ' bare' : ''}`, 'data-id': m.id, oncontextmenu: (e) => messageMenu(e, c, m) }, body);
     return el('div', { class: `row${mine ? ' mine' : ''}` }, b);
   }
 
@@ -816,7 +825,35 @@
       case 'poll': return [pollView(m)];
       case 'location': {
         const loc = (m.meta && m.meta.location) || {};
-        return [el('a', { href: `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`, target: '_blank', rel: 'noopener' }, `📍 ${loc.title || 'Location'} (${loc.lat}, ${loc.lng})`)];
+        const live = m.meta && m.meta.live;
+        const on = live && !live.stopped && new Date(live.until) > new Date();
+        const lat = Number(loc.lat).toFixed(5);
+        const lng = Number(loc.lng).toFixed(5);
+        return [el('a', { class: 'loc', href: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`, target: '_blank', rel: 'noopener noreferrer' },
+          el('span', { class: 'ic' }, '📍'),
+          el('span', {},
+            el('div', {}, live ? (on ? 'Live location' : 'Live location ended') : (loc.title || 'Location')),
+            el('div', { class: 'muted', style: 'font-size:12px' }, on ? `Until ${timeOf(live.until)} · updated ${timeOf(live.updated_at)}` : `${lat}, ${lng}`)))];
+      }
+      case 'sticker': {
+        if (!md) return [el('div', { class: 'sticker-emoji' }, (m.meta && m.meta.sticker && m.meta.sticker.emoji) || '🙂')];
+        const img = el('img', { class: 'sticker', alt: (m.meta && m.meta.sticker && m.meta.sticker.emoji) || 'Sticker', loading: 'lazy' });
+        mediaUrl(md.url).then((u) => { img.src = u; }).catch(() => {});
+        return [img];
+      }
+      case 'gif': {
+        const g = (m.meta && m.meta.gif) || {};
+        if (g.mp4) return [el('div', { class: 'media' }, el('video', { class: 'gif', src: g.mp4, autoplay: true, loop: true, muted: true, playsinline: true }))];
+        return [el('div', { class: 'media' }, el('img', { class: 'gif', src: g.url, alt: 'GIF', loading: 'lazy', referrerpolicy: 'no-referrer' }))];
+      }
+      case 'contact': {
+        const ct = (m.meta && m.meta.contact) || {};
+        return [el('div', { class: 'contact' },
+          el('span', { class: 'ic' }, '👤'),
+          el('span', {},
+            el('div', { style: 'font-weight:700' }, ct.name || 'Contact'),
+            ct.phone ? el('div', { class: 'muted', style: 'font-size:12px' }, ct.phone) : null,
+            ct.email ? el('div', { class: 'muted', style: 'font-size:12px' }, ct.email) : null))];
       }
       case 'call': {
         const call = (m.meta && m.meta.call) || {};

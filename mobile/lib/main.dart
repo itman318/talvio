@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'config.dart';
 import 'core/crash_reporter.dart';
 import 'core/prefs.dart';
+import 'core/prayer_reminders.dart';
 import 'core/services.dart';
 import 'screens/more_screens.dart';
 import 'screens/auth_screens.dart';
@@ -56,6 +58,8 @@ Future<void> _start() async {
   final auth = AuthState(services, chats)..prefs = prefs;
   final calls = CallManager(services);
   calls.lowData = prefs.dataSaver;
+  // keeps the 7-day window of prayer reminders topped up
+  if (prefs.prayerReminders || prefs.ramadanReminders) unawaited(PrayerReminders.reschedule(prefs));
   prefs.addListener(() => calls.lowData = prefs.dataSaver);
   calls.onShowCallScreen = () {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));

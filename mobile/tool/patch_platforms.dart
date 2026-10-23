@@ -11,6 +11,7 @@ void main() {
   _android();
   _pluginCompileSdk();
   _noMinify();
+  _desugaring();
   _androidBranding();
   _iosBranding();
   _releaseSigning();
@@ -40,6 +41,9 @@ void _android() {
     'android.permission.CHANGE_NETWORK_STATE',
     'android.permission.BLUETOOTH_CONNECT',
     'android.permission.WAKE_LOCK',
+    'android.permission.RECEIVE_BOOT_COMPLETED',
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
   ];
   for (final p in perms) {
     if (!xml.contains(p)) {
@@ -59,6 +63,23 @@ void _android() {
         ''';
       xml = xml.substring(0, i) + filter + xml.substring(i);
     }
+  }
+  // Prayer reminders (flutter_local_notifications) and the screen-share service (flutter_foreground_task)
+  if (!xml.contains('ScheduledNotificationReceiver')) {
+    const comps = '''
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="mediaProjection" android:exported="false" />
+    ''';
+    xml = xml.replaceFirst('</application>', '$comps</application>');
   }
   // Allows http:// during development. Remove once your server uses https://.
   if (!xml.contains('usesCleartextTraffic')) {
@@ -184,6 +205,35 @@ $s''');
 
 /// R8 strips plugin classes that are only reached through JNI (e.g. shared_preferences'
 /// SharedPreferencesApiRegistrar), which crashes the release app on launch. Keep all code.
+/// flutter_local_notifications needs Java 8+ APIs on older Androids (core library desugaring).
+void _desugaring() {
+  for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
+    final f = File(name);
+    if (!f.existsSync()) continue;
+    var s = f.readAsStringSync();
+    if (s.contains('desugar_jdk_libs')) return;
+    final kts = name.endsWith('.kts');
+    final co = s.indexOf(RegExp(r'compileOptions\s*\{'));
+    if (co < 0) {
+      stderr.writeln('! $name: compileOptions not found — enable desugaring by hand');
+      return;
+    }
+    final brace = s.indexOf('{', co) + 1;
+    s = s.substring(0, brace) + (kts ? '\n        isCoreLibraryDesugaringEnabled = true' : '\n        coreLibraryDesugaringEnabled true') + s.substring(brace);
+    final dep = kts ? 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' : "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'";
+    final d = s.indexOf(RegExp(r'^dependencies\s*\{', multiLine: true));
+    if (d >= 0) {
+      final b = s.indexOf('{', d) + 1;
+      s = s.substring(0, b) + '\n    $dep' + s.substring(b);
+    } else {
+      s += '\ndependencies {\n    $dep\n}\n';
+    }
+    f.writeAsStringSync(s);
+    stdout.writeln('✓ $name: core library desugaring');
+    return;
+  }
+}
+
 void _noMinify() {
   const marker = 'talvio-no-minify';
   for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {

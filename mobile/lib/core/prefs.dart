@@ -25,6 +25,16 @@ class AppPrefs extends ChangeNotifier {
   /// no link-preview pictures, lower call video quality.
   bool dataSaver = false;
 
+  // prayer times
+  double? prayerLat;
+  double? prayerLng;
+  String prayerPlace = '';
+  int prayerMethod = 0; // CalcMethod index (0 = Karachi)
+  bool hanafiAsr = true;
+  bool prayerReminders = false;
+  bool ramadanReminders = false;
+  int hijriAdjust = 0;
+
   Future<void> load() async {
     _p = await SharedPreferences.getInstance();
     final p = _p!;
@@ -42,6 +52,14 @@ class AppPrefs extends ChangeNotifier {
     lockAfterMinutes = p.getInt('lock_after') ?? 1;
     autoPhotos = p.getString('auto_photos') ?? 'always';
     dataSaver = p.getBool('data_saver') ?? false;
+    prayerLat = p.getDouble('prayer_lat');
+    prayerLng = p.getDouble('prayer_lng');
+    prayerPlace = p.getString('prayer_place') ?? '';
+    prayerMethod = p.getInt('prayer_method') ?? 0;
+    hanafiAsr = p.getBool('prayer_hanafi') ?? true;
+    prayerReminders = p.getBool('prayer_reminders') ?? false;
+    ramadanReminders = p.getBool('ramadan_reminders') ?? false;
+    hijriAdjust = p.getInt('hijri_adjust') ?? 0;
     notifyListeners();
   }
 
@@ -61,6 +79,25 @@ class AppPrefs extends ChangeNotifier {
   void setAutoPhotos(String v) {
     autoPhotos = v;
     _p?.setString('auto_photos', v);
+    notifyListeners();
+  }
+
+  void setPrayerPlace(String name, double lat, double lng) {
+    prayerPlace = name;
+    prayerLat = lat;
+    prayerLng = lng;
+    _p?.setString('prayer_place', name);
+    _p?.setDouble('prayer_lat', lat);
+    _p?.setDouble('prayer_lng', lng);
+    notifyListeners();
+  }
+
+  void setPrayerOptions({int? method, bool? hanafi, bool? reminders, bool? ramadan, int? hijri}) {
+    if (method != null) _p?.setInt('prayer_method', prayerMethod = method);
+    if (hanafi != null) _p?.setBool('prayer_hanafi', hanafiAsr = hanafi);
+    if (reminders != null) _p?.setBool('prayer_reminders', prayerReminders = reminders);
+    if (ramadan != null) _p?.setBool('ramadan_reminders', ramadanReminders = ramadan);
+    if (hijri != null) _p?.setInt('hijri_adjust', hijriAdjust = hijri);
     notifyListeners();
   }
 

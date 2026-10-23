@@ -16,6 +16,8 @@ import 'more_screens.dart';
 import 'premium_screens.dart';
 import 'bot_screens.dart';
 import 'link_device_screen.dart';
+import 'prayer_screen.dart';
+import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -95,6 +97,17 @@ class SettingsScreen extends StatelessWidget {
               title: const Text('My bots'),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyBotsScreen())),
             ),
+          ListTile(
+            leading: const Icon(Icons.mosque_outlined),
+            title: const Text('Prayer times'),
+            subtitle: const Text('Namaz, Qibla, Sehri & Iftar'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrayerScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.emoji_emotions_outlined),
+            title: const Text('Stickers'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StickerPacksScreen())),
+          ),
           ListTile(
             leading: const Icon(Icons.pin_outlined),
             title: const Text('App lock'),

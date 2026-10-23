@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -40,6 +41,11 @@ class CallManager extends ChangeNotifier {
   bool remoteMuted = false;
   bool remoteVideoOff = false;
   bool hasRemoteVideo = false;
+
+  /// Screen sharing (video calls only): I'm sharing / the other person is sharing.
+  bool sharingScreen = false;
+  bool remoteSharing = false;
+  MediaStream? _screen;
 
   String? endedText;
   bool canRate = false;
@@ -204,6 +210,94 @@ class CallManager extends ChangeNotifier {
     await Helper.switchCamera(tracks.first);
     frontCamera = !frontCamera;
     notifyListeners();
+  }
+
+  /// Swaps my camera for my screen (and back). Android needs a media-projection foreground service.
+  Future<String?> toggleScreenShare() async {
+    final pc = _pc;
+    if (!video || pc == null) return 'Screen sharing works in video calls';
+    if (sharingScreen) {
+      await _stopScreenShare();
+      return null;
+    }
+    try {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final ok = await Helper.requestCapturePermission();
+        if (!ok) return null;
+        await _startProjectionService();
+      }
+      final screen = await navigator.mediaDevices.getDisplayMedia({'video': true, 'audio': false});
+      final track = screen.getVideoTracks().first;
+      final sender = (await pc.getSenders()).where((s) => s.track?.kind == 'video').firstOrNull;
+      if (sender == null) {
+        for (final t in screen.getTracks()) {
+          await t.stop();
+        }
+        await _stopProjectionService();
+        return 'Could not share the screen';
+      }
+      await sender.replaceTrack(track);
+      track.onEnded = () => _stopScreenShare();
+      _screen = screen;
+      sharingScreen = true;
+      localRenderer.srcObject = screen;
+      _sendMedia();
+      notifyListeners();
+      return null;
+    } catch (e) {
+      debugPrint('screen share: $e');
+      await _stopProjectionService();
+      return 'Could not share the screen';
+    }
+  }
+
+  Future<void> _stopScreenShare() async {
+    final screen = _screen;
+    _screen = null;
+    if (!sharingScreen && screen == null) return;
+    sharingScreen = false;
+    try {
+      final cam = _local?.getVideoTracks().firstOrNull;
+      final pc = _pc;
+      if (pc != null && cam != null) {
+        final sender = (await pc.getSenders()).where((s) => s.track?.kind == 'video').firstOrNull;
+        await sender?.replaceTrack(cam);
+      }
+      if (_local != null && _renderersReady) localRenderer.srcObject = _local;
+    } catch (_) {}
+    for (final t in screen?.getTracks() ?? <MediaStreamTrack>[]) {
+      t.stop().catchError((_) {});
+    }
+    screen?.dispose().catchError((_) {});
+    await _stopProjectionService();
+    _sendMedia();
+    notifyListeners();
+  }
+
+  Future<void> _startProjectionService() async {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'screen_share',
+        channelName: 'Screen sharing',
+        channelDescription: 'Shown while you share your screen in a call',
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(showNotification: false),
+      foregroundTaskOptions: ForegroundTaskOptions(eventAction: ForegroundTaskEventAction.nothing()),
+    );
+    if (await FlutterForegroundTask.isRunningService) return;
+    await FlutterForegroundTask.startService(
+      serviceTypes: [ForegroundServiceTypes.mediaProjection],
+      notificationTitle: 'Talvio',
+      notificationText: 'You are sharing your screen',
+    );
+  }
+
+  Future<void> _stopProjectionService() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();
+    } catch (_) {}
   }
 
   Future<void> toggleSpeaker() async {
@@ -444,6 +538,7 @@ class CallManager extends ChangeNotifier {
         case 'media':
           remoteMuted = d['muted'] == true;
           remoteVideoOff = d['video_off'] == true;
+          remoteSharing = d['screen'] == true;
           notifyListeners();
           break;
       }
@@ -512,7 +607,7 @@ class CallManager extends ChangeNotifier {
     services.socket.emit('call:signal', {'call_id': c.id, ...body});
   }
 
-  void _sendMedia() => _signal({'kind': 'media', 'muted': muted, 'video_off': cameraOff});
+  void _sendMedia() => _signal({'kind': 'media', 'muted': muted, 'video_off': cameraOff && !sharingScreen, 'screen': sharingScreen});
 
   void _sendHangup(String reason) {
     final c = call;
@@ -535,6 +630,16 @@ class CallManager extends ChangeNotifier {
   }
 
   void _cleanupMedia() {
+    final screen = _screen;
+    _screen = null;
+    if (screen != null || sharingScreen) {
+      for (final t in screen?.getTracks() ?? <MediaStreamTrack>[]) {
+        t.stop().catchError((_) {});
+      }
+      screen?.dispose().catchError((_) {});
+      _stopProjectionService();
+    }
+    sharingScreen = false;
     _ticker?.cancel();
     _failTimer?.cancel();
     final pc = _pc;
@@ -569,6 +674,8 @@ class CallManager extends ChangeNotifier {
     remoteMuted = false;
     remoteVideoOff = false;
     hasRemoteVideo = false;
+    remoteSharing = false;
+    sharingScreen = false;
     endedText = null;
     canRate = false;
     elapsed = Duration.zero;

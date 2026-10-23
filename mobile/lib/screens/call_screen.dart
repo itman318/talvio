@@ -60,7 +60,8 @@ class _CallScreenState extends State<CallScreen> {
             children: [
               // background: remote video, or the person's photo on a dark gradient
               if (showRemoteVideo)
-                RTCVideoView(c.remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+                RTCVideoView(c.remoteRenderer,
+                    objectFit: c.remoteSharing ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
               else if (showLocalVideo && c.phase != CallPhase.connected)
                 // camera preview while ringing / connecting
                 Opacity(
@@ -120,7 +121,7 @@ class _CallScreenState extends State<CallScreen> {
                   height: 160,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: RTCVideoView(c.localRenderer, mirror: c.frontCamera, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                    child: RTCVideoView(c.localRenderer, mirror: c.frontCamera && !c.sharingScreen, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
                   ),
                 ),
 
@@ -186,8 +187,18 @@ class _CallScreenState extends State<CallScreen> {
             active: !c.cameraOff,
             onTap: c.toggleCamera,
           ),
-        if (c.video && inCall)
+        if (c.video && inCall && !c.sharingScreen)
           _RoundButton(icon: Icons.cameraswitch, label: 'Flip', onTap: c.switchCamera),
+        if (c.video && c.phase == CallPhase.connected)
+          _RoundButton(
+            icon: c.sharingScreen ? Icons.stop_screen_share : Icons.screen_share_outlined,
+            label: c.sharingScreen ? 'Stop' : 'Share',
+            active: c.sharingScreen,
+            onTap: () async {
+              final err = await c.toggleScreenShare();
+              if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+            },
+          ),
         _RoundButton(
           icon: c.muted ? Icons.mic_off : Icons.mic,
           label: c.muted ? 'Unmute' : 'Mute',

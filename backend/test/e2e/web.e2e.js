@@ -61,6 +61,19 @@ async function login(phone, first) {
   // live delivery over the real Socket.IO connection
   await call('POST', `/chats/${chat.id}/messages`, { text: 'Live message 🔴' }, friend.token);
   await page.waitForSelector('.bubble:has-text("Live message")', { timeout: 15000 });
+  // new message types: sticker, contact card, live location, disappearing-messages notice
+  const packs = await call('GET', '/stickers/packs', null, friend.token);
+  const sticker = packs[0] && packs[0].stickers[0];
+  if (!sticker) throw new Error('no official sticker pack');
+  await call('POST', `/chats/${chat.id}/messages`, { type: 'sticker', sticker_id: sticker.id }, friend.token);
+  await call('POST', `/chats/${chat.id}/messages`, { type: 'contact', contact: { name: 'Ali Raza', phone: '+923001234567' } }, friend.token);
+  await call('POST', `/chats/${chat.id}/messages`, { type: 'location', location: { lat: 30.4697, lng: 70.9669, live_minutes: 15 } }, friend.token);
+  await call('PUT', `/chats/${chat.id}/disappearing`, { seconds: 86400 }, friend.token);
+  await page.waitForSelector('.bubble.bare img.sticker', { timeout: 15000 });
+  await page.waitForSelector('.contact:has-text("Ali Raza")', { timeout: 15000 });
+  await page.waitForSelector('.loc:has-text("Live location")', { timeout: 15000 });
+  await page.waitForSelector('.sys:has-text("disappearing messages (24 hours)")', { timeout: 15000 });
+  await page.waitForFunction(() => { const i = document.querySelector('img.sticker'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 });
   await page.screenshot({ path: `${OUT}/web-2-chat.png` });
 
   const r = await call('GET', `/chats/${chat.id}/messages`, null, friend.token);
@@ -88,7 +101,7 @@ async function login(phone, first) {
   const usingSocket = await page.evaluate(() => !!(window.io && document.querySelector('script[src*="socket.io"]')));
   await browser.close();
   const bad = errors.filter((e) => !/favicon|ERR_ABORTED/.test(e));
-  console.log(`PASS web client: QR login, open chat, send, live receive (socket.io: ${usingSocket}), email-code login + profile`);
+  console.log(`PASS web client: QR login, open chat, send, live receive (socket.io: ${usingSocket}), sticker/contact/live location/disappearing, email-code login + profile`);
   if (bad.length) {
     console.log('Browser errors:\n' + bad.join('\n'));
     process.exit(1);
