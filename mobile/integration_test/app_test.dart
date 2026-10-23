@@ -138,9 +138,10 @@ void main() {
     await settle(t, 800);
     await t.ensureVisible(find.byKey(const ValueKey('demo-button')));
     await t.tap(find.byKey(const ValueKey('demo-button')));
-    await pumpUntil(t, find.text('Ayesha Khan'), seconds: 30, what: 'demo chat list');
+    await pumpUntil(t, find.text('Bilal Ahmed'), seconds: 30, what: 'demo chat list');
     await settle(t, 1500);
     await snap(t, 'demo-chats');
+    await t.scrollUntilVisible(find.text('Ayesha Khan'), 200, scrollable: find.byType(Scrollable).last);
     await t.tap(find.text('Ayesha Khan'));
     await pumpUntil(t, find.text('Naran trip ki photo 🏔️'), what: 'demo chat with photo');
     await settle(t, 2500);
@@ -153,6 +154,7 @@ void main() {
     await snap(t, 'demo-reply');
     await t.pageBack();
     await settle(t);
+    await t.scrollUntilVisible(find.text('Family ❤️'), -200, scrollable: find.byType(Scrollable).last);
     await t.tap(find.text('Family ❤️'));
     await pumpUntil(t, find.text('Sunday ko kya banayein?'), what: 'demo group with poll');
     await settle(t, 2500);
