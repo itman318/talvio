@@ -482,6 +482,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
 
   Future<void> _terminate(String path, String title) async {
     if (!await confirm(context, title, 'Those devices will be logged out.', ok: 'Terminate', danger: true)) return;
+    if (!mounted) return;
     try {
       final api = context.read<AppServices>().api;
       if (path.endsWith('terminate-others')) {

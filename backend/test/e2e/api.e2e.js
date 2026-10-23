@@ -169,6 +169,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       if (sb) await waitFor(sb, 'message:new', (p) => p.chat_id === pc.id);
       return msg;
     });
+    let bMsg;
     await step('send via socket (message:send ack)', async () => {
       assert(sb, 'no socket');
       const ack = await new Promise((resolve, reject) => {
@@ -179,6 +180,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
         });
       });
       assert(ack && ack.ok !== false && !ack.error, `ack error: ${JSON.stringify(ack)}`);
+      bMsg = ack.message;
     });
     await step('idempotent client_id', async () => {
       const again = await api.post(`/api/chats/${pc.id}/messages`, { text: 'Assalam o alaikum 👋', client_id: 'e2e-1' }, A.access_token);
@@ -200,9 +202,10 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
         sa.s.emit('typing', { chat_id: pc.id });
         await waitFor(sb, 'typing', (p) => p.chat_id === pc.id);
       });
-      await step('mark read → A gets receipt:read', async () => {
-        await api.post(`/api/chats/${pc.id}/read`, { message_id: m1.id }, B.access_token);
-        if (sa) await waitFor(sa, 'receipt:read', (p) => p.chat_id === pc.id);
+      await step('mark read → B gets receipt:read', async () => {
+        assert(bMsg && bMsg.id, 'no message from B');
+        await api.post(`/api/chats/${pc.id}/read`, { message_id: bMsg.id }, A.access_token);
+        if (sb) await waitFor(sb, 'receipt:read', (p) => p.chat_id === pc.id);
       });
       await step('edit message → message:edited', async () => {
         await api.patch(`/api/messages/${m1.id}`, { text: 'Assalam o alaikum! (edited)' }, A.access_token);
@@ -240,7 +243,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   const media = await step('upload photo', async () => {
     const form = new FormData();
     form.append('file', new Blob([PNG], { type: 'image/png' }), 'dot.png');
-    form.append('kind', 'photo');
+    form.append('kind', 'image');
     const m = await call('POST', '/api/media', { token: A.access_token, form });
     assert(m.id, 'no media id');
     return m;
@@ -259,7 +262,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   const avatar = await step('upload avatar', async () => {
     const form = new FormData();
     form.append('file', new Blob([PNG], { type: 'image/png' }), 'me.png');
-    form.append('kind', 'photo');
+    form.append('kind', 'image');
     return call('POST', '/api/media', { token: B.access_token, form });
   });
   if (avatar) {
@@ -274,8 +277,9 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 
   // groups
   const g = await step('create group', async () => {
-    const c = await api.post('/api/chats/group', { title: 'Dev Team', member_ids: [B.me.id] }, A.access_token);
-    assert(c.id, 'no id');
+    const r = await api.post('/api/chats/group', { title: 'Dev Team', member_ids: [B.me.id] }, A.access_token);
+    const c = r.chat || r;
+    assert(c.id, `no id: ${JSON.stringify(r).slice(0, 200)}`);
     return c;
   });
   if (g) {
@@ -325,7 +329,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     await step('public search finds channel', async () => {
       const r = await api.get('/api/chats/search?q=signals_e2e', B.access_token);
       const list = Array.isArray(r) ? r : r.chats || r.results || [];
-      assert(list.some((x) => x.id === ch.id), 'not found');
+      assert(list.some((x) => (x.chat_id || x.id) === ch.id), `not found in ${JSON.stringify(list).slice(0, 200)}`);
     });
     await step('B joins channel', () => api.post(`/api/chats/${ch.id}/join`, {}, B.access_token));
     const post = await step('post in channel', async () => {
@@ -338,7 +342,10 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     });
     if (post && post.id) {
       await step('channel views', () => api.post(`/api/chats/${ch.id}/views`, { message_ids: [post.id] }, B.access_token));
-      await step('channel comment (thread)', () => api.post(`/api/chats/${ch.id}/messages`, { text: 'Nice', thread_id: post.id }, B.access_token));
+      await step('channel comments on + comment (thread)', async () => {
+        await api.patch(`/api/chats/${ch.id}`, { comments_enabled: true }, A.access_token);
+        await api.post(`/api/chats/${ch.id}/messages`, { text: 'Nice', thread_id: post.id }, B.access_token);
+      });
     }
     await step('channel stats', () => api.get(`/api/chats/${ch.id}/stats`, A.access_token));
   }
@@ -356,7 +363,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     await step('story post + feed + view', async () => {
       const form = new FormData();
       form.append('file', new Blob([PNG], { type: 'image/png' }), 's.png');
-      form.append('kind', 'photo');
+      form.append('kind', 'image');
       const sm = await call('POST', '/api/media', { token: A.access_token, form });
       const s = await api.post('/api/stories', { media_id: sm.id, caption: 'Hello', privacy: 'everyone' }, A.access_token);
       const sid = s.id || (s.story && s.story.id);

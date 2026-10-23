@@ -124,6 +124,7 @@ class _EditFolderScreenState extends State<EditFolderScreen> {
 
   Future<void> _delete() async {
     if (!await confirm(context, 'Delete folder?', 'Chats stay where they are.', ok: 'Delete', danger: true)) return;
+    if (!mounted) return;
     try {
       await context.read<ChatStore>().deleteFolder(widget.folder!.id);
       if (mounted) Navigator.pop(context);
@@ -380,6 +381,7 @@ class _TicketScreenState extends State<TicketScreen> {
 
   Future<void> _close() async {
     if (!await confirm(context, 'Close this request?', 'Open a new request if you need more help later.', ok: 'Close')) return;
+    if (!mounted) return;
     try {
       await context.read<AppServices>().api.post('/support/tickets/${widget.ticketId}/close');
       await _load();

@@ -90,7 +90,7 @@ class _InviteLinksScreenState extends State<InviteLinksScreen> {
         ),
       ),
     );
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     try {
       await context.read<ChatStore>().createInvite(widget.chat.id, name: name.text.trim(), expireHours: hours, usageLimit: limit);
       await _load();

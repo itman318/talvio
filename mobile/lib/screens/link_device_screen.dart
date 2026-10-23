@@ -34,6 +34,7 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
     if (raw == null) return;
     setState(() => _busy = true);
     await _controller.stop();
+    if (!mounted) return;
     final api = context.read<AppServices>().api;
     try {
       final info = Map<String, dynamic>.from(await api.post('/auth/qr/scan', {'token': raw}) as Map);
