@@ -1,0 +1,94 @@
+# Runs the real backend (Express + Socket.IO + PostgreSQL): unit tests, then starts the
+# server and drives every main API + socket event end-to-end. Report → ci-backend branch.
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', '.github/workflows/backend.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: chatapp
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chat" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PGPASSWORD: chat
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-audit --no-fund 2>&1 | tail -5
+
+      - name: Syntax check
+        run: for f in $(git ls-files 'src/*.js' 'src/**/*.js' 'scripts/*.js' 'web-client/*.js' 'admin-panel/*.js'); do node --check "$f" || exit 1; done
+
+      - name: Unit tests
+        id: unit
+        continue-on-error: true
+        run: |
+          mkdir -p ../ci-backend
+          psql -h localhost -U chat -d chatapp -c 'CREATE DATABASE chatapp_test' >/dev/null
+          set -o pipefail
+          TEST_DATABASE_URL=postgres://chat:chat@localhost:5432/chatapp_test npm test 2>&1 | tail -150 | tee ../ci-backend/unit.txt
+
+      - name: Start server
+        env:
+          DATABASE_URL: postgres://chat:chat@localhost:5432/chatapp
+          OTP_DEV_MODE: 'true'
+          JWT_SECRET: e2e-user-secret-0123456789abcdef
+          ADMIN_JWT_SECRET: e2e-admin-secret-0123456789abcdef
+          OTP_SECRET: e2e-otp-secret-0123456789abcdef
+          PUBLIC_URL: http://localhost:4000
+          PORT: '4000'
+        run: |
+          node scripts/migrate.js
+          node scripts/create-admin.js boss@example.com 'SuperSecret123' 'Boss'
+          nohup node src/server.js > ../ci-backend/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:4000/health && break; sleep 1; done
+          curl -sf localhost:4000/health
+
+      - name: End-to-end API + socket test
+        id: e2e
+        continue-on-error: true
+        env:
+          BASE: http://localhost:4000
+          ADMIN_EMAIL: boss@example.com
+          ADMIN_PASSWORD: SuperSecret123
+          E2E_OUT: ../ci-backend/e2e.txt
+        run: node test/e2e/api.e2e.js
+
+      - name: Save report to ci-backend branch
+        if: always()
+        working-directory: .
+        run: |
+          mkdir -p ci-backend
+          echo "unit=${{ steps.unit.outcome }} e2e=${{ steps.e2e.outcome }} sha=${{ github.sha }}" > ci-backend/status.txt
+          cd ci-backend
+          git init -q -b ci-backend
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "backend report ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-backend
+
+      - name: Fail if tests failed
+        if: steps.unit.outcome != 'success' || steps.e2e.outcome != 'success'
+        run: exit 1

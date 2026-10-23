@@ -1,7 +1,7 @@
 {
   "name": "chatapp-backend",
   "version": "1.0.0",
-  "description": "Telegram-style messaging app — Phase 1 backend (REST API + Socket.IO + admin API)",
+  "description": "Telegram-style messaging app \u2014 Phase 1 backend (REST API + Socket.IO + admin API)",
   "main": "src/server.js",
   "private": true,
   "engines": {
@@ -12,7 +12,8 @@
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
     "create-admin": "node scripts/create-admin.js",
-    "test": "node --test --test-concurrency=1 test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "e2e": "node test/e2e/api.e2e.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -23,5 +24,8 @@
   },
   "optionalDependencies": {
     "firebase-admin": "^12.7.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
   }
 }
