@@ -17,6 +17,12 @@ void main() {
       await t.pump(const Duration(milliseconds: 250));
       if (f.evaluate().isNotEmpty) return;
     }
+    // show what is on screen instead
+    final texts = find.byType(Text).evaluate().map((e) => (e.widget as Text).data ?? '').where((x) => x.isNotEmpty).take(40).join(' | ');
+    debugPrint('ON SCREEN: $texts');
+    try {
+      await binding.takeScreenshot('zz-fail');
+    } catch (_) {}
     throw TestFailure('Timed out waiting for ${what ?? f.toString()}');
   }
 
