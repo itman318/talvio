@@ -113,6 +113,15 @@ grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never)
 - **Data saver** (Settings → Data & storage): smaller uploads, no auto-download, 480p calls.
 - Each feature can be switched off in admin → Settings.
 
+## Batch G — security, backup, themes, Tali
+
+- **Two-step verification:** optional account password after the login code (Settings → Two-step verification). Forgot it → reset after 7 days, owner can cancel. Admin can remove it (user page).
+- **Chat backup:** Settings → Chat backup — one file with every cloud chat (optionally photos/files, up to 300 MB), optional AES-256 password; save to Google Drive / anywhere; "Open a backup" to read it. Vault chats are never backed up.
+- **Shared media:** chat menu → Shared media (Media · Files · Links · Voice tabs). API: `GET /chats/:id/messages?filter=media|files|links|voice`, `GET /chats/:id/media-counts`.
+- **Round video messages** (`video_note`, ≤60 s): attach → Video note, or hold the mic button.
+- **Chat themes & wallpapers:** 7 themes (bubble + background colours), doodle/dots/plain patterns or your own photo (dim, blur); per chat or for all chats (Settings → Appearance).
+- **Animated stickers:** "Tali the Fox" pack is animated WebP (20 stickers, `mobile/tool/branding/fox_stickers.js`). **Tali emoji:** 20 custom emoji in the emoji panel; stored as one Private Use Area character each (U+E900+), shown as 🦊 elsewhere.
+
 ## Build the Android app on GitHub (no Flutter on your PC needed)
 
 1. Push this project to a GitHub repo (private recommended).

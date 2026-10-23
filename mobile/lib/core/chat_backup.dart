@@ -95,7 +95,7 @@ class ChatBackup {
       'skipped_media': skippedMedia,
     }));
     archive.addFile(ArchiveFile('backup.json', manifest.length, manifest));
-    final zip = Uint8List.fromList(ZipEncoder().encode(archive)!);
+    final zip = Uint8List.fromList(ZipEncoder().encode(archive));
     if (password == null || password.isEmpty) return zip;
     return _encrypt(zip, password);
   }
