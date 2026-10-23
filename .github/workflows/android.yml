@@ -8,6 +8,11 @@ on:
     branches: [main]
     paths: ['mobile/**', '.github/workflows/android.yml']
   workflow_dispatch:
+    inputs:
+      analyze_only:
+        description: Only check the code (no APK)
+        type: boolean
+        default: false
 
 permissions:
   contents: write  # lets the job save its error report to the ci-logs branch
@@ -79,7 +84,7 @@ jobs:
 
       - name: Build APK
         id: build
-        if: steps.analyze.outcome == 'success'
+        if: steps.analyze.outcome == 'success' && !inputs.analyze_only
         continue-on-error: true
         run: |
           set -o pipefail
@@ -127,5 +132,5 @@ jobs:
           exit 1
 
       - name: Fail if analyze or build failed
-        if: steps.analyze.outcome != 'success' || steps.build.outcome != 'success'
+        if: steps.analyze.outcome != 'success' || (steps.build.outcome != 'success' && !inputs.analyze_only)
         run: exit 1

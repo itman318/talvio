@@ -238,7 +238,12 @@ class _OtpScreenState extends State<OtpScreen> {
       } else {
         await auth.verifyOtp(widget.phone, code);
       }
-      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      if (!mounted) return;
+      if (auth.passwordChallenge != null) {
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const PasswordLoginScreen()));
+        return;
+      }
+      Navigator.of(context).popUntil((r) => r.isFirst);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.code == 'account_banned') {
@@ -452,4 +457,112 @@ class MessageScreen extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+// ------------------------------------------------------------------ two-step verification
+class PasswordLoginScreen extends StatefulWidget {
+  const PasswordLoginScreen({super.key});
+
+  @override
+  State<PasswordLoginScreen> createState() => _PasswordLoginScreenState();
+}
+
+class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
+  final _pw = TextEditingController();
+  bool _busy = false;
+  bool _show = false;
+
+  Future<void> _submit() async {
+    if (_pw.text.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await context.read<AuthState>().verifyPassword(_pw.text);
+      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'login_expired') {
+        showInfo(context, e.message);
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+      }
+      showInfo(context, e.message);
+      _pw.clear();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _forgot() async {
+    final auth = context.read<AuthState>();
+    final ok = await confirm(
+      context,
+      'Reset password?',
+      'For your security, the password will be removed after 7 days. If you remember it before then, just log in with it — or cancel the reset from a device where you are logged in.',
+      ok: 'Reset',
+    );
+    if (!ok) return;
+    try {
+      final until = await auth.requestPasswordReset();
+      if (mounted && until != null) {
+        showInfo(context, 'Reset requested. You can log in without the password after ${until.day}/${until.month}/${until.year}.');
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ch = context.watch<AuthState>().passwordChallenge ?? const {};
+    final hint = '${ch['hint'] ?? ''}';
+    final pending = ch['reset_pending_until'] as String?;
+    return Scaffold(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: ListView(padding: const EdgeInsets.all(24), children: [
+          Center(
+            child: Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(color: Brand.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: const Icon(Icons.lock_rounded, color: Brand.primary, size: 40),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text('Two-step verification', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          const Text('Your account is protected with an extra password. Enter it to finish logging in.', textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _pw,
+            autofocus: true,
+            obscureText: !_show,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: 'Password',
+              helperText: hint.isEmpty ? null : 'Hint: $hint',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(icon: Icon(_show ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _show = !_show)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+            child: _busy ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Log in'),
+          ),
+          const SizedBox(height: 8),
+          if (pending != null)
+            Text('Password reset requested — it will be removed on ${DateTime.parse(pending).toLocal().toString().substring(0, 10)}.',
+                textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).hintColor))
+          else
+            TextButton(onPressed: _forgot, child: const Text('Forgot password?')),
+        ]),
+      ),
+    );
+  }
 }

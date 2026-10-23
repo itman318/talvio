@@ -129,6 +129,8 @@ function previewText(message) {
       return message.text ? `🎬 ${message.text}` : '🎬 Video';
     case 'voice':
       return '🎤 Voice message';
+    case 'video_note':
+      return '📹 Video message';
     case 'file':
       return `📎 ${message.media && message.media.name ? message.media.name : 'File'}`;
     case 'poll':
@@ -142,7 +144,8 @@ function previewText(message) {
     case 'contact':
       return `👤 ${(message.meta && message.meta.contact && message.meta.contact.name) || 'Contact'}`;
     default:
-      return message.text;
+      // Talvio custom emoji (Private Use Area U+E900…) show as a fox in notifications
+      return String(message.text || '').replace(/[\uE900-\uE9FF]/g, '🦊');
   }
 }
 

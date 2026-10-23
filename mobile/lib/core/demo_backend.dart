@@ -84,6 +84,14 @@ class DemoBackend {
     return null;
   }
 
+  static bool _matches(Map<String, dynamic> m, String filter) => switch (filter) {
+        'media' => ['image', 'video', 'gif'].contains(m['type']),
+        'files' => m['type'] == 'file',
+        'voice' => ['voice', 'video_note'].contains(m['type']),
+        'links' => m['type'] == 'text' && (m['link_preview'] != null || RegExp(r'https?://').hasMatch('${m['text'] ?? ''}')),
+        _ => true,
+      };
+
   static ApiException _notInDemo() =>
       ApiException(400, 'demo', 'Demo mode — this works once the app is connected to your server');
 
@@ -104,7 +112,14 @@ class DemoBackend {
       if (seg.length == 3 && seg[0] == 'chats' && seg[2] == 'messages') {
         final id = idAt(1)!;
         if (query?['before'] != null || query?['after'] != null) return {'messages': <dynamic>[], 'has_more': false};
-        return {'messages': _messages[id] ?? <dynamic>[], 'has_more': false};
+        final list = _messages[id] ?? <Map<String, dynamic>>[];
+        final filter = query?['filter'];
+        if (filter != null) return {'messages': list.where((m) => _matches(m, filter)).toList(), 'has_more': false};
+        return {'messages': list, 'has_more': false};
+      }
+      if (seg.length == 3 && seg[0] == 'chats' && seg[2] == 'media-counts') {
+        final list = _messages[idAt(1)!] ?? <Map<String, dynamic>>[];
+        return {for (final f in ['media', 'files', 'voice', 'links']) f: list.where((m) => _matches(m, f)).length};
       }
       if (seg.length == 2 && seg[0] == 'chats' && idAt(1) != null) {
         final c = _chat(idAt(1)!);
@@ -135,6 +150,7 @@ class DemoBackend {
         return users;
       }
       if (path == '/me/username-check') return {'available': true};
+      if (path == '/me/password') return {'enabled': false, 'hint': '', 'reset_pending_until': null};
       if (path == '/gifs') return {'results': <dynamic>[]};
       if (_responses.containsKey(path)) return _responses[path];
       // things the recording doesn't have: an empty list is the safest answer for collections
@@ -238,7 +254,7 @@ class DemoBackend {
     final chat = _chat(chatId);
     if (chat == null) throw _notInDemo();
     final type = (b['type'] ?? 'text') as String;
-    if (!['text', 'image', 'video', 'voice', 'file', 'location', 'contact', 'sticker', 'gif', 'poll'].contains(type)) throw _notInDemo();
+    if (!['text', 'image', 'video', 'voice', 'video_note', 'file', 'location', 'contact', 'sticker', 'gif', 'poll'].contains(type)) throw _notInDemo();
     final meJson = me;
     Map<String, dynamic>? replyTo;
     final rid = (b['reply_to_id'] as num?)?.toInt();
@@ -252,8 +268,8 @@ class DemoBackend {
     final mid = b['media_id'];
     if (mid != null && _localFiles.containsKey('/demo/media/$mid')) {
       final f = _localFiles['/demo/media/$mid']!;
-      final mime = type == 'image' ? 'image/jpeg' : type == 'video' ? 'video/mp4' : type == 'voice' ? 'audio/mp4' : 'application/octet-stream';
-      media = {'id': mid, 'url': '/demo/media/$mid', 'kind': type, 'mime': mime, 'name': f.split(Platform.pathSeparator).last, 'size': File(f).lengthSync()};
+      final mime = type == 'image' ? 'image/jpeg' : (type == 'video' || type == 'video_note') ? 'video/mp4' : type == 'voice' ? 'audio/mp4' : 'application/octet-stream';
+      media = {'id': mid, 'url': '/demo/media/$mid', 'kind': type == 'video_note' ? 'video' : type, 'mime': mime, 'name': f.split(Platform.pathSeparator).last, 'size': File(f).lengthSync()};
     }
     Map<String, dynamic>? meta = b['meta'] is Map ? Map<String, dynamic>.from(b['meta'] as Map) : null;
     if (type == 'contact') meta = {'contact': b['contact']};

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'shared_media_screen.dart';
+
 import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
@@ -241,6 +243,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           const SizedBox(height: 12),
           Text(chat.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
           Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}', textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.perm_media_outlined),
+            title: const Text('Shared media'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat))),
+          ),
           if (chat.isSuspended)
             const Padding(
               padding: EdgeInsets.all(8),

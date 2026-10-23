@@ -776,3 +776,14 @@ ALTER TABLE messages ADD CONSTRAINT messages_type_check
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS disappear_after_sec INT NOT NULL DEFAULT 0;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS messages_expires_idx ON messages (expires_at) WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
+
+-- ---------------------------------------------------------------- two-step verification
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hint VARCHAR(64);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_after TIMESTAMPTZ;
+
+-- ---------------------------------------------------------------- round video messages
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact'));

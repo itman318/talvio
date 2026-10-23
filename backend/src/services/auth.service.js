@@ -182,6 +182,10 @@ async function loginWithTarget(target, kind, device, ip) {
   user = await liftExpiredBan(user);
   if (userService.isBanned(user)) throw banError(user, await appealExtra(user));
 
+  // two-step verification: ask for the password before creating a session
+  const challenge = await require('./password.service').loginChallenge(user, device);
+  if (challenge) return challenge;
+
   const tokens = await createSession(user.id, device, ip);
   return {
     ...tokens,

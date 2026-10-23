@@ -12,6 +12,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 
+import 'shared_media_screen.dart';
+import 'chat_theme_screen.dart';
+import '../theme/chat_theme.dart';
+import '../widgets/video_note.dart';
+import '../widgets/tali_emoji.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -56,7 +61,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _loading = true;
   String? _error;
 
-  final _text = TextEditingController();
+  final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
   final _scroll = ScrollController();
@@ -284,15 +289,16 @@ class _ChatScreenState extends State<ChatScreen> {
       } catch (_) {}
     }
     final caption = _text.text.trim();
-    if (caption.isNotEmpty && type != 'voice') _text.clear();
+    final noCaption = type == 'voice' || type == 'video_note';
+    if (caption.isNotEmpty && !noCaption) _text.clear();
     final reply = _replyTo;
     setState(() => _replyTo = null);
     await _store.sendMedia(
       chatId,
       path,
       type: type,
-      caption: type == 'voice' ? '' : caption,
-      mime: type == 'voice' ? 'audio/mp4' : lookupMimeType(path),
+      caption: noCaption ? '' : caption,
+      mime: type == 'voice' ? 'audio/mp4' : type == 'video_note' ? 'video/mp4' : lookupMimeType(path),
       name: name,
       duration: duration,
       width: w,
@@ -310,6 +316,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
       ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFFEF5A3C)]),
       ('file', Icons.insert_drive_file_rounded, 'Document', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
+      if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Video note', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),
       if (auth.feature('location')) ('location', Icons.location_on_rounded, 'Location', const [Color(0xFF4FD8A6), Color(0xFF10B37A)]),
       ('contact', Icons.person_rounded, 'Contact', const [Color(0xFF5FD0E6), Color(0xFF1597B8)]),
       if (multi && auth.feature('polls')) ('poll', Icons.bar_chart_rounded, 'Poll', const [Color(0xFFF7D27E), Color(0xFFE0A43A)]),
@@ -353,6 +360,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
     if (choice == null) return;
+    if (choice == 'videonote') {
+      await _recordVideoNote();
+      return;
+    }
     if (choice == 'location') {
       await _shareLocation();
       return;
@@ -405,6 +416,15 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) showInfo(context, 'Could not attach: $e');
     }
+  }
+
+  Future<void> _recordVideoNote() async {
+    final r = await Navigator.push<VideoNoteResult>(
+      context,
+      PageRouteBuilder(opaque: false, pageBuilder: (_, __, ___) => const VideoNoteRecorder()),
+    );
+    if (r == null || !mounted) return;
+    await _sendFile(r.path, type: 'video_note', name: 'video_message.mp4', duration: r.seconds);
   }
 
   /// Opens the photo editor (crop, rotate, draw, text) before sending one photo.
@@ -627,6 +647,12 @@ class _ChatScreenState extends State<ChatScreen> {
         case 'export':
           await exportChat(context, chat);
           break;
+        case 'media':
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat)));
+          break;
+        case 'theme':
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatThemeScreen(chatId: chat.id, title: chat.title)));
+          break;
         case 'secret':
           await startSecretChat(context, chat.peer!);
           break;
@@ -719,11 +745,14 @@ class _ChatScreenState extends State<ChatScreen> {
       subtitle = '';
     }
 
+    final look = context.watch<AppPrefs>().chatAppearance(chatId);
     return PopScope(
       canPop: !_emojiOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _emojiOpen) setState(() => _emojiOpen = false);
       },
+      child: ChatThemeScope(
+      appearance: look,
       child: Scaffold(
       backgroundColor: ChatColors.of(context).background,
       appBar: AppBar(
@@ -771,6 +800,8 @@ class _ChatScreenState extends State<ChatScreen> {
             onSelected: (a) => _chatMenu(a, chat),
             itemBuilder: (_) => [
               PopupMenuItem(value: 'mute', child: Text(chat.isMuted ? 'Unmute' : 'Mute')),
+              const PopupMenuItem(value: 'media', child: Text('Shared media')),
+              const PopupMenuItem(value: 'theme', child: Text('Theme & wallpaper')),
               if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
                 PopupMenuItem(value: 'disappearing', child: Text(chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages')),
               const PopupMenuItem(value: 'export', child: Text('Export chat')),
@@ -786,7 +817,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: ChatWallpaper(
+      body: ChatBackground(
+        appearance: look,
         child: Column(
         children: [
           if (!store.connected)
@@ -802,6 +834,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       ),
+    ),
     ),
     );
   }
@@ -1058,6 +1091,8 @@ class _ChatScreenState extends State<ChatScreen> {
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
+        Divider(height: 1, color: dark ? Colors.white10 : const Color(0xFFE9ECF3)),
         SizedBox(
           height: 300,
           child: EmojiPicker(
@@ -1241,7 +1276,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     )
                   else
-                    _roundAction(icon: Icons.mic_rounded, tooltip: 'Record voice message', onTap: _startRecording),
+                    GestureDetector(
+                      onLongPress: _recordVideoNote,
+                      child: _roundAction(icon: Icons.mic_rounded, tooltip: 'Voice message (hold for video)', onTap: _startRecording),
+                    ),
                 ],
               ),
             if (_emojiOpen && !_recording) _emojiPanel(),

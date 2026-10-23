@@ -107,6 +107,7 @@ function serialize(u, viewerId, rel) {
       calls: u.privacy_calls || 'everyone',
     };
     out.email = u.email || null;
+    out.has_password = !!u.password_hash;
     out.created_at = new Date(u.created_at).toISOString();
     out.premium_until = u.premium_until ? new Date(u.premium_until).toISOString() : null;
   } else {
@@ -385,7 +386,7 @@ async function deleteAccount(userId, { byAdmin = false } = {}) {
 
   await db.tx(async (c) => {
     await c.query(
-      `UPDATE users SET status = 'deleted', phone = 'deleted:' || id::text, email = NULL, username = NULL,
+      `UPDATE users SET status = 'deleted', phone = 'deleted:' || id::text, email = NULL, username = NULL, password_hash = NULL, password_hint = NULL,
          first_name = '', last_name = '', bio = '', avatar_media_id = NULL, updated_at = now()
        WHERE id = $1`,
       [userId],

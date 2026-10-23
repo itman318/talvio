@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'chat_theme_screen.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -336,6 +337,13 @@ class AppearanceScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Appearance')),
       body: ListView(children: [
+        ListTile(
+          leading: const Icon(Icons.wallpaper_rounded),
+          title: const Text('Chat theme & wallpaper'),
+          subtitle: const Text('Colours, patterns or your own photo'),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatThemeScreen())),
+        ),
+        const Divider(),
         const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 4), child: Text('Theme', style: TextStyle(fontWeight: FontWeight.w600))),
         for (final m in ThemeMode.values)
           RadioListTile<ThemeMode>(

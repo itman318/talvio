@@ -17,6 +17,7 @@ import 'premium_screens.dart';
 import 'bot_screens.dart';
 import 'link_device_screen.dart';
 import 'prayer_screen.dart';
+import 'backup_screen.dart';
 import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
 
@@ -118,6 +119,18 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.emoji_emotions_outlined),
             title: const Text('Stickers'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StickerPacksScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.backup_outlined),
+            title: const Text('Chat backup'),
+            subtitle: const Text('Save a copy to Google Drive or your phone'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.key_rounded),
+            title: const Text('Two-step verification'),
+            subtitle: const Text('An extra password when logging in'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TwoStepScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.pin_outlined),
@@ -574,6 +587,175 @@ class _SessionsScreenState extends State<SessionsScreen> {
                     )),
               ],
             ),
+    );
+  }
+}
+
+
+/// Settings → Two-step verification: set, change or remove the account password.
+class TwoStepScreen extends StatefulWidget {
+  const TwoStepScreen({super.key});
+
+  @override
+  State<TwoStepScreen> createState() => _TwoStepScreenState();
+}
+
+class _TwoStepScreenState extends State<TwoStepScreen> {
+  Map<String, dynamic>? _st;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = Map<String, dynamic>.from(await context.read<AppServices>().api.get('/me/password') as Map);
+      if (mounted) setState(() => _st = r);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    }
+  }
+
+  Future<void> _edit({required bool change}) async {
+    final api = context.read<AppServices>().api;
+    final cur = TextEditingController();
+    final pw = TextEditingController();
+    final pw2 = TextEditingController();
+    final hint = TextEditingController(text: change ? '${_st?['hint'] ?? ''}' : '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(change ? 'Change password' : 'Set a password'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (change) TextField(controller: cur, obscureText: true, decoration: const InputDecoration(labelText: 'Current password')),
+            TextField(controller: pw, obscureText: true, autofocus: !change, decoration: const InputDecoration(labelText: 'New password', helperText: 'At least 6 characters')),
+            TextField(controller: pw2, obscureText: true, decoration: const InputDecoration(labelText: 'Repeat new password')),
+            TextField(controller: hint, maxLength: 64, decoration: const InputDecoration(labelText: 'Hint (optional)')),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (pw.text != pw2.text) {
+      showInfo(context, 'The passwords do not match');
+      return;
+    }
+    try {
+      final r = Map<String, dynamic>.from(await api.put('/me/password', {
+        if (change) 'current_password': cur.text,
+        'new_password': pw.text,
+        'hint': hint.text.trim(),
+      }) as Map);
+      if (!mounted) return;
+      setState(() => _st = r);
+      showInfo(context, change ? 'Password changed' : 'Two-step verification is on');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  Future<void> _remove() async {
+    final api = context.read<AppServices>().api;
+    final cur = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Turn off two-step verification?'),
+        content: TextField(controller: cur, obscureText: true, autofocus: true, decoration: const InputDecoration(labelText: 'Current password')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: Colors.red), child: const Text('Turn off')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final r = Map<String, dynamic>.from(await api.post('/me/password/remove', {'current_password': cur.text}) as Map);
+      if (mounted) setState(() => _st = r);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  Future<void> _cancelReset() async {
+    try {
+      final r = Map<String, dynamic>.from(await context.read<AppServices>().api.post('/me/password/cancel-reset') as Map);
+      if (mounted) setState(() => _st = r);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final st = _st;
+    final on = st?['enabled'] == true;
+    final pending = st?['reset_pending_until'] as String?;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Two-step verification')),
+      body: st == null
+          ? Center(child: _error != null ? Text(friendlyError(_error!)) : const CircularProgressIndicator())
+          : ListView(padding: const EdgeInsets.all(16), children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: (on ? Brand.accent : Brand.amber).withValues(alpha: 0.14),
+                ),
+                child: Row(children: [
+                  Icon(on ? Icons.verified_user_rounded : Icons.shield_outlined, size: 40, color: on ? Brand.accent : Brand.amber),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(on ? 'Two-step verification is on' : 'Two-step verification is off',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text(on
+                          ? 'Logging in on a new device needs your password as well as the code.'
+                          : 'Add a password that is needed, together with the login code, on new devices.'),
+                    ]),
+                  ),
+                ]),
+              ),
+              if (pending != null) ...[
+                const SizedBox(height: 12),
+                Card(
+                  margin: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                    title: const Text('Someone asked to reset your password'),
+                    subtitle: Text('It will be removed on ${DateTime.parse(pending).toLocal().toString().substring(0, 16)}.'),
+                    trailing: TextButton(onPressed: _cancelReset, child: const Text('Cancel reset')),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (!on)
+                FilledButton.icon(
+                  onPressed: () => _edit(change: false),
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  icon: const Icon(Icons.key_rounded),
+                  label: const Text('Set password'),
+                )
+              else ...[
+                if ('${st['hint'] ?? ''}'.isNotEmpty)
+                  ListTile(leading: const Icon(Icons.lightbulb_outline), title: const Text('Hint'), subtitle: Text('${st['hint']}')),
+                ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Change password'), onTap: () => _edit(change: true)),
+                ListTile(
+                  leading: const Icon(Icons.no_encryption_gmailerrorred_outlined, color: Colors.red),
+                  title: const Text('Turn off', style: TextStyle(color: Colors.red)),
+                  onTap: _remove,
+                ),
+              ],
+            ]),
     );
   }
 }

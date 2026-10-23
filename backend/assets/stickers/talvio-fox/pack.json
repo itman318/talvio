@@ -1,84 +1,85 @@
 {
   "title": "Tali the Fox",
+  "animated": true,
   "stickers": [
     {
-      "file": "hello.png",
+      "file": "hello.webp",
       "emoji": "👋"
     },
     {
-      "file": "love.png",
+      "file": "love.webp",
       "emoji": "❤️"
     },
     {
-      "file": "laugh.png",
+      "file": "laugh.webp",
       "emoji": "😂"
     },
     {
-      "file": "thanks.png",
+      "file": "thanks.webp",
       "emoji": "🙏"
     },
     {
-      "file": "like.png",
+      "file": "like.webp",
       "emoji": "👍"
     },
     {
-      "file": "wow.png",
+      "file": "wow.webp",
       "emoji": "😮"
     },
     {
-      "file": "cry.png",
+      "file": "cry.webp",
       "emoji": "😭"
     },
     {
-      "file": "angry.png",
+      "file": "angry.webp",
       "emoji": "😠"
     },
     {
-      "file": "sleepy.png",
+      "file": "sleepy.webp",
       "emoji": "😴"
     },
     {
-      "file": "cool.png",
+      "file": "cool.webp",
       "emoji": "😎"
     },
     {
-      "file": "party.png",
+      "file": "party.webp",
       "emoji": "🥳"
     },
     {
-      "file": "think.png",
+      "file": "think.webp",
       "emoji": "🤔"
     },
     {
-      "file": "coffee.png",
+      "file": "coffee.webp",
       "emoji": "☕"
     },
     {
-      "file": "kiss.png",
+      "file": "kiss.webp",
       "emoji": "😘"
     },
     {
-      "file": "shy.png",
+      "file": "shy.webp",
       "emoji": "😊"
     },
     {
-      "file": "starstruck.png",
+      "file": "starstruck.webp",
       "emoji": "🤩"
     },
     {
-      "file": "gift.png",
+      "file": "gift.webp",
       "emoji": "🎁"
     },
     {
-      "file": "please.png",
+      "file": "please.webp",
       "emoji": "🥺"
     },
     {
-      "file": "busy.png",
+      "file": "busy.webp",
       "emoji": "📱"
     },
     {
-      "file": "king.png",
+      "file": "king.webp",
       "emoji": "👑"
     }
   ]

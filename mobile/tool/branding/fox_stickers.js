@@ -175,29 +175,90 @@ const PROPS = {
   sweat: `<path d="M370 170 q-16 26 0 38 q16 -12 0 -38 z" fill="url(#tear)" stroke="#fff" stroke-width="4"/>`,
 };
 
-function fox({ eyes = 'normal', mouth = 'smile', arms = 'rest', ears: e = 'up', tail: t = 'right', blush = 'soft', back = [], front = [], top = [], tilt = 0 }) {
+// ------------------------------------------------------------------ animation (t = 0..1, loops)
+const TAU = Math.PI * 2;
+const sin = (t, k = 1, ph = 0) => Math.sin(TAU * k * t + ph);
+const f = (n) => Number(n.toFixed(3));
+const about = (x, y, inner) => `translate(${x} ${y}) ${inner} translate(${-x} ${-y})`;
+
+function propAnim(k, t, i = 0) {
+  switch (k) {
+    case 'heart': return about(256, 400, `scale(${f(1 + 0.1 * Math.abs(sin(t, 2)))})`);
+    case 'smallHeart': case 'kissHeart': return `translate(${f(4 * sin(t))} ${f(-18 * t)})`;
+    case 'sparkles': return about(256, 220, `scale(${f(1 + 0.04 * sin(t, 2))})`);
+    case 'zzz': return `translate(${f(10 * t)} ${f(-24 * t)})`;
+    case 'confetti': return `translate(0 ${f(26 * t - 13)})`;
+    case 'joyTears': return `translate(0 ${f(6 * Math.abs(sin(t, 2)))})`;
+    case 'steam': return about(256, 110, `scale(${f(1 + 0.08 * sin(t, 2))})`);
+    case 'angerMark': return about(380, 130, `scale(${f(1 + 0.15 * Math.abs(sin(t, 2)))})`);
+    case 'bang': return about(430, 150, `rotate(${f(8 * sin(t, 2))})`);
+    case 'thought': return `translate(0 ${f(-5 * sin(t))})`;
+    case 'cup': return `translate(0 ${f(-3 * sin(t))})`;
+    case 'crown': return about(256, 92, `rotate(${f(5 * sin(t))})`);
+    case 'sweat': return `translate(0 ${f(16 * t)})`;
+    case 'thumb': return about(398, 330, `rotate(${f(-8 * Math.abs(sin(t, 2)))})`);
+    case 'gift': return about(256, 404, `rotate(${f(3 * sin(t, 2))})`);
+    case 'phone': return about(256, 398, `rotate(${f(2 * sin(t, 3))})`);
+    case 'partyHat': return about(256, 128, `rotate(${f(5 * sin(t))})`);
+    case 'nightcap': return about(256, 150, `rotate(${f(2 * sin(t))})`);
+    default: return '';
+  }
+}
+function propOpacity(k, t) {
+  if (k === 'smallHeart' || k === 'kissHeart' || k === 'zzz' || k === 'sweat') return f(t < 0.8 ? 1 : (1 - t) / 0.2);
+  if (k === 'tears') return f(0.65 + 0.35 * Math.abs(sin(t, 2)));
+  if (k === 'sparkles') return f(0.7 + 0.3 * Math.abs(sin(t, 1.5)));
+  return 1;
+}
+const props = (list, t) => list.map((k, i) => `<g transform="${propAnim(k, t, i)}" opacity="${propOpacity(k, t)}">${PROPS[k]}</g>`).join('');
+
+const BLINKS = ['normal', 'big', 'sad', 'side', 'wink', 'angry', 'think', 'pleading', 'surprised'];
+function blink(eyes, t) {
+  if (!BLINKS.includes(eyes)) return 1;
+  const d = Math.abs(t - 0.64);
+  return d < 0.05 ? f(0.12 + 0.88 * (d / 0.05)) : 1;
+}
+
+function armsFor(kind, t) {
+  if (kind === 'wave') {
+    return arm(170, 360, 182, 412) + `<g transform="${about(350, 352, `rotate(${f(-18 * sin(t, 2))})`)}">${arm(350, 352, 408, 280)}</g>`;
+  }
+  if (kind === 'up') {
+    return `<g transform="${about(168, 350, `rotate(${f(10 * sin(t, 2))})`)}">${arm(168, 350, 112, 284)}</g><g transform="${about(344, 350, `rotate(${f(-10 * sin(t, 2))})`)}">${arm(344, 350, 400, 284)}</g>`;
+  }
+  return ARMS[kind];
+}
+
+function fox({ eyes = 'normal', mouth = 'smile', arms = 'rest', ears: e = 'up', tail: tl = 'right', blush = 'soft', back = [], front = [], top = [], tilt = 0, shake = false }, t = 0) {
+  const bob = f(-3 * (1 - Math.cos(TAU * t)));
+  const sq = f(0.015 * Math.cos(TAU * t));
+  const headTilt = f(tilt + (shake ? 5 * sin(t, 4) : 3 * sin(t, 1, 1)));
+  const tailRot = f(9 * sin(t, 1, 0.5));
+  const bl = blink(eyes, t);
   return `<g filter="url(#sticker)">
-    ${back.map((k) => PROPS[k]).join('')}
-    ${tail(t)}
-    ${body()}
-    <g transform="rotate(${tilt} 256 330)">
-      ${ears(e)}
-      ${head()}
-      ${blush === 'big' ? BLUSH_BIG : blush === 'none' ? '' : BLUSH}
-      ${EYES[eyes]}
-      ${NOSE}
-      ${MOUTH[mouth]}
-      ${top.map((k) => PROPS[k]).join('')}
+    ${props(back, t)}
+    <g transform="translate(0 ${bob}) ${about(256, 490, `scale(${f(1 + sq)} ${f(1 - sq)})`)}">
+      <g transform="${about(340, 400, `rotate(${tailRot})`)}">${tail(tl)}</g>
+      ${body()}
+      <g transform="rotate(${headTilt} 256 330)">
+        ${ears(e)}
+        ${head()}
+        ${blush === 'big' ? BLUSH_BIG : blush === 'none' ? '' : BLUSH}
+        <g transform="${about(256, 232, `scale(1 ${bl})`)}">${EYES[eyes]}</g>
+        ${NOSE}
+        ${MOUTH[mouth]}
+        ${props(top, t)}
+      </g>
+      ${armsFor(arms, t)}
+      ${props(front, t)}
     </g>
-    ${ARMS[arms]}
-    ${front.map((k) => PROPS[k]).join('')}
   </g>`;
 }
 
 const LIST = [
   ['hello', '👋', { eyes: 'happy', mouth: 'grin', arms: 'wave', back: ['sparkles'] }],
   ['love', '❤️', { eyes: 'heart', mouth: 'grin', arms: 'hug', front: ['heart'], blush: 'big' }],
-  ['laugh', '😂', { eyes: 'laugh', mouth: 'grin', arms: 'rest', top: ['joyTears'], tilt: -6 }],
+  ['laugh', '😂', { eyes: 'laugh', mouth: 'grin', arms: 'rest', top: ['joyTears'], tilt: -6, shake: true }],
   ['thanks', '🙏', { eyes: 'closed', mouth: 'smile', arms: 'pray', back: ['sparkles'] }],
   ['like', '👍', { eyes: 'wink', mouth: 'grin', arms: 'thumb', front: ['thumb'], back: ['sparkles'] }],
   ['wow', '😮', { eyes: 'surprised', mouth: 'o', arms: 'up', back: ['bang'] }],
@@ -217,8 +278,12 @@ const LIST = [
   ['king', '👑', { eyes: 'closed', mouth: 'smirk', top: ['crown'], back: ['sparkles'] }],
 ];
 
-function svg(spec) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">${defs}${fox(spec)}</svg>`;
+const FRAMES = 20; // 2 s at 10 fps
+const SIZE = 320;
+const COLS = 5;
+
+function svg(spec, t = 0, size = 512) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">${defs}${fox(spec, t)}</svg>`;
 }
 
 (async () => {
@@ -226,36 +291,46 @@ function svg(spec) {
   const fontDir = path.resolve(__dirname, '../../../backend/web-client/fonts');
   const b64 = fs.readFileSync(path.join(fontDir, 'PlusJakartaSans-ExtraBold.woff2')).toString('base64');
   const font = `@font-face{font-family:Jakarta;src:url(data:font/woff2;base64,${b64}) format('woff2');font-weight:800}`;
-  const html = (s) => `<html><head><style>${font}html,body{margin:0;background:transparent}</style></head><body>${svg(s)}</body></html>`;
+  const rows = Math.ceil(FRAMES / COLS);
+  const page = (spec) => `<html><head><style>${font}html,body{margin:0;background:transparent}svg{display:block;float:left}</style></head><body style="width:${COLS * SIZE}px">${
+    Array.from({ length: FRAMES }, (_, i) => svg(spec, i / FRAMES, SIZE)).join('')}</body></html>`;
   const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
   const items = LIST.filter((x) => !only || only.includes(x[0]));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fox-'));
   let chromium = null;
   try {
     ({ chromium } = require('playwright'));
   } catch (_) {
     chromium = null;
   }
-  if (chromium) {
-    const b = await chromium.launch();
-    const p = await b.newPage({ viewport: { width: 512, height: 512 } });
-    for (const [name, , spec] of items) {
-      await p.setContent(html(spec));
+  const b = chromium ? await chromium.launch() : null;
+  const p = b ? await b.newPage({ viewport: { width: COLS * SIZE, height: rows * SIZE } }) : null;
+  for (const [name, , spec] of items) {
+    const sheet = path.join(tmp, `${name}-sheet.png`);
+    if (p) {
+      await p.setContent(page(spec));
       await p.evaluate(() => document.fonts.ready);
-      await p.screenshot({ path: path.join(OUT, `${name}.png`), omitBackground: true, clip: { x: 0, y: 0, width: 512, height: 512 } });
-    }
-    await b.close();
-  } else {
-    const chrome = process.env.CHROME || 'chromium';
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fox-'));
-    for (const [name, , spec] of items) {
+      await p.screenshot({ path: sheet, omitBackground: true, clip: { x: 0, y: 0, width: COLS * SIZE, height: rows * SIZE } });
+    } else {
       const f = path.join(tmp, `${name}.html`);
-      fs.writeFileSync(f, html(spec));
-      execFileSync(chrome, ['--headless', '--no-sandbox', '--hide-scrollbars', '--default-background-color=00000000', '--window-size=512,512',
-        '--virtual-time-budget=2000', `--screenshot=${path.join(OUT, `${name}.png`)}`, `file://${f}`], { stdio: 'ignore' });
+      fs.writeFileSync(f, page(spec));
+      execFileSync(process.env.CHROME || 'chromium', ['--headless', '--no-sandbox', '--hide-scrollbars', '--default-background-color=00000000',
+        `--window-size=${COLS * SIZE},${rows * SIZE}`, '--virtual-time-budget=3000', `--screenshot=${sheet}`, `file://${f}`], { stdio: 'ignore' });
     }
+    // slice the sheet into frames → animated WebP (+ a still PNG of the first frame)
+    execFileSync('python3', ['-c', `
+import sys
+from PIL import Image
+sheet = Image.open(sys.argv[1]).convert('RGBA')
+n, size, cols = int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
+frames = [sheet.crop(((i % cols) * size, (i // cols) * size, (i % cols + 1) * size, (i // cols + 1) * size)) for i in range(n)]
+frames[0].save(sys.argv[2] + '.png', optimize=True)
+frames[0].save(sys.argv[2] + '.webp', save_all=True, append_images=frames[1:], duration=100, loop=0, quality=70, method=4, alpha_quality=70)
+`, sheet, path.join(OUT, name), String(FRAMES), String(SIZE), String(COLS)]);
   }
+  if (b) await b.close();
   if (!only) {
-    fs.writeFileSync(path.join(OUT, 'pack.json'), JSON.stringify({ title: 'Tali the Fox', stickers: LIST.map(([n, e]) => ({ file: `${n}.png`, emoji: e })) }, null, 2));
+    fs.writeFileSync(path.join(OUT, 'pack.json'), JSON.stringify({ title: 'Tali the Fox', animated: true, stickers: LIST.map(([n, e]) => ({ file: `${n}.webp`, emoji: e })) }, null, 2));
   }
   console.log('stickers:', items.length, '→', OUT);
 })();

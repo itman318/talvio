@@ -390,6 +390,8 @@ async function userDetail(userIdRaw) {
   return {
     user: {
       ...u,
+      password_hash: undefined,
+      has_password: !!u.password_hash,
       avatar_url: userService.avatarUrl(u.avatar_media_id),
       online: presence.isOnline(u.id),
     },

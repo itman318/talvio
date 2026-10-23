@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../theme/chat_theme.dart';
+import 'tali_emoji.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../state/chat_store.dart';
@@ -23,6 +25,13 @@ class ChatColors {
 
   static ChatColors of(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final look = ChatThemeScope.maybeOf(context);
+    if (look != null && look.themeId != 'classic') {
+      final d = look.def;
+      return dark
+          ? ChatColors._(d.dark.first, d.mineDark.last, const Color(0xFF171A2C), const Color(0xFF131628), Colors.white60)
+          : ChatColors._(d.light.first, d.mine.last, Colors.white, Colors.white, const Color(0xFF7D8399));
+    }
     // Ink & Coral: my messages in deep ink (light text), others on clean white cards.
     return dark
         ? ChatColors._(const Color(0xFF0B0D17), const Color(0xFF2A3052), const Color(0xFF171A2C), const Color(0xFF131628), Colors.white60)
@@ -41,11 +50,15 @@ class MessageText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = style ?? DefaultTextStyle.of(context).style;
+    if (isOnlyTali(text)) {
+      // 1–3 Tali emoji alone: show them big
+      return Text.rich(TextSpan(children: taliSpans(text.trim(), base.copyWith(fontSize: 44), scale: 1.0)));
+    }
     final accent = Theme.of(context).brightness == Brightness.dark ? Brand.primaryLight : Brand.primaryDeep;
     final spans = <InlineSpan>[];
     var last = 0;
     for (final m in _mentionRe.allMatches(text)) {
-      if (m.start > last) spans.add(TextSpan(text: text.substring(last, m.start)));
+      if (m.start > last) spans.addAll(taliSpans(text.substring(last, m.start), base));
       final token = m.group(0)!;
       if (m.group(2) != null) {
         spans.add(TextSpan(
@@ -58,7 +71,7 @@ class MessageText extends StatelessWidget {
       }
       last = m.end;
     }
-    if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
+    if (last < text.length) spans.addAll(taliSpans(text.substring(last), base));
     return Text.rich(TextSpan(style: base, children: spans));
   }
 }

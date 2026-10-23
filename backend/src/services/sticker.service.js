@@ -147,7 +147,10 @@ async function stickerForSend(idRaw) {
 /** Installs the official packs from backend/assets/stickers on start-up (idempotent). */
 async function ensureOfficialPacks() {
   if (!fs.existsSync(ASSETS)) return;
-  for (const slug of fs.readdirSync(ASSETS)) {
+  const slugs = fs.readdirSync(ASSETS).filter((d) => fs.existsSync(path.join(ASSETS, d, 'pack.json')));
+  // official packs that were replaced: keep their stickers working in old messages, stop offering them
+  await db.query('UPDATE sticker_packs SET is_official = FALSE, is_public = FALSE WHERE is_official AND NOT (slug = ANY($1::text[]))', [slugs]);
+  for (const slug of slugs) {
     const dir = path.join(ASSETS, slug);
     const manifestPath = path.join(dir, 'pack.json');
     if (!fs.existsSync(manifestPath)) continue;
@@ -163,10 +166,12 @@ async function ensureOfficialPacks() {
       if (!fs.existsSync(src)) continue;
       const dst = path.join(target, st.file);
       fs.copyFileSync(src, dst);
+      const mime = st.file.endsWith('.webp') ? 'image/webp' : 'image/png';
+      const side = manifest.size || (mime === 'image/webp' ? 320 : 512);
       const media = await db.one(
         `INSERT INTO media (uploader_id, kind, mime, size_bytes, storage_path, original_name, width, height, is_public)
-         VALUES (NULL, 'sticker', 'image/png', $1, $2, $3, 512, 512, TRUE) RETURNING id`,
-        [fs.statSync(dst).size, path.relative(config.uploadDir, dst), st.file],
+         VALUES (NULL, 'sticker', $4, $1, $2, $3, $5, $5, TRUE) RETURNING id`,
+        [fs.statSync(dst).size, path.relative(config.uploadDir, dst), st.file, mime, side],
       );
       await db.query('INSERT INTO stickers (pack_id, media_id, emoji, position) VALUES ($1, $2, $3, $4)', [pack.id, media.id, st.emoji || '', pos++]);
     }

@@ -11,13 +11,14 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file', 'poll', 'location', 'sticker', 'gif', 'contact'];
+const SEND_TYPES = ['text', 'image', 'video', 'voice', 'video_note', 'file', 'poll', 'location', 'sticker', 'gif', 'contact'];
 const SLOW_MODE_VALUES = [0, 10, 30, 60, 300, 900, 3600];
 const MENTION_RE = /(^|[^A-Za-z0-9_@])@([A-Za-z][A-Za-z0-9_]{3,31})/g;
 const MEDIA_KINDS_FOR_TYPE = {
   image: ['image'],
   video: ['video'],
   voice: ['voice'],
+  video_note: ['video'],
   file: ['file', 'image', 'video', 'voice'],
 };
 const MAX_TEXT = 4096;
@@ -205,6 +206,28 @@ async function serializeByIds(viewerId, ids) {
 }
 
 // ------------------------------------------------------------------ reading
+// Shared media tabs (chat info → Media / Files / Links / Voice)
+const FILTERS = {
+  media: "m.type IN ('image', 'video', 'gif')",
+  files: "m.type = 'file'",
+  voice: "m.type IN ('voice', 'video_note')",
+  links: "m.type = 'text' AND (m.link_preview IS NOT NULL OR m.text ~* 'https?://')",
+};
+function filterSql(f) {
+  const sql = FILTERS[f];
+  if (!sql) throw badRequest('invalid_filter', 'Unknown filter');
+  return sql;
+}
+
+/** How many photos/files/links/voice messages a chat has. */
+async function mediaCounts(userId, chatIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  const vis = VISIBLE_SQL.replace(/\$USER/g, '$3');
+  const parts = Object.entries(FILTERS).map(([k, sql]) => `count(*) FILTER (WHERE ${sql}) AS ${k}`).join(', ');
+  const r = await db.one(`SELECT ${parts} FROM messages m WHERE m.chat_id = $1 AND m.id > $2 AND ${vis}`, [chat.id, chat.cleared_before_id, userId]);
+  return Object.fromEntries(Object.keys(FILTERS).map((k) => [k, Number(r[k])]));
+}
+
 async function listMessages(userId, chatIdRaw, query = {}) {
   const chat = await chatService.requireMember(chatIdRaw, userId);
   const lim = v.limit(query.limit, 50, 100);
@@ -224,6 +247,7 @@ async function listMessages(userId, chatIdRaw, query = {}) {
       cond += ` AND m.topic_id = $${params.length}`;
     }
   }
+  if (query.filter) cond += ` AND ${filterSql(query.filter)}`;
   let order = 'DESC';
   if (query.before) {
     params.push(v.id(query.before, 'before'));
@@ -312,7 +336,7 @@ async function prepareMessage(userId, chat, body) {
   const text = cleanText(body.text);
   const out = { type, text, mediaId: null, replyToId: null, poll: null, meta: null };
   if (type === 'poll') await settings.requireFeature('feature_polls', 'Polls');
-  if (type === 'voice') await settings.requireFeature('feature_voice_messages', 'Voice messages');
+  if (type === 'voice' || type === 'video_note') await settings.requireFeature('feature_voice_messages', 'Voice messages');
   if (type === 'location') await settings.requireFeature('feature_location', 'Location sharing');
 
   if (type === 'text') {
@@ -378,6 +402,10 @@ async function prepareMessage(userId, chat, body) {
     const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
     if (!media) throw notFound('media_not_found', 'Upload the file first');
     if (!MEDIA_KINDS_FOR_TYPE[type].includes(media.kind)) throw badRequest('invalid_media', `This file can't be sent as ${type}`);
+    if (type === 'video_note') {
+      if (text) throw badRequest('invalid_input', 'Video messages have no caption');
+      if (media.duration_sec && media.duration_sec > 60) throw badRequest('video_note_too_long', 'Video messages can be up to 60 seconds');
+    }
     out.mediaId = media.id;
   }
 
@@ -1115,6 +1143,7 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  mediaCounts,
   updateLiveLocation,
   sweepExpired,
   REACTIONS,

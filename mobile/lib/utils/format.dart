@@ -102,6 +102,8 @@ String systemText(Message m, ChatStore store) {
   }
 }
 
+String friendlyError(Object error) => error is ApiException ? error.message : 'Something went wrong';
+
 void showError(BuildContext context, Object error) {
   final text = error is ApiException ? error.message : 'Something went wrong';
   ScaffoldMessenger.of(context)

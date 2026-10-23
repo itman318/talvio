@@ -477,6 +477,12 @@
       }
       if (can('users.logout')) {
         actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/logout-all`), 'Logged out from all devices')) reload(); } }, 'Log out all devices'));
+        if (u.has_password) {
+          actions.push(el('button', { class: 'btn', onclick: async () => {
+            if (!confirm('Remove this user\'s two-step verification password? Only do this after verifying who they are.')) return;
+            if (await action(() => api('POST', `/users/${id}/password/disable`), 'Two-step verification removed')) reload();
+          } }, 'Remove 2-step password'));
+        }
       }
       if (can('users.verify')) {
         actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/verify`, { verified: !u.is_verified }), u.is_verified ? 'Badge removed' : 'Verified badge added')) reload(); } }, u.is_verified ? 'Remove verified badge' : 'Give verified badge'));
@@ -549,6 +555,7 @@
       el('section', {}, el('h4', {}, 'Profile'), el('div', { class: 'kv' },
         el('div', {}, 'Phone'), el('div', {}, u.phone || '—'),
         el('div', {}, 'Email'), el('div', {}, u.email || '—'),
+        el('div', {}, 'Two-step verification'), el('div', {}, u.has_password ? 'On' : 'Off'),
         el('div', {}, 'Bio'), el('div', {}, u.bio || '—'),
         el('div', {}, 'Joined'), el('div', {}, fmtDate(u.created_at)),
         el('div', {}, 'Last seen'), el('div', {}, u.online ? 'Online now' : fmtDate(u.last_seen_at)),

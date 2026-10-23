@@ -5,6 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../theme/chat_theme.dart';
+
 /// Device-local preferences: appearance, drafts and app lock.
 class AppPrefs extends ChangeNotifier {
   SharedPreferences? _p;
@@ -98,6 +100,29 @@ class AppPrefs extends ChangeNotifier {
     if (reminders != null) _p?.setBool('prayer_reminders', prayerReminders = reminders);
     if (ramadan != null) _p?.setBool('ramadan_reminders', ramadanReminders = ramadan);
     if (hijri != null) _p?.setInt('hijri_adjust', hijriAdjust = hijri);
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ chat theme & wallpaper
+  /// The look of a chat: its own choice, else the global one, else the default.
+  ChatAppearance chatAppearance(int? chatId) {
+    if (chatId != null) {
+      final own = _p?.getString('chat_look_$chatId');
+      if (own != null) return ChatAppearance.fromJson(own);
+    }
+    return ChatAppearance.fromJson(_p?.getString('chat_look'));
+  }
+
+  bool hasOwnChatAppearance(int chatId) => _p?.containsKey('chat_look_$chatId') ?? false;
+
+  /// [chatId] null = all chats. [look] null = back to default (or to the global look for one chat).
+  void setChatAppearance(int? chatId, ChatAppearance? look) {
+    final key = chatId == null ? 'chat_look' : 'chat_look_$chatId';
+    if (look == null) {
+      _p?.remove(key);
+    } else {
+      _p?.setString(key, look.toJson());
+    }
     notifyListeners();
   }
 

@@ -166,3 +166,10 @@ img.sticker { width: 160px; height: 160px; object-fit: contain; display: block; 
 .lp-desc { font-size: 13px; opacity: .8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .row.mine .lp { background: rgba(255,255,255,.08); border-left-color: #FF8A6E; }
 .row.mine .lp-body b { color: #FF8A6E; }
+
+img.tali { width: 1.35em; height: 1.35em; vertical-align: -0.3em; margin: 0 1px; }
+.text.big-tali img.tali { width: 64px; height: 64px; vertical-align: middle; }
+.vnote-wrap { position: relative; width: 220px; height: 220px; border-radius: 50%; overflow: hidden; background: #151A2E; cursor: pointer; box-shadow: 0 4px 16px rgba(21,26,46,.25); }
+.vnote-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vnote-play { position: absolute; inset: 0; margin: auto; width: 54px; height: 54px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.vnote-wrap.playing .vnote-play { display: none; }

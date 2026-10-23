@@ -65,6 +65,8 @@ dependencies:
   sensors_plus: ^6.1.1
   flutter_foreground_task: ^8.17.0
   emoji_picker_flutter: ^4.3.0
+  camera: ^0.11.0+2
+  archive: '>=3.6.1 <5.0.0'
   latlong2: ^0.9.1
 
 dev_dependencies:
@@ -78,6 +80,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/demo/
+    - assets/emoji/tali/
   fonts:
     - family: Jakarta
       fonts:

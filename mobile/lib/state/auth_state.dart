@@ -211,15 +211,48 @@ class AuthState extends ChangeNotifier {
   bool get emailLoginEnabled => (appConfig['login_methods'] as Map?)?['email'] != false;
   bool get phoneLoginEnabled => (appConfig['login_methods'] as Map?)?['phone'] != false;
 
-  Future<void> _verify(String path, Map<String, dynamic> body) async {
-    final data = Map<String, dynamic>.from(await api.post(path, {
-      ...body,
-      'device': {
+  Map<String, dynamic> get _device => {
         'name': _deviceName(),
         'platform': Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'other'),
         'app_version': AppConfig.appVersion,
-      },
+      };
+
+  /// Set when the account has two-step verification: the login waits for the password.
+  Map<String, dynamic>? passwordChallenge;
+
+  Future<void> _verify(String path, Map<String, dynamic> body) async {
+    final data = Map<String, dynamic>.from(await api.post(path, {...body, 'device': _device}) as Map);
+    if (data['needs_password'] == true) {
+      passwordChallenge = data;
+      notifyListeners();
+      return;
+    }
+    await _completeLogin(data);
+  }
+
+  /// Second login step (two-step verification).
+  Future<void> verifyPassword(String password) async {
+    final ch = passwordChallenge;
+    if (ch == null) throw ApiException(400, 'login_expired', 'Start the login again');
+    final data = Map<String, dynamic>.from(await api.post('/auth/password/verify', {
+      'login_token': ch['login_token'],
+      'password': password,
+      'device': _device,
     }) as Map);
+    passwordChallenge = null;
+    await _completeLogin(data);
+  }
+
+  /// "Forgot password": the password is removed after 7 days. Returns when.
+  Future<DateTime?> requestPasswordReset() async {
+    final ch = passwordChallenge;
+    if (ch == null) return null;
+    final r = Map<String, dynamic>.from(await api.post('/auth/password/reset', {'login_token': ch['login_token']}) as Map);
+    final until = r['reset_pending_until'] as String?;
+    return until == null ? null : DateTime.parse(until).toLocal();
+  }
+
+  Future<void> _completeLogin(Map<String, dynamic> data) async {
     final user = AppUser.fromJson(Map<String, dynamic>.from(data['user'] as Map));
     await api.setTokens(data['access_token'] as String, data['refresh_token'] as String, (data['expires_in'] as num).toInt());
     me = user;

@@ -55,17 +55,17 @@ test('official pack is installed once and everyone has it', async () => {
   await stickers.ensureOfficialPacks();
   await stickers.ensureOfficialPacks(); // idempotent
   const mine = await stickers.myPacks(A);
-  const desi = mine.find((p) => p.slug === 'talvio-desi');
+  const desi = mine.find((p) => p.slug === 'talvio-fox');
   assert.ok(desi, 'official pack listed');
   assert.equal(desi.is_official, true);
-  assert.equal(desi.stickers.length, 16);
+  assert.equal(desi.stickers.length, 20);
   assert.match(desi.stickers[0].url, /\/api\/media\/\d+\/public$/);
   const m = await media.getPublic(desi.stickers[0].media_id);
   assert.ok(fs.existsSync(media.absolutePath(m)), 'sticker file copied into uploads');
 });
 
 test('send a sticker; the other person can see it', async () => {
-  const desi = (await stickers.myPacks(A)).find((p) => p.slug === 'talvio-desi');
+  const desi = (await stickers.myPacks(A)).find((p) => p.slug === 'talvio-fox');
   const r = await messages.sendMessage(A, chat.id, { type: 'sticker', sticker_id: desi.stickers[0].id });
   const msg = r.message || r;
   assert.equal(msg.type, 'sticker');

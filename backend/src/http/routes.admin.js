@@ -72,6 +72,12 @@ router.get('/users', requireAdmin('users.view'), h(async (req, res) => res.json(
 router.get('/users/:id', requireAdmin('users.view'), h(async (req, res) => res.json(await admin.userDetail(req.params.id))));
 router.post('/users/:id/ban', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.banUser(req.admin, req.params.id, req.body, req.ip))));
 router.post('/users/:id/unban', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.unbanUser(req.admin, req.params.id, req.ip))));
+router.post('/users/:id/password/disable', requireAdmin('users.logout'), h(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  await require('../services/password.service').adminDisable(id);
+  await admin.log(req.admin.id, 'user.password_disable', 'user', id, null, req.ip);
+  res.json({ ok: true });
+}));
 router.post('/users/:id/logout-all', requireAdmin('users.logout'), h(async (req, res) => res.json(await admin.logoutAll(req.admin, req.params.id, req.ip))));
 router.post('/users/:id/verify', requireAdmin('users.verify'), h(async (req, res) => {
   res.json(await admin.setVerified(req.admin, req.params.id, req.body.verified, req.ip));

@@ -9,6 +9,7 @@ const path = require('path');
 const express = require('express');
 const multer = require('multer');
 const config = require('../config');
+const passwordService = require('../services/password.service');
 const authService = require('../services/auth.service');
 const userService = require('../services/user.service');
 const chatService = require('../services/chat.service');
@@ -74,6 +75,11 @@ router.post('/auth/email/verify', h(async (req, res) => {
   res.json(await authService.verifyEmailCode(req.body.email, req.body.code, req.body.device, req.ip));
 }));
 
+router.post('/auth/password/verify', h(async (req, res) => {
+  res.json(await passwordService.verifyLogin(req.body.login_token, req.body.password, req.body.device, req.ip));
+}));
+router.post('/auth/password/reset', h(async (req, res) => res.json(await passwordService.requestReset(req.body.login_token))));
+
 router.post('/auth/qr', h(async (req, res) => res.json(await qrService.create(req.body.device || {}, req.ip))));
 router.get('/auth/qr/status', h(async (req, res) => res.json(await qrService.status(req.query.token, req.query.wait, req.ip))));
 
@@ -87,6 +93,11 @@ router.get('/media/:id/public', h(async (req, res) => {
 
 // ------------------------------------------------------------------ authenticated
 router.use(requireUser);
+
+router.get('/me/password', h(async (req, res) => res.json(await passwordService.get(req.userId))));
+router.put('/me/password', h(async (req, res) => res.json(await passwordService.set(req.userId, req.body))));
+router.post('/me/password/remove', h(async (req, res) => res.json(await passwordService.remove(req.userId, req.body))));
+router.post('/me/password/cancel-reset', h(async (req, res) => res.json(await passwordService.cancelReset(req.userId))));
 
 router.post('/auth/logout', h(async (req, res) => res.json(await authService.logout(req.userId, req.sessionId))));
 router.post('/auth/qr/scan', h(async (req, res) => res.json(await qrService.scan(req.userId, req.body.token))));
@@ -232,6 +243,7 @@ router.get('/chats/:id/scheduled', h(async (req, res) => res.json(await messageS
 router.delete('/scheduled/:id', h(async (req, res) => res.json(await messageService.cancelScheduled(req.userId, req.params.id))));
 
 // --- messages
+router.get('/chats/:id/media-counts', h(async (req, res) => res.json(await messageService.mediaCounts(req.userId, req.params.id))));
 router.get('/chats/:id/messages', h(async (req, res) => res.json(await messageService.listMessages(req.userId, req.params.id, req.query))));
 router.post('/chats/:id/messages', h(async (req, res) => res.json(await messageService.sendMessage(req.userId, req.params.id, req.body))));
 router.post('/chats/:id/messages/delete', h(async (req, res) => res.json(await messageService.deleteMessages(req.userId, req.params.id, req.body))));

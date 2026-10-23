@@ -352,6 +352,8 @@ class Message {
         return text.isNotEmpty ? '🎬 $text' : '🎬 Video';
       case 'voice':
         return '🎤 Voice message';
+      case 'video_note':
+        return '📹 Video message';
       case 'file':
         return '📎 ${media?.name ?? 'File'}';
       case 'poll':
@@ -374,7 +376,7 @@ class Message {
         final sec = (c['duration_sec'] as num?)?.toInt() ?? 0;
         return sec > 0 ? '$icon Call (${formatCallDuration(sec)})' : '$icon Call';
       default:
-        return text;
+        return text.replaceAll(RegExp('[\uE900-\uE9FF]'), '🦊');
     }
   }
 }

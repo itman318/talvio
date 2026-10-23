@@ -134,6 +134,7 @@
       case 'image': return m.text ? `🖼 ${m.text}` : '🖼 Photo';
       case 'video': return m.text ? `🎬 ${m.text}` : '🎬 Video';
       case 'voice': return '🎤 Voice message';
+      case 'video_note': return '📹 Video message';
       case 'file': return `📎 ${(m.media && m.media.name) || 'File'}`;
       case 'poll': return `📊 ${m.text}`;
       case 'location': return m.meta && m.meta.live ? '📍 Live location' : '📍 Location';
@@ -146,7 +147,7 @@
         return c.duration_sec ? `📞 Call (${dur(c.duration_sec)})` : '📞 Call';
       }
       case 'system': return systemText(m);
-      default: return m.text || '';
+      default: return (m.text || '').replace(TALI_RE, '🦊');
     }
   }
 
@@ -425,6 +426,7 @@
           const r = isEmail
             ? await api('POST', '/auth/email/verify', { email: sent, code: code.value.trim(), device })
             : await api('POST', '/auth/otp/verify', { phone: sent, code: code.value.trim(), device });
+          if (r.needs_password) return renderPasswordStep(r, device);
           saveAuth(r);
           if (r.needs_profile) return renderProfileSetup();
           start();
@@ -434,9 +436,47 @@
       } finally {
         btn.disabled = false;
       }
+      return undefined;
     });
     box.append(el('h3', { style: 'margin-top:0' }, isEmail ? 'Log in with email' : 'Log in with phone'),
       el('div', { class: 'field' }, el('label', {}, isEmail ? 'Email address' : 'Phone number'), phone), step2, btn);
+  }
+
+  /** Two-step verification: the account password after the code. */
+  function renderPasswordStep(ch, device) {
+    const pw = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
+    const btn = el('button', { class: 'btn' }, 'Log in');
+    const forgot = el('button', { class: 'btn ghost', type: 'button' }, 'Forgot password?');
+    const note = el('div', { class: 'muted' }, ch.reset_pending_until ? `Reset requested — the password will be removed on ${new Date(ch.reset_pending_until).toLocaleDateString()}.` : '');
+    const go = async () => {
+      if (!pw.value) return;
+      btn.disabled = true;
+      try {
+        const r = await api('POST', '/auth/password/verify', { login_token: ch.login_token, password: pw.value, device });
+        saveAuth(r);
+        if (r.needs_profile) { renderProfileSetup(); return; }
+        start();
+      } catch (e) {
+        toast(e.message);
+        pw.value = '';
+      } finally {
+        btn.disabled = false;
+      }
+    };
+    btn.addEventListener('click', go);
+    pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    forgot.addEventListener('click', async () => {
+      if (!confirm('Reset the password? For your security it is removed after 7 days, unless you cancel it from a logged-in device.')) return;
+      try {
+        const r = await api('POST', '/auth/password/reset', { login_token: ch.login_token });
+        note.textContent = `Reset requested — you can log in without the password after ${new Date(r.reset_pending_until).toLocaleDateString()}.`;
+      } catch (e) { toast(e.message); }
+    });
+    $app.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'login-card', style: 'max-width:420px;display:block' },
+      el('h1', {}, 'Two-step verification'),
+      el('p', { class: 'muted' }, 'Your account has an extra password.'),
+      el('div', { class: 'field' }, pw), ch.hint ? el('div', { class: 'muted' }, `Hint: ${ch.hint}`) : null, btn, ch.reset_pending_until ? null : forgot, note)));
+    pw.focus();
   }
 
   function renderProfileSetup() {
@@ -741,7 +781,7 @@
     if (album) body.push(albumView(album));
     else body.push(...mediaView(m));
     const text = album ? album.map((x) => x.text).filter(Boolean).join('\n') : ['poll', 'location', 'call', 'sticker', 'contact'].includes(m.type) ? '' : m.text;
-    if (text) body.push(el('div', { class: 'text' }, linkify(text)));
+    if (text) body.push(el('div', { class: `text${onlyTali(text) ? ' big-tali' : ''}` }, linkify(text)));
     if (m.link_preview && m.type === 'text') {
       const lp = m.link_preview;
       const card = el('a', { class: 'lp', href: lp.url, target: '_blank', rel: 'noopener noreferrer' },
@@ -767,9 +807,27 @@
     if (c.type === 'channel' && c.comments_enabled && !m.thread_id) {
       body.push(el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px' }, `💬 ${m.comments_count || 0} comments — open on your phone to reply`));
     }
-    const b = el('div', { class: `bubble${m.pending ? ' pending' : ''}${m.type === 'sticker' ? ' bare' : ''}`, 'data-id': m.id, oncontextmenu: (e) => messageMenu(e, c, m) }, body);
+    const b = el('div', { class: `bubble${m.pending ? ' pending' : ''}${m.type === 'sticker' || m.type === 'video_note' ? ' bare' : ''}`, 'data-id': m.id, oncontextmenu: (e) => messageMenu(e, c, m) }, body);
     return el('div', { class: `row${mine ? ' mine' : ''}` }, b);
   }
+
+  // Talvio custom emoji: one Private Use Area character each (U+E900 + index)
+  const TALI = ['hello', 'love', 'laugh', 'thanks', 'like', 'wow', 'cry', 'angry', 'sleepy', 'cool',
+    'party', 'think', 'coffee', 'kiss', 'shy', 'starstruck', 'gift', 'please', 'busy', 'king'];
+  const TALI_RE = /[\uE900-\uE9FF]/g;
+  function withTali(text) {
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(TALI_RE)) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      const name = TALI[m[0].charCodeAt(0) - 0xE900];
+      out.push(name ? el('img', { class: 'tali', src: `emoji/tali/${name}.png`, alt: '🦊', title: name }) : '🦊');
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
+  const onlyTali = (t) => { const s = String(t || '').replace(/\s/g, ''); return s.length > 0 && s.length <= 3 && /^[\uE900-\uE9FF]+$/.test(s); };
 
   function linkify(text) {
     const out = [];
@@ -777,11 +835,11 @@
     let last = 0;
     let mm;
     while ((mm = re.exec(text))) {
-      if (mm.index > last) out.push(text.slice(last, mm.index));
+      if (mm.index > last) out.push(...withTali(text.slice(last, mm.index)));
       out.push(el('a', { href: mm[1], target: '_blank', rel: 'noopener noreferrer' }, mm[1]));
       last = mm.index + mm[1].length;
     }
-    if (last < text.length) out.push(text.slice(last));
+    if (last < text.length) out.push(...withTali(text.slice(last)));
     return out;
   }
 
@@ -834,6 +892,16 @@
           el('span', {},
             el('div', {}, live ? (on ? 'Live location' : 'Live location ended') : (loc.title || 'Location')),
             el('div', { class: 'muted', style: 'font-size:12px' }, on ? `Until ${timeOf(live.until)} · updated ${timeOf(live.updated_at)}` : `${lat}, ${lng}`)))];
+      }
+      case 'video_note': {
+        const v = el('video', { class: 'vnote', preload: 'none', playsinline: true, loop: false });
+        const wrap = el('div', { class: 'vnote-wrap', title: 'Play' }, v, el('span', { class: 'vnote-play' }, '▶'));
+        wrap.addEventListener('click', async () => {
+          if (!v.src) { try { v.src = await mediaUrl(md.url); } catch (e) { toast(e.message); return; } }
+          if (v.paused) { v.play().catch(() => {}); wrap.classList.add('playing'); } else { v.pause(); wrap.classList.remove('playing'); }
+        });
+        v.addEventListener('ended', () => wrap.classList.remove('playing'));
+        return [wrap];
       }
       case 'sticker': {
         if (!md) return [el('div', { class: 'sticker-emoji' }, (m.meta && m.meta.sticker && m.meta.sticker.emoji) || '🙂')];

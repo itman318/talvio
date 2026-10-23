@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'video_note.dart';
+import '../theme/chat_theme.dart';
 import '../models/models.dart';
 import '../utils/format.dart';
 import 'avatar.dart';
@@ -60,6 +62,8 @@ class MessageBubble extends StatelessWidget {
         return MessageVideo(message: m);
       case 'voice':
         return VoicePlayer(message: m, color: accent);
+      case 'video_note':
+        return VideoNoteBubble(message: m, size: 200);
       case 'file':
         return MessageFile(message: m, color: accent);
       case 'poll':
@@ -83,6 +87,7 @@ class MessageBubble extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final m = message;
     final bg = isMine ? ChatColors.of(context).mine : ChatColors.of(context).other;
+    final themed = mineGradientOf(context);
     // My bubbles are deep ink with light text, so they use the dark theme inside.
     final accent = isMine ? Brand.primaryLight : colorForId(m.senderId ?? 0);
     final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
@@ -90,7 +95,7 @@ class MessageBubble extends StatelessWidget {
     final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
     final textColor = isMine ? Colors.white : scheme.onSurface;
 
-    if (m.type == 'sticker' && m.replyTo == null) {
+    if ((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) {
       // stickers float without a bubble; a small time chip sits under them
       return Align(
         alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -102,7 +107,7 @@ class MessageBubble extends StatelessWidget {
             child: Column(crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               if (showSender && !isMine)
                 Text(m.sender?.name ?? '', style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
-              StickerView(message: m),
+              if (m.type == 'video_note') VideoNoteBubble(message: m) else StickerView(message: m),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(color: Colors.black.withAlpha(dark ? 90 : 40), borderRadius: BorderRadius.circular(10)),
@@ -210,8 +215,8 @@ class MessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
-            color: isMine && !dark ? null : bg,
-            gradient: isMine && !dark ? Brand.mineGradient : null,
+            color: isMine && (themed != null || !dark) ? null : bg,
+            gradient: isMine ? (themed ?? (dark ? null : Brand.mineGradient)) : null,
             // "Pebble" bubbles: very round, with a soft inner corner instead of a tail.
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(isMine ? 20 : 8),
@@ -241,6 +246,7 @@ class MessageBubble extends StatelessWidget {
         'image' => 'Photo',
         'video' => 'Video',
         'voice' => 'Voice message',
+        'video_note' => 'Video message',
         'file' => 'File',
         'poll' => 'Poll',
         _ => 'Message',

@@ -68,9 +68,11 @@ async function login(phone, first) {
   await call('POST', `/chats/${chat.id}/messages`, { type: 'sticker', sticker_id: sticker.id }, friend.token);
   await call('POST', `/chats/${chat.id}/messages`, { type: 'contact', contact: { name: 'Ali Raza', phone: '+923001234567' } }, friend.token);
   await call('POST', `/chats/${chat.id}/messages`, { type: 'location', location: { lat: 30.4697, lng: 70.9669, live_minutes: 15 } }, friend.token);
+  await call('POST', `/chats/${chat.id}/messages`, { text: 'Fox time \uE901' }, friend.token);
   await call('PUT', `/chats/${chat.id}/disappearing`, { seconds: 86400 }, friend.token);
   await page.waitForSelector('.bubble.bare img.sticker', { timeout: 15000 });
   await page.waitForSelector('.contact:has-text("Ali Raza")', { timeout: 15000 });
+  await page.waitForSelector('.bubble img.tali[title="love"]', { timeout: 15000 });
   await page.waitForSelector('.loc:has-text("Live location")', { timeout: 15000 });
   await page.waitForSelector('.sys:has-text("disappearing messages (24 hours)")', { timeout: 15000 });
   await page.waitForFunction(() => { const i = document.querySelector('img.sticker'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 });

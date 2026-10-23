@@ -400,10 +400,10 @@ class ChatStore extends ChangeNotifier {
       createdAt: DateTime.now(),
       sendState: SendState.sending,
       localFilePath: path,
-      uploadKind: type,
+      uploadKind: type == 'video_note' ? 'video' : type,
       media: MediaInfo(
         id: 0,
-        kind: type,
+        kind: type == 'video_note' ? 'video' : type,
         mime: mime ?? 'application/octet-stream',
         size: await file.length(),
         name: name ?? path.split(Platform.pathSeparator).last,
