@@ -9,7 +9,7 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, notFound } = require('../utils/errors');
 
-const KINDS = ['image', 'video', 'voice', 'file', 'avatar'];
+const KINDS = ['image', 'video', 'voice', 'file', 'avatar', 'sticker'];
 const SAFE_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
 const VOICE_EXT = ['.m4a', '.aac', '.ogg', '.opus', '.mp3', '.wav', '.webm'];
 
@@ -20,6 +20,8 @@ function mimeAllowed(kind, mime, originalName) {
       return SAFE_IMAGE_MIMES.includes(mime);
     case 'avatar':
       return ['image/jpeg', 'image/png', 'image/webp'].includes(mime);
+    case 'sticker':
+      return ['image/png', 'image/webp', 'image/gif'].includes(mime);
     case 'video':
       return mime.startsWith('video/');
     case 'voice':
@@ -69,6 +71,7 @@ async function registerUpload(userId, file, body) {
     if (!mimeAllowed(kind, mime, file.originalname)) {
       throw badRequest('invalid_file_type', `This file type is not allowed for ${kind}`);
     }
+    if (kind === 'sticker' && file.size > 1024 * 1024) throw badRequest('file_too_large', 'A sticker must be smaller than 1 MB');
     const maxMb = (await require('./payment.service').limitsFor(userId)).upload_mb; // lazy: avoids circular import
     if (file.size > maxMb * 1024 * 1024) {
       throw badRequest('file_too_large', `File is larger than ${maxMb} MB`);
@@ -89,7 +92,7 @@ async function registerUpload(userId, file, body) {
         optInt(body.duration, 86400),
         optInt(body.width, 100000),
         optInt(body.height, 100000),
-        kind === 'avatar',
+        kind === 'avatar' || kind === 'sticker',
       ],
     );
     return serialize(row);

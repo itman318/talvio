@@ -34,6 +34,9 @@ import 'forward_screen.dart';
 import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
 import '../theme/brand.dart';
+import '../core/chat_export.dart';
+import '../widgets/sticker_widgets.dart';
+import '../widgets/contact_card.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.chatId, this.initial});
@@ -202,12 +205,34 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) showInfo(context, 'Turn on location (GPS) first');
         return;
       }
-      if (mounted) showInfo(context, 'Getting your location…');
+      final liveOk = context.read<AuthState>().feature('live_location');
+      final choice = await showModalBottomSheet<int>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(leading: const Icon(Icons.my_location_rounded), title: const Text('Send my current location'), onTap: () => Navigator.pop(ctx, 0)),
+            if (liveOk) ...[
+              const Padding(padding: EdgeInsets.fromLTRB(16, 8, 16, 0), child: Align(alignment: Alignment.centerLeft, child: Text('Share live location', style: TextStyle(fontWeight: FontWeight.w700)))),
+              ListTile(leading: const Icon(Icons.share_location_rounded), title: const Text('For 15 minutes'), onTap: () => Navigator.pop(ctx, 15)),
+              ListTile(leading: const Icon(Icons.share_location_rounded), title: const Text('For 1 hour'), onTap: () => Navigator.pop(ctx, 60)),
+              ListTile(leading: const Icon(Icons.share_location_rounded), title: const Text('For 8 hours'), onTap: () => Navigator.pop(ctx, 480)),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text('Your location updates while Talvio is open. You can stop sharing any time.', style: TextStyle(fontSize: 12, color: Brand.muted)),
+              ),
+            ],
+          ]),
+        ),
+      );
+      if (choice == null || !mounted) return;
+      showInfo(context, 'Getting your location…');
       final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
       if (!mounted) return;
-      final ok = await confirm(context, 'Send your location?',
-          '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)} (±${pos.accuracy.round()} m)', ok: 'Send');
-      if (ok) await _store.sendLocation(chatId, pos.latitude, pos.longitude, title: 'My location');
+      if (choice == 0) {
+        await _store.sendLocation(chatId, pos.latitude, pos.longitude, title: 'My location');
+      } else {
+        await _store.sendLiveLocation(chatId, pos.latitude, pos.longitude, choice);
+      }
     } catch (e) {
       if (mounted) showInfo(context, 'Could not get your location');
     }
@@ -284,6 +309,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ListTile(leading: const Icon(Icons.attach_file), title: const Text('File'), onTap: () => Navigator.pop(ctx, 'file')),
           if (context.read<AuthState>().feature('location'))
             ListTile(leading: const Icon(Icons.location_on_outlined), title: const Text('Location'), onTap: () => Navigator.pop(ctx, 'location')),
+          ListTile(leading: const Icon(Icons.contact_page_outlined), title: const Text('Contact'), onTap: () => Navigator.pop(ctx, 'contact')),
           if ((_store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false) && context.read<AuthState>().feature('polls'))
             ListTile(leading: const Icon(Icons.poll_outlined), title: const Text('Poll or quiz'), onTap: () => Navigator.pop(ctx, 'poll')),
         ]),
@@ -292,6 +318,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (choice == null) return;
     if (choice == 'location') {
       await _shareLocation();
+      return;
+    }
+    if (choice == 'contact') {
+      if (mounted) await pickAndShareContact(context, chatId);
       return;
     }
     if (choice == 'poll') {
@@ -309,7 +339,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final picker = ImagePicker();
       switch (choice) {
         case 'photo':
-          final picked = await picker.pickMultiImage(imageQuality: 85, maxWidth: 2560, maxHeight: 2560, limit: 10);
+          final picked = await picker.pickMultiImage(imageQuality: _prefs.uploadQuality, maxWidth: _prefs.uploadMaxSide, maxHeight: _prefs.uploadMaxSide, limit: 10);
           if (picked.isEmpty) break;
           if (picked.length == 1) {
             await _editAndSend(picked.first.path, picked.first.name);
@@ -322,7 +352,7 @@ class _ChatScreenState extends State<ChatScreen> {
           }
           break;
         case 'camera':
-          final x = await picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2560, maxHeight: 2560);
+          final x = await picker.pickImage(source: ImageSource.camera, imageQuality: _prefs.uploadQuality, maxWidth: _prefs.uploadMaxSide, maxHeight: _prefs.uploadMaxSide);
           if (x != null) await _editAndSend(x.path, x.name);
           break;
         case 'video':
@@ -536,6 +566,30 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _chatMenu(String action, Chat chat) async {
     try {
       switch (action) {
+        case 'disappearing':
+          final secs = await showModalBottomSheet<int>(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text('New messages in this chat will delete themselves after:', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                for (final o in const [0, 3600, 86400, 604800, 7776000])
+                  RadioListTile<int>(
+                    value: o,
+                    groupValue: chat.disappearAfterSec,
+                    title: Text(o == 0 ? 'Off' : disappearLabel(o)),
+                    onChanged: (v) => Navigator.pop(ctx, v),
+                  ),
+              ]),
+            ),
+          );
+          if (secs != null && secs != chat.disappearAfterSec) await _store.setDisappearing(chatId, secs);
+          break;
+        case 'export':
+          await exportChat(context, chat);
+          break;
         case 'secret':
           await startSecretChat(context, chat.peer!);
           break;
@@ -675,6 +729,9 @@ class _ChatScreenState extends State<ChatScreen> {
             onSelected: (a) => _chatMenu(a, chat),
             itemBuilder: (_) => [
               PopupMenuItem(value: 'mute', child: Text(chat.isMuted ? 'Unmute' : 'Mute')),
+              if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
+                PopupMenuItem(value: 'disappearing', child: Text(chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages')),
+              const PopupMenuItem(value: 'export', child: Text('Export chat')),
               const PopupMenuItem(value: 'clear', child: Text('Clear history')),
               if (chat.canPost) const PopupMenuItem(value: 'scheduled', child: Text('Scheduled messages')),
               if (chat.isMulti && chat.isAdmin) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
@@ -957,6 +1014,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       },
                     ),
                   if (_editing == null) IconButton(icon: const Icon(Icons.attach_file), onPressed: _attach),
+                  if (_editing == null && (context.read<AuthState>().feature('stickers') || context.read<AuthState>().feature('gifs')))
+                    IconButton(
+                      tooltip: 'Stickers & GIFs',
+                      icon: const Icon(Icons.emoji_emotions_outlined),
+                      onPressed: () => showStickerGifSheet(context, chatId),
+                    ),
                   if (_editing != null) const SizedBox(width: 12),
                   Expanded(
                     child: TextField(

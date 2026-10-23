@@ -52,6 +52,20 @@ router.post('/auth/otp/verify', h(async (req, res) => {
   res.json(await authService.verifyOtp(req.body.phone, req.body.code, req.body.device, req.ip));
 }));
 
+// Crash reports (login optional — the app may crash before or during login)
+router.post('/client-errors', h(async (req, res) => {
+  let userId = null;
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ')) {
+    try {
+      userId = (await authService.authenticate(auth.slice(7))).user.id;
+    } catch (_) {
+      userId = null;
+    }
+  }
+  res.json(await require('../services/crash.service').record(userId, req.body || {}, req.ip));
+}));
+
 router.post('/auth/email/request', h(async (req, res) => {
   res.json(await authService.requestEmailCode(req.body.email, req.ip));
 }));
@@ -141,6 +155,7 @@ router.put('/chats/:id/members/:userId/role', h(async (req, res) => {
   res.json(await chatService.setMemberRole(req.userId, req.params.id, req.params.userId, req.body.role));
 }));
 router.post('/chats/:id/leave', h(async (req, res) => res.json(await chatService.leaveChat(req.userId, req.params.id))));
+router.put('/chats/:id/disappearing', h(async (req, res) => res.json(await chatService.setDisappearing(req.userId, req.params.id, req.body.seconds))));
 router.patch('/chats/:id/settings', h(async (req, res) => res.json(await chatService.updateMySettings(req.userId, req.params.id, req.body))));
 router.post('/chats/:id/clear', h(async (req, res) => res.json(await chatService.clearHistory(req.userId, req.params.id))));
 router.post('/chats/:id/invite/regenerate', h(async (req, res) => res.json(await chatService.regenerateInvite(req.userId, req.params.id))));
@@ -221,6 +236,7 @@ router.get('/chats/:id/messages', h(async (req, res) => res.json(await messageSe
 router.post('/chats/:id/messages', h(async (req, res) => res.json(await messageService.sendMessage(req.userId, req.params.id, req.body))));
 router.post('/chats/:id/messages/delete', h(async (req, res) => res.json(await messageService.deleteMessages(req.userId, req.params.id, req.body))));
 router.post('/chats/:id/read', h(async (req, res) => res.json(await messageService.markRead(req.userId, req.params.id, req.body.message_id))));
+router.post('/messages/:id/live', h(async (req, res) => res.json(await messageService.updateLiveLocation(req.userId, req.params.id, req.body))));
 router.patch('/messages/:id', h(async (req, res) => res.json(await messageService.editMessage(req.userId, req.params.id, req.body))));
 router.post('/messages/forward', h(async (req, res) => res.json(await messageService.forwardMessages(req.userId, req.body))));
 router.put('/messages/:id/reaction', h(async (req, res) => res.json(await messageService.react(req.userId, req.params.id, req.body.emoji))));
@@ -229,6 +245,19 @@ router.post('/messages/:id/poll/close', h(async (req, res) => res.json(await mes
 router.get('/messages/:id/poll/voters', h(async (req, res) => res.json(await messageService.pollVoters(req.userId, req.params.id, req.query.option))));
 
 // --- folders
+// stickers & GIFs
+const stickerService = require('../services/sticker.service');
+router.get('/stickers/packs', h(async (req, res) => res.json(await stickerService.myPacks(req.userId))));
+router.get('/stickers/search', h(async (req, res) => res.json(await stickerService.searchPacks(req.userId, req.query.q))));
+router.post('/stickers/packs', h(async (req, res) => res.json(await stickerService.createPack(req.userId, req.body))));
+router.get('/stickers/packs/:id', h(async (req, res) => res.json(await stickerService.getPack(req.userId, req.params.id))));
+router.delete('/stickers/packs/:id', h(async (req, res) => res.json(await stickerService.deletePack(req.userId, req.params.id))));
+router.post('/stickers/packs/:id/install', h(async (req, res) => res.json(await stickerService.installPack(req.userId, req.params.id))));
+router.post('/stickers/packs/:id/uninstall', h(async (req, res) => res.json(await stickerService.uninstallPack(req.userId, req.params.id))));
+router.post('/stickers/packs/:id/stickers', h(async (req, res) => res.json(await stickerService.addSticker(req.userId, req.params.id, req.body))));
+router.delete('/stickers/packs/:id/stickers/:stickerId', h(async (req, res) => res.json(await stickerService.removeSticker(req.userId, req.params.id, req.params.stickerId))));
+router.get('/gifs', h(async (req, res) => res.json(await stickerService.gifs(req.userId, req.query))));
+
 router.get('/folders', h(async (req, res) => res.json(await folderService.list(req.userId))));
 router.post('/folders', h(async (req, res) => res.json(await folderService.create(req.userId, req.body))));
 router.put('/folders/order', h(async (req, res) => res.json(await folderService.reorder(req.userId, req.body.folder_ids))));

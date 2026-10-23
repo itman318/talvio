@@ -25,6 +25,9 @@ class CallManager extends ChangeNotifier {
   final AppServices services;
   StreamSubscription<SocketEvent>? _sub;
 
+  /// Set from the data-saver preference (lower video resolution and frame rate).
+  bool lowData = false;
+
   CallPhase phase = CallPhase.idle;
   CallInfo? call;
   AppUser? peer;
@@ -336,9 +339,10 @@ class CallManager extends ChangeNotifier {
       'video': video
           ? {
               'facingMode': 'user',
-              'width': {'ideal': 1280},
-              'height': {'ideal': 720},
-              'frameRate': {'ideal': 30},
+              // data saver → 480p at 15 fps (roughly a quarter of the data)
+              'width': {'ideal': lowData ? 640 : 1280},
+              'height': {'ideal': lowData ? 480 : 720},
+              'frameRate': {'ideal': lowData ? 15 : 30},
             }
           : false,
     });

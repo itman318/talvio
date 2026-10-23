@@ -20,6 +20,8 @@ const server = http.createServer(app);
 socket.init(server);
 push.init();
 
+require('./services/sticker.service').ensureOfficialPacks().catch((err) => console.error('sticker packs:', err.message)); // eslint-disable-line no-console
+
 server.listen(config.port, () => {
   // eslint-disable-next-line no-console
   console.log(`Talvio API listening on http://localhost:${config.port}  (admin panel: /admin)`);
@@ -40,6 +42,7 @@ const scheduler = setInterval(() => {
   messageService.runDueScheduled().catch((err) => console.error('scheduler error', err)); // eslint-disable-line no-console
   callService.sweep().catch((err) => console.error('call sweep error', err)); // eslint-disable-line no-console
   secretSweepTick = (secretSweepTick + 1) % 240; // about once an hour
+  if (secretSweepTick % 4 === 0) messageService.sweepExpired().catch((err) => console.error('disappearing sweep error', err)); // eslint-disable-line no-console
   require('./services/payment.service').sweep().catch(() => {});
   if (secretSweepTick % 20 === 2) require('./services/qr.service').sweep().catch(() => {});
   require('./services/bot.service').sweep().catch((err) => console.error('bot sweep error', err)); // eslint-disable-line no-console

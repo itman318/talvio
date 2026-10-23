@@ -238,6 +238,7 @@ class Message {
   final String? albumId; // photos sent together
   int commentsCount;
   Map<String, dynamic>? replyMarkup; // bot inline keyboard
+  Map<String, dynamic>? linkPreview; // {url, site, title, description, image}
   DateTime? editedAt;
   final DateTime createdAt;
 
@@ -273,6 +274,7 @@ class Message {
     this.albumId,
     this.commentsCount = 0,
     this.replyMarkup,
+    this.linkPreview,
     this.editedAt,
     required this.createdAt,
     this.sendState = SendState.sent,
@@ -317,6 +319,7 @@ class Message {
       albumId: j['album_id'] as String?,
       commentsCount: _int(j['comments_count'] ?? 0),
       replyMarkup: j['reply_markup'] == null ? null : Map<String, dynamic>.from(j['reply_markup'] as Map),
+      linkPreview: j['link_preview'] == null ? null : Map<String, dynamic>.from(j['link_preview'] as Map),
       editedAt: _date(j['edited_at']),
       createdAt: _date(j['created_at']) ?? DateTime.now(),
     );
@@ -354,7 +357,14 @@ class Message {
       case 'poll':
         return '📊 $text';
       case 'location':
+        if (meta?['live'] != null) return '📍 Live location';
         return text.isNotEmpty ? '📍 $text' : '📍 Location';
+      case 'sticker':
+        return '${(meta?['sticker'] as Map?)?['emoji'] ?? '🙂'} Sticker';
+      case 'gif':
+        return text.isNotEmpty ? 'GIF · $text' : 'GIF';
+      case 'contact':
+        return '👤 ${(meta?['contact'] as Map?)?['name'] ?? 'Contact'}';
       case 'call':
         final c = callMeta ?? const {};
         final icon = c['video'] == true ? '📹' : '📞';
@@ -445,6 +455,7 @@ class Chat {
   bool canPost;
   bool isSuspended;
   int slowModeSec;
+  int disappearAfterSec; // 0 = off
   bool joinApproval;
   int pendingRequests;
   bool commentsEnabled;
@@ -484,6 +495,7 @@ class Chat {
     this.canPost = true,
     this.isSuspended = false,
     this.slowModeSec = 0,
+    this.disappearAfterSec = 0,
     this.joinApproval = false,
     this.pendingRequests = 0,
     this.commentsEnabled = false,
@@ -524,6 +536,7 @@ class Chat {
         canPost: j['can_post'] != false,
         isSuspended: j['is_suspended'] == true,
         slowModeSec: _int(j['slow_mode_sec'] ?? 0),
+        disappearAfterSec: _int(j['disappear_after_sec'] ?? 0),
         joinApproval: j['join_approval'] == true,
         pendingRequests: _int(j['pending_requests'] ?? 0),
         commentsEnabled: j['comments_enabled'] == true,

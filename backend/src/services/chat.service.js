@@ -53,7 +53,7 @@ async function emitUpdated(chatId, extraUserIds = []) {
 const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
-       c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum,
+       c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
        cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread,
        (SELECT count(*) FROM message_mentions mm JOIN messages mmsg ON mmsg.id = mm.message_id
           WHERE mm.user_id = $1 AND mm.chat_id = c.id AND mmsg.deleted_at IS NULL
@@ -126,6 +126,7 @@ async function serializeChats(userId, rows) {
       is_verified: isPrivate ? !!(peer && peer.is_verified) : r.is_verified,
       can_post: !r.is_suspended && (r.type !== 'channel' || ADMIN_ROLES.includes(r.my_role)),
       slow_mode_sec: r.slow_mode_sec,
+      disappear_after_sec: r.disappear_after_sec || 0,
       join_approval: r.join_approval,
       comments_enabled: r.type === 'channel' && !!r.comments_enabled,
       is_forum: r.type === 'group' && !!r.is_forum,
@@ -263,6 +264,21 @@ async function createGroup(ownerId, body) {
   await lazyMessages().createSystemMessage(chatId, ownerId, { event: 'group_created', title });
   await emitUpdated(chatId);
   return { chat: await getChat(ownerId, chatId), skipped };
+}
+
+/** Disappearing messages: new messages delete themselves after the chosen time (0 = off). */
+const DISAPPEAR_OPTIONS = [0, 3600, 86400, 604800, 7776000]; // off, 1 h, 24 h, 7 days, 90 days
+async function setDisappearing(userId, chatIdRaw, secondsRaw) {
+  await settings.requireFeature('feature_disappearing', 'Disappearing messages');
+  const chat = await requireMember(chatIdRaw, userId);
+  const seconds = Number(secondsRaw);
+  if (!DISAPPEAR_OPTIONS.includes(seconds)) throw badRequest('invalid_input', 'Choose off, 1 hour, 24 hours, 7 days or 90 days');
+  if (chat.type !== 'private') requireGroupAdmin(chat);
+  if ((chat.disappear_after_sec || 0) === seconds) return getChat(userId, chat.id);
+  await db.query('UPDATE chats SET disappear_after_sec = $2, updated_at = now() WHERE id = $1', [chat.id, seconds]);
+  await lazyMessages().createSystemMessage(chat.id, userId, { event: 'disappearing_changed', seconds });
+  await emitUpdated(chat.id);
+  return getChat(userId, chat.id);
 }
 
 async function updateGroup(userId, chatIdRaw, body) {
@@ -831,6 +847,8 @@ async function chatStats(userId, chatIdRaw) {
 }
 
 module.exports = {
+  setDisappearing,
+  DISAPPEAR_OPTIONS,
   ADMIN_ROLES,
   MULTI_TYPES,
   isMulti,

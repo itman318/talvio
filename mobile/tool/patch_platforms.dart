@@ -14,6 +14,7 @@ void main() {
   _androidBranding();
   _iosBranding();
   _releaseSigning();
+  _googleServices();
   _ios();
   stdout.writeln('\nDone. Next: flutter pub get && flutter run --dart-define=API_BASE=http://<your-server>:4000');
 }
@@ -345,4 +346,26 @@ void _releaseSigning() {
     f.writeAsStringSync(s);
     return;
   }
+}
+
+/// Push notifications: when android/app/google-services.json exists (CI writes it from the
+/// GOOGLE_SERVICES_JSON secret), apply the Google Services Gradle plugin so Firebase works.
+void _googleServices() {
+  if (!File('android/app/google-services.json').existsSync()) return;
+  final settings = File('android/settings.gradle.kts').existsSync() ? File('android/settings.gradle.kts') : File('android/settings.gradle');
+  final app = File('android/app/build.gradle.kts').existsSync() ? File('android/app/build.gradle.kts') : File('android/app/build.gradle');
+  if (!settings.existsSync() || !app.existsSync()) return;
+  final kts = settings.path.endsWith('.kts');
+  var s = settings.readAsStringSync();
+  if (!s.contains('com.google.gms.google-services')) {
+    s = s.replaceFirst(RegExp(r'plugins\s*\{'),
+        kts ? 'plugins {\n    id("com.google.gms.google-services") version "4.4.2" apply false' : 'plugins {\n    id "com.google.gms.google-services" version "4.4.2" apply false');
+    settings.writeAsStringSync(s);
+  }
+  var a = app.readAsStringSync();
+  if (!a.contains('com.google.gms.google-services')) {
+    a = a.replaceFirst(RegExp(r'plugins\s*\{'), kts ? 'plugins {\n    id("com.google.gms.google-services")' : 'plugins {\n    id "com.google.gms.google-services"');
+    app.writeAsStringSync(a);
+  }
+  stdout.writeln('✓ Firebase (push notifications) enabled');
 }

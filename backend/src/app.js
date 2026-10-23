@@ -41,7 +41,7 @@ function createApp() {
     (req, res, next) => {
       res.setHeader(
         'Content-Security-Policy',
-        "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; " +
+        "default-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; " +
           "connect-src 'self' ws: wss:; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'",
       );
       res.setHeader('Service-Worker-Allowed', '/web/');

@@ -58,6 +58,10 @@ dependencies:
   image: ^4.2.0
   connectivity_plus: ^6.1.0
 
+  # Premium batch: maps for (live) locations
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

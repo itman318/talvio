@@ -24,6 +24,7 @@
     { id: 'settings', label: 'Settings', perm: 'settings' },
     { id: 'pages', label: 'Pages & FAQ', perm: 'settings' },
     { id: 'admins', label: 'Admin team', perm: 'admins' },
+    { id: 'crashes', label: 'App crashes', perm: 'logs.view' },
     { id: 'logs', label: 'Activity log', perm: 'logs.view' },
   ];
   const REASONS = { spam: 'Spam', abuse: 'Abuse / harassment', scam: 'Scam / fraud', violence: 'Violence', sexual: 'Sexual content', illegal: 'Illegal', other: 'Other' };
@@ -807,6 +808,12 @@
     feature_polls: ['Polls & quizzes', ''],
     feature_voice_messages: ['Voice messages', ''],
     feature_location: ['Location sharing', ''],
+    feature_link_previews: ['Link previews', 'The server shows a title and picture for links in messages.'],
+    feature_stickers: ['Stickers', 'Sticker packs in the chat composer.'],
+    feature_gifs: ['GIF search', 'Needs a free Tenor API key (Google Cloud → Tenor API) below.'],
+    gif_api_key: ['Tenor API key', 'From console.cloud.google.com → APIs → Tenor API → Credentials.'],
+    feature_disappearing: ['Disappearing messages', 'Users can set messages to delete themselves after a time.'],
+    feature_live_location: ['Live location', 'Share your moving location for 15 min – 8 hours.'],
     feature_calls: ['Voice calls', 'One-to-one calls between users.'],
     feature_video_calls: ['Video calls', 'Needs voice calls to be on.'],
     call_ring_timeout_sec: ['Ring for (seconds)', 'After this the call counts as missed.'],
@@ -829,7 +836,7 @@
   };
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
-    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Talvio Plus & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
@@ -1138,6 +1145,41 @@
       pager(data, (p) => { logsState.page = p; pageLogs(); }));
   }
 
+  // ------------------------------------------------------------------ crashes (reported by the apps)
+  const crashState = { status: 'open', platform: '' };
+  async function pageCrashes() {
+    const stat = (label, value) => el('div', { class: 'card stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+    const status = el('select', {}, [['open', 'Open'], ['resolved', 'Resolved'], ['all', 'All']]
+      .map(([v, l]) => el('option', { value: v, selected: crashState.status === v ? true : null }, l)));
+    const platform = el('select', {}, [['', 'All platforms'], ['android', 'Android'], ['ios', 'iOS'], ['web', 'Web'], ['desktop', 'Desktop']]
+      .map(([v, l]) => el('option', { value: v, selected: crashState.platform === v ? true : null }, l)));
+    status.addEventListener('change', () => { crashState.status = status.value; pageCrashes(); });
+    platform.addEventListener('change', () => { crashState.platform = platform.value; pageCrashes(); });
+    const bar = el('div', { class: 'toolbar' }, status, platform);
+    main.replaceChildren(head('App crashes'), bar, el('div', { class: 'muted' }, 'Loading…'));
+    const data = await action(() => api('GET', `/crashes?${new URLSearchParams({ status: crashState.status, platform: crashState.platform })}`));
+    if (!data) return;
+    const rows = data.crashes.map((c) => {
+      const stack = el('pre', { class: 'muted', style: 'display:none;white-space:pre-wrap;font-size:12px;max-width:640px' }, c.stack || '(no stack)');
+      const btn = el('button', { class: 'btn' }, c.resolved_at ? 'Reopen' : 'Mark fixed');
+      btn.addEventListener('click', async () => {
+        if (await action(() => api('POST', `/crashes/${c.id}/resolve`, { resolved: !c.resolved_at }), c.resolved_at ? 'Reopened' : 'Marked as fixed')) pageCrashes();
+      });
+      return el('tr', { class: 'clickable', onclick: (e) => { if (e.target !== btn) stack.style.display = stack.style.display === 'none' ? 'block' : 'none'; } },
+        el('td', {}, el('div', { style: 'font-weight:600;max-width:520px;word-break:break-word' }, c.message), stack),
+        el('td', {}, el('span', { class: 'chip' }, c.platform), ' ', c.app_version || ''),
+        el('td', { class: 'num' }, fmtNum(c.count)),
+        el('td', { class: 'num' }, fmtNum(c.users_count)),
+        el('td', { class: 'muted' }, c.last_device || '—'),
+        el('td', { class: 'muted' }, fmtDate(c.last_seen)),
+        el('td', {}, btn));
+    });
+    main.replaceChildren(head('App crashes'),
+      el('div', { class: 'stats' }, stat('Open problems', fmtNum(data.totals.open)), stat('Crashes in last 24h', fmtNum(data.totals.last_24h))),
+      bar,
+      table(['Error (tap for details)', 'Platform', 'Times', 'Users', 'Last device', 'Last seen', ''], rows, 'No crashes reported 🎉'));
+  }
+
   // ------------------------------------------------------------------ calls
   const CALL_STATUS = { ringing: ['Ringing', 'warn'], accepted: ['On call', 'ok'], ended: ['Ended', ''], missed: ['Missed', 'warn'], declined: ['Declined', ''], busy: ['Busy', ''], failed: ['Failed', 'bad'] };
   const callsState = { status: '', video: '', user: '', page: 1 };
@@ -1419,6 +1461,7 @@
     support: pageSupport,
     admins: pageAdmins,
     logs: pageLogs,
+    crashes: pageCrashes,
   };
 
   // ------------------------------------------------------------------ boot

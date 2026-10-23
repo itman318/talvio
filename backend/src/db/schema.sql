@@ -707,3 +707,72 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(254);
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_uq ON users (lower(email)) WHERE email IS NOT NULL;
 -- otp_codes.phone holds the login target: "+92…" for SMS or "name@mail.com" for email codes
 ALTER TABLE otp_codes ALTER COLUMN phone TYPE VARCHAR(254);
+
+-- ---------------------------------------------------------------- crash reports from the apps (self-hosted)
+CREATE TABLE IF NOT EXISTS client_errors (
+  id           BIGSERIAL PRIMARY KEY,
+  fingerprint  CHAR(64)     NOT NULL UNIQUE,
+  platform     VARCHAR(16)  NOT NULL DEFAULT 'other',
+  app_version  VARCHAR(20)  NOT NULL DEFAULT '',
+  message      TEXT         NOT NULL,
+  stack        TEXT         NOT NULL DEFAULT '',
+  last_device  VARCHAR(100) NOT NULL DEFAULT '',
+  last_user_id BIGINT,
+  count        INT          NOT NULL DEFAULT 1,
+  users_count  INT          NOT NULL DEFAULT 1,
+  resolved_at  TIMESTAMPTZ,
+  first_seen   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  last_seen    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS client_errors_last_seen_idx ON client_errors (last_seen DESC);
+CREATE TABLE IF NOT EXISTS client_error_users (
+  error_id BIGINT NOT NULL REFERENCES client_errors(id) ON DELETE CASCADE,
+  user_id  BIGINT NOT NULL,
+  PRIMARY KEY (error_id, user_id)
+);
+
+-- ---------------------------------------------------------------- link previews
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS link_preview JSONB;
+CREATE TABLE IF NOT EXISTS link_previews (
+  url_hash   CHAR(64)    PRIMARY KEY,
+  url        TEXT        NOT NULL,
+  data       JSONB,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------- stickers
+CREATE TABLE IF NOT EXISTS sticker_packs (
+  id            BIGSERIAL PRIMARY KEY,
+  title         VARCHAR(64)  NOT NULL,
+  slug          VARCHAR(40)  UNIQUE,
+  owner_id      BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  is_official   BOOLEAN      NOT NULL DEFAULT FALSE,
+  is_public     BOOLEAN      NOT NULL DEFAULT TRUE,
+  installs      INT          NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS stickers (
+  id         BIGSERIAL PRIMARY KEY,
+  pack_id    BIGINT      NOT NULL REFERENCES sticker_packs(id) ON DELETE CASCADE,
+  media_id   BIGINT      NOT NULL REFERENCES media(id),
+  emoji      VARCHAR(16) NOT NULL DEFAULT '',
+  position   INT         NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS stickers_pack_idx ON stickers (pack_id, position);
+CREATE TABLE IF NOT EXISTS user_sticker_packs (
+  user_id  BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  pack_id  BIGINT      NOT NULL REFERENCES sticker_packs(id) ON DELETE CASCADE,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, pack_id)
+);
+ALTER TABLE media DROP CONSTRAINT IF EXISTS media_kind_check;
+ALTER TABLE media ADD CONSTRAINT media_kind_check CHECK (kind IN ('image', 'video', 'voice', 'file', 'avatar', 'sticker'));
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact'));
+
+-- ---------------------------------------------------------------- disappearing messages
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS disappear_after_sec INT NOT NULL DEFAULT 0;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS messages_expires_idx ON messages (expires_at) WHERE expires_at IS NOT NULL AND deleted_at IS NULL;

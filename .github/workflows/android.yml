@@ -45,6 +45,7 @@ jobs:
       - name: Generate android/ folder
         env:
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           flutter --version
           flutter create . --org com.talvio --project-name chatapp --platforms=android
@@ -57,6 +58,8 @@ jobs:
           else
             echo "SIGNED=debug" >> $GITHUB_ENV
           fi
+          # push notifications: Firebase config from the GOOGLE_SERVICES_JSON secret (optional)
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json; fi
           dart run tool/patch_platforms.dart
           # keep Gradle within the runner's memory (the default -Xmx8G can get the runner killed)
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties

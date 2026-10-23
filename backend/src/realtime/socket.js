@@ -134,7 +134,13 @@ function previewText(message) {
     case 'poll':
       return `📊 ${message.text}`;
     case 'location':
-      return '📍 Location';
+      return message.meta && message.meta.live ? '📍 Live location' : '📍 Location';
+    case 'sticker':
+      return `${(message.meta && message.meta.sticker && message.meta.sticker.emoji) || '🙂'} Sticker`;
+    case 'gif':
+      return message.text ? `GIF · ${message.text}` : 'GIF';
+    case 'contact':
+      return `👤 ${(message.meta && message.meta.contact && message.meta.contact.name) || 'Contact'}`;
     default:
       return message.text;
   }

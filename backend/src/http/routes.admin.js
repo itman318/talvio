@@ -159,6 +159,8 @@ router.put('/pages/:slug', requireAdmin('settings'), h(async (req, res) => {
 }));
 
 // audit log
+router.get('/crashes', requireAdmin('logs.view'), h(async (req, res) => res.json(await require('../services/crash.service').list(req.query))));
+router.post('/crashes/:id/resolve', requireAdmin('logs.view'), h(async (req, res) => res.json(await require('../services/crash.service').resolve(req.params.id, req.body.resolved !== false))));
 router.get('/logs', requireAdmin('logs.view'), h(async (req, res) => res.json(await admin.listLogs(req.query))));
 
 // media (for reviewing reported content)

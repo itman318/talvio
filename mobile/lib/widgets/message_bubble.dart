@@ -10,6 +10,9 @@ import '../screens/calls_screen.dart';
 import '../screens/thread_screen.dart';
 import 'bot_widgets.dart';
 import '../theme/brand.dart';
+import 'link_preview.dart';
+import 'sticker_widgets.dart';
+import 'contact_card.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -63,6 +66,10 @@ class MessageBubble extends StatelessWidget {
         return PollView(message: m, accent: accent);
       case 'location':
         return LocationView(message: m, accent: accent);
+      case 'gif':
+        return GifView(message: m);
+      case 'contact':
+        return ContactCardView(message: m, accent: accent);
       case 'call':
         return CallLogBubble(message: m, isMine: isMine, peer: chat.peer, accent: accent);
       default:
@@ -82,6 +89,34 @@ class MessageBubble extends StatelessWidget {
     final colors = ChatColors.of(context);
     final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
     final textColor = isMine ? Colors.white : scheme.onSurface;
+
+    if (m.type == 'sticker' && m.replyTo == null) {
+      // stickers float without a bubble; a small time chip sits under them
+      return Align(
+        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
+          onLongPress: onLongPress,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            child: Column(crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              if (showSender && !isMine)
+                Text(m.sender?.name ?? '', style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
+              StickerView(message: m),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: Colors.black.withAlpha(dark ? 90 : 40), borderRadius: BorderRadius.circular(10)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(messageTime(m.createdAt), style: const TextStyle(fontSize: 11, color: Colors.white)),
+                  if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
+                ]),
+              ),
+              ReactionChips(message: m),
+            ]),
+          ),
+        ),
+      );
+    }
 
     final children = <Widget>[
       if (_asChannel && !isMine)
@@ -131,6 +166,7 @@ class MessageBubble extends StatelessWidget {
       if (m.type != 'text') _body(context, accent),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
       if (hasText) MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor)),
+      if (m.linkPreview != null && m.type == 'text') LinkPreviewCard(data: m.linkPreview!, accent: accent),
       ReactionChips(message: m),
       if (m.replyMarkup != null) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
       const SizedBox(height: 2),

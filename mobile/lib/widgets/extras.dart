@@ -1,5 +1,11 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../state/chat_store.dart';
+import '../core/prefs.dart';
+import 'package:provider/provider.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
@@ -58,38 +64,127 @@ class MessageText extends StatelessWidget {
 }
 
 /// Location card; tap opens the maps app.
-class LocationView extends StatelessWidget {
+class LocationView extends StatefulWidget {
   const LocationView({super.key, required this.message, required this.accent});
   final Message message;
   final Color accent;
 
   @override
+  State<LocationView> createState() => _LocationViewState();
+}
+
+/// A location (or live location) in a chat: a small map, the place, and "Open in Maps".
+class _LocationViewState extends State<LocationView> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // refresh "updated … ago" / "ends in …" while a live location is running
+    if (_liveUntil != null) _tick = Timer.periodic(const Duration(seconds: 30), (_) => mounted ? setState(() {}) : null);
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  DateTime? get _liveUntil => DateTime.tryParse('${(widget.message.meta?['live'] as Map?)?['until'] ?? ''}')?.toLocal();
+
+  @override
   Widget build(BuildContext context) {
-    final loc = message.location ?? const {};
+    final m = widget.message;
+    final loc = m.location ?? const {};
     final lat = (loc['lat'] as num?)?.toDouble() ?? 0;
     final lng = (loc['lng'] as num?)?.toDouble() ?? 0;
     final title = '${loc['title'] ?? ''}';
-    return InkWell(
-      onTap: () => launchUrl(
-        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'),
-        mode: LaunchMode.externalApplication,
-      ),
-      child: Container(
-        width: 230,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(10)),
-        child: Row(children: [
-          CircleAvatar(backgroundColor: accent, child: const Icon(Icons.location_on, color: Colors.white)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title.isEmpty ? 'Location' : title, style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text('${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}', style: const TextStyle(fontSize: 12)),
-              Text('Open in Maps', style: TextStyle(fontSize: 12, color: accent)),
-            ]),
+    final liveMeta = m.meta?['live'] as Map?;
+    final until = _liveUntil;
+    final live = until != null && until.isAfter(DateTime.now()) && liveMeta?['stopped'] != true;
+    final updated = DateTime.tryParse('${liveMeta?['updated_at'] ?? ''}')?.toLocal();
+    final saver = context.select<AppPrefs, bool>((p) => p.dataSaver);
+    final store = context.read<ChatStore>();
+    final mine = m.senderId == store.myId;
+    final point = LatLng(lat, lng);
+    return SizedBox(
+      width: 250,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        if (!saver)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 140,
+              child: IgnorePointer(
+                child: FlutterMap(
+                  key: ValueKey('$lat,$lng'),
+                  options: MapOptions(initialCenter: point, initialZoom: 15, interactionOptions: const InteractionOptions(flags: InteractiveFlag.none)),
+                  children: [
+                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.talvio.app'),
+                    MarkerLayer(markers: [
+                      Marker(
+                        point: point,
+                        width: 44,
+                        height: 44,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: live ? Brand.primary : widget.accent,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6)],
+                          ),
+                          child: Icon(live ? Icons.navigation_rounded : Icons.location_on, color: Colors.white, size: 22),
+                        ),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ]),
-      ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: () => launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'), mode: LaunchMode.externalApplication),
+          child: Row(children: [
+            Icon(live ? Icons.share_location_rounded : Icons.location_on_outlined, color: live ? Brand.primary : widget.accent, size: 20),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(live ? 'Live location' : (until != null ? 'Live location ended' : (title.isEmpty ? 'Location' : title)),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  live
+                      ? 'Updated ${updated == null ? 'just now' : _ago(updated)} · ends ${_inTime(until)}'
+                      : '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)} · Open in Maps',
+                  style: TextStyle(fontSize: 12, color: widget.accent),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+        if (live && mine && !m.isLocal)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => store.live.stop(m.id),
+              child: const Text('Stop sharing'),
+            ),
+          ),
+      ]),
     );
+  }
+
+  static String _ago(DateTime t) {
+    final s = DateTime.now().difference(t).inSeconds;
+    if (s < 60) return 'just now';
+    if (s < 3600) return '${s ~/ 60} min ago';
+    return '${s ~/ 3600} h ago';
+  }
+
+  static String _inTime(DateTime t) {
+    final m = t.difference(DateTime.now()).inMinutes;
+    if (m < 1) return 'soon';
+    if (m < 60) return 'in $m min';
+    return 'in ${(m / 60).round()} h';
   }
 }

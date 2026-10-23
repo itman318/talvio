@@ -11,7 +11,7 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file', 'poll', 'location'];
+const SEND_TYPES = ['text', 'image', 'video', 'voice', 'file', 'poll', 'location', 'sticker', 'gif', 'contact'];
 const SLOW_MODE_VALUES = [0, 10, 30, 60, 300, 900, 3600];
 const MENTION_RE = /(^|[^A-Za-z0-9_@])@([A-Za-z][A-Za-z0-9_]{3,31})/g;
 const MEDIA_KINDS_FOR_TYPE = {
@@ -187,6 +187,8 @@ async function serializeRows(viewerId, rows) {
       topic_id: m.topic_id || null,
       comments_count: commentMap.get(m.id) || 0,
       reply_markup: m.reply_markup || null,
+      link_preview: m.link_preview || null,
+      expires_at: iso(m.expires_at),
       client_id: m.client_id || null,
       edited_at: iso(m.edited_at),
       created_at: iso(m.created_at),
@@ -320,6 +322,40 @@ async function prepareMessage(userId, chat, body) {
     if (chat.type === 'private') throw badRequest('invalid_poll', 'Polls can be sent in groups and channels');
     out.poll = parsePoll(body.poll);
     out.text = out.poll.question;
+  } else if (type === 'sticker') {
+    await settings.requireFeature('feature_stickers', 'Stickers');
+    const st = await require('./sticker.service').stickerForSend(body.sticker_id); // lazy: avoids circular import
+    out.mediaId = st.media_id;
+    out.meta = { sticker: { id: st.id, pack_id: st.pack_id, emoji: st.emoji, pack_title: st.pack_title } };
+    out.text = '';
+  } else if (type === 'contact') {
+    const c = body.contact || {};
+    const name = v.str(c.name, { field: 'name', min: 1, max: 64, required: true });
+    const phone = c.phone ? v.tryNormalizePhone(String(c.phone)) : null;
+    let email = null;
+    if (c.email) {
+      try {
+        email = v.normalizeEmail(String(c.email));
+      } catch (_) {
+        email = null;
+      }
+    }
+    if (!phone && !email && !c.user_id) throw badRequest('invalid_contact', 'A contact needs a phone number, an email or a Talvio account');
+    // link it to a Talvio account when we can (only phone numbers people allow to be found)
+    let userIdForCard = null;
+    if (c.user_id) {
+      const u = await db.one(`SELECT id FROM users WHERE id = $1 AND status = 'active'`, [v.id(c.user_id, 'user_id')]);
+      userIdForCard = u ? u.id : null;
+    } else if (phone) {
+      const u = await db.one(`SELECT id FROM users WHERE phone = $1 AND status = 'active' AND privacy_phone <> 'nobody'`, [phone]);
+      userIdForCard = u ? u.id : null;
+    }
+    out.meta = { contact: { name, phone, email, user_id: userIdForCard } };
+    out.text = name;
+  } else if (type === 'gif') {
+    await settings.requireFeature('feature_gifs', 'GIFs');
+    out.meta = { gif: require('./sticker.service').validateGif(body.gif) };
+    if (text.length > MAX_CAPTION) throw badRequest('caption_too_long', `Captions can be at most ${MAX_CAPTION} characters`);
   } else if (type === 'location') {
     const loc = body.location || {};
     const lat = Number(loc.lat);
@@ -330,6 +366,13 @@ async function prepareMessage(userId, chat, body) {
     const title = v.str(loc.title, { field: 'title', max: 120 }) || '';
     out.meta = { location: { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, title } };
     out.text = title;
+    if (loc.live_minutes !== undefined && loc.live_minutes !== null) {
+      await settings.requireFeature('feature_live_location', 'Live location');
+      const minutes = Number(loc.live_minutes);
+      if (![15, 60, 480].includes(minutes)) throw badRequest('invalid_location', 'Live location lasts 15 minutes, 1 hour or 8 hours');
+      const now = new Date();
+      out.meta.live = { until: new Date(now.getTime() + minutes * 60000).toISOString(), updated_at: now.toISOString() };
+    }
   } else {
     if (text.length > MAX_CAPTION) throw badRequest('caption_too_long', `Captions can be at most ${MAX_CAPTION} characters`);
     const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
@@ -401,10 +444,12 @@ async function insertMessage({
     row = await db.tx(async (c) => {
       const r = await c.query(
         `INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id,
-                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id, album_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
+                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id, album_id, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+                 CASE WHEN $17 THEN (SELECT CASE WHEN disappear_after_sec > 0 THEN now() + make_interval(secs => disappear_after_sec) END FROM chats WHERE id = $1) END)
+         RETURNING *`,
         [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent,
-          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId],
+          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId, type !== 'system'],
       );
       const m = r.rows[0];
       if (mentionCandidates && senderId) {
@@ -466,7 +511,61 @@ async function insertMessage({
   const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
   const memberIds = await chatService.memberIds(chatId);
   bus.emit('message:new', { chatId, message, memberIds, senderId });
+  if (text && /https?:\/\//i.test(text) && type !== 'system') {
+    // fetch the link preview in the background, then tell everyone the message changed
+    setImmediate(() => require('./link.service').enrichMessage(row.id, text, async () => {
+      const fresh = await db.one('SELECT * FROM messages WHERE id = $1', [row.id]);
+      if (!fresh) return;
+      const [updated] = await serializeRows(BROADCAST_VIEWER, [fresh]);
+      bus.emit('message:edited', { chatId, message: updated, memberIds: await chatService.memberIds(chatId) });
+    }));
+  }
   return message;
+}
+
+/** Deletes messages whose disappearing timer ran out (called every minute by the server). */
+async function sweepExpired() {
+  const rows = await db.many(
+    `UPDATE messages SET deleted_at = now(), text = '', media_id = NULL, meta = NULL, link_preview = NULL
+     WHERE id IN (SELECT id FROM messages WHERE expires_at <= now() AND deleted_at IS NULL ORDER BY expires_at LIMIT 2000)
+     RETURNING id, chat_id`,
+  );
+  const byChat = new Map();
+  for (const r of rows) {
+    if (!byChat.has(r.chat_id)) byChat.set(r.chat_id, []);
+    byChat.get(r.chat_id).push(r.id);
+  }
+  for (const [chatId, ids] of byChat) {
+    bus.emit('message:deleted', { chatId, messageIds: ids, userIds: await chatService.memberIds(chatId) });
+  }
+  return rows.length;
+}
+
+/** Live location: the sender's phone posts new coordinates (or stop) until the time runs out. */
+async function updateLiveLocation(userId, messageIdRaw, body = {}) {
+  const m = await db.one('SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL', [v.id(messageIdRaw, 'message_id')]);
+  if (!m || m.type !== 'location' || !m.meta || !m.meta.live) throw notFound('message_not_found', 'Live location not found');
+  if (m.sender_id !== userId) throw forbidden('not_allowed', 'Only the sender can update a live location');
+  const meta = { ...m.meta, live: { ...m.meta.live } };
+  const now = new Date();
+  if (new Date(meta.live.until) <= now) return { ok: true, ended: true };
+  rateLimit.enforce(`live:${m.id}`, 20, 60 * 1000, 'Too many updates');
+  if (body.stop === true) {
+    meta.live.until = now.toISOString();
+    meta.live.stopped = true;
+  } else {
+    const lat = Number(body.lat);
+    const lng = Number(body.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw badRequest('invalid_location', 'Invalid location');
+    meta.location = { ...meta.location, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 };
+    if (Number.isFinite(Number(body.accuracy))) meta.live.accuracy = Math.min(5000, Math.round(Number(body.accuracy)));
+    if (Number.isFinite(Number(body.heading))) meta.live.heading = Math.round(Number(body.heading)) % 360;
+  }
+  meta.live.updated_at = now.toISOString();
+  const row = await db.one('UPDATE messages SET meta = $2 WHERE id = $1 RETURNING *', [m.id, JSON.stringify(meta)]);
+  const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
+  bus.emit('message:edited', { chatId: m.chat_id, message, memberIds: await chatService.memberIds(m.chat_id) });
+  return { ok: true, until: meta.live.until };
 }
 
 async function createSystemMessage(chatId, actorId, meta) {
@@ -611,9 +710,16 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   if (text === m.text) return (await serializeRows(userId, [m]))[0];
   const flags = await moderation.checkOutgoing(await db.one('SELECT * FROM users WHERE id = $1', [userId]), [text]);
 
-  const row = await db.one('UPDATE messages SET text = $2, edited_at = now() WHERE id = $1 RETURNING *', [m.id, text]);
+  const row = await db.one('UPDATE messages SET text = $2, edited_at = now(), link_preview = NULL WHERE id = $1 RETURNING *', [m.id, text]);
   const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
   bus.emit('message:edited', { chatId: m.chat_id, message, memberIds: await chatService.memberIds(m.chat_id) });
+  if (/https?:\/\//i.test(text)) {
+    setImmediate(() => require('./link.service').enrichMessage(m.id, text, async () => {
+      const fresh = await db.one('SELECT * FROM messages WHERE id = $1', [m.id]);
+      const [updated] = await serializeRows(BROADCAST_VIEWER, [fresh]);
+      bus.emit('message:edited', { chatId: m.chat_id, message: updated, memberIds: await chatService.memberIds(m.chat_id) });
+    }));
+  }
   if (flags.flaggedWord) {
     const sender = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
     moderation.afterSend(sender, message, flags).catch(() => {});
@@ -1009,6 +1115,8 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  updateLiveLocation,
+  sweepExpired,
   REACTIONS,
   SLOW_MODE_VALUES,
   pinMessage,

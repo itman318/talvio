@@ -78,6 +78,9 @@ String systemText(Message m, ChatStore store) {
       return 'Channel “${meta['title'] ?? ''}” created';
     case 'title_changed':
       return '$actor changed the group name to “${meta['title'] ?? ''}”';
+    case 'disappearing_changed':
+      final secs = (meta['seconds'] as num?)?.toInt() ?? 0;
+      return secs == 0 ? '$actor turned off disappearing messages' : '$actor set messages to disappear after ${disappearLabel(secs)}';
     case 'photo_changed':
       return '$actor changed the group photo';
     case 'photo_removed':
@@ -128,4 +131,13 @@ Future<bool> confirm(BuildContext context, String title, String body, {String ok
     ),
   );
   return r == true;
+}
+
+/// "1 hour", "24 hours", "7 days", "90 days" for the disappearing-messages timer.
+String disappearLabel(int seconds) {
+  if (seconds <= 0) return 'Off';
+  if (seconds < 86400) return '${seconds ~/ 3600} hour${seconds ~/ 3600 == 1 ? '' : 's'}';
+  if (seconds == 86400) return '24 hours';
+  final d = seconds ~/ 86400;
+  return '$d day${d == 1 ? '' : 's'}';
 }

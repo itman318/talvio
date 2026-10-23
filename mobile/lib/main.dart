@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'config.dart';
+import 'core/crash_reporter.dart';
 import 'core/prefs.dart';
 import 'core/services.dart';
 import 'screens/more_screens.dart';
@@ -20,9 +21,11 @@ final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CrashReporter.install();
   try {
     await _start();
   } catch (e, st) {
+    CrashReporter.report(e, st, context: 'startup');
     // Never leave the user on the launch screen: show what went wrong instead.
     debugPrint('Startup failed: $e\n$st');
     runApp(MaterialApp(
@@ -48,9 +51,12 @@ Future<void> _start() async {
     debugPrint('Prefs not loaded: $e');
   }
   final services = AppServices();
+  CrashReporter.tokenProvider = () => services.api.accessToken;
   final chats = ChatStore(services);
   final auth = AuthState(services, chats)..prefs = prefs;
   final calls = CallManager(services);
+  calls.lowData = prefs.dataSaver;
+  prefs.addListener(() => calls.lowData = prefs.dataSaver);
   calls.onShowCallScreen = () {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };

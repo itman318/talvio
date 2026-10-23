@@ -35,6 +35,25 @@
     s.append(p);
     return s;
   };
+  // Crash reports → our own server (Admin → App crashes). Once per distinct error per page load.
+  const sentErrors = new Set();
+  function reportError(message, stack) {
+    try {
+      const key = `${message}|${String(stack || '').split('\n').slice(0, 3).join('|')}`;
+      if (sentErrors.has(key) || sentErrors.size > 30) return;
+      sentErrors.add(key);
+      const headers = { 'content-type': 'application/json' };
+      const token = (() => { try { return localStorage.getItem('wc_access'); } catch (_) { return null; } })();
+      if (token) headers.authorization = `Bearer ${token}`;
+      fetch('/api/client-errors', { method: 'POST', headers, body: JSON.stringify({
+        platform: window.matchMedia('(display-mode: standalone)').matches ? 'desktop' : 'web',
+        app_version: 'web', device: navigator.userAgent.slice(0, 100), message: String(message).slice(0, 2000), stack: String(stack || '').slice(0, 12000),
+      }) }).catch(() => {});
+    } catch (_) { /* never throw from the reporter */ }
+  }
+  window.addEventListener('error', (e) => reportError(e.message || 'Script error', e.error && e.error.stack));
+  window.addEventListener('unhandledrejection', (e) => reportError(`Unhandled promise: ${e.reason && e.reason.message ? e.reason.message : e.reason}`, e.reason && e.reason.stack));
+
   const ICONS = {
     send: 'M12 4.5 5 11.5l1.6 1.6 4.3-4.3V20h2.2V8.8l4.3 4.3 1.6-1.6z',
     attach: 'M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z',
@@ -714,6 +733,16 @@
     else body.push(...mediaView(m));
     const text = album ? album.map((x) => x.text).filter(Boolean).join('\n') : m.type === 'poll' || m.type === 'location' || m.type === 'call' ? '' : m.text;
     if (text) body.push(el('div', { class: 'text' }, linkify(text)));
+    if (m.link_preview && m.type === 'text') {
+      const lp = m.link_preview;
+      const card = el('a', { class: 'lp', href: lp.url, target: '_blank', rel: 'noopener noreferrer' },
+        lp.image ? el('img', { src: lp.image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
+        el('div', { class: 'lp-body' },
+          lp.site ? el('b', {}, lp.site) : null,
+          lp.title ? el('div', { class: 'lp-title' }, lp.title) : null,
+          lp.description ? el('div', { class: 'lp-desc' }, lp.description) : null));
+      body.push(card);
+    }
     if (m.reactions && m.reactions.length) {
       body.push(el('div', { class: 'reacts' }, m.reactions.map((r) => el('span', { class: r.emoji === m.my_reaction ? 'mine' : '' }, `${r.emoji} ${r.count}`))));
     }

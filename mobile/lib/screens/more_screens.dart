@@ -629,6 +629,14 @@ class _StorageScreenState extends State<StorageScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Data & storage')),
       body: ListView(children: [
+        SwitchListTile(
+          secondary: const Icon(Icons.data_saver_on_rounded),
+          title: const Text('Data saver'),
+          subtitle: const Text('For slow or costly internet: photos and videos load only when you tap, smaller photo uploads, no link-preview pictures, lower video-call quality.'),
+          value: context.watch<AppPrefs>().dataSaver,
+          onChanged: (v) => context.read<AppPrefs>().setDataSaver(v),
+        ),
+        const Divider(),
         ListTile(
           leading: const Icon(Icons.sd_storage_outlined),
           title: const Text('Media cache'),

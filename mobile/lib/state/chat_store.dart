@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../core/api_client.dart';
+import '../core/live_location.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
 import '../models/models.dart';
@@ -322,6 +323,56 @@ class ChatStore extends ChangeNotifier {
     await _deliver(local);
   }
 
+  /// Stickers, GIFs, contact cards and live locations: no upload, just a typed payload.
+  Future<void> sendSpecial(int chatId, String type, Map<String, dynamic> payload, {Map<String, dynamic>? meta, String text = '', Message? replyTo}) async {
+    final local = Message(
+      id: _localId--,
+      chatId: chatId,
+      senderId: myId,
+      type: type,
+      text: text,
+      meta: meta,
+      clientId: _newClientId(),
+      createdAt: DateTime.now(),
+      sendState: SendState.sending,
+      outbox: {'type': type, if (text.isNotEmpty) 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id, ...payload},
+    );
+    _insertLocal(local);
+    await _deliver(local);
+  }
+
+  /// Live location for [minutes] (15, 60 or 480); the phone keeps it updated while the app is open.
+  late final live = LiveLocationService(this);
+  Future<void> sendLiveLocation(int chatId, double lat, double lng, int minutes) async {
+    final local = Message(
+      id: _localId--,
+      chatId: chatId,
+      senderId: myId,
+      type: 'location',
+      text: '',
+      meta: {
+        'location': {'lat': lat, 'lng': lng, 'title': ''},
+        'live': {'until': DateTime.now().add(Duration(minutes: minutes)).toUtc().toIso8601String()},
+      },
+      clientId: _newClientId(),
+      createdAt: DateTime.now(),
+      sendState: SendState.sending,
+      outbox: {
+        'type': 'location',
+        'location': {'lat': lat, 'lng': lng, 'title': '', 'live_minutes': minutes},
+      },
+    );
+    _insertLocal(local);
+    final real = await _deliver(local);
+    final until = DateTime.tryParse('${(real?.meta?['live'] as Map?)?['until'] ?? ''}');
+    if (real != null && until != null) live.start(real.id, until);
+  }
+
+  Future<void> sendSticker(int chatId, Map<String, dynamic> sticker) => sendSpecial(chatId, 'sticker', {'sticker_id': sticker['id']},
+      meta: {'sticker': {'id': sticker['id'], 'emoji': sticker['emoji'], 'url': sticker['url'], 'pack_id': sticker['pack_id']}});
+
+  Future<void> sendGif(int chatId, Map<String, dynamic> gif) => sendSpecial(chatId, 'gif', {'gif': gif}, meta: {'gif': gif});
+
   /// type: image | video | voice | file
   Future<void> sendMedia(
     int chatId,
@@ -391,7 +442,7 @@ class ChatStore extends ChangeNotifier {
     await _deliver(local);
   }
 
-  Future<void> _deliver(Message local) async {
+  Future<Message?> _deliver(Message local) async {
     final payload = <String, dynamic>{...local.outbox!, 'chat_id': local.chatId, 'client_id': local.clientId};
     try {
       Map<String, dynamic> json;
@@ -401,12 +452,15 @@ class ChatStore extends ChangeNotifier {
       } else {
         json = Map<String, dynamic>.from(await api.post('/chats/${local.chatId}/messages', payload) as Map);
       }
-      _confirm(local, Message.fromJson(json));
+      final real = Message.fromJson(json);
+      _confirm(local, real);
+      return real;
     } on ApiException catch (e) {
       _fail(local, e.message);
     } catch (_) {
       _fail(local, 'Could not send');
     }
+    return null;
   }
 
   void _fail(Message local, String error) {
@@ -568,6 +622,22 @@ class ChatStore extends ChangeNotifier {
     }) as Map));
     _upsertChat(c);
     return c;
+  }
+
+  Future<Chat> setDisappearing(int chatId, int seconds) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.put('/chats/$chatId/disappearing', {'seconds': seconds}) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  /// Live location: post the latest position (or stop sharing).
+  Future<Map<String, dynamic>> updateLiveLocation(int messageId, {double? lat, double? lng, double? accuracy, bool stop = false}) async {
+    return Map<String, dynamic>.from(await api.post('/messages/$messageId/live', {
+      if (stop) 'stop': true,
+      if (!stop) 'lat': lat,
+      if (!stop) 'lng': lng,
+      if (accuracy != null) 'accuracy': accuracy,
+    }) as Map);
   }
 
   Future<Chat> setGroupAvatar(int chatId, String? path) async {

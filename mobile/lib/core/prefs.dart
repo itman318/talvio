@@ -21,6 +21,10 @@ class AppPrefs extends ChangeNotifier {
   /// Auto-download photos: 'always' | 'wifi' | 'never'. Videos and files always wait for a tap.
   String autoPhotos = 'always';
 
+  /// Data saver (for slow or costly internet): photos/videos only on tap, smaller uploads,
+  /// no link-preview pictures, lower call video quality.
+  bool dataSaver = false;
+
   Future<void> load() async {
     _p = await SharedPreferences.getInstance();
     final p = _p!;
@@ -37,6 +41,7 @@ class AppPrefs extends ChangeNotifier {
     biometric = p.getBool('lock_biometric') ?? false;
     lockAfterMinutes = p.getInt('lock_after') ?? 1;
     autoPhotos = p.getString('auto_photos') ?? 'always';
+    dataSaver = p.getBool('data_saver') ?? false;
     notifyListeners();
   }
 
@@ -59,8 +64,19 @@ class AppPrefs extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDataSaver(bool v) {
+    dataSaver = v;
+    _p?.setBool('data_saver', v);
+    notifyListeners();
+  }
+
+  /// Image quality (1-100) and longest side for photos we upload.
+  int get uploadQuality => dataSaver ? 60 : 85;
+  double get uploadMaxSide => dataSaver ? 1280 : 2560;
+
   /// Should a photo download by itself right now?
   Future<bool> autoDownloadPhotos() async {
+    if (dataSaver) return false;
     if (autoPhotos == 'always') return true;
     if (autoPhotos == 'never') return false;
     try {

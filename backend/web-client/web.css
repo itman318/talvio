@@ -150,3 +150,12 @@ a { color: var(--accent-dark); }
   .messages, .composer { padding-left: 8px; padding-right: 8px; }
 }
 .send.attach svg { fill: var(--muted); }
+
+.lp { display: block; margin-top: 6px; border-left: 3px solid var(--accent); background: var(--tint); border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; max-width: 420px; }
+.lp img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
+.lp-body { padding: 8px 10px; }
+.lp-body b { color: var(--accent-dark); font-size: 12px; }
+.lp-title { font-weight: 700; margin: 1px 0; }
+.lp-desc { font-size: 13px; opacity: .8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.row.mine .lp { background: rgba(255,255,255,.08); border-left-color: #FF8A6E; }
+.row.mine .lp-body b { color: #FF8A6E; }
