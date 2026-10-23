@@ -386,8 +386,16 @@ class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
+  // Same ink background as the native launch screen, so start-up has no flash.
   Widget build(BuildContext context) => const Scaffold(
-        body: Center(child: BrandMark(size: 84)),
+        backgroundColor: Brand.ink,
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            BrandMark(size: 96),
+            SizedBox(height: 18),
+            Text(AppConfig.appName, style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6)),
+          ]),
+        ),
       );
 }
 

@@ -43,15 +43,24 @@ jobs:
           cache: true
 
       - name: Generate android/ folder
+        env:
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter --version
           flutter create . --org com.talvio --project-name chatapp --platforms=android
-          dart run tool/patch_platforms.dart
           rm -f test/widget_test.dart  # template test for the default counter app
+          # release signing with the encrypted upload key (see android-key.yml); debug key otherwise
+          if [ -n "$KEY_PASS" ] && [ -f signing/upload-keystore.jks.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in signing/upload-keystore.jks.enc -out android/upload.jks -pass env:KEY_PASS
+            printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=upload\nkeyPassword=%s\n' "$KEY_PASS" "$KEY_PASS" > android/key.properties
+            echo "SIGNED=release" >> $GITHUB_ENV
+          else
+            echo "SIGNED=debug" >> $GITHUB_ENV
+          fi
+          dart run tool/patch_platforms.dart
           # keep Gradle within the runner's memory (the default -Xmx8G can get the runner killed)
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties
           printf '%s\n' 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g' 'org.gradle.workers.max=2' 'kotlin.daemon.jvmargs=-Xmx1g' >> android/gradle.properties
-          cat android/gradle.properties
           sed -n '/buildTypes/,/^    }/p' android/app/build.gradle* || true
 
       - name: Get packages
@@ -71,8 +80,9 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          { flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 \
-              --dart-define=API_BASE=${{ vars.API_BASE || 'http://10.0.2.2:4000' }}; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
+          DEFINES="--dart-define=API_BASE=${{ vars.API_BASE || 'http://10.0.2.2:4000' }} --build-number=${{ github.run_number }}"
+          { flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 $DEFINES &&
+            { [ "$SIGNED" != release ] || flutter build appbundle --release $DEFINES; }; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
       - name: Save report to ci-logs branch
         if: always()
@@ -94,15 +104,19 @@ jobs:
         run: |
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk talvio.apk
           cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk talvio-x86_64-emulator.apk
+          FILES="talvio.apk talvio-x86_64-emulator.apk"
+          if [ -f mobile/build/app/outputs/bundle/release/app-release.aab ]; then
+            cp mobile/build/app/outputs/bundle/release/app-release.aab talvio-playstore.aab; FILES="$FILES talvio-playstore.aab"
+          fi
           R="${{ github.repository }}"
           TITLE="Talvio Android (test build #${{ github.run_number }})"
-          NOTES="Built from ${{ github.sha }}. Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only - set the API_BASE variable)' }}"
+          NOTES="Built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only - set the API_BASE variable)' }}"
           for i in 1 2 3; do
             if gh release view android-latest -R "$R" >/dev/null 2>&1; then
-              gh release upload android-latest talvio.apk talvio-x86_64-emulator.apk --clobber -R "$R" &&
+              gh release upload android-latest $FILES --clobber -R "$R" &&
                 gh release edit android-latest --title "$TITLE" --notes "$NOTES" --prerelease -R "$R" && exit 0
             else
-              gh release create android-latest talvio.apk talvio-x86_64-emulator.apk -R "$R" --target "${{ github.sha }}" \
+              gh release create android-latest $FILES -R "$R" --target "${{ github.sha }}" \
                 --prerelease --title "$TITLE" --notes "$NOTES" && exit 0
             fi
             echo "publish attempt $i failed, retrying"; sleep 15

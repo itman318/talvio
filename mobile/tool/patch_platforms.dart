@@ -11,6 +11,9 @@ void main() {
   _android();
   _pluginCompileSdk();
   _noMinify();
+  _androidBranding();
+  _iosBranding();
+  _releaseSigning();
   _ios();
   stdout.writeln('\nDone. Next: flutter pub get && flutter run --dart-define=API_BASE=http://<your-server>:4000');
 }
@@ -201,6 +204,145 @@ void _noMinify() {
     s = s.substring(0, at) + add + s.substring(at);
     f.writeAsStringSync(s);
     stdout.writeln('✓ $name: R8 minify/shrink off for release');
+    return;
+  }
+}
+
+/// Talvio launcher icons (legacy + adaptive + themed), and the launch/splash screen in brand ink.
+/// The PNGs come from branding/ (regenerate with: node tool/branding/render.js branding).
+void _androidBranding() {
+  final res = Directory('android/app/src/main/res');
+  final src = Directory('branding/android');
+  if (!res.existsSync() || !src.existsSync()) return;
+  for (final f in src.listSync(recursive: true).whereType<File>()) {
+    final rel = f.path.substring(src.path.length + 1);
+    final dst = File('${res.path}/$rel');
+    dst.parent.createSync(recursive: true);
+    f.copySync(dst.path);
+  }
+  void write(String rel, String body) {
+    final f = File('${res.path}/$rel');
+    f.parent.createSync(recursive: true);
+    f.writeAsStringSync(body);
+  }
+
+  const adaptive = '''<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/talvio_ink"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
+</adaptive-icon>
+''';
+  write('mipmap-anydpi-v26/ic_launcher.xml', adaptive);
+  write('mipmap-anydpi-v26/ic_launcher_round.xml', adaptive);
+  write('values/talvio_colors.xml', '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="talvio_ink">#151A2E</color>
+</resources>
+''');
+  const launch = '''<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/talvio_ink"/>
+    <item><bitmap android:gravity="center" android:src="@drawable/splash_logo"/></item>
+</layer-list>
+''';
+  write('drawable/launch_background.xml', launch);
+  write('drawable-v21/launch_background.xml', launch);
+  const v31 = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowSplashScreenBackground">@color/talvio_ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/talvio_ink</item>
+    </style>
+</resources>
+''';
+  write('values-v31/styles.xml', v31);
+  write('values-night-v31/styles.xml', v31);
+  stdout.writeln('✓ Android: Talvio launcher icons + splash screen');
+}
+
+void _iosBranding() {
+  final set = Directory('ios/Runner/Assets.xcassets/AppIcon.appiconset');
+  final src = Directory('branding/ios');
+  if (!set.existsSync() || !src.existsSync()) return;
+  for (final f in set.listSync().whereType<File>()) {
+    if (f.path.endsWith('.png')) f.deleteSync();
+  }
+  final images = <String>[];
+  void add(String idiom, double size, int scale) {
+    final px = (size * scale).round();
+    final name = 'Icon-$px.png';
+    final file = File('${src.path}/$name');
+    if (!file.existsSync()) return;
+    file.copySync('${set.path}/$name');
+    final sz = size == size.roundToDouble() ? size.toInt().toString() : size.toString();
+    images.add('{"idiom":"$idiom","size":"${sz}x$sz","scale":"${scale}x","filename":"$name"}');
+  }
+
+  for (final s in [20.0, 29.0, 40.0, 60.0]) {
+    add('iphone', s, 2);
+    add('iphone', s, 3);
+  }
+  for (final s in [20.0, 29.0, 40.0, 76.0]) {
+    add('ipad', s, 1);
+    add('ipad', s, 2);
+  }
+  add('ipad', 83.5, 2);
+  add('ios-marketing', 1024, 1);
+  File('${set.path}/Contents.json').writeAsStringSync('{"images":[${images.join(',')}],"info":{"version":1,"author":"talvio"}}');
+  stdout.writeln('✓ iOS: Talvio app icon');
+}
+
+/// Release signing: when android/key.properties exists (written by CI from the encrypted upload key),
+/// sign release builds with it instead of the debug key. Also sets the Play Store application id.
+void _releaseSigning() {
+  const appId = 'com.talvio.app';
+  for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
+    final f = File(name);
+    if (!f.existsSync()) continue;
+    var s = f.readAsStringSync();
+    final kts = name.endsWith('.kts');
+    s = s.replaceFirst(RegExp(r'applicationId\s*=?\s*"[^"]*"'), kts ? 'applicationId = "$appId"' : 'applicationId "$appId"');
+    if (File('android/key.properties').existsSync() && !s.contains('talvio-release-signing')) {
+      final block = kts
+          ? '''
+    // talvio-release-signing
+    signingConfigs {
+        create("release") {
+            val props = java.util.Properties().apply { load(rootProject.file("key.properties").inputStream()) }
+            keyAlias = props["keyAlias"] as String
+            keyPassword = props["keyPassword"] as String
+            storeFile = rootProject.file(props["storeFile"] as String)
+            storePassword = props["storePassword"] as String
+        }
+    }
+'''
+          : '''
+    // talvio-release-signing
+    signingConfigs {
+        release {
+            def props = new Properties()
+            props.load(rootProject.file("key.properties").newInputStream())
+            keyAlias props["keyAlias"]
+            keyPassword props["keyPassword"]
+            storeFile rootProject.file(props["storeFile"])
+            storePassword props["storePassword"]
+        }
+    }
+''';
+      final i = s.indexOf('buildTypes');
+      if (i > 0) s = s.substring(0, i) + block.trimLeft() + '\n    ' + s.substring(i);
+      s = kts
+          ? s.replaceAll('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")')
+          : s.replaceAll('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release');
+      stdout.writeln('✓ $name: release builds signed with the upload key');
+    }
+    f.writeAsStringSync(s);
     return;
   }
 }
