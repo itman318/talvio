@@ -155,6 +155,33 @@ void main() {
     await pumpUntil(t, find.text('Hey! 👋 How are you?'), seconds: 15, what: 'demo auto-reply');
     await settle(t, 800);
     await snap(t, 'demo-reply');
+    // emoji panel (Tali emoji + full emoji keyboard)
+    await t.tap(find.byTooltip('Emoji, stickers & GIFs'));
+    await settle(t, 1500);
+    await snap(t, 'demo-emoji');
+    await t.tap(find.byTooltip('Keyboard'));
+    await settle(t, 600);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await settle(t, 600);
+    // theme & wallpaper
+    await t.tap(find.byType(PopupMenuButton<String>).last);
+    await settle(t, 800);
+    await t.tap(find.text('Theme & wallpaper'));
+    await pumpUntil(t, find.text('Ocean'), what: 'theme screen');
+    await t.tap(find.text('Ocean'));
+    await settle(t, 1200);
+    await snap(t, 'demo-theme');
+    await t.pageBack();
+    await settle(t, 1500);
+    await snap(t, 'demo-chat-ocean');
+    // shared media
+    await t.tap(find.byType(PopupMenuButton<String>).last);
+    await settle(t, 800);
+    await t.tap(find.text('Shared media'));
+    await settle(t, 2500);
+    await snap(t, 'demo-media');
+    await t.pageBack();
+    await settle(t);
     await t.pageBack();
     await settle(t);
     await t.dragFrom(const Offset(160, 250), const Offset(0, 500));
