@@ -249,7 +249,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     return m;
   });
   if (media && pc) {
-    await step('send photo message', () => api.post(`/api/chats/${pc.id}/messages`, { type: 'photo', media_id: media.id, text: 'pic' }, A.access_token));
+    await step('send photo message', () => api.post(`/api/chats/${pc.id}/messages`, { type: 'image', media_id: media.id, text: 'pic' }, A.access_token));
     await step('download media (member)', async () => {
       const r = await call('GET', `/api/media/${media.id}`, { token: B.access_token, raw: true });
       assert(r.status === 200, `status ${r.status}`);
@@ -307,8 +307,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       await api.post(`/api/chats/${g.id}/members/${C.me.id}`, {}, A.access_token).catch(() => {});
       await api.get(`/api/chats/invite/${code}`, C.access_token);
     });
-    await step('topics on', async () => {
-      await api.patch(`/api/chats/${g.id}`, { topics_enabled: true }, A.access_token).catch(() => {});
+    await step('topics on (forum) + list', async () => {
+      await api.patch(`/api/chats/${g.id}`, { is_forum: true }, A.access_token);
       await api.get(`/api/chats/${g.id}/topics`, A.access_token);
     });
     await step('kick C', () => call('DELETE', `/api/chats/${g.id}/members/${C.me.id}`, { token: A.access_token }));
@@ -316,7 +316,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       const r = await call('GET', `/api/chats/${g.id}/messages`, { token: C.access_token, raw: true });
       assert(r.status === 403 || r.status === 404, `kicked user got ${r.status}`);
     });
-    if (m1) await step('forward to group', () => api.post('/api/messages/forward', { from_chat_id: pc.id, to_chat_id: g.id, message_ids: [m1.id] }, A.access_token));
+    if (m1) await step('forward to group', () => api.post('/api/messages/forward', { from_chat_id: pc.id, to_chat_ids: [g.id], message_ids: [m1.id] }, A.access_token));
   }
 
   // channels
