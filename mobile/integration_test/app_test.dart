@@ -6,7 +6,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:chatapp/main.dart' as app;
 
-const phoneDigits = '3005550001';
+const email = 'muhammad@talvio.test';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -39,10 +39,15 @@ void main() {
 
   testWidgets('login → chats → send message → tabs', (t) async {
     app.main();
-    await pumpUntil(t, find.text('Your phone number'), seconds: 60, what: 'login screen');
+    await pumpUntil(t, find.text('Email address'), seconds: 60, what: 'login screen (email)');
     await snap(t, 'login');
+    await t.tap(find.text('Phone'));
+    await settle(t, 600);
+    await snap(t, 'login-phone');
+    await t.tap(find.text('Email'));
+    await settle(t, 600);
 
-    await t.enterText(find.widgetWithText(TextField, 'Phone number'), phoneDigits);
+    await t.enterText(find.widgetWithText(TextField, 'Email address'), email);
     await t.tap(find.text('Next'));
     await pumpUntil(t, find.textContaining('Dev mode code:'), what: 'OTP screen with dev code');
     await snap(t, 'otp');

@@ -296,13 +296,16 @@
     const status = el('div', { class: 'qr-status muted' }, 'Loading…');
     const qrPane = el('div', { class: 'qr-box' }, canvas, status);
     const phonePane = el('div', { class: 'hidden', style: 'flex:0 0 300px' });
+    const emailPane = el('div', { class: 'hidden', style: 'flex:0 0 300px' });
     const tabs = el('div', { class: 'tabs' },
       el('button', { class: 'active', onclick: (e) => switchTab(e, 'qr') }, 'QR code'),
+      el('button', { onclick: (e) => switchTab(e, 'email') }, 'Email'),
       el('button', { onclick: (e) => switchTab(e, 'phone') }, 'Phone number'));
     function switchTab(e, which) {
       [...tabs.children].forEach((b) => b.classList.toggle('active', b === e.currentTarget));
       qrPane.classList.toggle('hidden', which !== 'qr');
       phonePane.classList.toggle('hidden', which !== 'phone');
+      emailPane.classList.toggle('hidden', which !== 'email');
     }
     $app.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'login-card' },
       el('div', { class: 'login-steps' },
@@ -315,8 +318,9 @@
           el('li', {}, 'Point your phone at this screen')),
         tabs,
         el('p', { class: 'muted' }, 'Tip: install it as a desktop app from your browser menu (“Install Talvio”).')),
-      qrPane, phonePane)));
+      qrPane, emailPane, phonePane)));
     buildPhoneLogin(phonePane);
+    buildCodeLogin(emailPane, 'email');
 
     const device = { platform: window.matchMedia('(display-mode: standalone)').matches ? 'desktop' : 'web', name: browserName() };
     (async function loop() {
@@ -362,7 +366,15 @@
   }
 
   function buildPhoneLogin(box) {
-    const phone = el('input', { type: 'tel', placeholder: '+92 300 1234567', autocomplete: 'tel' });
+    buildCodeLogin(box, 'phone');
+  }
+
+  /** Login with a one-time code sent by email (free) or SMS. */
+  function buildCodeLogin(box, kind) {
+    const isEmail = kind === 'email';
+    const phone = isEmail
+      ? el('input', { type: 'email', placeholder: 'name@gmail.com', autocomplete: 'email' })
+      : el('input', { type: 'tel', placeholder: '+92 300 1234567', autocomplete: 'tel' });
     const code = el('input', { type: 'text', inputmode: 'numeric', placeholder: '6-digit code', maxlength: 8 });
     const hint = el('div', { class: 'muted' });
     const step2 = el('div', { class: 'hidden' }, el('div', { class: 'field' }, el('label', {}, 'Code'), code), hint);
@@ -372,14 +384,19 @@
       btn.disabled = true;
       try {
         if (!sent) {
-          const r = await api('POST', '/auth/otp/request', { phone: phone.value.trim() });
-          sent = r.phone;
+          const r = isEmail
+            ? await api('POST', '/auth/email/request', { email: phone.value.trim() })
+            : await api('POST', '/auth/otp/request', { phone: phone.value.trim() });
+          sent = isEmail ? r.email : r.phone;
           step2.classList.remove('hidden');
-          hint.textContent = r.dev_code ? `Development mode code: ${r.dev_code}` : 'We sent the code by SMS.';
+          hint.textContent = r.dev_code ? `Development mode code: ${r.dev_code}` : isEmail ? 'We emailed you the code (check Spam too).' : 'We sent the code by SMS.';
           btn.textContent = 'Log in';
           code.focus();
         } else {
-          const r = await api('POST', '/auth/otp/verify', { phone: sent, code: code.value.trim(), device: { platform: 'web', name: browserName(), app_version: 'web' } });
+          const device = { platform: 'web', name: browserName(), app_version: 'web' };
+          const r = isEmail
+            ? await api('POST', '/auth/email/verify', { email: sent, code: code.value.trim(), device })
+            : await api('POST', '/auth/otp/verify', { phone: sent, code: code.value.trim(), device });
           saveAuth(r);
           if (r.needs_profile) return renderProfileSetup();
           start();
@@ -390,7 +407,8 @@
         btn.disabled = false;
       }
     });
-    box.append(el('h3', { style: 'margin-top:0' }, 'Log in with phone'), el('div', { class: 'field' }, el('label', {}, 'Phone number'), phone), step2, btn);
+    box.append(el('h3', { style: 'margin-top:0' }, isEmail ? 'Log in with email' : 'Log in with phone'),
+      el('div', { class: 'field' }, el('label', {}, isEmail ? 'Email address' : 'Phone number'), phone), step2, btn);
   }
 
   function renderProfileSetup() {

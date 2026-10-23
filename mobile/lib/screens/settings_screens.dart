@@ -35,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
             contentPadding: const EdgeInsets.all(16),
             leading: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 64),
             title: Text(me.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-            subtitle: Text([me.phone ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty).join('\n')),
+            subtitle: Text([me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty).join('\n')),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
           ),
           ...auth.otherAccounts.map((a) => ListTile(
@@ -85,7 +85,7 @@ class SettingsScreen extends StatelessWidget {
           if (auth.feature('premium'))
             ListTile(
               leading: const Icon(Icons.star_rounded, color: premiumColor),
-              title: const Text('Premium'),
+              title: const Text('Talvio Plus'),
               subtitle: Text(auth.me?.isPremium == true ? 'Active' : 'Bigger uploads, more folders, no ads'),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
             ),

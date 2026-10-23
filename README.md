@@ -77,7 +77,7 @@ Admin panel: on/off switch and counts only (content can't be read by anyone but 
 
 ## Batch D — what's included
 
-**Bots & mini apps:** create bots in the app (token like BotFather), Telegram-style Bot API (long polling
+**Bots & mini apps:** create bots in the app (Settings → My bots), Talvio Bot API at `/api/bot/v1/<method>` (long polling
 or webhooks), commands menu, START screen, inline buttons (callback / link / mini app), mini apps in an
 in-app web view with signed user data. **Channel comments** under posts. **Topics** in groups.
 **Premium** (⭐ badge, bigger uploads, more folders, no ads) with **JazzCash**, **Easypaisa** and
@@ -111,6 +111,18 @@ grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never)
 4. When it finishes (~15 min), open the repo's **Releases → android-latest** and download `talvio.apk` (64-bit phones — nearly all phones from the last 6+ years).
 
 The APK is signed with the debug key — fine for testing; set up a release key before publishing on Play Store.
+
+## Login: email code or phone (SMS)
+
+- **Email (default, free):** the app asks for an email address and sends a 6-digit code. Set `MAIL_PROVIDER`
+  (`brevo` free plan, `resend`, or `smtp`/Gmail) in `backend/.env`. Accounts made this way have no phone number.
+- **Phone (SMS):** same flow by SMS — needs an SMS provider (`SMS_PROVIDER`) and costs per message.
+- Admin → Settings → General turns each method on/off; the app and web show only what is enabled.
+
+## Our own names (not a copy of any other messenger)
+
+Vault chats (end-to-end encrypted), My Notes (chat with yourself), Talvio Plus (premium), the Talvio Bot API
+(`/api/bot/v1/<method>`, `Authorization: Bearer tlv_…`), `talvio://` links, `window.Talvio` for mini apps.
 
 ## Next
 

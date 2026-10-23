@@ -47,7 +47,7 @@ async function create(userId, body = {}) {
   const n = await db.one('SELECT count(*) AS n FROM chat_folders WHERE user_id = $1', [userId]);
   const max = (await require('./payment.service').limitsFor(userId)).folders;
   if (Number(n.n) >= max) {
-    throw badRequest('too_many_folders', `You can have up to ${max} folders${max === MAX_FOLDERS ? ' (Premium: more)' : ''}`);
+    throw badRequest('too_many_folders', `You can have up to ${max} folders${max === MAX_FOLDERS ? ' (Talvio Plus: more)' : ''}`);
   }
   const flags = readFlags(body, { include_private: false, include_groups: false, include_channels: false, include_unread_only: false });
   const chatIds = await ownChatIds(userId, body.chat_ids);

@@ -7,7 +7,7 @@ import '../core/services.dart';
 import '../models/models.dart';
 import '../utils/format.dart';
 
-/// Settings → My bots: create bots and get their Bot API token (like BotFather).
+/// Settings → My bots: create bots and get their Talvio Bot API token.
 class MyBotsScreen extends StatefulWidget {
   const MyBotsScreen({super.key});
 
@@ -108,7 +108,7 @@ Future<void> showTokenDialog(BuildContext context, String token) {
         const SizedBox(height: 10),
         SelectableText(token, style: const TextStyle(fontFamily: 'monospace')),
         const SizedBox(height: 10),
-        Text('API: ${AppConfig.serverUrl}/bot<token>/getMe', style: const TextStyle(fontSize: 12)),
+        Text('API: ${AppConfig.serverUrl}/api/bot/v1/me\nHeader: Authorization: Bearer <token>', style: const TextStyle(fontSize: 12)),
       ]),
       actions: [
         TextButton(

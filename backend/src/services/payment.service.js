@@ -50,7 +50,7 @@ async function limitsFor(userId) {
 async function perks() {
   const s = await settings.getAll();
   return [
-    { key: 'badge', title: 'Premium badge', text: 'A ⭐ next to your name' },
+    { key: 'badge', title: 'Plus badge', text: 'A ⭐ next to your name' },
     { key: 'uploads', title: `Upload files up to ${s.premium_upload_mb} MB`, text: `Instead of ${s.max_upload_mb} MB` },
     { key: 'folders', title: `${PREMIUM_FOLDERS} chat folders`, text: `Instead of ${FREE_FOLDERS}` },
     { key: 'no_ads', title: 'No sponsored messages', text: 'No ads in channels' },
@@ -69,7 +69,7 @@ function providers() {
 }
 
 async function premiumInfo(userId) {
-  await settings.requireFeature('feature_premium', 'Premium');
+  await settings.requireFeature('feature_premium', 'Talvio Plus');
   const u = await db.one('SELECT premium_until FROM users WHERE id = $1', [userId]);
   const plans = await db.many('SELECT * FROM premium_plans WHERE is_active ORDER BY sort, months');
   const s = await settings.getAll();
@@ -118,7 +118,7 @@ function checkPayToken(orderId, token) {
 }
 
 async function checkout(userId, body = {}) {
-  await settings.requireFeature('feature_premium', 'Premium');
+  await settings.requireFeature('feature_premium', 'Talvio Plus');
   const plan = await db.one('SELECT * FROM premium_plans WHERE id = $1 AND is_active', [v.id(body.plan_id, 'plan_id')]);
   if (!plan) throw notFound('plan_not_found', 'This plan is not available');
   const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual'], 'provider');
@@ -229,7 +229,7 @@ async function jazzcashReturn(body) {
   }
   if (r.paid && r.amountPkr === o.amount_pkr) {
     await markPaid(o.id, { providerRef: r.providerRef, raw: body, message: r.message });
-    return { ok: true, message: 'Payment successful — Premium is active.', order: o };
+    return { ok: true, message: 'Payment successful — Talvio Plus is active.', order: o };
   }
   await markFailed(o.id, { message: `${r.code} ${r.message}`.trim(), raw: body });
   return { ok: false, message: r.message || 'Payment was not completed.', order: o };
@@ -247,13 +247,13 @@ async function easypaisaDone(orderIdRaw, token, query = {}) {
   if (!checkPayToken(id, token)) throw notFound('order_not_found', 'Payment link is invalid');
   const o = await db.one(`SELECT * FROM payment_orders WHERE id = $1 AND provider = 'easypaisa'`, [id]);
   if (!o) throw notFound('order_not_found', 'Payment not found');
-  if (o.status === 'paid') return { ok: true, message: 'Payment successful — Premium is active.', order: o };
+  if (o.status === 'paid') return { ok: true, message: 'Payment successful — Talvio Plus is active.', order: o };
   if (easypaisa.canInquire()) {
     try {
       const q = await easypaisa.inquire(o.txn_ref);
       if (q.paid && q.amountPkr === o.amount_pkr) {
         await markPaid(o.id, { providerRef: q.providerRef, raw: q.raw, message: q.status });
-        return { ok: true, message: 'Payment successful — Premium is active.', order: o };
+        return { ok: true, message: 'Payment successful — Talvio Plus is active.', order: o };
       }
       if (String(query.status || '') !== '0000') {
         await markFailed(o.id, { message: String(query.desc || q.status || 'Not paid').slice(0, 300), raw: q.raw });
@@ -268,7 +268,7 @@ async function easypaisaDone(orderIdRaw, token, query = {}) {
     o.id,
     `Easypaisa says: ${String(query.status || '?')} ${String(query.desc || '')}`.slice(0, 300),
   ]);
-  return { ok: true, message: 'Thanks! We are confirming your payment — Premium will be activated shortly.', order: o };
+  return { ok: true, message: 'Thanks! We are confirming your payment — Talvio Plus will be activated shortly.', order: o };
 }
 
 /** Scheduler: abandoned hosted-checkout orders expire after 2 hours. */

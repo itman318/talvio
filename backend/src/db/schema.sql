@@ -699,3 +699,11 @@ CREATE INDEX IF NOT EXISTS qr_logins_expiry_idx ON qr_logins (expires_at);
 
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS album_id VARCHAR(36);
 CREATE INDEX IF NOT EXISTS messages_album_idx ON messages (album_id) WHERE album_id IS NOT NULL;
+
+-- ---------------------------------------------------------------- email login
+-- Accounts can sign in with a phone number (SMS code) or an email address (email code).
+ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(254);
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_uq ON users (lower(email)) WHERE email IS NOT NULL;
+-- otp_codes.phone holds the login target: "+92…" for SMS or "name@mail.com" for email codes
+ALTER TABLE otp_codes ALTER COLUMN phone TYPE VARCHAR(254);

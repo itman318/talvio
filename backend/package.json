@@ -1,7 +1,7 @@
 {
-  "name": "chatapp-backend",
+  "name": "talvio-backend",
   "version": "1.0.0",
-  "description": "Telegram-style messaging app \u2014 Phase 1 backend (REST API + Socket.IO + admin API)",
+  "description": "Talvio messaging app backend (REST API + Socket.IO + admin API)",
   "main": "src/server.js",
   "private": true,
   "engines": {

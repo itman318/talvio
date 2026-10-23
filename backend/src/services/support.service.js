@@ -119,7 +119,7 @@ async function adminList(query = {}) {
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = await db.one(`SELECT count(*) AS n FROM support_tickets t JOIN users u ON u.id = t.user_id ${whereSql}`, params);
   const rows = await db.many(
-    `SELECT t.*, u.first_name, u.last_name, u.username, u.phone, a.name AS assigned_name,
+    `SELECT t.*, u.first_name, u.last_name, u.username, u.phone, u.email, a.name AS assigned_name,
             (SELECT from_user FROM support_messages WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS awaiting_admin
      FROM support_tickets t JOIN users u ON u.id = t.user_id LEFT JOIN admins a ON a.id = t.assigned_to
      ${whereSql}
@@ -133,7 +133,7 @@ async function adminList(query = {}) {
 async function adminGet(ticketIdRaw) {
   const id = v.id(ticketIdRaw, 'ticket_id');
   const t = await db.one(
-    `SELECT t.*, u.first_name, u.last_name, u.username, u.phone, u.status AS user_status, a.name AS assigned_name
+    `SELECT t.*, u.first_name, u.last_name, u.username, u.phone, u.email, u.status AS user_status, a.name AS assigned_name
      FROM support_tickets t JOIN users u ON u.id = t.user_id LEFT JOIN admins a ON a.id = t.assigned_to WHERE t.id = $1`,
     [id],
   );

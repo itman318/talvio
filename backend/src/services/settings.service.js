@@ -6,6 +6,8 @@ const { badRequest } = require('../utils/errors');
 /** Admin-editable settings with defaults and type rules. */
 const DEFINITIONS = {
   registration_open: { type: 'boolean', default: true },
+  login_email_enabled: { type: 'boolean', default: true },
+  login_phone_enabled: { type: 'boolean', default: true },
   maintenance_mode: { type: 'boolean', default: false },
   maintenance_message: { type: 'string', default: 'We are doing maintenance. Please try again soon.', max: 300 },
   max_group_members: { type: 'integer', default: 1000, min: 2, max: 200000 },
@@ -167,6 +169,7 @@ async function publicConfig() {
   const s = await getAll();
   return {
     registration_open: s.registration_open,
+    login_methods: { email: s.login_email_enabled, phone: s.login_phone_enabled },
     maintenance_mode: s.maintenance_mode,
     maintenance_message: s.maintenance_message,
     max_upload_mb: s.max_upload_mb,

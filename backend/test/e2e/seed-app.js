@@ -26,9 +26,16 @@ async function login(phone, first, last) {
   return { token: t.access_token, id: me.id };
 }
 
+async function loginEmail(email) {
+  const r = await call('POST', '/auth/email/request', { email });
+  const t = await call('POST', '/auth/email/verify', { email, code: r.dev_code, device: { name: 'seed' } });
+  const me = await call('GET', '/me', null, t.access_token);
+  return { token: t.access_token, id: me.id };
+}
+
 async function seed() {
-  // the app logs in as +923005550001; create it now (no profile) so others can message it
-  const me = await login('+923005550001');
+  // the app logs in with the email code as muhammad@talvio.test; create it now (no profile) so others can message it
+  const me = await loginEmail('muhammad@talvio.test');
   const sana = await login('+923005550002', 'Sana', 'Ahmed');
   const ali = await login('+923005550003', 'Ali', 'Raza');
 

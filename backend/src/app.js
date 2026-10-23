@@ -25,8 +25,8 @@ function createApp() {
     }
   });
 
-  // Bot API (Telegram-style): /bot<token>/<method>
-  app.all('/bot:token/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
+  // Talvio Bot API: /api/bot/v1/<method>, token in "Authorization: Bearer <token>"
+  app.all('/api/bot/v1/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
 
   // Payment pages for JazzCash / Easypaisa hosted checkout
   app.use('/pay', require('./http/routes.pay'));

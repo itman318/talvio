@@ -442,7 +442,7 @@ test('account deletion frees phone, leaves groups, keeps history as Deleted Acco
 test('saved messages (chat with yourself)', async () => {
   const saved = await chats.getOrCreatePrivate(B.id, B.id);
   assert.equal(saved.is_saved_messages, true);
-  assert.equal(saved.title, 'Saved Messages');
+  assert.equal(saved.title, 'My Notes');
   await messages.sendMessage(B.id, saved.id, { text: 'note to self' });
   const list = await chats.listChats(B.id);
   assert.ok(list.find((c) => c.id === saved.id).last_message.text === 'note to self');

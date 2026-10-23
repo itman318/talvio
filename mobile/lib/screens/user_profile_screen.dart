@@ -104,7 +104,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       if (context.read<AuthState>().feature('secret_chats')) ...[
                         const SizedBox(width: 8),
                         IconButton.filledTonal(
-                          tooltip: 'Secret chat',
+                          tooltip: 'Vault chat',
                           icon: const Icon(Icons.lock_outline),
                           onPressed: () => startSecretChat(context, u),
                         ),

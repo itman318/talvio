@@ -67,10 +67,28 @@ async function login(phone, first) {
   const list = Array.isArray(r) ? r : r.messages || [];
   if (!list.some((m) => m.text === 'Haan, web se likh raha hoon')) throw new Error('message sent from web did not reach the other user');
 
+  // second browser: log in with an email code
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const p2 = await ctx2.newPage();
+  p2.on('pageerror', (e) => errors.push(e.message));
+  await p2.goto(BASE + '/web/');
+  await p2.click('.tabs button:has-text("Email")');
+  await p2.fill('input[type=email]', 'web.mail@talvio.test');
+  await p2.click('button:visible:has-text("Send code")');
+  await p2.waitForFunction(() => /code: \d{6}/.test(document.body.innerText), null, { timeout: 15000 });
+  const devCode = (await p2.evaluate(() => document.body.innerText.match(/code: (\d{6})/)[1]));
+  await p2.fill('input[inputmode=numeric]:visible', devCode);
+  await p2.click('button:visible:has-text("Log in")');
+  await p2.waitForSelector('input[placeholder="First name"]', { timeout: 15000 });
+  await p2.fill('input[placeholder="First name"]', 'Mail');
+  await p2.click('button:has-text("Continue")');
+  await p2.waitForSelector('.chat-list', { timeout: 15000 });
+  await p2.screenshot({ path: `${OUT}/web-3-email-login.png` });
+
   const usingSocket = await page.evaluate(() => !!(window.io && document.querySelector('script[src*="socket.io"]')));
   await browser.close();
   const bad = errors.filter((e) => !/favicon|ERR_ABORTED/.test(e));
-  console.log(`PASS web client: QR login, open chat, send, live receive (socket.io client loaded: ${usingSocket})`);
+  console.log(`PASS web client: QR login, open chat, send, live receive (socket.io: ${usingSocket}), email-code login + profile`);
   if (bad.length) {
     console.log('Browser errors:\n' + bad.join('\n'));
     process.exit(1);

@@ -133,7 +133,7 @@ class AuthState extends ChangeNotifier {
   Future<void> _rememberActive() async {
     final u = me;
     if (u == null) return;
-    await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone, avatarUrl: u.avatarUrl));
+    await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone ?? u.email, avatarUrl: u.avatarUrl));
     addingAccount = false;
   }
 
@@ -155,10 +155,24 @@ class AuthState extends ChangeNotifier {
     return Map<String, dynamic>.from(await api.post('/auth/otp/request', {'phone': phone}) as Map);
   }
 
-  Future<void> verifyOtp(String phone, String code) async {
-    final data = Map<String, dynamic>.from(await api.post('/auth/otp/verify', {
-      'phone': phone,
-      'code': code,
+  Future<void> verifyOtp(String phone, String code) =>
+      _verify('/auth/otp/verify', {'phone': phone, 'code': code});
+
+  /// Login code by email (free) — the account is identified by the email address.
+  Future<Map<String, dynamic>> requestEmailCode(String email) async {
+    return Map<String, dynamic>.from(await api.post('/auth/email/request', {'email': email}) as Map);
+  }
+
+  Future<void> verifyEmailCode(String email, String code) =>
+      _verify('/auth/email/verify', {'email': email, 'code': code});
+
+  /// Which login methods the server allows (admin → Settings → General).
+  bool get emailLoginEnabled => (appConfig['login_methods'] as Map?)?['email'] != false;
+  bool get phoneLoginEnabled => (appConfig['login_methods'] as Map?)?['phone'] != false;
+
+  Future<void> _verify(String path, Map<String, dynamic> body) async {
+    final data = Map<String, dynamic>.from(await api.post(path, {
+      ...body,
       'device': {
         'name': _deviceName(),
         'platform': Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'other'),
@@ -207,7 +221,7 @@ class AuthState extends ChangeNotifier {
   Future<void> _parkActive() async {
     final u = me;
     if (u != null && api.refreshToken != null) {
-      await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone, avatarUrl: u.avatarUrl, access: api.accessToken, refresh: api.refreshToken));
+      await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone ?? u.email, avatarUrl: u.avatarUrl, access: api.accessToken, refresh: api.refreshToken));
     }
     onAccountSwitch?.call();
     services.socket.disconnect();
@@ -327,6 +341,7 @@ class AuthState extends ChangeNotifier {
         'bio': u.bio,
         'avatar_url': u.avatarUrl,
         'phone': u.phone,
+        'email': u.email,
         'is_verified': u.isVerified,
         'is_premium': u.isPremium,
         'privacy': u.privacy,

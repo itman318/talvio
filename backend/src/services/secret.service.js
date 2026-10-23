@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Secret chats — end-to-end encrypted, bound to ONE device on each side (like Telegram).
+ * Secret chats — end-to-end encrypted, bound to ONE device on each side.
  *
  * The server never sees keys or content. It only:
  *   - passes the two devices' public X25519 keys to each other (key exchange),
@@ -80,31 +80,31 @@ async function serializeOne(row, viewerId) {
 /** Loads an active chat and checks that this exact device is one of its two ends. */
 async function requireDevice(userId, sessionId, chatIdRaw, { allowRequested = false } = {}) {
   const row = await db.one('SELECT * FROM secret_chats WHERE id = $1', [v.id(chatIdRaw, 'secret_chat_id')]);
-  if (!row || (row.initiator_id !== userId && row.peer_id !== userId)) throw notFound('secret_chat_not_found', 'Secret chat not found');
-  if (row.status === 'closed') throw conflict('secret_chat_closed', 'This secret chat was closed');
+  if (!row || (row.initiator_id !== userId && row.peer_id !== userId)) throw notFound('secret_chat_not_found', 'Vault chat not found');
+  if (row.status === 'closed') throw conflict('secret_chat_closed', 'This vault chat was closed');
   if (row.status === 'requested' && !allowRequested) throw conflict('secret_chat_pending', 'Waiting for the other person to come online');
   const role = roleOf(row, userId, sessionId);
-  if (!role) throw forbidden('wrong_device', 'This secret chat is on another device');
+  if (!role) throw forbidden('wrong_device', 'This vault chat is on another device');
   return { row, role };
 }
 
 // ------------------------------------------------------------------ lifecycle
 async function create(userId, sessionId, body = {}) {
-  await settings.requireFeature('feature_secret_chats', 'Secret chats');
+  await settings.requireFeature('feature_secret_chats', 'Vault chats');
   const peerId = v.id(body.user_id, 'user_id');
   const key = parseKey(body.public_key);
-  if (peerId === userId) throw badRequest('invalid_input', 'You can’t start a secret chat with yourself');
+  if (peerId === userId) throw badRequest('invalid_input', 'You can’t start a vault chat with yourself');
   const me = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
   moderation.assertNotRestricted(me);
   const peer = await db.one('SELECT id, status FROM users WHERE id = $1', [peerId]);
   if (!peer || peer.status !== 'active') throw notFound('user_not_found', 'User not found');
-  if (await userService.isBlockedEither(userId, peerId)) throw forbidden('blocked', 'You can’t start a secret chat with this user');
-  rateLimit.enforce(`secret:new:${userId}`, 10, 60 * 60 * 1000, 'You started too many secret chats. Try again later.');
+  if (await userService.isBlockedEither(userId, peerId)) throw forbidden('blocked', 'You can’t start a vault chat with this user');
+  rateLimit.enforce(`secret:new:${userId}`, 10, 60 * 60 * 1000, 'You started too many vault chats. Try again later.');
   const open = await db.one(
     `SELECT count(*)::int AS n FROM secret_chats WHERE status <> 'closed' AND (initiator_session_id = $1 OR peer_session_id = $1)`,
     [sessionId],
   );
-  if (open.n >= MAX_OPEN_PER_DEVICE) throw forbidden('too_many_secret_chats', 'Close some secret chats first');
+  if (open.n >= MAX_OPEN_PER_DEVICE) throw forbidden('too_many_secret_chats', 'Close some vault chats first');
 
   const row = await db.one(
     `INSERT INTO secret_chats (initiator_id, initiator_session_id, initiator_key, peer_id) VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -112,7 +112,7 @@ async function create(userId, sessionId, body = {}) {
   );
   emit('secret:request', { secret_chat: await serializeOne(row, peerId) }, { userIds: [peerId] });
   push
-    .sendToUsers([peerId], { title: userService.displayName(me), body: '🔒 Wants to start a secret chat' }, { type: 'secret', secret_chat_id: row.id })
+    .sendToUsers([peerId], { title: userService.displayName(me), body: '🔒 Wants to start a vault chat' }, { type: 'secret', secret_chat_id: row.id })
     .catch(() => {});
   return { secret_chat: await serializeOne(row, userId) };
 }
@@ -123,11 +123,11 @@ async function accept(userId, sessionId, chatIdRaw, body = {}) {
   const row = await db.tx(async (c) => {
     const r = await c.query('SELECT * FROM secret_chats WHERE id = $1 FOR UPDATE', [v.id(chatIdRaw, 'secret_chat_id')]);
     const sc = r.rows[0];
-    if (!sc || sc.peer_id !== userId) throw notFound('secret_chat_not_found', 'Secret chat not found');
-    if (sc.status === 'closed') throw conflict('secret_chat_closed', 'This secret chat was closed');
+    if (!sc || sc.peer_id !== userId) throw notFound('secret_chat_not_found', 'Vault chat not found');
+    if (sc.status === 'closed') throw conflict('secret_chat_closed', 'This vault chat was closed');
     if (sc.status === 'active') {
       if (sc.peer_session_id === sessionId) return sc;
-      throw conflict('accepted_elsewhere', 'This secret chat was accepted on another device');
+      throw conflict('accepted_elsewhere', 'This vault chat was accepted on another device');
     }
     const u = await c.query(
       `UPDATE secret_chats SET status = 'active', peer_session_id = $2, peer_key = $3, accepted_at = now() WHERE id = $1 RETURNING *`,
@@ -156,10 +156,10 @@ async function finish(row, by, reason) {
 /** Decline a request (any of the peer's devices) or close a chat (one of its two devices). */
 async function close(userId, sessionId, chatIdRaw) {
   const row = await db.one('SELECT * FROM secret_chats WHERE id = $1', [v.id(chatIdRaw, 'secret_chat_id')]);
-  if (!row || (row.initiator_id !== userId && row.peer_id !== userId)) throw notFound('secret_chat_not_found', 'Secret chat not found');
+  if (!row || (row.initiator_id !== userId && row.peer_id !== userId)) throw notFound('secret_chat_not_found', 'Vault chat not found');
   if (row.status === 'closed') return { ok: true };
   const may = roleOf(row, userId, sessionId) || (row.status === 'requested' && row.peer_id === userId);
-  if (!may) throw forbidden('wrong_device', 'This secret chat is on another device');
+  if (!may) throw forbidden('wrong_device', 'This vault chat is on another device');
   await finish(row, userId, row.status === 'requested' && row.peer_id === userId ? 'declined' : 'closed');
   return { ok: true };
 }

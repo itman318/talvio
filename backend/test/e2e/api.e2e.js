@@ -119,6 +119,20 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     });
   }
 
+  const E = await step('email login (code by email, new account)', async () => {
+    const r = await api.post('/api/auth/email/request', { email: 'E2E.User@Example.com' });
+    assert(r.dev_code && r.email === 'e2e.user@example.com', JSON.stringify(r));
+    const t = await api.post('/api/auth/email/verify', { email: 'e2e.user@example.com', code: r.dev_code, device: { name: 'e2e' } });
+    assert(t.access_token && t.needs_profile === true, JSON.stringify(t).slice(0, 200));
+    await api.patch('/api/me', { first_name: 'Email' }, t.access_token);
+    const me = await api.get('/api/me', t.access_token);
+    assert(me.email === 'e2e.user@example.com' && !me.phone, JSON.stringify(me).slice(0, 200));
+    return { ...t, me };
+  });
+  await step('app-config exposes login methods', async () => {
+    const c = await api.get('/api/app-config');
+    assert(c.login_methods && c.login_methods.email === true && c.login_methods.phone === true, JSON.stringify(c.login_methods));
+  });
   const A = await step('login user A (OTP dev mode)', () => login('+923001110001', 'Ali'));
   const B = await step('login user B', () => login('+923001110002', 'Sana'));
   const C = await step('login user C', () => login('+923001110003', 'Usman'));
@@ -407,9 +421,15 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     return { ...b, token };
   });
   if (bot) {
-    await step('bot API getMe', async () => {
-      const r = await api.get(`/bot${bot.token}/getMe`);
-      assert(r.ok !== false, JSON.stringify(r));
+    await step('bot API me (Bearer token)', async () => {
+      const res = await fetch(`${BASE}/api/bot/v1/me`, { method: 'POST', headers: { authorization: `Bearer ${bot.token}` } });
+      const r = await res.json();
+      assert(r.ok === true && r.data && r.data.id, JSON.stringify(r));
+    });
+    await step('bot API rejects a bad token', async () => {
+      const res = await fetch(`${BASE}/api/bot/v1/me`, { method: 'POST', headers: { authorization: 'Bearer tlv_1_nopenopenopenopenopenope' } });
+      const r = await res.json();
+      assert(res.status === 401 && r.ok === false && r.error.code === 'invalid_token', JSON.stringify(r));
     });
   }
 

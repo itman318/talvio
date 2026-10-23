@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * "Log in with QR code" for the web / desktop app (like WhatsApp Web / Telegram Desktop).
+ * "Log in with QR code" for the web / desktop app.
  *
- *  1. Browser: POST /api/auth/qr → { token, qr: "chatapp://login?token=…", expires_in }  (shows it as a QR code)
+ *  1. Browser: POST /api/auth/qr → { token, qr: "talvio://login?token=…", expires_in }  (shows it as a QR code)
  *  2. Phone (logged in) scans it: POST /api/auth/qr/scan   → device name / IP to confirm
  *                                  POST /api/auth/qr/approve (or /decline)
  *  3. Browser polls GET /api/auth/qr/status?token=…&wait=25 → { status: "approved", access_token, refresh_token, user }
@@ -24,7 +24,7 @@ const changes = new EventEmitter();
 changes.setMaxListeners(0);
 
 function parseToken(raw) {
-  const t = String(raw || '').trim().replace(/^chatapp:\/\/login\?token=/, '');
+  const t = String(raw || '').trim().replace(/^talvio:\/\/login\?token=/, '');
   if (!/^[A-Za-z0-9_-]{20,64}$/.test(t)) throw badRequest('invalid_qr', 'This is not a login QR code');
   return t;
 }
@@ -39,7 +39,7 @@ async function create(device = {}, ip) {
     `INSERT INTO qr_logins (token_hash, device_name, platform, ip, expires_at) VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))`,
     [sha256(token), name, platform, ip || null, TTL_SEC],
   );
-  return { token, qr: `chatapp://login?token=${token}`, expires_in: TTL_SEC };
+  return { token, qr: `talvio://login?token=${token}`, expires_in: TTL_SEC };
 }
 
 async function load(token) {

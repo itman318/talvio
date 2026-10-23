@@ -146,7 +146,7 @@ class _ChatScreenState extends State<ChatScreen> {
           alignment: Alignment.centerRight,
           child: TextButton(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
-            child: const Text('Remove ads with Premium ⭐', style: TextStyle(fontSize: 12)),
+            child: const Text('Remove ads with Talvio Plus ⭐', style: TextStyle(fontSize: 12)),
           ),
         ),
       ]),
@@ -679,7 +679,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (chat.canPost) const PopupMenuItem(value: 'scheduled', child: Text('Scheduled messages')),
               if (chat.isMulti && chat.isAdmin) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('secret_chats'))
-                const PopupMenuItem(value: 'secret', child: Text('Start secret chat')),
+                const PopupMenuItem(value: 'secret', child: Text('Start vault chat')),
               if (chat.peer != null) PopupMenuItem(value: 'block', child: Text(chat.peer!.blocked ? 'Unblock user' : 'Block user')),
               if (!chat.isSavedMessages) const PopupMenuItem(value: 'report', child: Text('Report')),
               PopupMenuItem(value: 'leave', child: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'))),

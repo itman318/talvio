@@ -39,7 +39,7 @@ async function memberIds(chatId) {
   return rows.map((r) => r.user_id);
 }
 
-/** The other member of a private chat (null for "Saved Messages"). */
+/** The other member of a private chat (null for "My Notes"). */
 async function privatePeerId(chatId, userId) {
   const r = await db.one('SELECT user_id FROM chat_members WHERE chat_id = $1 AND user_id <> $2 LIMIT 1', [chatId, userId]);
   return r ? r.user_id : null;
@@ -108,7 +108,7 @@ async function serializeChats(userId, rows) {
     const peer = isPrivate && r.peer_id ? peers.get(r.peer_id) || null : null;
     const isSaved = isPrivate && !r.peer_id;
     let title = r.title;
-    if (isPrivate) title = isSaved ? 'Saved Messages' : userService.displayName(peer && { ...peer, status: peer.deleted ? 'deleted' : 'active' });
+    if (isPrivate) title = isSaved ? 'My Notes' : userService.displayName(peer && { ...peer, status: peer.deleted ? 'deleted' : 'active' });
     return {
       id: r.id,
       type: r.type,
@@ -677,7 +677,7 @@ async function transferOwnershipByOwner(userId, chatIdRaw, toUserIdRaw) {
 }
 
 // ------------------------------------------------------------------ channels & public usernames
-/** Usernames are shared between users, groups and channels (like Telegram). */
+/** Usernames are shared between users, groups and channels. */
 /** Throws if the username is on the admin "reserved" list (admins can still assign it). */
 async function assertNotReserved(name) {
   const reserved = await settings.get('reserved_usernames');

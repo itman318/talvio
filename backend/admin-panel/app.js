@@ -17,7 +17,7 @@
     { id: 'bots', label: 'Bots', perm: 'users.view' },
     { id: 'revenue', label: 'Revenue', perm: 'payments' },
     { id: 'payments', label: 'Payments', perm: 'payments' },
-    { id: 'plans', label: 'Premium plans', perm: 'payments' },
+    { id: 'plans', label: 'Talvio Plus plans', perm: 'payments' },
     { id: 'ads', label: 'Sponsored messages', perm: 'payments' },
     { id: 'support', label: 'Support', perm: 'support' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast' },
@@ -393,8 +393,8 @@
         stat('Messages today', fmtNum(d.messages_today)),
         stat('Calls today', fmtNum(d.calls_today)),
         stat('Calls right now', fmtNum(d.calls_active)),
-        stat('Secret chats', fmtNum(d.secret_chats_active)),
-        stat('Premium users', fmtNum(d.premium_users)),
+        stat('Vault chats', fmtNum(d.secret_chats_active)),
+        stat('Talvio Plus users', fmtNum(d.premium_users)),
         stat('Revenue this month', `Rs ${fmtNum(d.revenue_month_pkr)}`),
         stat('Payments to review', fmtNum(d.payments_to_review)),
         stat('Bots', fmtNum(d.bots_total)),
@@ -430,12 +430,12 @@
         el('td', { class: 'num' }, u.id),
         el('td', {}, fullName(u), u.is_verified ? el('span', { class: 'chip info', style: 'margin-left:6px' }, 'Verified') : null),
         el('td', {}, u.username ? `@${u.username}` : el('span', { class: 'muted' }, '—')),
-        el('td', { class: 'num' }, u.phone),
+        el('td', { class: 'num' }, u.phone || u.email || '—'),
         el('td', {}, statusChip(u)),
         el('td', { class: 'muted' }, u.online ? 'online' : ago(u.last_seen_at)),
         el('td', { class: 'muted' }, new Date(u.created_at).toLocaleDateString())));
       listBox.replaceChildren(
-        table(['ID', 'Name', 'Username', 'Phone', 'Status', 'Last seen', 'Joined'], rows, 'No users match'),
+        table(['ID', 'Name', 'Username', 'Phone / email', 'Status', 'Last seen', 'Joined'], rows, 'No users match'),
         pager(data, (p) => { usersState.page = p; load(); }));
     }
     search.addEventListener('input', debounce(() => { usersState.q = search.value.trim(); usersState.page = 1; load(); }, 300));
@@ -486,18 +486,18 @@
           class: 'btn',
           onclick: () => {
             const months = el('select', {}, [1, 3, 6, 12].map((m) => el('option', { value: m }, `${m} month${m > 1 ? 's' : ''}`)));
-            modal(premium ? 'Extend Premium' : 'Give Premium', [el('div', { class: 'field' }, el('label', {}, 'Length'), months)], 'Give', async () => {
-              const r = await action(() => api('POST', `/users/${id}/premium`, { months: Number(months.value) }), 'Premium given');
+            modal(premium ? 'Extend Talvio Plus' : 'Give Talvio Plus', [el('div', { class: 'field' }, el('label', {}, 'Length'), months)], 'Give', async () => {
+              const r = await action(() => api('POST', `/users/${id}/premium`, { months: Number(months.value) }), 'Talvio Plus given');
               if (r) reload();
               return !!r;
             });
           },
-        }, premium ? 'Extend Premium' : 'Give Premium'));
+        }, premium ? 'Extend Talvio Plus' : 'Give Talvio Plus'));
         if (premium) {
           actions.push(el('button', {
             class: 'btn',
-            onclick: async () => { if (await action(() => api('POST', `/users/${id}/premium`, { months: 0 }), 'Premium removed')) reload(); },
-          }, 'Remove Premium'));
+            onclick: async () => { if (await action(() => api('POST', `/users/${id}/premium`, { months: 0 }), 'Talvio Plus removed')) reload(); },
+          }, 'Remove Talvio Plus'));
         }
       }
       if (can('users.export')) {
@@ -546,7 +546,8 @@
         el('div', {}, el('h3', {}, fullName(u)), el('div', { class: 'muted' }, u.username ? `@${u.username}` : 'no username', ' · ID ', u.id), statusChip(u))),
       el('section', {}, el('div', { class: 'btn-row' }, actions)),
       el('section', {}, el('h4', {}, 'Profile'), el('div', { class: 'kv' },
-        el('div', {}, 'Phone'), el('div', {}, u.phone),
+        el('div', {}, 'Phone'), el('div', {}, u.phone || '—'),
+        el('div', {}, 'Email'), el('div', {}, u.email || '—'),
         el('div', {}, 'Bio'), el('div', {}, u.bio || '—'),
         el('div', {}, 'Joined'), el('div', {}, fmtDate(u.created_at)),
         el('div', {}, 'Last seen'), el('div', {}, u.online ? 'Online now' : fmtDate(u.last_seen_at)),
@@ -780,7 +781,9 @@
 
   // ------------------------------------------------------------------ settings
   const SETTING_LABELS = {
-    registration_open: ['New registrations open', 'Turn off to stop new phone numbers from signing up.'],
+    registration_open: ['New registrations open', 'Turn off to stop new accounts from signing up.'],
+    login_email_enabled: ['Login with email', 'Users get a 6-digit code by email (free). Set MAIL_PROVIDER on the server.'],
+    login_phone_enabled: ['Login with phone (SMS)', 'Users get a code by SMS. Needs an SMS provider (SMS_PROVIDER) — costs per SMS.'],
     maintenance_mode: ['Maintenance mode', 'The app shows the maintenance message and stops working until turned off.'],
     maintenance_message: ['Maintenance message', ''],
     max_group_members: ['Max members per group', ''],
@@ -815,20 +818,20 @@
     max_bots_per_user: ['Bots per user', ''],
     feature_channel_comments: ['Channel comments', 'Channel admins can turn on comments under posts.'],
     feature_topics: ['Topics in groups', 'Group admins can split a group into topics.'],
-    feature_premium: ['Premium', 'Show Premium plans and accept payments.'],
-    premium_upload_mb: ['Premium upload limit (MB)', 'Free users get “Max upload size”.'],
+    feature_premium: ['Talvio Plus', 'Show Talvio Plus plans and accept payments.'],
+    premium_upload_mb: ['Talvio Plus upload limit (MB)', 'Free users get “Max upload size”.'],
     payment_manual_enabled: ['Accept manual payments', 'User sends money to your account and uploads a screenshot; you approve it under Payments.'],
     payment_manual_instructions: ['Manual payment instructions', 'Shown to the user: account number, title, what to write in the note.'],
-    feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Premium users).'],
+    feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Talvio Plus users).'],
     ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
-    feature_secret_chats: ['Secret chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
+    feature_secret_chats: ['Vault chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
     turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
   };
   const SETTING_SECTIONS = [
-    ['General', ['registration_open', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
+    ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
-    ['Premium & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions']],
+    ['Talvio Plus & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
@@ -901,7 +904,7 @@
     };
     const rows = data.appeals.map((a) => el('tr', {},
       el('td', { class: 'num' }, a.id),
-      el('td', {}, `${`${a.first_name || ''} ${a.last_name || ''}`.trim() || '—'}`, el('div', { class: 'muted' }, a.username ? `@${a.username}` : a.phone),
+      el('td', {}, `${`${a.first_name || ''} ${a.last_name || ''}`.trim() || '—'}`, el('div', { class: 'muted' }, a.username ? `@${a.username}` : (a.phone || a.email || '')),
         el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(a.user_id); } }, 'Open user')),
       el('td', {}, el('div', { class: 'muted' }, `Ban: ${a.ban_reason || '—'}`), a.message),
       el('td', {}, el('span', { class: `chip ${a.status === 'pending' ? 'warn' : a.status === 'accepted' ? 'ok' : 'bad'}` }, a.status),
@@ -1023,7 +1026,7 @@
       const rows = data.tickets.map((t) => el('tr', { class: 'clickable', onclick: () => openTicket(t.id) },
         el('td', { class: 'num' }, t.id),
         el('td', {}, el('strong', {}, t.subject), el('div', { class: 'muted' }, t.category)),
-        el('td', {}, `${t.first_name || ''} ${t.last_name || ''}`.trim() || '—', el('div', { class: 'muted' }, t.username ? `@${t.username}` : t.phone)),
+        el('td', {}, `${t.first_name || ''} ${t.last_name || ''}`.trim() || '—', el('div', { class: 'muted' }, t.username ? `@${t.username}` : (t.phone || t.email || ''))),
         el('td', {}, el('span', { class: `chip ${t.status === 'open' ? 'warn' : t.status === 'pending' ? 'info' : 'ok'}` }, t.status),
           t.awaiting_admin && ['open', 'pending'].includes(t.status) ? el('span', { class: 'chip bad', style: 'margin-left:4px' }, 'Needs reply') : null),
         el('td', {}, el('span', { class: `chip ${PRIORITY_CHIP[t.priority]}` }, t.priority)),
@@ -1056,7 +1059,7 @@
     const setStatus = (s) => el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { status: s }), `Marked ${s}`)) { openTicket(id); pageSupport(); } } }, s[0].toUpperCase() + s.slice(1));
     openDrawer([
       el('h3', {}, `#${t.id} — ${t.subject}`),
-      el('div', { class: 'muted' }, `${t.category} · opened ${fmtDate(t.created_at)} by ${`${t.first_name || ''} ${t.last_name || ''}`.trim()} (${t.phone}${t.username ? `, @${t.username}` : ''})`),
+      el('div', { class: 'muted' }, `${t.category} · opened ${fmtDate(t.created_at)} by ${`${t.first_name || ''} ${t.last_name || ''}`.trim()} (${t.phone || t.email || ''}${t.username ? `, @${t.username}` : ''})`),
       el('section', {}, el('div', { class: 'btn-row', style: 'align-items:center' },
         el('span', { class: 'chip' }, t.status), 'Priority', priority,
         t.assigned_to === state.admin.id ? null : el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { assigned_to: state.admin.id }), 'Assigned to you')) openTicket(id); } }, 'Assign to me'),
@@ -1259,14 +1262,14 @@
       head('Revenue', el('button', { class: 'btn', onclick: pageRevenue }, 'Refresh')),
       el('div', { class: 'stats' },
         stat('Total earned', rs(d.total)),
-        stat('Premium this month', rs(d.premium_this_month)),
-        stat('Premium (all time)', rs(d.premium_total)),
+        stat('Talvio Plus this month', rs(d.premium_this_month)),
+        stat('Talvio Plus (all time)', rs(d.premium_total)),
         stat('Ads (all time)', rs(d.ads_total)),
-        stat('Premium users now', fmtNum(d.premium_users)),
+        stat('Talvio Plus users now', fmtNum(d.premium_users)),
         stat('Payments (30 days)', fmtNum(d.payments_30d)),
         stat('Waiting for review', fmtNum(d.to_review))),
       el('div', { class: 'charts' },
-        barChart('Premium income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.premium_pkr }))),
+        barChart('Talvio Plus income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.premium_pkr }))),
         barChart('Ad income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.ads_pkr })))),
       el('h3', { style: 'margin:16px 0 8px;font-size:15px' }, 'By payment method'),
       table(['Method', 'Payments', 'Amount'], d.by_provider.map((p) => el('tr', {},
@@ -1296,7 +1299,7 @@
         proof, el('div', { class: 'field', style: 'margin-top:10px' }, note));
       openDrawer(el('div', {}, el('h3', {}, `Payment #${o.id}`), info,
         el('div', { class: 'btn-row', style: 'margin-top:12px' },
-          el('button', { class: 'btn primary', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/approve`, { note: note.value.trim() }), 'Approved — Premium is active')) { closeDrawer(); pagePayments(); } } }, 'Approve'),
+          el('button', { class: 'btn primary', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/approve`, { note: note.value.trim() }), 'Approved — Talvio Plus is active')) { closeDrawer(); pagePayments(); } } }, 'Approve'),
           el('button', { class: 'btn danger', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/reject`, { note: note.value.trim() }), 'Rejected')) { closeDrawer(); pagePayments(); } } }, 'Reject'))));
     };
     const rows = data.orders.map((o) => {
@@ -1317,7 +1320,7 @@
 
   // ------------------------------------------------------------------ premium plans
   async function pagePlans() {
-    main.replaceChildren(head('Premium plans'), el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Talvio Plus plans'), el('div', { class: 'muted' }, 'Loading…'));
     const plans = await action(() => api('GET', '/plans'));
     if (!plans) return;
     const edit = (p) => {
@@ -1341,8 +1344,8 @@
       el('td', {}, p.name), el('td', { class: 'num' }, p.months), el('td', { class: 'num' }, rs(p.price_pkr)), el('td', { class: 'num' }, rs(p.per_month_pkr)),
       el('td', {}, el('span', { class: `chip ${p.is_active ? 'ok' : ''}` }, p.is_active ? 'On sale' : 'Hidden')),
       el('td', {}, el('button', { class: 'btn small', onclick: () => edit(p) }, 'Edit'))));
-    main.replaceChildren(head('Premium plans', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New plan')),
-      el('p', { class: 'muted' }, 'Premium gives: ⭐ badge, bigger uploads (Settings → Premium & payments), 30 chat folders, no sponsored messages.'),
+    main.replaceChildren(head('Talvio Plus plans', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New plan')),
+      el('p', { class: 'muted' }, 'Talvio Plus gives: ⭐ badge, bigger uploads (Settings → Talvio Plus & payments), 30 chat folders, no sponsored messages.'),
       table(['Plan', 'Months', 'Price', 'Per month', 'Status', ''], rows, 'No plans'));
   }
 
@@ -1394,7 +1397,7 @@
           el('button', { class: 'btn small danger', onclick: async () => { if (await action(() => api('DELETE', `/ads/${c.id}`), 'Deleted')) pageAds(); } }, 'Delete'))));
     });
     main.replaceChildren(head('Sponsored messages', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New campaign')),
-      el('p', { class: 'muted' }, 'Shown at the end of big public channels, never to Premium users. Turn on in Settings → Sponsored messages.'),
+      el('p', { class: 'muted' }, 'Shown at the end of big public channels, never to Talvio Plus users. Turn on in Settings → Sponsored messages.'),
       table(['Campaign', 'Status', 'Views', 'Clicks', 'CTR', 'Price', ''], rows, 'No campaigns yet'));
   }
 

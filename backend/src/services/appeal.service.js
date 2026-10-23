@@ -33,7 +33,7 @@ async function list(query = {}) {
   }
   const total = await db.one(`SELECT count(*) AS n FROM ban_appeals a ${where}`, params);
   const rows = await db.many(
-    `SELECT a.*, u.first_name, u.last_name, u.username, u.phone, u.ban_reason, u.banned_until, u.status AS user_status,
+    `SELECT a.*, u.first_name, u.last_name, u.username, u.phone, u.email, u.ban_reason, u.banned_until, u.status AS user_status,
             ad.name AS resolved_by_name
      FROM ban_appeals a JOIN users u ON u.id = a.user_id LEFT JOIN admins ad ON ad.id = a.resolved_by
      ${where} ORDER BY a.id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`,

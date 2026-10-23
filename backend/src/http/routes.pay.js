@@ -51,7 +51,7 @@ function result(res, r) {
     r.ok ? 'Payment received' : 'Payment not completed',
     `<h1 class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✕'} ${esc(r.ok ? 'Thank you!' : 'Payment not completed')}</h1>
 <p>${esc(r.message)}</p><p>You can close this page and go back to the app.</p>
-<a class="btn" href="chatapp://payment${r.order ? `?order=${r.order.id}` : ''}">Back to the app</a>`,
+<a class="btn" href="talvio://payment${r.order ? `?order=${r.order.id}` : ''}">Back to the app</a>`,
   );
 }
 

@@ -29,7 +29,7 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
     if (_busy) return;
     String? raw;
     for (final b in capture.barcodes) {
-      if ((b.rawValue ?? '').startsWith('chatapp://login?token=')) raw = b.rawValue;
+      if ((b.rawValue ?? '').startsWith('talvio://login?token=')) raw = b.rawValue;
     }
     if (raw == null) return;
     setState(() => _busy = true);
@@ -48,7 +48,7 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
             Text('${info['device_name']}', style: const TextStyle(fontWeight: FontWeight.w600)),
             if (info['ip'] != null) Text('IP ${info['ip']}'),
             const SizedBox(height: 12),
-            const Text('Only continue if you are logging in yourself. That computer will see all your chats (except secret chats).'),
+            const Text('Only continue if you are logging in yourself. That computer will see all your chats (except vault chats).'),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

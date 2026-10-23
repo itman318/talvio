@@ -42,15 +42,15 @@ void _android() {
       xml = xml.replaceFirst('<application', '<uses-permission android:name="$p"/>\n    <application');
     }
   }
-  // chatapp:// links (the "Back to the app" button after paying)
-  if (!xml.contains('android:scheme="chatapp"')) {
+  // talvio:// links (the "Back to the app" button after paying)
+  if (!xml.contains('android:scheme="talvio"')) {
     final i = xml.indexOf('</activity>');
     if (i > 0) {
       const filter = '''    <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="chatapp"/>
+                <data android:scheme="talvio"/>
             </intent-filter>
         ''';
       xml = xml.substring(0, i) + filter + xml.substring(i);
@@ -113,7 +113,7 @@ void _ios() {
     if (!s.contains(k)) add.write('\t<key>$k</key>\n\t<string>$v</string>\n');
   });
   if (!s.contains('CFBundleURLSchemes')) {
-    add.write('\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array><string>chatapp</string></array>\n\t\t</dict>\n\t</array>\n');
+    add.write('\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array><string>talvio</string></array>\n\t\t</dict>\n\t</array>\n');
   }
   if (!s.contains('UIBackgroundModes')) {
     // keeps the call audio running when the screen locks / the app goes to the background

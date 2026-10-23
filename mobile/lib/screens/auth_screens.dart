@@ -13,7 +13,8 @@ import '../utils/format.dart';
 import 'more_screens.dart';
 import '../theme/brand.dart';
 
-// ------------------------------------------------------------------ phone number
+// ------------------------------------------------------------------ login (email or phone)
+/// First screen: log in with an email code (free) or a phone number (SMS), whichever the admin allows.
 class PhoneScreen extends StatefulWidget {
   const PhoneScreen({super.key});
 
@@ -24,7 +25,9 @@ class PhoneScreen extends StatefulWidget {
 class _PhoneScreenState extends State<PhoneScreen> {
   final _code = TextEditingController(text: AppConfig.defaultCountryCode);
   final _number = TextEditingController();
+  final _email = TextEditingController();
   bool _busy = false;
+  bool? _useEmail; // null → default from server settings
 
   String get _phone {
     var n = _number.text.replaceAll(RegExp(r'[^0-9]'), '');
@@ -34,18 +37,25 @@ class _PhoneScreenState extends State<PhoneScreen> {
     return '$c$n';
   }
 
-  Future<void> _submit() async {
-    if (_number.text.trim().length < 6) {
-      showInfo(context, 'Enter your phone number');
+  static final _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$');
+
+  Future<void> _submit(bool email) async {
+    final auth = context.read<AuthState>();
+    final target = email ? _email.text.trim().toLowerCase() : _phone;
+    if (email ? !_emailRe.hasMatch(target) : _number.text.trim().length < 6) {
+      showInfo(context, email ? 'Enter a valid email address' : 'Enter your phone number');
       return;
     }
     setState(() => _busy = true);
-    final phone = _phone;
     try {
-      final r = await context.read<AuthState>().requestOtp(phone);
+      final r = email ? await auth.requestEmailCode(target) : await auth.requestOtp(target);
       if (!mounted) return;
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => OtpScreen(phone: r['phone'] as String? ?? phone, devCode: r['dev_code'] as String?),
+        builder: (_) => OtpScreen(
+          phone: (r[email ? 'email' : 'phone'] as String?) ?? target,
+          isEmail: email,
+          devCode: r['dev_code'] as String?,
+        ),
       ));
     } catch (e) {
       if (mounted) showError(context, e);
@@ -58,6 +68,9 @@ class _PhoneScreenState extends State<PhoneScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
     final reason = auth.logoutReason;
+    final canEmail = auth.emailLoginEnabled;
+    final canPhone = auth.phoneLoginEnabled || !canEmail;
+    final email = canEmail && (_useEmail ?? true) || !canPhone;
     return Scaffold(
       appBar: auth.addingAccount && auth.otherAccounts.isNotEmpty
           ? AppBar(
@@ -69,47 +82,73 @@ class _PhoneScreenState extends State<PhoneScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             const BrandMark(size: 84),
             const SizedBox(height: 16),
-            Text('Your phone number', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+            Text(email ? 'Welcome to ${AppConfig.appName}' : 'Your phone number',
+                textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
-            const Text('We will send you a verification code by SMS.', textAlign: TextAlign.center),
+            Text(email ? 'Enter your email — we will send you a 6-digit login code.' : 'We will send you a verification code by SMS.',
+                textAlign: TextAlign.center),
             if (reason != null) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: Brand.primary.withAlpha(25), borderRadius: BorderRadius.circular(12)),
                 child: Text(reason, textAlign: TextAlign.center),
               ),
             ],
-            const SizedBox(height: 28),
-            Row(
-              children: [
-                SizedBox(
-                  width: 80,
-                  child: TextField(
-                    controller: _code,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'Code', border: OutlineInputBorder()),
+            const SizedBox(height: 24),
+            if (canEmail && canPhone) ...[
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, icon: Icon(Icons.alternate_email_rounded), label: Text('Email')),
+                  ButtonSegment(value: false, icon: Icon(Icons.phone_iphone_rounded), label: Text('Phone')),
+                ],
+                selected: {email},
+                onSelectionChanged: (v) => setState(() => _useEmail = v.first),
+              ),
+              const SizedBox(height: 20),
+            ],
+            if (email)
+              TextField(
+                key: const ValueKey('email-field'),
+                controller: _email,
+                autofocus: true,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                textInputAction: TextInputAction.go,
+                decoration: const InputDecoration(labelText: 'Email address', hintText: 'name@gmail.com', border: OutlineInputBorder()),
+                onSubmitted: (_) => _submit(true),
+              )
+            else
+              Row(
+                children: [
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _code,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(labelText: 'Code', border: OutlineInputBorder()),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _number,
-                    autofocus: true,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]'))],
-                    decoration: const InputDecoration(labelText: 'Phone number', hintText: '300 1234567', border: OutlineInputBorder()),
-                    onSubmitted: (_) => _submit(),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('phone-field'),
+                      controller: _number,
+                      autofocus: true,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]'))],
+                      decoration: const InputDecoration(labelText: 'Phone number', hintText: '300 1234567', border: OutlineInputBorder()),
+                      onSubmitted: (_) => _submit(false),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _busy ? null : _submit,
+              onPressed: _busy ? null : () => _submit(email),
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
               child: _busy ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Next'),
             ),
@@ -122,8 +161,11 @@ class _PhoneScreenState extends State<PhoneScreen> {
 
 // ------------------------------------------------------------------ OTP
 class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key, required this.phone, this.devCode});
+  const OtpScreen({super.key, required this.phone, this.isEmail = false, this.devCode});
+
+  /// Where the code went: a phone number or (when [isEmail]) an email address.
   final String phone;
+  final bool isEmail;
   final String? devCode;
 
   @override
@@ -162,10 +204,15 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _verify() async {
     final code = _code.text.trim();
-    if (code.length < 4) return;
+    if (code.length < 4 || _busy) return;
     setState(() => _busy = true);
+    final auth = context.read<AuthState>();
     try {
-      await context.read<AuthState>().verifyOtp(widget.phone, code);
+      if (widget.isEmail) {
+        await auth.verifyEmailCode(widget.phone, code);
+      } else {
+        await auth.verifyOtp(widget.phone, code);
+      }
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -185,8 +232,9 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _resend() async {
+    final auth = context.read<AuthState>();
     try {
-      final r = await context.read<AuthState>().requestOtp(widget.phone);
+      final r = widget.isEmail ? await auth.requestEmailCode(widget.phone) : await auth.requestOtp(widget.phone);
       if (!mounted) return;
       setState(() => _devCode = r['dev_code'] as String?);
       _startTimer();
@@ -203,9 +251,16 @@ class _OtpScreenState extends State<OtpScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          Icon(widget.isEmail ? Icons.mark_email_read_rounded : Icons.sms_rounded, size: 56, color: Brand.primary),
+          const SizedBox(height: 12),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
-          Text('We sent an SMS with a code to ${widget.phone}', textAlign: TextAlign.center),
+          Text(widget.isEmail ? 'We emailed a 6-digit code to ${widget.phone}' : 'We sent an SMS with a code to ${widget.phone}',
+              textAlign: TextAlign.center),
+          if (widget.isEmail) ...[
+            const SizedBox(height: 6),
+            const Text('Not in your inbox? Check the Spam / Promotions folder.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Brand.muted)),
+          ],
           if (_devCode != null) ...[
             const SizedBox(height: 12),
             Text('Dev mode code: $_devCode', textAlign: TextAlign.center, style: const TextStyle(color: Colors.deepOrange)),

@@ -180,7 +180,7 @@ class NewChatScreen extends StatelessWidget {
             ),
           ListTile(
             leading: const CircleAvatar(child: Icon(Icons.bookmark)),
-            title: const Text('Saved Messages'),
+            title: const Text('My Notes'),
             onTap: () => _openWith(context, myId),
           ),
           ListTile(

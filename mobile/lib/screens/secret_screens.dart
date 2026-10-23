@@ -29,7 +29,7 @@ Future<void> startSecretChat(BuildContext context, AppUser user) async {
   }
   final ok = await confirm(
     context,
-    'Start a secret chat?',
+    'Start a vault chat?',
     'Messages are end-to-end encrypted and live only on this phone and ${user.firstName}’s phone. '
         'Nobody else — not even the server — can read them. They can’t be forwarded, and screenshots are blocked.',
     ok: 'Start',
@@ -55,10 +55,10 @@ class SecretChatTile extends StatelessWidget {
     final sub = chat.status == 'requested'
         ? 'Waiting for ${chat.peer?.firstName ?? 'them'} to come online…'
         : chat.status == 'closed'
-            ? 'Secret chat closed'
+            ? 'Vault chat closed'
             : store.isTyping(chat.id)
                 ? 'typing…'
-                : (last?.preview ?? 'Secret chat started');
+                : (last?.preview ?? 'Vault chat started');
     return ListTile(
       leading: Avatar(id: chat.peerId, name: chat.title, url: chat.peer?.avatarAbsolute, size: 52),
       title: Row(children: [
@@ -79,7 +79,7 @@ class SecretChatTile extends StatelessWidget {
       ]),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SecretChatScreen(chatId: chat.id))),
       onLongPress: () async {
-        if (await confirm(context, 'Delete secret chat?', 'It will be closed for both of you and deleted from this phone.', ok: 'Delete', danger: true)) {
+        if (await confirm(context, 'Delete vault chat?', 'It will be closed for both of you and deleted from this phone.', ok: 'Delete', danger: true)) {
           store.closeAndDelete(chat.id);
         }
       },
@@ -221,7 +221,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
   Widget build(BuildContext context) {
     final store = context.watch<SecretStore>();
     final chat = store.chats[widget.chatId];
-    if (chat == null) return Scaffold(appBar: AppBar(), body: const Center(child: Text('This secret chat was deleted')));
+    if (chat == null) return Scaffold(appBar: AppBar(), body: const Center(child: Text('This vault chat was deleted')));
     final list = store.messages[chat.id] ?? const <SecretMessage>[];
     final colors = ChatColors.of(context);
     final status = chat.status == 'requested'
@@ -267,7 +267,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               if (v == 'key') {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => SecretKeyScreen(chat: chat)));
               } else if (v == 'close') {
-                if (await confirm(context, 'Delete secret chat?', 'It will be closed for both of you and all messages will be deleted from this phone.',
+                if (await confirm(context, 'Delete vault chat?', 'It will be closed for both of you and all messages will be deleted from this phone.',
                     ok: 'Delete', danger: true)) {
                   await store.closeAndDelete(chat.id);
                   if (context.mounted) Navigator.pop(context);
@@ -276,7 +276,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
             },
             itemBuilder: (_) => [
               if (chat.fingerprint != null) const PopupMenuItem(value: 'key', child: Text('Encryption key')),
-              const PopupMenuItem(value: 'close', child: Text('Delete secret chat')),
+              const PopupMenuItem(value: 'close', child: Text('Delete vault chat')),
             ],
           ),
         ],
@@ -330,7 +330,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
             child: SafeArea(
               top: false,
               child: Text(
-                chat.status == 'requested' ? 'You can write once ${chat.peer?.firstName ?? 'they'} opens the app.' : 'This secret chat is closed.',
+                chat.status == 'requested' ? 'You can write once ${chat.peer?.firstName ?? 'they'} opens the app.' : 'This vault chat is closed.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: colors.meta),
               ),
@@ -421,7 +421,7 @@ class _Intro extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(color: colors.other, borderRadius: BorderRadius.circular(16)),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [Icon(Icons.lock, color: _green), SizedBox(width: 8), Text('Secret chat', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16))]),
+          const Row(children: [Icon(Icons.lock, color: _green), SizedBox(width: 8), Text('Vault chat', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16))]),
           const SizedBox(height: 10),
           row(Icons.enhanced_encryption_outlined, 'End-to-end encrypted — only the two phones can read it'),
           row(Icons.cloud_off_outlined, 'Nothing is kept on the server after delivery'),

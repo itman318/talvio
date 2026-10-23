@@ -1,5 +1,5 @@
 name: chatapp
-description: Telegram-style messaging app (Phase 1) for Android and iOS.
+description: Talvio messaging app for Android and iOS.
 publish_to: 'none'
 version: 1.0.0+1
 

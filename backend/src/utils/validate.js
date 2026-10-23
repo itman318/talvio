@@ -13,6 +13,15 @@ function normalizePhone(input) {
   return p;
 }
 
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
+
+function normalizeEmail(input) {
+  if (typeof input !== 'string') throw badRequest('invalid_email', 'Email address is required');
+  const e = input.trim().toLowerCase();
+  if (e.length > 254 || !EMAIL_RE.test(e)) throw badRequest('invalid_email', 'Enter a valid email address, e.g. name@gmail.com');
+  return e;
+}
+
 /** Same as normalizePhone but returns null instead of throwing. */
 function tryNormalizePhone(input) {
   try {
@@ -86,6 +95,7 @@ function limit(value, def = 50, max = 100) {
 
 module.exports = {
   normalizePhone,
+  normalizeEmail,
   tryNormalizePhone,
   validateUsername,
   str,

@@ -52,6 +52,14 @@ router.post('/auth/otp/verify', h(async (req, res) => {
   res.json(await authService.verifyOtp(req.body.phone, req.body.code, req.body.device, req.ip));
 }));
 
+router.post('/auth/email/request', h(async (req, res) => {
+  res.json(await authService.requestEmailCode(req.body.email, req.ip));
+}));
+
+router.post('/auth/email/verify', h(async (req, res) => {
+  res.json(await authService.verifyEmailCode(req.body.email, req.body.code, req.body.device, req.ip));
+}));
+
 router.post('/auth/qr', h(async (req, res) => res.json(await qrService.create(req.body.device || {}, req.ip))));
 router.get('/auth/qr/status', h(async (req, res) => res.json(await qrService.status(req.query.token, req.query.wait, req.ip))));
 

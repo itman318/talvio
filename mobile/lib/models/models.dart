@@ -12,6 +12,7 @@ class AppUser {
   final String bio;
   final String? avatarUrl;
   final String? phone;
+  final String? email; // only for yourself
   final bool isVerified;
   final bool deleted;
   bool online;
@@ -33,6 +34,7 @@ class AppUser {
     this.bio = '',
     this.avatarUrl,
     this.phone,
+    this.email,
     this.isVerified = false,
     this.deleted = false,
     this.online = false,
@@ -55,6 +57,7 @@ class AppUser {
         bio: (j['bio'] ?? '') as String,
         avatarUrl: j['avatar_url'] as String?,
         phone: j['phone'] as String?,
+        email: j['email'] as String?,
         isVerified: j['is_verified'] == true,
         deleted: j['deleted'] == true,
         online: j['online'] == true,

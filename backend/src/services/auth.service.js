@@ -4,6 +4,7 @@ const config = require('../config');
 const db = require('../db');
 const bus = require('../bus');
 const sms = require('./sms.service');
+const mail = require('./mail.service');
 const settings = require('./settings.service');
 const moderation = require('./moderation.service');
 const userService = require('./user.service');
@@ -47,41 +48,65 @@ async function liftExpiredBan(u) {
   return u;
 }
 
-async function requestOtp(rawPhone, ip) {
-  const phone = v.normalizePhone(rawPhone);
-  if (await moderation.isPhoneBlocked(phone)) {
-    throw forbidden('phone_not_allowed', 'This phone number cannot be used to sign up');
-  }
-  rateLimit.enforce(`otp:phone1m:${phone}`, 1, 60 * 1000, 'Please wait a minute before requesting another code');
-  rateLimit.enforce(`otp:phone1h:${phone}`, 5, 60 * 60 * 1000, 'Too many codes requested for this number. Try later.');
+/**
+ * Login codes. `target` is the normalized phone ("+92…", sent by SMS) or email address
+ * (sent by email); both use the same otp_codes table and the same verification rules.
+ */
+async function issueCode(target, kind, ip) {
+  const label = kind === 'email' ? 'email address' : 'number';
+  rateLimit.enforce(`otp:phone1m:${target}`, 1, 60 * 1000, 'Please wait a minute before requesting another code');
+  rateLimit.enforce(`otp:phone1h:${target}`, 5, 60 * 60 * 1000, `Too many codes requested for this ${label}. Try later.`);
   rateLimit.enforce(`otp:ip:${ip}`, 20, 60 * 60 * 1000);
 
   const s = await settings.getAll();
-  const existing = await db.one('SELECT id FROM users WHERE phone = $1', [phone]);
+  if (kind === 'email' && !s.login_email_enabled) throw forbidden('login_method_disabled', 'Email login is turned off');
+  if (kind === 'phone' && !s.login_phone_enabled) throw forbidden('login_method_disabled', 'Phone login is turned off');
+  const existing = await findUserByTarget(target, kind);
   if (!existing && !s.registration_open) {
     throw forbidden('registration_closed', 'New registrations are currently closed');
   }
 
   const code = randomDigits(config.otp.length);
-  await db.query('UPDATE otp_codes SET consumed_at = now() WHERE phone = $1 AND consumed_at IS NULL', [phone]);
+  await db.query('UPDATE otp_codes SET consumed_at = now() WHERE phone = $1 AND consumed_at IS NULL', [target]);
   await db.query(
     `INSERT INTO otp_codes (phone, code_hash, ip, expires_at)
      VALUES ($1, $2, $3, now() + make_interval(secs => $4))`,
-    [phone, otpHash(phone, code), ip || null, config.otp.ttlSec],
+    [target, otpHash(target, code), ip || null, config.otp.ttlSec],
   );
 
   if (config.otp.devMode) {
     // eslint-disable-next-line no-console
-    console.log(`[OTP dev mode] ${phone} → ${code}`);
+    console.log(`[OTP dev mode] ${target} → ${code}`);
+  } else if (kind === 'email') {
+    const m = mail.codeEmail(code);
+    await mail.send(target, m.subject, m.text, m.html);
   } else {
-    await sms.send(phone, `Your verification code is ${code}. Do not share it with anyone.`);
+    await sms.send(target, `Your Talvio code is ${code}. Do not share it with anyone.`);
   }
 
   return {
-    phone,
+    [kind]: target,
     expires_in: config.otp.ttlSec,
     ...(config.otp.devMode ? { dev_code: code } : {}),
   };
+}
+
+function findUserByTarget(target, kind) {
+  return kind === 'email'
+    ? db.one('SELECT * FROM users WHERE lower(email) = $1', [target])
+    : db.one('SELECT * FROM users WHERE phone = $1', [target]);
+}
+
+async function requestOtp(rawPhone, ip) {
+  const phone = v.normalizePhone(rawPhone);
+  if (await moderation.isPhoneBlocked(phone)) {
+    throw forbidden('phone_not_allowed', 'This phone number cannot be used to sign up');
+  }
+  return issueCode(phone, 'phone', ip);
+}
+
+async function requestEmailCode(rawEmail, ip) {
+  return issueCode(v.normalizeEmail(rawEmail), 'email', ip);
 }
 
 function parseDevice(device) {
@@ -113,15 +138,14 @@ async function createSession(userId, device, ip) {
   return issueTokens(userId, s.id, refresh);
 }
 
-async function verifyOtp(rawPhone, rawCode, device, ip) {
-  const phone = v.normalizePhone(rawPhone);
+async function checkCode(target, rawCode, ip) {
   const code = String(rawCode || '').trim();
   if (!/^\d{4,8}$/.test(code)) throw badRequest('otp_invalid', 'Enter the code you received');
   rateLimit.enforce(`otp:verify:ip:${ip}`, 30, 60 * 60 * 1000);
 
   const row = await db.one(
     'SELECT * FROM otp_codes WHERE phone = $1 AND consumed_at IS NULL ORDER BY id DESC LIMIT 1',
-    [phone],
+    [target],
   );
   if (!row || new Date(row.expires_at) <= new Date()) {
     throw badRequest('otp_expired', 'This code has expired. Request a new one.');
@@ -129,7 +153,7 @@ async function verifyOtp(rawPhone, rawCode, device, ip) {
   if (row.attempts >= config.otp.maxAttempts) {
     throw badRequest('otp_too_many_attempts', 'Too many wrong attempts. Request a new code.');
   }
-  if (!safeEqual(otpHash(phone, code), row.code_hash)) {
+  if (!safeEqual(otpHash(target, code), row.code_hash)) {
     const upd = await db.one('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1 RETURNING attempts', [row.id]);
     throw badRequest('otp_invalid', 'Incorrect code', {
       attempts_left: Math.max(0, config.otp.maxAttempts - upd.attempts),
@@ -140,16 +164,20 @@ async function verifyOtp(rawPhone, rawCode, device, ip) {
     [row.id],
   );
   if (!consumed) throw badRequest('otp_expired', 'This code was already used. Request a new one.');
+}
 
-  let user = await db.one('SELECT * FROM users WHERE phone = $1', [phone]);
+async function loginWithTarget(target, kind, device, ip) {
+  let user = await findUserByTarget(target, kind);
   let isNew = false;
   if (!user) {
     if (!(await settings.get('registration_open'))) {
       throw forbidden('registration_closed', 'New registrations are currently closed');
     }
-    user = await db.one('INSERT INTO users (phone) VALUES ($1) ON CONFLICT (phone) DO NOTHING RETURNING *', [phone]);
+    user = kind === 'email'
+      ? await db.one('INSERT INTO users (email) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *', [target])
+      : await db.one('INSERT INTO users (phone) VALUES ($1) ON CONFLICT (phone) DO NOTHING RETURNING *', [target]);
     if (user) isNew = true;
-    else user = await db.one('SELECT * FROM users WHERE phone = $1', [phone]);
+    else user = await findUserByTarget(target, kind);
   }
   user = await liftExpiredBan(user);
   if (userService.isBanned(user)) throw banError(user, await appealExtra(user));
@@ -160,6 +188,18 @@ async function verifyOtp(rawPhone, rawCode, device, ip) {
     user: userService.serialize(user, user.id),
     needs_profile: isNew || !user.first_name,
   };
+}
+
+async function verifyOtp(rawPhone, rawCode, device, ip) {
+  const phone = v.normalizePhone(rawPhone);
+  await checkCode(phone, rawCode, ip);
+  return loginWithTarget(phone, 'phone', device, ip);
+}
+
+async function verifyEmailCode(rawEmail, rawCode, device, ip) {
+  const email = v.normalizeEmail(rawEmail);
+  await checkCode(email, rawCode, ip);
+  return loginWithTarget(email, 'email', device, ip);
 }
 
 async function refresh(refreshToken, ip) {
@@ -212,4 +252,4 @@ async function logout(userId, sessionId) {
   return { ok: true };
 }
 
-module.exports = { requestOtp, verifyOtp, refresh, authenticate, logout, createSession };
+module.exports = { requestOtp, verifyOtp, requestEmailCode, verifyEmailCode, refresh, authenticate, logout, createSession };

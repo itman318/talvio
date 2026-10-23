@@ -74,38 +74,38 @@ test('create a bot, getMe, user writes → getUpdates, bot replies with buttons,
   const created = await bots.createBot(A.id, { name: 'Weather', username: 'weather_info_bot', about: 'Mausam batata hai' });
   bot = created.bot;
   token = created.token;
-  assert.match(token, /^\d+:[A-Za-z0-9_-]{20,}$/);
+  assert.match(token, /^tlv_\d+_[A-Za-z0-9]{20,}$/);
   await rejects(bots.createBot(B.id, { name: 'X', username: 'WEATHER_INFO_BOT' }), 'username_taken');
   assert.equal((await bots.listMyBots(A.id))[0].username, 'weather_info_bot');
-  await rejects(bots.callMethod('1:wrongtokenwrongtokenwrong', 'getMe'), 'invalid_token');
+  await rejects(bots.callMethod('tlv_1_wrongtokenwrongtokenwrong', 'me'), 'invalid_token');
 
-  const me = await bots.callMethod(token, 'getMe');
+  const me = await bots.callMethod(token, 'me');
   assert.deepEqual([me.id, me.is_bot, me.username], [bot.id, true, 'weather_info_bot']);
-  await bots.callMethod(token, 'setMyCommands', { commands: [{ command: 'start', description: 'Shuru' }, { command: '/today', description: 'Aaj ka mausam' }] });
-  assert.deepEqual((await bots.callMethod(token, 'getMyCommands')).map((c) => c.command), ['start', 'today']);
+  await bots.callMethod(token, 'commands.set', { commands: [{ command: 'start', description: 'Shuru' }, { command: '/today', description: 'Aaj ka mausam' }] });
+  assert.deepEqual((await bots.callMethod(token, 'commands.get')).map((c) => c.command), ['start', 'today']);
 
   // the bot can't write to someone who never opened it
   const chatAB = await chats.getOrCreatePrivate(A.id, B.id);
-  await rejects(bots.callMethod(token, 'sendMessage', { chat_id: chatAB.id, text: 'spam' }), 'chat_not_found');
+  await rejects(bots.callMethod(token, 'messages.send', { chat_id: chatAB.id, text: 'spam' }), 'chat_not_found');
 
   const chat = await chats.getOrCreatePrivate(B.id, bot.id);
   assert.equal(chat.is_bot, true);
   assert.deepEqual(chat.bot.commands.map((c) => c.command), ['start', 'today']);
   await messages.sendMessage(B.id, chat.id, { text: '/start' });
   await flush();
-  const ups = await bots.callMethod(token, 'getUpdates', {});
+  const ups = await bots.callMethod(token, 'updates', {});
   assert.equal(ups.length, 1);
   assert.equal(ups[0].message.text, '/start');
   assert.equal(ups[0].message.from.username, 'bilal_b');
   assert.equal(ups[0].message.chat.id, chat.id);
 
-  const sent = await bots.callMethod(token, 'sendMessage', {
+  const sent = await bots.callMethod(token, 'messages.send', {
     chat_id: chat.id,
     text: 'Kaun sa shehar?',
     reply_markup: JSON.stringify({ inline_keyboard: [[{ text: 'Lahore', callback_data: 'city:lhr' }, { text: 'Karachi', callback_data: 'city:khi' }], [{ text: 'Open app', web_app: { url: 'https://example.com/app' } }]] }),
   });
   await rejects(
-    bots.callMethod(token, 'sendMessage', { chat_id: chat.id, text: 'x', reply_markup: { inline_keyboard: [[{ text: 'bad', callback_data: 'x'.repeat(70) }]] } }),
+    bots.callMethod(token, 'messages.send', { chat_id: chat.id, text: 'x', reply_markup: { inline_keyboard: [[{ text: 'bad', callback_data: 'x'.repeat(70) }]] } }),
     'invalid_markup',
   );
   const list = await messages.listMessages(B.id, chat.id, {});
@@ -114,28 +114,28 @@ test('create a bot, getMe, user writes → getUpdates, bot replies with buttons,
   assert.equal(botMsg.reply_markup.inline_keyboard[0][1].callback_data, 'city:khi');
 
   // offset confirms the first update
-  await bots.callMethod(token, 'getUpdates', { offset: ups[0].update_id + 1 });
+  await bots.callMethod(token, 'updates', { offset: ups[0].update_id + 1 });
   assert.equal((await db.one('SELECT count(*)::int AS n FROM bot_updates WHERE bot_id = $1', [bot.id])).n, 0);
 
   await rejects(bots.pressButton(B.id, sent.message_id, { data: 'city:isb' }), 'invalid_button');
   const press = await bots.pressButton(B.id, sent.message_id, { data: 'city:lhr' });
-  const ups2 = await bots.callMethod(token, 'getUpdates', {});
+  const ups2 = await bots.callMethod(token, 'updates', {});
   assert.equal(ups2[0].callback_query.data, 'city:lhr');
   assert.equal(ups2[0].callback_query.id, press.callback_query_id);
   assert.equal(ups2[0].callback_query.message.message_id, sent.message_id);
-  await bots.callMethod(token, 'answerCallbackQuery', { callback_query_id: press.callback_query_id, text: 'Lahore: 31°C ☀️' });
+  await bots.callMethod(token, 'buttons.answer', { callback_query_id: press.callback_query_id, text: 'Lahore: 31°C ☀️' });
   const ans = events.find((e) => e.event === 'bot:callback_answer');
   assert.deepEqual(ans.userIds, [B.id]);
   assert.equal(ans.payload.text, 'Lahore: 31°C ☀️');
 
-  const edited = await bots.callMethod(token, 'editMessageText', { chat_id: chat.id, message_id: sent.message_id, text: 'Lahore: 31°C ☀️', reply_markup: '' });
+  const edited = await bots.callMethod(token, 'messages.edit', { chat_id: chat.id, message_id: sent.message_id, text: 'Lahore: 31°C ☀️', reply_markup: '' });
   assert.equal(edited.text, 'Lahore: 31°C ☀️');
   const after = (await messages.listMessages(B.id, chat.id, {})).messages.find((m) => m.id === sent.message_id);
   assert.equal(after.reply_markup, null);
-  await bots.callMethod(token, 'deleteMessage', { chat_id: chat.id, message_id: sent.message_id });
+  await bots.callMethod(token, 'messages.delete', { chat_id: chat.id, message_id: sent.message_id });
 
   // long polling returns as soon as something arrives
-  const waiting = bots.callMethod(token, 'getUpdates', { offset: ups2[0].update_id + 1, timeout: 5 });
+  const waiting = bots.callMethod(token, 'updates', { offset: ups2[0].update_id + 1, timeout: 5 });
   await new Promise((r) => setTimeout(r, 100));
   const t0 = Date.now();
   await messages.sendMessage(B.id, chat.id, { text: 'hello?' });
@@ -146,21 +146,21 @@ test('create a bot, getMe, user writes → getUpdates, bot replies with buttons,
 
 test('groups: privacy mode delivers only commands, mentions and replies', async () => {
   const g = (await chats.createGroup(A.id, { title: 'Dev', member_ids: [B.id, bot.id] })).chat;
-  await bots.callMethod(token, 'getUpdates', { offset: 1e12 }); // clear
+  await bots.callMethod(token, 'updates', { offset: 1e12 }); // clear
   await messages.sendMessage(B.id, g.id, { text: 'normal chat message' });
   await messages.sendMessage(B.id, g.id, { text: '/today@weather_info_bot' });
   await messages.sendMessage(A.id, g.id, { text: 'hey @weather_info_bot kya haal' });
   await flush();
-  const ups = await bots.callMethod(token, 'getUpdates', {});
+  const ups = await bots.callMethod(token, 'updates', {});
   assert.deepEqual(ups.map((u) => u.message.text), ['/today@weather_info_bot', 'hey @weather_info_bot kya haal']);
   assert.equal(ups[0].message.chat.type, 'group');
   assert.equal(ups[0].message.chat.title, 'Dev');
 
   await bots.updateBot(A.id, bot.id, { group_privacy: false });
-  await bots.callMethod(token, 'getUpdates', { offset: ups[1].update_id + 1 });
+  await bots.callMethod(token, 'updates', { offset: ups[1].update_id + 1 });
   await messages.sendMessage(B.id, g.id, { text: 'now the bot sees everything' });
   await flush();
-  assert.equal((await bots.callMethod(token, 'getUpdates', {}))[0].message.text, 'now the bot sees everything');
+  assert.equal((await bots.callMethod(token, 'updates', {}))[0].message.text, 'now the bot sees everything');
 });
 
 test('webhook delivery with secret header; getUpdates refused while a webhook is set', async () => {
@@ -169,24 +169,24 @@ test('webhook delivery with secret header; getUpdates refused while a webhook is
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
-      received.push({ secret: req.headers['x-chatapp-bot-api-secret-token'], body: JSON.parse(body) });
+      received.push({ secret: req.headers['x-talvio-webhook-secret'], body: JSON.parse(body) });
       res.end('ok');
     });
   });
   await new Promise((r) => server.listen(0, r));
   const url = `http://127.0.0.1:${server.address().port}/hook`;
-  await bots.callMethod(token, 'getUpdates', { offset: 1e12 });
-  await bots.callMethod(token, 'setWebhook', { url, secret_token: 'shh_123' });
-  await rejects(bots.callMethod(token, 'getUpdates', {}), 'webhook_active');
+  await bots.callMethod(token, 'updates', { offset: 1e12 });
+  await bots.callMethod(token, 'webhook.set', { url, secret_token: 'shh_123' });
+  await rejects(bots.callMethod(token, 'updates', {}), 'webhook_active');
   const chat = await chats.getOrCreatePrivate(B.id, bot.id);
   await messages.sendMessage(B.id, chat.id, { text: 'via webhook' });
   for (let i = 0; i < 30 && !received.length; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(received[0].secret, 'shh_123');
   assert.equal(received[0].body.message.text, 'via webhook');
   assert.ok(received[0].body.update_id > 0);
-  assert.equal((await bots.callMethod(token, 'getWebhookInfo')).pending_update_count, 0);
+  assert.equal((await bots.callMethod(token, 'webhook.info')).pending_update_count, 0);
   server.close();
-  await bots.callMethod(token, 'deleteWebhook', { drop_pending_updates: true });
+  await bots.callMethod(token, 'webhook.delete', { drop_pending_updates: true });
 });
 
 test('mini app init data is signed so the bot server can verify it; web_app_data reaches the bot', async () => {
@@ -198,22 +198,22 @@ test('mini app init data is signed so the bot server can verify it; web_app_data
   assert.equal(JSON.parse(new URLSearchParams(init.init_data).get('user')).id, B.id);
 
   await bots.webAppData(B.id, bot.id, { data: '{"order":42}', button_text: 'Order' });
-  const ups = await bots.callMethod(token, 'getUpdates', {});
+  const ups = await bots.callMethod(token, 'updates', {});
   assert.equal(ups.at(-1).message.web_app_data.data, '{"order":42}');
 });
 
 test('admin can disable a bot; regenerating the token kills the old one; deleting frees the username', async () => {
   await bots.adminSetStatus(bot.id, false, 'spam');
-  await rejects(bots.callMethod(token, 'getMe'), 'bot_disabled');
+  await rejects(bots.callMethod(token, 'me'), 'bot_disabled');
   await bots.adminSetStatus(bot.id, true);
   const { token: t2 } = await bots.regenerateToken(A.id, bot.id);
-  await rejects(bots.callMethod(token, 'getMe'), 'invalid_token');
-  assert.equal((await bots.callMethod(t2, 'getMe')).id, bot.id);
+  await rejects(bots.callMethod(token, 'me'), 'invalid_token');
+  assert.equal((await bots.callMethod(t2, 'me')).id, bot.id);
   const listed = await bots.adminList({ q: 'weather' });
   assert.equal(listed.bots[0].owner.username, 'asad_dev');
   await rejects(bots.deleteBot(B.id, bot.id), 'bot_not_found');
   await bots.deleteBot(A.id, bot.id);
-  await rejects(bots.callMethod(t2, 'getMe'), 'invalid_token');
+  await rejects(bots.callMethod(t2, 'me'), 'invalid_token');
   assert.equal((await bots.createBot(B.id, { name: 'W2', username: 'weather_info_bot' })).bot.username, 'weather_info_bot');
 });
 

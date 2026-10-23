@@ -335,12 +335,12 @@ async function listUsers(query = {}) {
     params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
     const p = `$${params.length}`;
     const idCond = /^\d+$/.test(q) && q.length < 16 ? ` OR u.id = ${parseInt(q, 10)}` : '';
-    where.push(`(u.phone ILIKE ${p} OR u.username ILIKE ${p} OR (u.first_name || ' ' || u.last_name) ILIKE ${p}${idCond})`);
+    where.push(`(u.phone ILIKE ${p} OR u.email ILIKE ${p} OR u.username ILIKE ${p} OR (u.first_name || ' ' || u.last_name) ILIKE ${p}${idCond})`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = await db.one(`SELECT count(*) AS n FROM users u ${whereSql}`, params);
   const rows = await db.many(
-    `SELECT u.id, u.phone, u.username, u.first_name, u.last_name, u.status, u.is_verified, u.ban_reason,
+    `SELECT u.id, u.phone, u.email, u.username, u.first_name, u.last_name, u.status, u.is_verified, u.ban_reason,
             u.banned_until, u.last_seen_at, u.created_at, u.avatar_media_id, u.restricted_until, u.restrict_reason
      FROM users u ${whereSql} ORDER BY u.id DESC LIMIT ${limit} OFFSET ${offset}`,
     params,

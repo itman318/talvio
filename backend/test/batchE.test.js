@@ -55,7 +55,7 @@ test.after(async () => {
 
 test('QR login: create → scan → approve wakes the long poll → tokens are handed out once', async () => {
   const c = await qr.create({ name: 'Chrome on Windows', platform: 'web' }, '203.0.113.9');
-  assert.match(c.qr, /^chatapp:\/\/login\?token=[A-Za-z0-9_-]{20,}$/);
+  assert.match(c.qr, /^talvio:\/\/login\?token=[A-Za-z0-9_-]{20,}$/);
   assert.equal((await qr.status(c.token, 0)).status, 'pending');
 
   const info = await qr.scan(A.id, c.qr); // the phone passes the whole scanned text

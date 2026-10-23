@@ -59,6 +59,18 @@ const config = {
     twilioFrom: env.TWILIO_FROM || '',
   },
 
+  mail: {
+    // console | brevo | resend | smtp
+    provider: env.MAIL_PROVIDER || 'console',
+    from: env.MAIL_FROM || 'Talvio <no-reply@example.com>',
+    brevoKey: env.BREVO_API_KEY || '',
+    resendKey: env.RESEND_API_KEY || '',
+    smtpHost: env.SMTP_HOST || '',
+    smtpPort: int('SMTP_PORT', 587),
+    smtpUser: env.SMTP_USER || '',
+    smtpPass: env.SMTP_PASS || '',
+  },
+
   uploadDir: path.resolve(env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads')),
   // Hard ceiling for a single upload; the admin "max_upload_mb" setting can only lower it.
   uploadHardLimitMb: 2048,

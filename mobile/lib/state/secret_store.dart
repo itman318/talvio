@@ -141,7 +141,7 @@ class SecretChat {
     required this.lastActivity,
   });
 
-  String get title => peer?.name ?? 'Secret chat';
+  String get title => peer?.name ?? 'Vault chat';
   bool get isActive => status == 'active';
 
   Map<String, dynamic> toJson() => {
@@ -309,7 +309,7 @@ class SecretStore extends ChangeNotifier {
     final c = _chatFrom(j)..peer = user;
     chats[id] = c;
     messages[id] = [];
-    _service(id, 'You invited ${user.firstName} to a secret chat. Waiting for their phone to come online…');
+    _service(id, 'You invited ${user.firstName} to a vault chat. Waiting for their phone to come online…');
     _changed();
     return c;
   }
@@ -329,7 +329,7 @@ class SecretStore extends ChangeNotifier {
     chats[id] = c;
     messages[id] ??= [];
     await _finishHandshake(id, j['their_key'] as String);
-    _service(id, '${c.peer?.firstName ?? 'Someone'} started a secret chat with you.');
+    _service(id, '${c.peer?.firstName ?? 'Someone'} started a vault chat with you.');
     _changed();
   }
 
@@ -371,7 +371,7 @@ class SecretStore extends ChangeNotifier {
           final id = (j['id'] as num).toInt();
           if (_keys[id] == null) return;
           await _finishHandshake(id, j['their_key'] as String);
-          _service(id, '${chats[id]?.peer?.firstName ?? 'They'} joined your secret chat.');
+          _service(id, '${chats[id]?.peer?.firstName ?? 'They'} joined your vault chat.');
           _changed();
         });
         break;
@@ -388,7 +388,7 @@ class SecretStore extends ChangeNotifier {
         if (c != null && c.status != 'closed') {
           c.status = 'closed';
           c.closeReason = d['reason'] as String?;
-          _service(c.id, d['reason'] == 'declined' ? 'Secret chat was declined.' : 'This secret chat was closed.');
+          _service(c.id, d['reason'] == 'declined' ? 'Vault chat was declined.' : 'This vault chat was closed.');
           _changed();
         }
         break;
@@ -545,7 +545,7 @@ class SecretStore extends ChangeNotifier {
   Future<void> _send(int chatId, Map<String, dynamic> plain, {required String kind, String text = '', SecretMedia? media, bool silentLocal = false}) async {
     final c = chats[chatId];
     final state = _keys[chatId];
-    if (c == null || state == null || !state.ready || !c.isActive) throw ApiException(400, 'secret_not_ready', 'This secret chat is not ready yet');
+    if (c == null || state == null || !state.ready || !c.isActive) throw ApiException(400, 'secret_not_ready', 'This vault chat is not ready yet');
     final ttl = kind == 'service' ? 0 : c.ttl;
     plain['ts'] = DateTime.now().millisecondsSinceEpoch;
     late String ct;

@@ -1,20 +1,20 @@
 'use strict';
 
 /**
- * Bots & mini apps — a Telegram-style Bot API.
+ * Bots & mini apps — the Talvio Bot API (POST /api/bot/v1/<method>, token in the Authorization header).
  *
- *   https://your-server/bot<TOKEN>/<method>     (GET query or POST JSON / multipart)
- *   → { ok: true, result } | { ok: false, error_code, description }
+ *   POST https://your-server/api/bot/v1/<method>   Authorization: Bearer <TOKEN>   (JSON, form or multipart)
+ *   → { ok: true, data } | { ok: false, error: { code, message } }
  *
- * Methods: getMe, getUpdates (long polling), setWebhook, deleteWebhook, getWebhookInfo,
- * sendMessage, sendPhoto, sendDocument, editMessageText, editMessageReplyMarkup, deleteMessage,
- * answerCallbackQuery, setMyCommands, getMyCommands, deleteMyCommands, getChat.
+ * Methods: me, updates (long polling), webhook.set, webhook.delete, webhook.info,
+ * messages.send, photos.send, files.send, messages.edit, messages.edit-buttons, messages.delete,
+ * buttons.answer, commands.set, commands.get, commands.delete, chats.get.
  *
  * Updates: message (private chats; groups → commands, @mentions and replies unless privacy is off),
  * callback_query (inline buttons), web_app_data (mini app sent data).
  *
- * Mini apps: a web_app button opens the URL inside the app with `#chatAppData=<init data>`.
- * Verify it on your server:  secret = HMAC_SHA256(key="WebAppData", msg=SHA256_HEX(bot_token))
+ * Mini apps: a web_app button opens the URL inside the app with `#talvioData=<init data>`.
+ * Verify it on your server:  secret = HMAC_SHA256(key="TalvioMiniApp", msg=SHA256_HEX(bot_token))
  *                           hash   = HEX(HMAC_SHA256(key=secret, msg=data_check_string))
  * where data_check_string = all fields except hash, sorted, "key=value" joined by "\n".
  */
@@ -62,7 +62,7 @@ function serializeBot(u, b, { pending = 0 } = {}) {
 }
 
 function newToken(botId) {
-  return `${botId}:${randomToken(24).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 35)}`;
+  return `tlv_${botId}_${randomToken(24).replace(/[^A-Za-z0-9]/g, '').slice(0, 32)}`;
 }
 
 async function createBot(ownerId, body = {}) {
@@ -175,14 +175,14 @@ async function deleteBot(ownerId, botIdRaw) {
 
 // ------------------------------------------------------------------ auth for the Bot API
 async function authenticate(token) {
-  if (typeof token !== 'string' || !/^\d+:[A-Za-z0-9_-]{20,}$/.test(token)) throw unauthorized('invalid_token', 'Unauthorized');
+  if (typeof token !== 'string' || !/^tlv_\d+_[A-Za-z0-9]{20,}$/.test(token)) throw unauthorized('invalid_token', 'Invalid bot token');
   const row = await db.one(
     `SELECT u.*, b.*, u.status AS user_status, o.status AS owner_status
      FROM bots b JOIN users u ON u.id = b.user_id JOIN users o ON o.id = b.owner_id
      WHERE b.token_hash = $1`,
     [sha256(token)],
   );
-  if (!row || row.user_status === 'deleted') throw unauthorized('invalid_token', 'Unauthorized');
+  if (!row || row.user_status === 'deleted') throw unauthorized('invalid_token', 'Invalid bot token');
   if (row.status !== 'active' || row.owner_status !== 'active') {
     throw forbidden('bot_disabled', row.disabled_reason ? `Bot disabled: ${row.disabled_reason}` : 'This bot is disabled');
   }
@@ -226,7 +226,7 @@ async function deliverWebhook(botId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(b.webhook_secret ? { 'X-ChatApp-Bot-Api-Secret-Token': b.webhook_secret } : {}),
+            ...(b.webhook_secret ? { 'X-Talvio-Webhook-Secret': b.webhook_secret } : {}),
           },
           body: JSON.stringify({ update_id: Number(u.id), ...u.payload }),
           signal: AbortSignal.timeout(10000),
@@ -316,7 +316,7 @@ bus.on('message:new', (e) => {
 });
 
 async function getUpdates(bot, q = {}) {
-  if (bot.webhook_url) throw new AppError(409, 'webhook_active', 'Conflict: can’t use getUpdates while a webhook is set; call deleteWebhook first');
+  if (bot.webhook_url) throw new AppError(409, 'webhook_active', 'can’t use getUpdates while a webhook is set; call deleteWebhook first');
   const offset = q.offset !== undefined ? parseInt(q.offset, 10) : 0;
   const limit = Math.min(100, Math.max(1, parseInt(q.limit, 10) || 100));
   const timeout = Math.min(50, Math.max(0, parseInt(q.timeout, 10) || 0));
@@ -382,7 +382,7 @@ async function botChat(bot, chatIdRaw) {
   try {
     return await chatService.requireMember(chatIdRaw, bot.user_id);
   } catch (_) {
-    throw badRequest('chat_not_found', 'Bad Request: chat not found (the user must start the bot first, or add it to the group)');
+    throw badRequest('chat_not_found', 'chat not found (the user must start the bot first, or add it to the group)');
   }
 }
 
@@ -405,8 +405,8 @@ async function sendMessage(bot, p, kind = 'text', file = null) {
 async function botMessage(bot, p) {
   const chat = await botChat(bot, p.chat_id);
   const m = await db.one('SELECT * FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [v.id(p.message_id, 'message_id'), chat.id]);
-  if (!m) throw badRequest('message_not_found', 'Bad Request: message to edit not found');
-  if (m.sender_id !== bot.user_id) throw badRequest('cannot_edit', 'Bad Request: message can’t be edited');
+  if (!m) throw badRequest('message_not_found', 'message to edit not found');
+  if (m.sender_id !== bot.user_id) throw badRequest('cannot_edit', 'message can’t be edited');
   return { chat, m };
 }
 
@@ -446,7 +446,7 @@ async function deleteMessage(bot, p) {
 async function answerCallbackQuery(bot, p) {
   const id = String(p.callback_query_id || '');
   const q = await db.one('SELECT * FROM bot_callback_queries WHERE id = $1 AND bot_id = $2', [id, bot.user_id]);
-  if (!q) throw badRequest('query_not_found', 'Bad Request: query is too old or invalid');
+  if (!q) throw badRequest('query_not_found', 'query is too old or invalid');
   if (q.answered) return true;
   await db.query('UPDATE bot_callback_queries SET answered = TRUE WHERE id = $1', [id]);
   const text = p.text === undefined ? '' : v.str(String(p.text), { field: 'text', max: 200 }) || '';
@@ -482,56 +482,56 @@ async function getWebhookInfo(bot) {
 /** Runs a Bot API method. `file` = multer upload for sendPhoto / sendDocument. */
 async function callMethod(token, method, params = {}, file = null) {
   const bot = await authenticate(token);
-  rateLimit.enforce(`botapi:${bot.user_id}`, 120, 10 * 1000, 'Too Many Requests: retry later');
+  rateLimit.enforce(`botapi:${bot.user_id}`, 120, 10 * 1000, 'Too many requests — slow down');
   switch (method) {
-    case 'getMe':
+    case 'me':
       return { ...botUser(bot), can_join_groups: true, can_read_all_group_messages: !bot.group_privacy, supports_inline_queries: false };
-    case 'getUpdates':
+    case 'updates':
       return getUpdates(bot, params);
-    case 'setWebhook':
+    case 'webhook.set':
       return setWebhook(bot, params);
-    case 'deleteWebhook':
+    case 'webhook.delete':
       await db.query('UPDATE bots SET webhook_url = NULL, webhook_secret = NULL WHERE user_id = $1', [bot.user_id]);
       if (params.drop_pending_updates === true || params.drop_pending_updates === 'true') {
         await db.query('DELETE FROM bot_updates WHERE bot_id = $1', [bot.user_id]);
       }
       return true;
-    case 'getWebhookInfo':
+    case 'webhook.info':
       return getWebhookInfo(bot);
-    case 'sendMessage':
+    case 'messages.send':
       return sendMessage(bot, params);
-    case 'sendPhoto':
-      if (!file) throw badRequest('file_required', 'Bad Request: upload the photo as multipart field "photo"');
+    case 'photos.send':
+      if (!file) throw badRequest('file_required', 'upload the photo as multipart field "photo"');
       return sendMessage(bot, params, 'image', file);
-    case 'sendDocument':
-      if (!file) throw badRequest('file_required', 'Bad Request: upload the file as multipart field "document"');
+    case 'files.send':
+      if (!file) throw badRequest('file_required', 'upload the file as multipart field "document"');
       return sendMessage(bot, params, 'file', file);
-    case 'editMessageText':
+    case 'messages.edit':
       return editMessageText(bot, params);
-    case 'editMessageReplyMarkup':
+    case 'messages.edit-buttons':
       return editMessageReplyMarkup(bot, params);
-    case 'deleteMessage':
+    case 'messages.delete':
       return deleteMessage(bot, params);
-    case 'answerCallbackQuery':
+    case 'buttons.answer':
       return answerCallbackQuery(bot, params);
-    case 'setMyCommands': {
+    case 'commands.set': {
       let cmds = params.commands;
       if (typeof cmds === 'string') cmds = JSON.parse(cmds);
       await db.query('UPDATE bots SET commands = $2 WHERE user_id = $1', [bot.user_id, JSON.stringify(parseCommands(cmds))]);
       bus.emit('user:updated', { userId: bot.user_id });
       return true;
     }
-    case 'getMyCommands':
+    case 'commands.get':
       return (await db.one('SELECT commands FROM bots WHERE user_id = $1', [bot.user_id])).commands || [];
-    case 'deleteMyCommands':
+    case 'commands.delete':
       await db.query(`UPDATE bots SET commands = '[]' WHERE user_id = $1`, [bot.user_id]);
       return true;
-    case 'getChat': {
+    case 'chats.get': {
       const chat = await botChat(bot, params.chat_id);
       return { id: chat.id, type: chat.type, title: chat.title || undefined, description: chat.description || undefined };
     }
     default:
-      throw new AppError(404, 'method_not_found', `Not Found: method ${method} is not supported`);
+      throw new AppError(404, 'method_not_found', `Unknown method "${method}" — see the Talvio Bot API docs`);
   }
 }
 
@@ -558,7 +558,7 @@ async function pressButton(userId, messageIdRaw, body = {}) {
 }
 
 function webAppSecret(tokenHash) {
-  return crypto.createHmac('sha256', 'WebAppData').update(tokenHash).digest();
+  return crypto.createHmac('sha256', 'TalvioMiniApp').update(tokenHash).digest();
 }
 
 /** Signed launch data for a mini app (opened from a web_app button or the bot's menu). */
@@ -592,7 +592,7 @@ function verifyInitData(initData, botToken) {
   return !!hash && hash.length === expected.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
 }
 
-/** The mini app called ChatApp.sendData(data) → the bot gets a web_app_data message. */
+/** The mini app called Talvio.sendData(data) → the bot gets a web_app_data message. */
 async function webAppData(userId, botIdRaw, body = {}) {
   const botId = v.id(botIdRaw, 'bot_id');
   const data = String(body.data || '');

@@ -245,9 +245,9 @@ Not included yet: group calls (needs an SFU such as LiveKit) and the native iOS 
 full-screen incoming-call UI when the app is closed — today a closed app gets a push notification,
 and tapping it opens the ringing call.
 
-## Secret chats (Batch C)
+## Vault chats — end-to-end encrypted (Batch C)
 
-End-to-end encrypted chats between **one device on each side** (like Telegram):
+End-to-end encrypted chats between **one device on each side** (shown in the app as "Vault chat"; the API calls them secret chats):
 
 - Each phone makes a new X25519 key pair for the chat; only the public keys pass through the server.
 - Both phones compute the same secret (X25519 → HKDF-SHA256) and encrypt every message with
@@ -258,33 +258,37 @@ End-to-end encrypted chats between **one device on each side** (like Telegram):
 - Self-destruct timer, "delete for both", screenshots blocked, no forwarding, key fingerprint (emoji) to compare.
 - Logging out or revoking the device closes its secret chats for good.
 
-Admins and the server **cannot read secret chats** — the panel only shows counts, and the feature can be
+Admins and the server **cannot read vault chats** — the panel only shows counts, and the feature can be
 switched off in Settings → Features. Reports about a secret chat need the user to include what they saw.
 
 ## Bots (Batch D)
 
-Users create bots in the app (Settings → My bots) and get a token. The Bot API is Telegram-style:
+Users create bots in the app (Settings → My bots) and get a token (`tlv_<id>_<secret>`). The Talvio Bot API:
 
 ```bash
-curl https://chat.example.com/bot<TOKEN>/getMe
-curl "https://chat.example.com/bot<TOKEN>/getUpdates?timeout=30"          # long polling
-curl -X POST https://chat.example.com/bot<TOKEN>/sendMessage -H 'Content-Type: application/json' \
+API=https://chat.example.com/api/bot/v1
+AUTH="Authorization: Bearer <TOKEN>"
+curl -X POST $API/me -H "$AUTH"
+curl -X POST "$API/updates?timeout=30" -H "$AUTH"                       # long polling
+curl -X POST $API/messages.send -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"chat_id": 42, "text": "Kaun sa shehar?", "reply_markup": {"inline_keyboard": [[{"text":"Lahore","callback_data":"lhr"}]]}}'
-curl -X POST https://chat.example.com/bot<TOKEN>/setWebhook -d url=https://yourbot.example.com/hook -d secret_token=abc
+curl -X POST $API/webhook.set -H "$AUTH" -d url=https://yourbot.example.com/hook -d secret_token=abc
 ```
 
-Methods: getMe, getUpdates, setWebhook, deleteWebhook, getWebhookInfo, sendMessage, sendPhoto, sendDocument
-(multipart field `photo` / `document`), editMessageText, editMessageReplyMarkup, deleteMessage,
-answerCallbackQuery, setMyCommands, getMyCommands, deleteMyCommands, getChat. Updates: `message`,
-`callback_query`, and `message.web_app_data`. Webhooks get the header `X-ChatApp-Bot-Api-Secret-Token`.
+Every call answers `{ "ok": true, "data": … }` or `{ "ok": false, "error": { "code", "message" } }`.
+
+Methods: `me`, `updates`, `webhook.set`, `webhook.delete`, `webhook.info`, `messages.send`, `photos.send`,
+`files.send` (multipart field `photo` / `document`), `messages.edit`, `messages.edit-buttons`, `messages.delete`,
+`buttons.answer`, `commands.set`, `commands.get`, `commands.delete`, `chats.get`. Updates: `message`,
+`callback_query`, and `message.web_app_data`. Webhooks get the header `X-Talvio-Webhook-Secret`.
 
 **Mini apps:** a `web_app` button (or the bot's menu URL) opens the page inside the app with
-`#chatAppData=<init data>` and `window.ChatApp = { initData, user, close(), sendData(text) }`.
-Verify init data on your server: `secret = HMAC_SHA256(key="WebAppData", msg=SHA256_HEX(token))`,
+`#talvioData=<init data>` and `window.Talvio = { initData, user, close(), sendData(text) }`.
+Verify init data on your server: `secret = HMAC_SHA256(key="TalvioMiniApp", msg=SHA256_HEX(token))`,
 `hash = HEX(HMAC_SHA256(key=secret, msg=data_check_string))` where data_check_string is every field except
 `hash`, sorted, as `key=value` lines joined by `\n`.
 
-## Premium, payments & ads (Batch D)
+## Talvio Plus (premium), payments & ads (Batch D)
 
 - **Premium plans** are edited in the admin panel (default: 1 month Rs 299, 12 months Rs 2,999).
   Perks: ⭐ badge, bigger uploads (Settings → Premium & payments), 30 chat folders, no sponsored messages.

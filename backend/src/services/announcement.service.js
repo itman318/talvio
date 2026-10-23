@@ -123,7 +123,7 @@ async function forUser(userId) {
   return rows
     .filter((a) => {
       const t = a.target || {};
-      if (t.phone_prefix && !user.phone.startsWith(t.phone_prefix)) return false;
+      if (t.phone_prefix && !(user.phone || '').startsWith(t.phone_prefix)) return false;
       if (t.platform && !platforms.includes(t.platform)) return false;
       if (t.app_version_below && !versions.some((ver) => olderThan(ver, t.app_version_below))) return false;
       return true;

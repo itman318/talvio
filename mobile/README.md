@@ -71,7 +71,7 @@ The app runs without Firebase; push is simply off. To enable it:
 | `lib/screens/more_screens.dart` | Batch A: invite links, join requests, contacts sync, appearance, app lock, storage, legal pages, ban appeal |
 | `lib/widgets/` | Message bubble, avatar, media players, report dialog, `extras.dart` (dark-mode chat colours, @mention/link text, location card) |
 
-`patch_platforms.dart` also adds the `chatapp://` link (back from the payment page), camera/microphone/network permissions for calls (and iOS background audio), location, contacts and fingerprint/Face ID permissions and switches
+`patch_platforms.dart` also adds the `talvio://` link (back from the payment page), camera/microphone/network permissions for calls (and iOS background audio), location, contacts and fingerprint/Face ID permissions and switches
 `MainActivity` to `FlutterFragmentActivity` (needed for fingerprint unlock). If you created the
 platform folders before Batch A, run it again.
 

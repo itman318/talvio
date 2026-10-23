@@ -77,7 +77,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
         );
         if (paid == true && mounted) {
           await context.read<AuthState>().refreshMe();
-          if (mounted) showInfo(context, 'Premium is active ⭐');
+          if (mounted) showInfo(context, 'Talvio Plus is active ⭐');
         }
       }
       _load();
@@ -93,7 +93,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final info = _info;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Premium'),
+        title: const Text('Talvio Plus'),
         actions: [
           IconButton(
             tooltip: 'Payment history',
@@ -107,7 +107,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
           : ListView(padding: const EdgeInsets.all(20), children: [
               const Icon(Icons.star_rounded, size: 72, color: premiumColor),
               const SizedBox(height: 8),
-              Text('${AppConfig.appName} Premium', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+              Text('${AppConfig.appName} Plus', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
               if (info['is_premium'] == true)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -213,7 +213,7 @@ class _WaitForPaymentState extends State<_WaitForPayment> {
           child: Text(failed
               ? 'The payment did not go through. You can try again.'
               : _status == 'review'
-                  ? 'We received your payment details and are confirming them. Premium will start shortly.'
+                  ? 'We received your payment details and are confirming them. Talvio Plus will start shortly.'
                   : 'Finish the payment in your browser, then come back here.'),
         ),
       ]),
@@ -257,7 +257,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Sent for review'),
-          content: const Text('Thanks! We will check your payment and turn on Premium — usually within a few hours.'),
+          content: const Text('Thanks! We will check your payment and turn on Talvio Plus — usually within a few hours.'),
           actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
         ),
       );
