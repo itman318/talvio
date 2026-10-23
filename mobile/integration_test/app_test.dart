@@ -142,7 +142,7 @@ void main() {
     await settle(t, 1500);
     await snap(t, 'demo-chats');
     for (var i = 0; i < 4 && find.text('Ayesha Khan').hitTestable().evaluate().isEmpty; i++) {
-      await t.drag(find.text('Talvio Dev Team'), const Offset(0, -250));
+      await t.dragFrom(const Offset(160, 420), const Offset(0, -250));
       await settle(t, 600);
     }
     await t.tap(find.text('Ayesha Khan'));
@@ -157,7 +157,7 @@ void main() {
     await snap(t, 'demo-reply');
     await t.pageBack();
     await settle(t);
-    await t.drag(find.text('Ayesha Khan'), const Offset(0, 500));
+    await t.dragFrom(const Offset(160, 250), const Offset(0, 500));
     await settle(t, 800);
     await t.tap(find.text('Family ❤️'));
     await pumpUntil(t, find.text('Sunday ko kya banayein?'), what: 'demo group with poll');
