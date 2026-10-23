@@ -94,10 +94,20 @@ jobs:
         run: |
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk talvio.apk
           cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk talvio-x86_64-emulator.apk
-          gh release delete android-latest --yes --cleanup-tag -R "${{ github.repository }}" || true
-          gh release create android-latest talvio.apk talvio-x86_64-emulator.apk -R "${{ github.repository }}" --target "${{ github.sha }}" \
-            --prerelease --title "Talvio Android (test build #${{ github.run_number }})" \
-            --notes "Built from ${{ github.sha }}. Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only — set the API_BASE variable)' }}"
+          R="${{ github.repository }}"
+          TITLE="Talvio Android (test build #${{ github.run_number }})"
+          NOTES="Built from ${{ github.sha }}. Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only - set the API_BASE variable)' }}"
+          for i in 1 2 3; do
+            if gh release view android-latest -R "$R" >/dev/null 2>&1; then
+              gh release upload android-latest talvio.apk talvio-x86_64-emulator.apk --clobber -R "$R" &&
+                gh release edit android-latest --title "$TITLE" --notes "$NOTES" --prerelease -R "$R" && exit 0
+            else
+              gh release create android-latest talvio.apk talvio-x86_64-emulator.apk -R "$R" --target "${{ github.sha }}" \
+                --prerelease --title "$TITLE" --notes "$NOTES" && exit 0
+            fi
+            echo "publish attempt $i failed, retrying"; sleep 15
+          done
+          exit 1
 
       - name: Fail if analyze or build failed
         if: steps.analyze.outcome != 'success' || steps.build.outcome != 'success'
