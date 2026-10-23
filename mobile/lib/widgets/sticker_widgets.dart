@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../core/demo_backend.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -38,7 +39,7 @@ class StickerView extends StatelessWidget {
       height: size,
       child: url.isEmpty
           ? Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))
-          : Image.network(url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))),
+          : netImage(url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))),
     );
   }
 }
@@ -204,7 +205,7 @@ class _StickerTabState extends State<_StickerTab> {
                   padding: const EdgeInsets.all(5),
                   child: packs[i]['cover_url'] == null
                       ? const Icon(Icons.emoji_emotions_outlined)
-                      : Image.network(AppConfig.absolute('${packs[i]['cover_url']}')),
+                      : netImage(AppConfig.absolute('${packs[i]['cover_url']}')),
                 ),
               ),
             ),
@@ -231,7 +232,7 @@ class _StickerTabState extends State<_StickerTab> {
                     Navigator.pop(context);
                     context.read<ChatStore>().sendSticker(widget.chatId, stickers[i]);
                   },
-                  child: Image.network(AppConfig.absolute('${stickers[i]['url']}'), errorBuilder: (_, __, ___) => Center(child: Text('${stickers[i]['emoji']}'))),
+                  child: netImage(AppConfig.absolute('${stickers[i]['url']}'), errorBuilder: (_, __, ___) => Center(child: Text('${stickers[i]['emoji']}'))),
                 ),
               ),
       ),
@@ -403,7 +404,7 @@ class _StickerPacksScreenState extends State<StickerPacksScreen> {
       leading: SizedBox(
         width: 44,
         height: 44,
-        child: p['cover_url'] == null ? const Icon(Icons.emoji_emotions_outlined) : Image.network(AppConfig.absolute('${p['cover_url']}')),
+        child: p['cover_url'] == null ? const Icon(Icons.emoji_emotions_outlined) : netImage(AppConfig.absolute('${p['cover_url']}')),
       ),
       title: Text('${p['title']}'),
       subtitle: Text(p['is_official'] == true ? 'Official · ${(p['stickers'] as List?)?.length ?? 0} stickers' : own ? 'Your pack' : '${p['installs']} people use it'),
@@ -577,7 +578,7 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
                               if (context.mounted) showError(context, e);
                             }
                           },
-                    child: Image.network(AppConfig.absolute('${list[i]['url']}')),
+                    child: netImage(AppConfig.absolute('${list[i]['url']}')),
                   ),
                 ),
     );

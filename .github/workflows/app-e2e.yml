@@ -63,6 +63,7 @@ jobs:
           nohup node src/server.js > ../ci-app/server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:4000/health && break; sleep 1; done
           node test/e2e/seed-app.js seed
+          OUT=../mobile/assets/demo/demo.json node test/e2e/demo-record.js
 
       - name: Prepare Android project
         working-directory: mobile

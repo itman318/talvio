@@ -55,6 +55,12 @@ class SocketService {
 
   void connect() {
     _wantConnected = true;
+    final demo = api.demo;
+    if (demo != null) {
+      demo.onEvent = (name, data) => _events.add(SocketEvent(name, data));
+      _setConnected(true);
+      return;
+    }
     final token = api.accessToken;
     if (token == null) return;
     _socket?.dispose();
@@ -113,11 +119,14 @@ class SocketService {
   }
 
   void emit(String event, Map<String, dynamic> data) {
+    if (api.demo != null) return;
     if (isConnected) _socket?.emit(event, data);
   }
 
   /// Emits with an acknowledgement; throws ApiException-like error map on failure.
   Future<Map<String, dynamic>> request(String event, Map<String, dynamic> data, {Duration timeout = const Duration(seconds: 20)}) {
+    final demo = api.demo;
+    if (demo != null) return demo.socketRequest(event, data);
     final s = _socket;
     if (s == null || !isConnected) {
       return Future.error(ApiException(0, 'network', 'Not connected'));

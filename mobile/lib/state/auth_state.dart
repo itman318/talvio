@@ -74,6 +74,12 @@ class AuthState extends ChangeNotifier {
       await accounts.load();
     }
 
+    // offline demo left running last time
+    if (await api.restoreDemo()) {
+      _enterDemo();
+      return;
+    }
+
     try {
       appConfig = Map<String, dynamic>.from(await api.get('/app-config') as Map);
       if (appConfig['maintenance_mode'] == true) {
@@ -132,7 +138,7 @@ class AuthState extends ChangeNotifier {
   /// Records the active account in the account list (its tokens stay in ApiClient).
   Future<void> _rememberActive() async {
     final u = me;
-    if (u == null) return;
+    if (u == null || isDemo) return;
     await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone ?? u.email, avatarUrl: u.avatarUrl));
     addingAccount = false;
   }
@@ -148,6 +154,23 @@ class AuthState extends ChangeNotifier {
     services.socket.connect();
     chats.start(me!.id);
     services.push.registerDevice();
+  }
+
+  // ------------------------------------------------------------------ demo
+  bool get isDemo => api.demo != null;
+
+  /// "Try demo": opens the full app with sample chats, no server needed.
+  Future<void> startDemo() async {
+    await api.startDemo();
+    _enterDemo();
+  }
+
+  void _enterDemo() {
+    final d = api.demo!;
+    appConfig = d.appConfig;
+    me = AppUser.fromJson(d.me);
+    logoutReason = null;
+    _enter();
   }
 
   // ------------------------------------------------------------------ login
@@ -220,7 +243,7 @@ class AuthState extends ChangeNotifier {
   /// Saves the active account's tokens in the list and signs out locally (the server session stays).
   Future<void> _parkActive() async {
     final u = me;
-    if (u != null && api.refreshToken != null) {
+    if (u != null && api.refreshToken != null && !isDemo) {
       await accounts.upsert(StoredAccount(id: u.id, name: u.name, phone: u.phone ?? u.email, avatarUrl: u.avatarUrl, access: api.accessToken, refresh: api.refreshToken));
     }
     onAccountSwitch?.call();

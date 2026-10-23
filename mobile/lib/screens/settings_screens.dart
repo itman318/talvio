@@ -33,6 +33,17 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
+          if (auth.isDemo)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Brand.amber.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14)),
+              child: const Row(children: [
+                Icon(Icons.play_circle_outline_rounded),
+                SizedBox(width: 10),
+                Expanded(child: Text('Demo account — sample chats on this phone only. Log out to use a real account.')),
+              ]),
+            ),
           ListTile(
             contentPadding: const EdgeInsets.all(16),
             leading: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 64),

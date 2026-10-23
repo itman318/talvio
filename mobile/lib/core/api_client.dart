@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 
 import '../config.dart';
+import 'demo_backend.dart';
 
 class ApiException implements Exception {
   final int status;
@@ -51,6 +52,33 @@ class ApiClient {
 
   bool get isLoggedIn => refreshToken != null;
 
+  /// Offline demo: every request is answered on the phone (see DemoBackend).
+  DemoBackend? demo;
+
+  /// Turns the offline demo on (from the login screen).
+  Future<DemoBackend> startDemo() async {
+    final d = await DemoBackend.load();
+    demo = d;
+    DemoBackend.active = d;
+    accessToken = DemoBackend.marker;
+    refreshToken = DemoBackend.marker;
+    await _storage.write(key: 'access_token', value: DemoBackend.marker);
+    await _storage.write(key: 'refresh_token', value: DemoBackend.marker);
+    return d;
+  }
+
+  /// After an app restart: was the demo running?
+  Future<bool> restoreDemo() async {
+    if (await _storage.read(key: 'refresh_token') != DemoBackend.marker) return false;
+    try {
+      await startDemo();
+      return true;
+    } catch (_) {
+      await clearTokens();
+      return false;
+    }
+  }
+
   // ------------------------------------------------------------------ token storage
   Future<void> loadTokens() async {
     accessToken = await _storage.read(key: 'access_token');
@@ -69,6 +97,8 @@ class ApiClient {
   }
 
   Future<void> clearTokens() async {
+    demo = null;
+    DemoBackend.active = null;
     _refreshTimer?.cancel();
     accessToken = null;
     refreshToken = null;
@@ -79,6 +109,7 @@ class ApiClient {
   /// Single-flight refresh: concurrent callers share one request
   /// (the server rotates refresh tokens, so two parallel refreshes would log us out).
   Future<void> refreshTokens() {
+    if (demo != null) return Future.value();
     return _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
   }
 
@@ -111,6 +142,8 @@ class ApiClient {
     bool auth = true,
     bool retry = true,
   }) async {
+    final d = demo;
+    if (d != null) return d.handle(method, path, body, query);
     final req = http.Request(method, uri(path, query));
     req.headers['Content-Type'] = 'application/json';
     req.headers['Accept'] = 'application/json';
@@ -167,6 +200,8 @@ class ApiClient {
     Map<String, String> fields = const {},
     bool retry = true,
   }) async {
+    final d = demo;
+    if (d != null) return d.upload(filePath, kind);
     final req = http.MultipartRequest('POST', uri('/media'));
     req.headers.addAll(authHeaders);
     req.fields['kind'] = kind;
@@ -183,6 +218,8 @@ class ApiClient {
 
   /// Downloads a protected file (e.g. /api/media/12) to [target].
   Future<File> download(String apiUrl, File target, {bool retry = true}) async {
+    final d = demo;
+    if (d != null) return d.download(apiUrl, target);
     final req = http.Request('GET', Uri.parse(AppConfig.absolute(apiUrl)));
     req.headers.addAll(authHeaders);
     final streamed = await _http.send(req).timeout(const Duration(minutes: 10));

@@ -46,6 +46,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
       showInfo(context, email ? 'Enter a valid email address' : 'Enter your phone number');
       return;
     }
+    if (email && target == 'demo@talvio.app') return _demo();
     setState(() => _busy = true);
     try {
       final r = email ? await auth.requestEmailCode(target) : await auth.requestOtp(target);
@@ -57,6 +58,17 @@ class _PhoneScreenState extends State<PhoneScreen> {
           devCode: r['dev_code'] as String?,
         ),
       ));
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _demo() async {
+    setState(() => _busy = true);
+    try {
+      await context.read<AuthState>().startDemo();
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -152,6 +164,19 @@ class _PhoneScreenState extends State<PhoneScreen> {
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
               child: _busy ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Next'),
             ),
+            if (!auth.addingAccount) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const ValueKey('demo-button'),
+                onPressed: _busy ? null : _demo,
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: const Text('Try demo account'),
+              ),
+              const SizedBox(height: 6),
+              Text('Explore the app with sample chats — no sign-up, works offline.',
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+            ],
           ],
         ),
       ),
