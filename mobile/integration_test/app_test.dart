@@ -91,5 +91,26 @@ void main() {
     await t.tap(find.byType(FloatingActionButton).first);
     await pumpUntil(t, find.text('New message'), what: 'new message screen');
     await snap(t, 'new-message');
+    await t.tapAt(const Offset(20, 120)); // close the sheet
+    await settle(t);
+
+    // Same screens in dark mode (theme follows the system by default)
+    t.binding.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await settle(t, 1500);
+    await snap(t, 'chats-dark');
+    await t.tap(find.text('Sana Ahmed'));
+    await pumpUntil(t, find.text('Hello from the app ✅'), what: 'chat in dark mode');
+    await snap(t, 'chat-dark');
+    await t.pageBack();
+    await settle(t);
+    await t.tap(find.text('Dev Team'));
+    await pumpUntil(t, find.text('Launch kab karein?'), what: 'group in dark mode');
+    await snap(t, 'group-dark');
+    await t.pageBack();
+    await settle(t);
+    await t.tap(find.text('Settings'));
+    await settle(t, 2000);
+    await snap(t, 'settings-dark');
+    t.binding.platformDispatcher.clearPlatformBrightnessTestValue();
   });
 }

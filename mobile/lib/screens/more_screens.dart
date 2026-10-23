@@ -129,8 +129,8 @@ class _InviteLinksScreenState extends State<InviteLinksScreen> {
                   if (l['expires_at'] != null && !expired) 'expires ${chatListTime(DateTime.parse(l['expires_at'] as String).toLocal())}',
                 ];
                 return ListTile(
-                  leading: Icon(Icons.link, color: expired ? Colors.black26 : Brand.primary),
-                  title: Text('${l['name']}'.isEmpty ? '${l['code']}' : '${l['name']}', style: TextStyle(color: expired ? Colors.black38 : null)),
+                  leading: Icon(Icons.link, color: expired ? Brand.faint : Brand.primary),
+                  title: Text('${l['name']}'.isEmpty ? '${l['code']}' : '${l['name']}', style: TextStyle(color: expired ? Brand.faint : null)),
                   subtitle: Text(parts.join(' · ')),
                   trailing: expired
                       ? null
@@ -303,7 +303,7 @@ class _ContactsSyncScreenState extends State<ContactsSyncScreen> {
                         Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text('${found.length} of your contacts are here. They were added to your contacts list.',
-                              style: const TextStyle(color: Colors.black54)),
+                              style: const TextStyle(color: Brand.muted)),
                         ),
                         ...found.map((u) => ListTile(
                               leading: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute),

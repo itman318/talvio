@@ -643,12 +643,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17))),
+                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
                       if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
                     ]),
                     if (subtitle.isNotEmpty)
                       Text(subtitle,
-                          style: TextStyle(fontSize: 13, color: typing != null || chat.peer?.online == true ? Brand.primary : Colors.black54)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: typing != null || chat.peer?.online == true ? Brand.primary : Brand.muted)),
                   ],
                 ),
               ),
@@ -878,7 +880,7 @@ class _ChatScreenState extends State<ChatScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(blockedText, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+            Text(blockedText, textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
             if (blockedAction != null) blockedAction,
           ]),
         ),

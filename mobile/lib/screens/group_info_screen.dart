@@ -70,7 +70,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         title: const Text('Public link'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(controller: ctrl, autofocus: true, maxLength: 32, decoration: const InputDecoration(prefixText: '@', hintText: 'username')),
-          const Text('Leave empty to make it private.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          const Text('Leave empty to make it private.', style: TextStyle(fontSize: 12, color: Brand.muted)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -240,7 +240,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           ),
           const SizedBox(height: 12),
           Text(chat.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
-          Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+          Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}', textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
           if (chat.isSuspended)
             const Padding(
               padding: EdgeInsets.all(8),

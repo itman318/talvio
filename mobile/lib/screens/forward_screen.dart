@@ -48,7 +48,7 @@ class _ForwardScreenState extends State<ForwardScreen> {
           return ListTile(
             leading: Avatar(id: c.id, name: c.title, url: c.avatarAbsolute, icon: c.isSavedMessages ? Icons.bookmark : null),
             title: Text(c.title),
-            trailing: Icon(selected ? Icons.check_circle : Icons.circle_outlined, color: selected ? Brand.primary : Colors.black26),
+            trailing: Icon(selected ? Icons.check_circle : Icons.circle_outlined, color: selected ? Brand.primary : Brand.faint),
             onTap: () => setState(() {
               if (selected) {
                 _selected.remove(c.id);

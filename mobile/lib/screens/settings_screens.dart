@@ -159,7 +159,7 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => _deleteAccount(context),
           ),
           const SizedBox(height: 16),
-          const Center(child: Text('${AppConfig.appName} v${AppConfig.appVersion}', style: TextStyle(color: Colors.black45))),
+          const Center(child: Text('${AppConfig.appName} v${AppConfig.appVersion}', style: TextStyle(color: Brand.muted))),
           const SizedBox(height: 24),
         ],
       ),

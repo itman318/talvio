@@ -13,6 +13,9 @@ class Brand {
   static const accent = Color(0xFF12B3A3); // mint: online, read, success
   static const amber = Color(0xFFFFB547);
   static const ink = Color(0xFF1D1B2F);
+  /// Secondary text/icons readable on both the light and the dark background.
+  static const muted = Color(0xFF8C8296);
+  static const faint = Color(0xFFA9A2B5);
   static const premium = Color(0xFF8B6CF6);
 
   // gradients

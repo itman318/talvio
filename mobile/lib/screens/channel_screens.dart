@@ -224,7 +224,7 @@ class _ChatStatsScreenState extends State<ChatStatsScreen> {
             padding: const EdgeInsets.all(12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(compactNumber((value as num?)?.toInt() ?? 0), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+              Text(label, style: const TextStyle(color: Brand.muted, fontSize: 12)),
             ]),
           ),
         ),
@@ -363,7 +363,7 @@ class _NewChannelScreenState extends State<NewChannelScreen> {
           ]),
           TextField(controller: _desc, maxLength: 255, maxLines: 3, decoration: const InputDecoration(labelText: 'Description (optional)')),
           const SizedBox(height: 8),
-          const Text('Only admins can post in a channel. Subscribers read, react and vote in polls.', style: TextStyle(color: Colors.black54)),
+          const Text('Only admins can post in a channel. Subscribers read, react and vote in polls.', style: TextStyle(color: Brand.muted)),
           RadioListTile<bool>(
             value: false,
             groupValue: _public,
@@ -452,7 +452,7 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
           Text(
             '${i['username'] != null ? '@${i['username']} · ' : ''}${i['member_count']} ${isChannel ? 'subscribers' : 'members'}',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black54),
+            style: const TextStyle(color: Brand.muted),
           ),
           if ('${i['description'] ?? ''}'.isNotEmpty) ...[
             const SizedBox(height: 16),

@@ -22,7 +22,7 @@ class FoldersScreen extends StatelessWidget {
       body: Column(children: [
         const Padding(
           padding: EdgeInsets.all(16),
-          child: Text('Folders appear as tabs above your chat list. Drag to reorder.', style: TextStyle(color: Colors.black54)),
+          child: Text('Folders appear as tabs above your chat list. Drag to reorder.', style: TextStyle(color: Brand.muted)),
         ),
         Expanded(
           child: ReorderableListView(
@@ -233,7 +233,7 @@ class _SupportListScreenState extends State<SupportListScreen> {
               child: t.isEmpty
                   ? ListView(children: const [
                       SizedBox(height: 120),
-                      Icon(Icons.support_agent, size: 64, color: Colors.black26),
+                      Icon(Icons.support_agent, size: 64, color: Brand.faint),
                       SizedBox(height: 12),
                       Center(child: Text('Need help? Send us a message and\nour team will reply here.', textAlign: TextAlign.center)),
                     ])

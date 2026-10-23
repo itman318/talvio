@@ -215,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(top: 80),
                             child: Column(children: [
-                              const Icon(Icons.forum_outlined, size: 64, color: Colors.black26),
+                              const Icon(Icons.forum_outlined, size: 64, color: Brand.faint),
                               const SizedBox(height: 12),
                               Text(folder == null ? 'No chats yet.\nTap + to start a conversation.' : 'No chats in this folder.',
                                   textAlign: TextAlign.center),
@@ -314,12 +314,12 @@ class ChatTile extends StatelessWidget {
     Widget? tick;
     if (mine && !chat.isSavedMessages && !chat.isChannel) {
       if (last.sendState == SendState.sending) {
-        tick = const Icon(Icons.schedule, size: 14, color: Colors.black45);
+        tick = const Icon(Icons.schedule, size: 14, color: Brand.muted);
       } else if (last.sendState == SendState.failed) {
         tick = const Icon(Icons.error, size: 15, color: Colors.red);
       } else {
         tick = Icon(last.id <= chat.deliveredUpTo ? Icons.done_all : Icons.done,
-            size: 16, color: last.id <= chat.readUpTo ? Brand.primary : Colors.black45);
+            size: 16, color: last.id <= chat.readUpTo ? Brand.primary : Brand.muted);
       }
     }
 
@@ -333,14 +333,19 @@ class ChatTile extends StatelessWidget {
       ),
       title: Row(
         children: [
-          if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group, size: 16)),
-          if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign, size: 16)),
-          Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
-          if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
-          if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off, size: 15, color: Colors.black38)),
-          const Spacer(),
+          // The name takes all the room it needs; only the time/ticks stay on the right.
+          Expanded(
+            child: Row(children: [
+              if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group, size: 16)),
+              if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign, size: 16)),
+              Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+              if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
+              if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off, size: 15, color: Brand.faint)),
+            ]),
+          ),
+          const SizedBox(width: 6),
           if (tick != null) Padding(padding: const EdgeInsets.only(right: 4), child: tick),
-          if (last != null) Text(chatListTime(last.createdAt), style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          if (last != null) Text(chatListTime(last.createdAt), style: const TextStyle(fontSize: 12, color: Brand.muted)),
         ],
       ),
       subtitle: Row(
@@ -376,7 +381,7 @@ class ChatTile extends StatelessWidget {
               margin: const EdgeInsets.only(left: 6),
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: chat.isMuted ? Colors.black38 : Brand.primary,
+                color: chat.isMuted ? Brand.faint : Brand.primary,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text('${chat.unreadCount > 999 ? '999+' : chat.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 12)),
@@ -386,10 +391,10 @@ class ChatTile extends StatelessWidget {
               margin: const EdgeInsets.only(left: 6),
               width: 14,
               height: 14,
-              decoration: BoxDecoration(color: chat.isMuted ? Colors.black38 : Brand.primary, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: chat.isMuted ? Brand.faint : Brand.primary, shape: BoxShape.circle),
             )
           else if (chat.isPinned)
-            const Icon(Icons.push_pin, size: 16, color: Colors.black38),
+            const Icon(Icons.push_pin, size: 16, color: Brand.faint),
         ],
       ),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat))),

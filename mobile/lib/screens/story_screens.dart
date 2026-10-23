@@ -37,7 +37,7 @@ class StoryBar extends StatelessWidget {
           _StoryAvatar(
             user: me,
             label: 'My story',
-            ring: mine.isNotEmpty ? Colors.black26 : null,
+            ring: mine.isNotEmpty ? Brand.faint : null,
             badge: mine.isEmpty,
             onTap: () {
               if (mine.isEmpty) {
@@ -51,7 +51,7 @@ class StoryBar extends StatelessWidget {
           ...others.map((g) => _StoryAvatar(
                 user: g.user,
                 label: g.user.firstName.isEmpty ? g.user.name : g.user.firstName,
-                ring: g.hasUnseen ? Brand.primary : Colors.black26,
+                ring: g.hasUnseen ? Brand.primary : Brand.faint,
                 onTap: () => openStories(context, groups, groups.indexOf(g)),
               )),
         ],
@@ -144,7 +144,7 @@ Future<void> addStory(BuildContext context) async {
             ],
             onChanged: (v) => setState(() => privacy = v!),
           ),
-          const Text('Disappears after 24 hours', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          const Text('Disappears after 24 hours', style: TextStyle(fontSize: 12, color: Brand.muted)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

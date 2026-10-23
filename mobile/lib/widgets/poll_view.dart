@@ -72,7 +72,7 @@ class _PollViewState extends State<PollView> {
         children: [
           Text(p.question, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15.5)),
           const SizedBox(height: 2),
-          Text(p.closed ? 'Final results · $kind' : kind, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text(p.closed ? 'Final results · $kind' : kind, style: const TextStyle(fontSize: 12, color: Brand.muted)),
           const SizedBox(height: 8),
           for (var i = 0; i < p.options.length; i++) _option(p, i, results, total, accent),
           if (p.multiple && !results && !p.closed)
@@ -91,7 +91,7 @@ class _PollViewState extends State<PollView> {
           const SizedBox(height: 4),
           Row(
             children: [
-              Text('${p.totalVoters} ${p.totalVoters == 1 ? 'vote' : 'votes'}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              Text('${p.totalVoters} ${p.totalVoters == 1 ? 'vote' : 'votes'}', style: const TextStyle(fontSize: 12, color: Brand.muted)),
               const Spacer(),
               if (p.voted && !p.quiz && !p.closed)
                 GestureDetector(

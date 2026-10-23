@@ -79,7 +79,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   if (u.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Brand.primary)),
                   if (u.isPremium) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.star_rounded, color: Brand.premium)),
                 ]),
-                Text(u.isBot ? 'bot' : lastSeenText(u), textAlign: TextAlign.center, style: TextStyle(color: u.online ? Brand.primary : Colors.black54)),
+                Text(u.isBot ? 'bot' : lastSeenText(u), textAlign: TextAlign.center, style: TextStyle(color: u.online ? Brand.primary : Brand.muted)),
                 const SizedBox(height: 16),
                 if (!u.deleted && u.id != myId)
                   Padding(

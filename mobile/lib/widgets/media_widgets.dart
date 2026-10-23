@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../theme/brand.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
@@ -72,7 +73,7 @@ class _MessageImageState extends State<MessageImage> {
                 _file = resolveMediaFile(context, widget.message);
               }),
               child: Container(
-                color: Colors.black26,
+                color: Brand.faint,
                 child: Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.download_rounded, color: Colors.white, size: 36),
