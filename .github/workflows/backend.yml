@@ -77,12 +77,24 @@ jobs:
           E2E_OUT: ../ci-backend/e2e.txt
         run: node test/e2e/api.e2e.js
 
+      - name: Web client in a real browser
+        id: web
+        continue-on-error: true
+        env:
+          BASE: http://localhost:4000
+          OUT: ../ci-backend
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.48.2 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          set -o pipefail
+          node test/e2e/web.e2e.js 2>&1 | tee ../ci-backend/web.txt
+
       - name: Save report to ci-backend branch
         if: always()
         working-directory: .
         run: |
           mkdir -p ci-backend
-          echo "unit=${{ steps.unit.outcome }} e2e=${{ steps.e2e.outcome }} sha=${{ github.sha }}" > ci-backend/status.txt
+          echo "unit=${{ steps.unit.outcome }} e2e=${{ steps.e2e.outcome }} web=${{ steps.web.outcome }} sha=${{ github.sha }}" > ci-backend/status.txt
           cd ci-backend
           git init -q -b ci-backend
           git config user.name ci && git config user.email ci@users.noreply.github.com
@@ -90,5 +102,5 @@ jobs:
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-backend
 
       - name: Fail if tests failed
-        if: steps.unit.outcome != 'success' || steps.e2e.outcome != 'success'
+        if: steps.unit.outcome != 'success' || steps.e2e.outcome != 'success' || steps.web.outcome != 'success'
         run: exit 1
