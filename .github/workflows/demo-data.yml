@@ -45,7 +45,15 @@ jobs:
           node scripts/migrate.js
           nohup node src/server.js > /tmp/server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:4000/health && break; sleep 1; done
-          OUT=../mobile/assets/demo/demo.json node test/e2e/demo-record.js || (tail -50 /tmp/server.log; exit 1)
+          OUT=../mobile/assets/demo/demo.json node test/e2e/demo-record.js 2>&1 | tee /tmp/record.txt
+          test "${PIPESTATUS[0]}" = 0
+      - name: Report
+        if: always()
+        run: |
+          mkdir -p /tmp/rep && cp /tmp/record.txt /tmp/rep/ 2>/dev/null; tail -80 /tmp/server.log > /tmp/rep/server.txt 2>/dev/null
+          cd /tmp/rep && git init -q && git checkout -q -b ci-demo && git add -A
+          git -c user.name=ci -c user.email=ci@x commit -qm "demo report ${GITHUB_SHA::7}" || true
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-demo
       - name: Commit
         run: |
           git config user.name "github-actions"
