@@ -432,7 +432,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
     final normH = math.sqrt(hx * hx + hy * hy + hz * hz);
     if (normH < 0.1) return;
     final normA = math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
-    final ax = a[0] / normA, ay = a[1] / normA, az = a[2] / normA;
+    final ax = a[0] / normA, az = a[2] / normA;
     final hxn = hx / normH, hyn = hy / normH, hzn = hz / normH;
     final my = az * hxn - ax * hzn;
     var az0 = math.atan2(hyn, my) * 180 / math.pi;
