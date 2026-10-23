@@ -1086,6 +1086,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = context.read<AuthState>();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final bg = dark ? const Color(0xFF12152A) : Colors.white;
+    // wait until the keyboard has gone down (both at once would not fit)
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) return const SizedBox.shrink();
     // small phones: keep room for the messages above
     final pickerH = (MediaQuery.of(context).size.height * 0.25).clamp(140.0, 300.0);
     return Container(
