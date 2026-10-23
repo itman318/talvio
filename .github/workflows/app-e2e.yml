@@ -97,7 +97,7 @@ jobs:
         working-directory: backend
         run: |
           set -o pipefail
-          node test/e2e/seed-app.js verify | tee ../ci-app/verify.txt
+          node test/e2e/seed-app.js verify 2>&1 | tee ../ci-app/verify.txt
 
       - name: Save to ci-app branch
         if: always()

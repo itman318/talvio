@@ -23,7 +23,7 @@ async function login(phone, first, last) {
   const t = await call('POST', '/auth/otp/verify', { phone, code: r.dev_code, device: { name: 'seed' } });
   if (first) await call('PATCH', '/me', { first_name: first, last_name: last || '' }, t.access_token);
   const me = await call('GET', '/me', null, t.access_token);
-  return { token: t.access_token, id: me.id };
+  return { token: t.access_token, refresh: t.refresh_token, id: me.id };
 }
 
 async function loginEmail(email) {
@@ -60,7 +60,9 @@ async function seed() {
 
 async function verify() {
   const { sana, privateChatId } = JSON.parse(fs.readFileSync(STATE, 'utf8'));
-  const r = await call('GET', `/chats/${privateChatId}/messages`, null, sana.token);
+  // the access token from seeding has expired by now (the emulator run takes longer than its 15 min)
+  const fresh = await call('POST', '/auth/refresh', { refresh_token: sana.refresh });
+  const r = await call('GET', `/chats/${privateChatId}/messages`, null, fresh.access_token);
   const list = Array.isArray(r) ? r : r.messages || [];
   const got = list.find((m) => m.text === 'Hello from the app ✅');
   if (!got) {
