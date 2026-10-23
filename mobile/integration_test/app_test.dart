@@ -138,21 +138,21 @@ void main() {
     await settle(t, 800);
     await t.ensureVisible(find.byKey(const ValueKey('demo-button')));
     await t.tap(find.byKey(const ValueKey('demo-button')));
-    await pumpUntil(t, find.text('Bilal Ahmed'), seconds: 30, what: 'demo chat list');
+    await pumpUntil(t, find.text('Omar Hassan'), seconds: 30, what: 'demo chat list');
     await settle(t, 1500);
     await snap(t, 'demo-chats');
-    for (var i = 0; i < 4 && find.text('Ayesha Khan').hitTestable().evaluate().isEmpty; i++) {
+    for (var i = 0; i < 4 && find.text('Sarah Miller').hitTestable().evaluate().isEmpty; i++) {
       await t.dragFrom(const Offset(160, 420), const Offset(0, -250));
       await settle(t, 600);
     }
-    await t.tap(find.text('Ayesha Khan'));
-    await pumpUntil(t, find.text('Naran trip ki photo 🏔️'), what: 'demo chat with photo');
+    await t.tap(find.text('Sarah Miller'));
+    await pumpUntil(t, find.text('From our mountain trip 🏔️'), what: 'demo chat with photo');
     await settle(t, 2500);
     await snap(t, 'demo-chat');
-    await t.enterText(find.widgetWithText(TextField, 'Message'), 'Assalam o alaikum');
+    await t.enterText(find.widgetWithText(TextField, 'Message'), 'Hello there');
     await settle(t, 400);
     await t.tap(find.byTooltip('Send (hold to schedule)'));
-    await pumpUntil(t, find.text('Walaikum assalam! 😊'), seconds: 15, what: 'demo auto-reply');
+    await pumpUntil(t, find.text('Hey! 👋 How are you?'), seconds: 15, what: 'demo auto-reply');
     await settle(t, 800);
     await snap(t, 'demo-reply');
     await t.pageBack();
@@ -160,7 +160,7 @@ void main() {
     await t.dragFrom(const Offset(160, 250), const Offset(0, 500));
     await settle(t, 800);
     await t.tap(find.text('Family ❤️'));
-    await pumpUntil(t, find.text('Sunday ko kya banayein?'), what: 'demo group with poll');
+    await pumpUntil(t, find.text('What should we cook on Sunday?'), what: 'demo group with poll');
     await settle(t, 2500);
     await snap(t, 'demo-group');
     await t.pageBack();
@@ -172,8 +172,8 @@ void main() {
     await pumpUntil(t, find.text('Choose a city'), what: 'prayer screen');
     await t.tap(find.text('Choose a city'));
     await settle(t, 1200);
-    await t.scrollUntilVisible(find.text('Kot Addu'), 200, scrollable: find.byType(Scrollable).last);
-    await t.tap(find.text('Kot Addu'));
+    await t.scrollUntilVisible(find.text('Dubai'), 200, scrollable: find.byType(Scrollable).last);
+    await t.tap(find.text('Dubai'));
     await pumpUntil(t, find.textContaining('Next:'), what: 'prayer times');
     await settle(t, 1200);
     await snap(t, 'demo-prayer');

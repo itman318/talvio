@@ -56,80 +56,80 @@ async function main() {
   const er = await call('POST', '/auth/email/request', { email: 'demo@talvio.app' });
   const et = await call('POST', '/auth/email/verify', { email: 'demo@talvio.app', code: er.dev_code, device: { name: 'Demo phone' } });
   const me = { token: et.access_token };
-  await call('PATCH', '/me', { first_name: 'Shareef', last_name: '', bio: 'Building Talvio 🚀' }, me.token);
-  await optional('username', () => call('PATCH', '/me', { username: 'shareef_demo' }, me.token));
+  await call('PATCH', '/me', { first_name: 'Sam', last_name: 'Carter', bio: 'Building Talvio 🚀' }, me.token);
+  await optional('username', () => call('PATCH', '/me', { username: 'sam_demo' }, me.token));
   me.id = (await call('GET', '/me', null, me.token)).id;
 
-  const ayesha = await phoneUser('+923001110001', 'Ayesha', 'Khan');
-  const bilal = await phoneUser('+923001110002', 'Bilal', 'Ahmed');
-  const sana = await phoneUser('+923001110003', 'Sana', 'Malik');
-  const ali = await phoneUser('+923001110004', 'Ali', 'Raza');
-  const ammi = await phoneUser('+923001110005', 'Ammi', '');
-  const usman = await phoneUser('+923001110006', 'Usman', 'Tariq');
+  const ayesha = await phoneUser('+447700900001', 'Sarah', 'Miller');
+  const bilal = await phoneUser('+447700900002', 'Omar', 'Hassan');
+  const sana = await phoneUser('+447700900003', 'Lina', 'Chen');
+  const ali = await phoneUser('+447700900004', 'David', 'Brown');
+  const ammi = await phoneUser('+447700900005', 'Mom', '');
+  const usman = await phoneUser('+447700900006', 'Alex', 'Turner');
 
   // ---------------------------------------------------------------- my notes
   const saved = await optional('notes', () => call('POST', '/chats/private', { user_id: me.id }, me.token));
   if (saved) {
-    await say(saved.id, me, 'Server: Contabo VPS 10 lena hai ✅');
-    await say(saved.id, me, 'Ideas: dark mode wallpaper, sticker packs, namaz reminders');
+    await say(saved.id, me, 'To do: book the server ✅');
+    await say(saved.id, me, 'Ideas: new wallpapers, more sticker packs, widgets');
   }
 
   // ---------------------------------------------------------------- private chats
   const a = await call('POST', '/chats/private', { user_id: me.id }, ayesha.token);
-  await say(a.id, ayesha, 'Assalam o alaikum! 👋');
-  await say(a.id, me, 'Walaikum assalam! Kaisi hain?');
-  await say(a.id, ayesha, 'Main theek. Talvio ka naya design bohat zabardast hai 😍');
+  await say(a.id, ayesha, 'Hey Sam! 👋');
+  await say(a.id, me, 'Hi Sarah! How are you?');
+  await say(a.id, ayesha, 'Great, thanks! The new Talvio design looks amazing 😍');
   const lake = await upload(path.join(ASSETS, 'lake.jpg'), 'image', ayesha.token);
-  await call('POST', `/chats/${a.id}/messages`, { type: 'image', media_id: lake.id, text: 'Naran trip ki photo 🏔️' }, ayesha.token);
-  await say(a.id, me, 'Wah! Kya view hai 😮');
-  await say(a.id, ayesha, 'Agli dafa sab saath chalenge InshaAllah');
+  await call('POST', `/chats/${a.id}/messages`, { type: 'image', media_id: lake.id, text: 'From our mountain trip 🏔️' }, ayesha.token);
+  await say(a.id, me, 'Wow, what a view 😮');
+  await say(a.id, ayesha, 'Next time we all go together!');
 
   const b = await call('POST', '/chats/private', { user_id: me.id }, bilal.token);
-  await say(b.id, bilal, 'Bhai kal meeting 11 baje hai, yaad hai na?');
-  await say(b.id, me, 'Haan yaad hai, main time pe aa jaunga');
-  await call('POST', `/chats/${b.id}/messages`, { type: 'location', location: { lat: 30.4697, lng: 70.9669, title: 'Kot Addu' } }, bilal.token);
-  await say(b.id, bilal, 'Ye office ki location hai 📍');
-  await call('POST', `/chats/${b.id}/messages`, { type: 'contact', contact: { name: 'Usman Tariq', phone: '+923001110006' } }, bilal.token);
-  await say(b.id, bilal, 'Ye Usman ka number hai, designer hai 👍');
+  await say(b.id, bilal, 'Meeting tomorrow at 11, remember?');
+  await say(b.id, me, 'Yes, I will be there on time');
+  await call('POST', `/chats/${b.id}/messages`, { type: 'location', location: { lat: 25.0805, lng: 55.1403, title: 'Office' } }, bilal.token);
+  await say(b.id, bilal, 'Here is the office location 📍');
+  await call('POST', `/chats/${b.id}/messages`, { type: 'contact', contact: { name: 'Alex Turner', phone: '+447700900006' } }, bilal.token);
+  await say(b.id, bilal, 'This is Alex, the designer I told you about 👍');
 
   const s = await call('POST', '/chats/private', { user_id: me.id }, sana.token);
-  await say(s.id, sana, 'Talvio ka APK mil gaya, install kar liya ✅');
+  await say(s.id, sana, 'Got the Talvio app, installed it ✅');
   const packs = await optional('stickers', () => call('GET', '/stickers/packs', null, sana.token));
   const st = packs && packs[0] && packs[0].stickers;
   if (st && st.length) await call('POST', `/chats/${s.id}/messages`, { type: 'sticker', sticker_id: st[0].id }, sana.token);
-  await say(s.id, me, 'Shukriya! Koi masla ho to batana');
-  await say(s.id, sana, 'Sticker pack bohat cute hai 😄');
+  await say(s.id, me, 'Thanks! Let me know if anything breaks');
+  await say(s.id, sana, 'The stickers are so cute 😄');
   if (st && st.length > 3) await call('POST', `/chats/${s.id}/messages`, { type: 'sticker', sticker_id: st[3].id }, me.token);
 
   const am = await call('POST', '/chats/private', { user_id: me.id }, ammi.token);
-  await say(am.id, ammi, 'Beta khana kha liya?');
-  await say(am.id, me, 'Ji Ammi, kha liya ❤️');
-  await say(am.id, ammi, 'Jaldi ghar aana, chai bana rahi hoon ☕');
+  await say(am.id, ammi, 'Did you have lunch?');
+  await say(am.id, me, 'Yes Mom, I did ❤️');
+  await say(am.id, ammi, 'Come home early, I am making tea ☕');
 
   const u = await call('POST', '/chats/private', { user_id: me.id }, usman.token);
-  await say(u.id, usman, 'Salam! Bilal bhai ne aap ka number diya tha');
-  await say(u.id, usman, 'App ke icons main bana sakta hoon 🎨');
+  await say(u.id, usman, 'Hi! Omar gave me your number');
+  await say(u.id, usman, 'I can design the app icons for you 🎨');
 
   // ---------------------------------------------------------------- groups
   const fam = (await call('POST', '/chats/group', { title: 'Family ❤️', member_ids: [me.id, ammi.id, ayesha.id] }, ammi.token)).chat;
-  await say(fam.id, ammi, 'Sunday ko sab ghar aa jana');
-  await say(fam.id, ayesha, 'Ji Ammi, main aa jaungi');
-  await call('POST', `/chats/${fam.id}/messages`, { type: 'poll', poll: { question: 'Sunday ko kya banayein?', options: ['Biryani 🍛', 'Karahi 🍲', 'BBQ 🍢'] } }, ayesha.token);
+  await say(fam.id, ammi, 'Everyone come over on Sunday');
+  await say(fam.id, ayesha, 'Sure Mom, I will be there');
+  await call('POST', `/chats/${fam.id}/messages`, { type: 'poll', poll: { question: 'What should we cook on Sunday?', options: ['Pasta 🍝', 'Curry 🍛', 'BBQ 🍢'] } }, ayesha.token);
   const sunset = await upload(path.join(ASSETS, 'sunset.jpg'), 'image', ammi.token);
-  await call('POST', `/chats/${fam.id}/messages`, { type: 'image', media_id: sunset.id, text: 'Aaj ka sunset 🌅' }, ammi.token);
+  await call('POST', `/chats/${fam.id}/messages`, { type: 'image', media_id: sunset.id, text: 'Sunset today 🌅' }, ammi.token);
 
   const dev = (await call('POST', '/chats/group', { title: 'Talvio Dev Team', member_ids: [me.id, bilal.id, sana.id, ali.id, usman.id] }, me.token)).chat;
-  await say(dev.id, ali, 'Android build pass ho gaya ✅');
-  await say(dev.id, sana, 'Web version bhi test kar liya, sab theek hai');
-  await call('POST', `/chats/${dev.id}/messages`, { type: 'poll', poll: { question: 'Launch kab karein?', options: ['Is hafte', 'Agle hafte', 'Agle mahine'] } }, me.token);
-  await say(dev.id, bilal, 'Server lene ke baad live karte hain 🚀');
-  await say(dev.id, usman, 'Main play store ke screenshots bana deta hoon');
+  await say(dev.id, ali, 'Android build passed ✅');
+  await say(dev.id, sana, 'Tested the web version too, all good');
+  await call('POST', `/chats/${dev.id}/messages`, { type: 'poll', poll: { question: 'When should we launch?', options: ['This week', 'Next week', 'Next month'] } }, me.token);
+  await say(dev.id, bilal, 'Let us go live once the server is ready 🚀');
+  await say(dev.id, usman, 'I will make the Play Store screenshots');
 
   // ---------------------------------------------------------------- channel
-  const ch = await call('POST', '/chats/channel', { title: 'Talvio News', username: 'talvio_news', description: 'Talvio ki updates aur naye features' }, ali.token);
-  await say(ch.id, ali, 'Talvio mein khush aamdeed! 🎉 Yahan naye features ki khabar milegi.');
-  await say(ch.id, ali, 'Naya: Stickers, GIFs, disappearing messages aur live location 📍');
-  await say(ch.id, ali, 'Naya: Namaz ke auqaat, Qibla aur Sehri/Iftar reminders 🕌');
+  const ch = await call('POST', '/chats/channel', { title: 'Talvio News', username: 'talvio_news', description: 'Talvio updates and new features' }, ali.token);
+  await say(ch.id, ali, 'Welcome to Talvio! 🎉 New features are announced here.');
+  await say(ch.id, ali, 'New: stickers, GIFs, disappearing messages and live location 📍');
+  await say(ch.id, ali, 'New: prayer times, Qibla direction and Ramadan reminders 🕌');
   await call('POST', `/chats/${ch.id}/join`, {}, me.token);
 
   // ---------------------------------------------------------------- extras
@@ -148,7 +148,7 @@ async function main() {
     await call('POST', '/stories', { media_id: m.id, caption: 'Golden hour ✨', privacy: 'everyone' }, ayesha.token);
   });
   await optional('folder', () => call('POST', '/folders', { name: 'Work', chat_ids: [dev.id, b.id, u.id] }, me.token));
-  await optional('ticket', () => call('POST', '/support/tickets', { subject: 'App ka feedback', category: 'other', message: 'Bohat acha kaam hai, shukriya!' }, me.token));
+  await optional('ticket', () => call('POST', '/support/tickets', { subject: 'App feedback', category: 'other', message: 'Great work, thank you!' }, me.token));
   await optional('calls', async () => {
     const { io } = require('socket.io-client');
     const sock = io(BASE, { transports: ['websocket'], auth: { token: bilal.token } });

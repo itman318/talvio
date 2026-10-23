@@ -66,11 +66,8 @@ class AuthState extends ChangeNotifier {
       _setupDone = true;
       api.onSessionEnded = (e) => _forceLogout(e.code == 'account_banned' ? _banText(e) : e.message);
       chats.onSessionRevoked = () => _forceLogout('You were logged out from this device.');
-      try {
-        await services.push.init().timeout(const Duration(seconds: 8));
-      } catch (e) {
-        debugPrint('Push init skipped: $e');
-      }
+      // Firebase starts in the background — never holds the splash screen
+      unawaited(services.push.init().catchError((Object e) => debugPrint('Push init skipped: $e')));
       await accounts.load();
     }
 
@@ -81,7 +78,8 @@ class AuthState extends ChangeNotifier {
     }
 
     try {
-      appConfig = Map<String, dynamic>.from(await api.get('/app-config') as Map);
+      // short timeout: an unreachable server must not keep the splash screen up
+      appConfig = Map<String, dynamic>.from(await api.get('/app-config').timeout(const Duration(seconds: 4)) as Map);
       if (appConfig['maintenance_mode'] == true) {
         status = AuthStatus.maintenance;
         notifyListeners();
@@ -92,6 +90,8 @@ class AuthState extends ChangeNotifier {
         notifyListeners();
         return;
       }
+    } on TimeoutException {
+      // offline / server down: carry on with the cached session
     } on ApiException catch (e) {
       if (e.code == 'maintenance') {
         appConfig['maintenance_message'] = e.message;
@@ -111,8 +111,26 @@ class AuthState extends ChangeNotifier {
     final cached = await _storage.read(key: 'me');
     if (cached != null) me = AppUser.fromJson(Map<String, dynamic>.from(jsonDecode(cached) as Map));
     try {
-      await api.refreshTokens();
+      if (me != null) {
+        // we know who this is: open the app now and refresh in the background
+        _enter();
+        unawaited(() async {
+          try {
+            await api.refreshTokens();
+            await _loadMe();
+            notifyListeners();
+          } catch (_) {
+            // a dead session is reported through api.onSessionEnded → logout
+          }
+        }());
+        return;
+      }
+      await api.refreshTokens().timeout(const Duration(seconds: 10));
       await _loadMe();
+    } on TimeoutException {
+      status = AuthStatus.loggedOut;
+      notifyListeners();
+      return;
     } on ApiException catch (e) {
       if (!e.isNetwork) {
         await _clearLocal();

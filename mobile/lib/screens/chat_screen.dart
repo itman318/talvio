@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
@@ -56,6 +57,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _error;
 
   final _text = TextEditingController();
+  final _focus = FocusNode();
+  bool _emojiOpen = false;
   final _scroll = ScrollController();
   Message? _replyTo;
   Message? _editing;
@@ -104,6 +107,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _recTimer?.cancel();
     _recorder.dispose();
     _text.dispose();
+    _focus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -298,23 +302,56 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Future<void> _attach() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(children: [
-          ListTile(leading: const Icon(Icons.photo), title: const Text('Photo'), onTap: () => Navigator.pop(ctx, 'photo')),
-          ListTile(leading: const Icon(Icons.photo_camera), title: const Text('Camera'), onTap: () => Navigator.pop(ctx, 'camera')),
-          ListTile(leading: const Icon(Icons.videocam), title: const Text('Video'), onTap: () => Navigator.pop(ctx, 'video')),
-          ListTile(leading: const Icon(Icons.attach_file), title: const Text('File'), onTap: () => Navigator.pop(ctx, 'file')),
-          if (context.read<AuthState>().feature('location'))
-            ListTile(leading: const Icon(Icons.location_on_outlined), title: const Text('Location'), onTap: () => Navigator.pop(ctx, 'location')),
-          ListTile(leading: const Icon(Icons.contact_page_outlined), title: const Text('Contact'), onTap: () => Navigator.pop(ctx, 'contact')),
-          if ((_store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false) && context.read<AuthState>().feature('polls'))
-            ListTile(leading: const Icon(Icons.poll_outlined), title: const Text('Poll or quiz'), onTap: () => Navigator.pop(ctx, 'poll')),
-        ]),
-      ),
-    );
+  Future<void> _attach([String? preset]) async {
+    final auth = context.read<AuthState>();
+    final multi = _store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false;
+    final items = <(String, IconData, String, List<Color>)>[
+      ('photo', Icons.photo_library_rounded, 'Gallery', const [Color(0xFF8E7CF8), Color(0xFF6C5BE3)]),
+      ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
+      ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFFEF5A3C)]),
+      ('file', Icons.insert_drive_file_rounded, 'Document', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
+      if (auth.feature('location')) ('location', Icons.location_on_rounded, 'Location', const [Color(0xFF4FD8A6), Color(0xFF10B37A)]),
+      ('contact', Icons.person_rounded, 'Contact', const [Color(0xFF5FD0E6), Color(0xFF1597B8)]),
+      if (multi && auth.feature('polls')) ('poll', Icons.bar_chart_rounded, 'Poll', const [Color(0xFFF7D27E), Color(0xFFE0A43A)]),
+    ];
+    final choice = preset ??
+        await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (ctx) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              child: GridView.count(
+                crossAxisCount: 4,
+                shrinkWrap: true,
+                mainAxisSpacing: 18,
+                childAspectRatio: 0.82,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  for (final (key, icon, label, colors) in items)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => Navigator.pop(ctx, key),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                            boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                          ),
+                          child: Icon(icon, color: Colors.white, size: 27),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      ]),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
     if (choice == null) return;
     if (choice == 'location') {
       await _shareLocation();
@@ -682,7 +719,12 @@ class _ChatScreenState extends State<ChatScreen> {
       subtitle = '';
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_emojiOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _emojiOpen) setState(() => _emojiOpen = false);
+      },
+      child: Scaffold(
       backgroundColor: ChatColors.of(context).background,
       appBar: AppBar(
         titleSpacing: 0,
@@ -760,6 +802,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       ),
+    ),
     );
   }
 
@@ -905,6 +948,177 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _toggleEmoji() {
+    if (_emojiOpen) {
+      setState(() => _emojiOpen = false);
+      _focus.requestFocus();
+    } else {
+      _focus.unfocus();
+      SystemChannels.textInput.invokeMethod('TextInput.hide');
+      setState(() => _emojiOpen = true);
+    }
+  }
+
+  /// The rounded message field: emoji / text / attach / camera, like modern messengers.
+  Widget _inputPill(Chat chat) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final iconColor = dark ? Colors.white70 : Brand.muted;
+    final empty = _text.text.trim().isEmpty;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1C2033) : Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: dark ? Colors.white10 : const Color(0xFFE3E6EF)),
+        boxShadow: dark ? null : [BoxShadow(color: Brand.ink.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2))],
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        IconButton(
+          tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
+          icon: Icon(_emojiOpen ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined, color: iconColor, size: 26),
+          onPressed: _toggleEmoji,
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: TextField(
+              controller: _text,
+              focusNode: _focus,
+              minLines: 1,
+              maxLines: 6,
+              maxLength: 4096,
+              textCapitalization: TextCapitalization.sentences,
+              style: const TextStyle(fontSize: 16.5, height: 1.35),
+              onTap: () {
+                if (_emojiOpen) setState(() => _emojiOpen = false);
+              },
+              decoration: InputDecoration(
+                hintText: chat.slowModeSec > 0 && !chat.isAdmin ? 'Message (slow mode: ${chat.slowModeSec}s)' : 'Message',
+                hintStyle: TextStyle(color: iconColor, fontSize: 16.5),
+                filled: false,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                counterText: '',
+              ),
+              onChanged: (v) {
+                if (v.isNotEmpty) _store.sendTyping(chatId);
+                setState(() {});
+              },
+            ),
+          ),
+        ),
+        if (_editing == null)
+          IconButton(
+            tooltip: 'Attach',
+            icon: Transform.rotate(angle: -0.6, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 25)),
+            onPressed: () => _attach(),
+          ),
+        if (_editing == null && empty)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              tooltip: 'Camera',
+              icon: Icon(Icons.photo_camera_outlined, color: iconColor, size: 25),
+              onPressed: () => _attach('camera'),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  Widget _roundAction({required IconData icon, required String tooltip, required VoidCallback onTap}) => Tooltip(
+        message: tooltip,
+        child: Material(
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: [Brand.primaryLight, Brand.primary], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            ),
+            child: InkWell(
+              onTap: onTap,
+              child: Icon(icon, color: Colors.white, size: 24),
+            ),
+          ),
+        ),
+      );
+
+  Widget _emojiPanel() {
+    final auth = context.read<AuthState>();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = dark ? const Color(0xFF12152A) : Colors.white;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox(
+          height: 300,
+          child: EmojiPicker(
+            textEditingController: _text,
+            onEmojiSelected: (_, __) => setState(() {}),
+            onBackspacePressed: () => setState(() {}),
+            config: Config(
+              height: 300,
+              checkPlatformCompatibility: true,
+              emojiViewConfig: EmojiViewConfig(
+                backgroundColor: bg,
+                columns: 8,
+                emojiSizeMax: 28,
+                recentsLimit: 32,
+                noRecents: const Text('No recent emoji', style: TextStyle(fontSize: 15, color: Brand.muted)),
+              ),
+              categoryViewConfig: CategoryViewConfig(
+                backgroundColor: bg,
+                indicatorColor: Brand.primary,
+                iconColorSelected: Brand.primary,
+                iconColor: Brand.muted,
+                dividerColor: Colors.transparent,
+              ),
+              skinToneConfig: const SkinToneConfig(),
+              bottomActionBarConfig: BottomActionBarConfig(
+                backgroundColor: bg,
+                buttonColor: bg,
+                buttonIconColor: Brand.muted,
+              ),
+              searchViewConfig: SearchViewConfig(backgroundColor: bg, buttonIconColor: Brand.muted),
+            ),
+          ),
+        ),
+        if (auth.feature('stickers') || auth.feature('gifs'))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+            child: Row(children: [
+              if (auth.feature('stickers'))
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() => _emojiOpen = false);
+                    showStickerGifSheet(context, chatId);
+                  },
+                  icon: const Icon(Icons.sticky_note_2_outlined, size: 20),
+                  label: const Text('Stickers'),
+                ),
+              if (auth.feature('gifs'))
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() => _emojiOpen = false);
+                    showStickerGifSheet(context, chatId, openGifs: true);
+                  },
+                  icon: const Icon(Icons.gif_box_outlined, size: 20),
+                  label: const Text('GIFs'),
+                ),
+            ]),
+          ),
+      ]),
+    );
+  }
+
   Widget _bottomBar(Chat chat) {
     if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
       return SafeArea(
@@ -949,6 +1163,7 @@ class _ChatScreenState extends State<ChatScreen> {
       top: false,
       child: Container(
         color: ChatColors.of(context).bar,
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1013,49 +1228,23 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (c != null) _store.sendText(chatId, c);
                       },
                     ),
-                  if (_editing == null) IconButton(icon: const Icon(Icons.attach_file), onPressed: _attach),
-                  if (_editing == null && (context.read<AuthState>().feature('stickers') || context.read<AuthState>().feature('gifs')))
-                    IconButton(
-                      tooltip: 'Stickers & GIFs',
-                      icon: const Icon(Icons.emoji_emotions_outlined),
-                      onPressed: () => showStickerGifSheet(context, chatId),
-                    ),
-                  if (_editing != null) const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _text,
-                      minLines: 1,
-                      maxLines: 6,
-                      maxLength: 4096,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: InputDecoration(
-                        hintText: chat.slowModeSec > 0 && !chat.isAdmin ? 'Message (slow mode: ${chat.slowModeSec}s)' : 'Message',
-                        border: InputBorder.none,
-                        counterText: '',
-                      ),
-                      onChanged: (v) {
-                        if (v.isNotEmpty) _store.sendTyping(chatId);
-                        setState(() {});
-                      },
-                    ),
-                  ),
-                  if (_text.text.trim().isNotEmpty || _editing != null)
+                  if (_editing != null) const SizedBox(width: 4),
+                  Expanded(child: _inputPill(chat)),
+                  const SizedBox(width: 6),
+                  if (_text.text.trim().isNotEmpty || _editing != null || !context.read<AuthState>().feature('voice_messages'))
                     GestureDetector(
                       onLongPress: _editing == null ? _sendOptions : null,
-                      child: IconButton.filled(
-                        style: IconButton.styleFrom(
-                          backgroundColor: Brand.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        icon: Icon(_editing != null ? Icons.check : Icons.arrow_upward_rounded, color: Colors.white),
+                      child: _roundAction(
+                        icon: _editing != null ? Icons.check_rounded : Icons.send_rounded,
                         tooltip: 'Send (hold to schedule)',
-                        onPressed: _send,
+                        onTap: _send,
                       ),
                     )
-                  else if (context.read<AuthState>().feature('voice_messages'))
-                    IconButton(icon: const Icon(Icons.mic_none), onPressed: _startRecording, tooltip: 'Record voice message'),
+                  else
+                    _roundAction(icon: Icons.mic_rounded, tooltip: 'Record voice message', onTap: _startRecording),
                 ],
               ),
+            if (_emojiOpen && !_recording) _emojiPanel(),
           ],
         ),
       ),

@@ -24,7 +24,12 @@ class PushService {
   /// Called when the user taps an incoming-call notification.
   void Function()? onOpenCall;
 
-  Future<void> init() async {
+  Future<void>? _initializing;
+
+  /// Safe to call without waiting: registerDevice() waits for it.
+  Future<void> init() => _initializing ??= _init();
+
+  Future<void> _init() async {
     try {
       if (Firebase.apps.isEmpty) await Firebase.initializeApp();
       _ready = true;
@@ -42,6 +47,9 @@ class PushService {
 
   /// Ask permission and register this device's token with the server (after login).
   Future<void> registerDevice() async {
+    try {
+      await (_initializing ?? init()).timeout(const Duration(seconds: 15));
+    } catch (_) {}
     if (!_ready) return;
     try {
       final settings = await FirebaseMessaging.instance.requestPermission();

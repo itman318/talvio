@@ -326,21 +326,21 @@ class DemoBackend {
   }
 
   static const _answers = [
-    'Wah, zabardast! 👍',
-    'Theek hai, baad mein baat karte hain 🙂',
-    'Ji bilkul ✅',
+    'Sounds great 👍',
+    'Okay, talk later 🙂',
+    'Sure ✅',
     'Haha 😄',
-    'Shukriya! ❤️',
-    'InshaAllah 🤲',
+    'Thank you! ❤️',
+    'Perfect 👌',
   ];
   int _answer = 0;
 
   void _reply(Map<String, dynamic> chat, Map<String, dynamic> peer, String text) {
     final t = text.toLowerCase();
-    final answer = t.contains('salam')
-        ? 'Walaikum assalam! 😊'
+    final answer = RegExp(r'\b(hi|hello|hey|salam)\b').hasMatch(t)
+        ? 'Hey! 👋 How are you?'
         : t.contains('?')
-            ? 'Achha sawal hai, sochta hoon 🤔'
+            ? 'Good question, let me think 🤔'
             : _answers[_answer++ % _answers.length];
     final now = DateTime.now().toUtc().toIso8601String();
     final m = <String, dynamic>{

@@ -21,7 +21,7 @@ String _left(Duration d) {
   return h > 0 ? '${h}h ${m.toString().padLeft(2, '0')}m' : '${m}m ${s.toString().padLeft(2, '0')}s';
 }
 
-/// Settings → Prayer times: today's namaz times, next-prayer countdown, Sehri/Iftar, Hijri date, Qibla.
+/// Settings → Prayer times: today's prayer times, next-prayer countdown, Sehri/Iftar, Hijri date, Qibla.
 class PrayerScreen extends StatefulWidget {
   const PrayerScreen({super.key});
 
@@ -59,7 +59,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
       // nearest known city just for the label
       var label = 'My location';
       var best = 40.0;
-      for (final (name, lat, lng) in pakistanCities) {
+      for (final (name, lat, lng) in prayerCities) {
         final d = Geolocator.distanceBetween(pos.latitude, pos.longitude, lat, lng) / 1000;
         if (d < best) {
           best = d;
@@ -91,7 +91,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
             onTap: () => Navigator.pop(ctx, ('__gps__', 0.0, 0.0)),
           ),
           const Divider(height: 1),
-          for (final c in pakistanCities)
+          for (final c in prayerCities)
             ListTile(
               leading: const Icon(Icons.location_city_outlined),
               title: Text(c.$1),
@@ -218,7 +218,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
       const SizedBox(height: 14),
       // Sehri / Iftar
       Row(children: [
-        Expanded(child: _miniCard(Icons.nightlight_outlined, 'Sehri ends', _hm(sehri), Brand.accent, dark)),
+        Expanded(child: _miniCard(Icons.nightlight_outlined, 'Suhoor ends', _hm(sehri), Brand.accent, dark)),
         const SizedBox(width: 12),
         Expanded(child: _miniCard(Icons.wb_twilight, 'Iftar', _hm(iftar), Brand.amber, dark)),
       ]),
@@ -260,8 +260,8 @@ class _PrayerScreenState extends State<PrayerScreen> {
           ),
           SwitchListTile(
             secondary: const Icon(Icons.restaurant_outlined),
-            title: const Text('Sehri & Iftar alerts'),
-            subtitle: const Text('In Ramadan: 30 min before Sehri ends, and at Iftar'),
+            title: const Text('Suhoor & Iftar alerts'),
+            subtitle: const Text('In Ramadan: 30 min before Suhoor ends, and at Iftar'),
             value: prefs.ramadanReminders,
             onChanged: (v) => _setReminders(prefs, ramadan: v),
           ),

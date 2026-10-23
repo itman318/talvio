@@ -111,7 +111,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.mosque_outlined),
             title: const Text('Prayer times'),
-            subtitle: const Text('Namaz, Qibla, Sehri & Iftar'),
+            subtitle: const Text('Qibla, Suhoor & Iftar reminders'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrayerScreen())),
           ),
           ListTile(

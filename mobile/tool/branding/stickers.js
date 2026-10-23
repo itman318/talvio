@@ -1,9 +1,9 @@
-// Draws the official "Talvio Desi" sticker pack (512×512 PNG, transparent) → backend/assets/stickers/talvio-desi
-// Usage: node mobile/tool/branding/stickers.js   (needs playwright)
-const { chromium } = require('playwright');
+// Draws the official "Talvio Basics" sticker pack (512×512 PNG, transparent) → backend/assets/stickers/talvio-basics
+// Usage: node mobile/tool/branding/stickers.js   (uses playwright, or CHROME=/path/to/chrome as a fallback)
 const fs = require('fs');
 const path = require('path');
-const OUT = path.resolve(__dirname, '../../../backend/assets/stickers/talvio-desi');
+const { execFileSync } = require('child_process');
+const OUT = path.resolve(__dirname, '../../../backend/assets/stickers/talvio-basics');
 const FONTS = path.resolve(__dirname, '../../../backend/web-client/fonts');
 
 const C = { coral: ['#FF8A6E', '#EF5A3C'], rose: ['#F27AA6', '#E0417A'], mint: ['#4FD8C3', '#10B39A'], gold: ['#F7D27E', '#E0A43A'], violet: ['#A596F7', '#6C5BE3'], sky: ['#7CC0F7', '#3C83DE'], ink: ['#8F98C4', '#59628F'] };
@@ -41,21 +41,21 @@ const extras = {
   confetti: '<rect x="96" y="120" width="18" height="18" rx="4" fill="#F7D27E" transform="rotate(20 105 129)"/><rect x="392" y="104" width="18" height="18" rx="4" fill="#4FD8C3" transform="rotate(-24 401 113)"/><circle cx="420" cy="176" r="10" fill="#E0417A"/><circle cx="90" cy="190" r="9" fill="#6C5BE3"/>',
 };
 const list = [
-  ['salam', 'Salam!', 'coral', 'happy', 'grin', 'wave', '👋'],
-  ['shukriya', 'Shukriya', 'mint', 'closed', 'smile', 'heart', '🙏'],
+  ['hello', 'Hello!', 'coral', 'happy', 'grin', 'wave', '👋'],
+  ['thanks', 'Thank you', 'mint', 'closed', 'smile', 'heart', '🙏'],
   ['haha', 'Hahaha', 'gold', 'closed', 'grin', 'sparkle', '😂'],
-  ['wah', 'Wah!', 'violet', 'wide', 'o', 'sparkle', '🤩'],
-  ['theek', 'Theek hai', 'sky', 'happy', 'smile', 'thumb', '👍'],
-  ['mubarak', 'Mubarak!', 'rose', 'happy', 'grin', 'confetti', '🎉'],
-  ['ameen', 'Ameen', 'mint', 'closed', 'small', 'hands', '🤲'],
+  ['wow', 'Wow!', 'violet', 'wide', 'o', 'sparkle', '🤩'],
+  ['good', 'Sounds good', 'sky', 'happy', 'smile', 'thumb', '👍'],
+  ['congrats', 'Congrats!', 'rose', 'happy', 'grin', 'confetti', '🎉'],
+  ['amen', 'Amen', 'mint', 'closed', 'small', 'hands', '🤲'],
   ['love', 'Love you', 'rose', 'heart', 'smile', 'heart', '❤️'],
-  ['soch', 'Soch raha hoon', 'violet', 'think', 'flat', 'bubble', '🤔'],
-  ['chai', 'Chai?', 'gold', 'open', 'smile', 'tea', '☕'],
-  ['ruko', 'Ruko zara!', 'coral', 'wide', 'o', 'stop', '✋'],
-  ['sorry', 'Sorry yaar', 'sky', 'sad', 'frown', 'tear', '😔'],
-  ['goodnight', 'Shab bakhair', 'ink', 'sleepy', 'small', 'zz', '😴'],
-  ['jazak', 'JazakAllah', 'mint', 'happy', 'smile', 'sparkle', '🌙'],
-  ['kyabaat', 'Kya baat hai!', 'coral', 'wink', 'tongue', 'sparkle', '😜'],
+  ['hmm', 'Hmm...', 'violet', 'think', 'flat', 'bubble', '🤔'],
+  ['coffee', 'Coffee?', 'gold', 'open', 'smile', 'tea', '☕'],
+  ['wait', 'Wait!', 'coral', 'wide', 'o', 'stop', '✋'],
+  ['sorry', 'Sorry!', 'sky', 'sad', 'frown', 'tear', '😔'],
+  ['goodnight', 'Good night', 'ink', 'sleepy', 'small', 'zz', '😴'],
+  ['awesome', 'Awesome!', 'mint', 'happy', 'smile', 'sparkle', '🌟'],
+  ['cool', 'So cool!', 'coral', 'wink', 'tongue', 'sparkle', '😜'],
   ['ok', 'OK!', 'ink', 'open', 'smile', 'thumb', '👌'],
 ];
 function sticker([, label, color, eye, mouth, extra]) {
@@ -79,16 +79,34 @@ function sticker([, label, color, eye, mouth, extra]) {
 }
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const b = await chromium.launch();
-  const p = await b.newPage({ viewport: { width: 512, height: 512 } });
   const b64 = fs.readFileSync(path.join(FONTS, 'PlusJakartaSans-ExtraBold.woff2')).toString('base64');
   const font = `@font-face{font-family:Jakarta;src:url(data:font/woff2;base64,${b64}) format('woff2');font-weight:800}`;
-  for (const s of list) {
-    await p.setContent(`<html><head><style>${font}html,body{margin:0;background:transparent}</style></head><body>${sticker(s)}</body></html>`);
-    await p.evaluate(() => document.fonts.ready);
-    await p.screenshot({ path: path.join(OUT, `${s[0]}.png`), omitBackground: true, clip: { x: 0, y: 0, width: 512, height: 512 } });
+  const html = (s) => `<html><head><style>${font}html,body{margin:0;background:transparent}</style></head><body>${sticker(s)}</body></html>`;
+  let chromium = null;
+  try {
+    ({ chromium } = require('playwright'));
+  } catch (_) {
+    chromium = null;
   }
-  await b.close();
-  fs.writeFileSync(path.join(OUT, 'pack.json'), JSON.stringify({ title: 'Talvio Desi', stickers: list.map((s) => ({ file: `${s[0]}.png`, emoji: s[6] })) }, null, 2));
+  if (chromium) {
+    const b = await chromium.launch();
+    const p = await b.newPage({ viewport: { width: 512, height: 512 } });
+    for (const s of list) {
+      await p.setContent(html(s));
+      await p.evaluate(() => document.fonts.ready);
+      await p.screenshot({ path: path.join(OUT, `${s[0]}.png`), omitBackground: true, clip: { x: 0, y: 0, width: 512, height: 512 } });
+    }
+    await b.close();
+  } else {
+    const chrome = process.env.CHROME || 'chromium';
+    const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'stk-'));
+    for (const s of list) {
+      const f = path.join(tmp, `${s[0]}.html`);
+      fs.writeFileSync(f, html(s));
+      execFileSync(chrome, ['--headless', '--no-sandbox', '--hide-scrollbars', '--default-background-color=00000000', '--window-size=512,512',
+        '--virtual-time-budget=2000', `--screenshot=${path.join(OUT, `${s[0]}.png`)}`, `file://${f}`], { stdio: 'ignore' });
+    }
+  }
+  fs.writeFileSync(path.join(OUT, 'pack.json'), JSON.stringify({ title: 'Talvio Basics', stickers: list.map((s) => ({ file: `${s[0]}.png`, emoji: s[6] })) }, null, 2));
   console.log('stickers:', list.length);
 })();

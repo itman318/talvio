@@ -16,7 +16,7 @@ class PrayerReminders {
   static const _channel = AndroidNotificationDetails(
     'prayer_times',
     'Prayer times',
-    channelDescription: 'Reminders at prayer times and for Sehri / Iftar',
+    channelDescription: 'Reminders at prayer times and for Suhoor / Iftar',
     importance: Importance.high,
     priority: Priority.high,
   );
@@ -60,7 +60,7 @@ class PrayerReminders {
           }
         }
         if (p.ramadanReminders && ramadan) {
-          plan.add((t.fajr.subtract(const Duration(minutes: 30)), 'Sehri ends in 30 minutes', 'Sehri until ${_hm(t.fajr)}.'));
+          plan.add((t.fajr.subtract(const Duration(minutes: 30)), 'Suhoor ends in 30 minutes', 'Suhoor until ${_hm(t.fajr)}.'));
           plan.add((t.maghrib, 'Iftar time', 'Iftar now — ${_hm(t.maghrib)}. Ramadan Mubarak!'));
         }
         for (final (at, title, body) in plan) {

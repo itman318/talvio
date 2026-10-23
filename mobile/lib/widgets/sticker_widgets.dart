@@ -93,18 +93,19 @@ class _GifViewState extends State<GifView> {
 }
 
 /// Bottom sheet from the composer: stickers and GIF search.
-Future<void> showStickerGifSheet(BuildContext context, int chatId) {
+Future<void> showStickerGifSheet(BuildContext context, int chatId, {bool openGifs = false}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: MediaQuery.of(context).size.height * 0.55, child: _StickerGifSheet(chatId: chatId)),
+    builder: (_) => SizedBox(height: MediaQuery.of(context).size.height * 0.55, child: _StickerGifSheet(chatId: chatId, openGifs: openGifs)),
   );
 }
 
 class _StickerGifSheet extends StatefulWidget {
-  const _StickerGifSheet({required this.chatId});
+  const _StickerGifSheet({required this.chatId, this.openGifs = false});
   final int chatId;
+  final bool openGifs;
 
   @override
   State<_StickerGifSheet> createState() => _StickerGifSheetState();
@@ -119,7 +120,7 @@ class _StickerGifSheetState extends State<_StickerGifSheet> with SingleTickerPro
     final auth = context.read<AuthState>();
     final gifs = auth.feature('gifs');
     final stickers = auth.feature('stickers');
-    _tabs = TabController(length: (gifs ? 1 : 0) + (stickers ? 1 : 0), vsync: this);
+    _tabs = TabController(length: (gifs ? 1 : 0) + (stickers ? 1 : 0), vsync: this, initialIndex: widget.openGifs && gifs && stickers ? 1 : 0);
   }
 
   @override

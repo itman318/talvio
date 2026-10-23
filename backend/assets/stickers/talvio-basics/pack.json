@@ -1,12 +1,12 @@
 {
-  "title": "Talvio Desi",
+  "title": "Talvio Basics",
   "stickers": [
     {
-      "file": "salam.png",
+      "file": "hello.png",
       "emoji": "👋"
     },
     {
-      "file": "shukriya.png",
+      "file": "thanks.png",
       "emoji": "🙏"
     },
     {
@@ -14,19 +14,19 @@
       "emoji": "😂"
     },
     {
-      "file": "wah.png",
+      "file": "wow.png",
       "emoji": "🤩"
     },
     {
-      "file": "theek.png",
+      "file": "good.png",
       "emoji": "👍"
     },
     {
-      "file": "mubarak.png",
+      "file": "congrats.png",
       "emoji": "🎉"
     },
     {
-      "file": "ameen.png",
+      "file": "amen.png",
       "emoji": "🤲"
     },
     {
@@ -34,15 +34,15 @@
       "emoji": "❤️"
     },
     {
-      "file": "soch.png",
+      "file": "hmm.png",
       "emoji": "🤔"
     },
     {
-      "file": "chai.png",
+      "file": "coffee.png",
       "emoji": "☕"
     },
     {
-      "file": "ruko.png",
+      "file": "wait.png",
       "emoji": "✋"
     },
     {
@@ -54,11 +54,11 @@
       "emoji": "😴"
     },
     {
-      "file": "jazak.png",
-      "emoji": "🌙"
+      "file": "awesome.png",
+      "emoji": "🌟"
     },
     {
-      "file": "kyabaat.png",
+      "file": "cool.png",
       "emoji": "😜"
     },
     {
