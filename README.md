@@ -107,7 +107,7 @@ grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never)
 
 - **Design "Ink & Coral":** deep ink `#151A2E` + coral `#EF5A3C`, mint `#10B39A`, champagne gold for Talvio Plus, Plus Jakarta Sans font. My bubbles are ink; new app icon, splash, store graphics (`mobile/branding/`).
 - **Push notifications** (Firebase — add `GOOGLE_SERVICES_JSON` secret), **crash reports** (admin → App crashes), **Play Store release** (see `docs/PLAY_STORE.md`).
-- **Stickers & GIFs** (official "Talvio Basics" pack, own packs; GIFs via Tenor key in admin settings), **link previews**, **disappearing messages** (1h / 24h / 7d / 90d), **live location** (15 min / 1 h / 8 h on a map), **contact sharing**, **chat export** (.txt).
+- **Stickers & GIFs** (official "Tali the Fox" pack (20 character stickers), own packs; GIFs via Tenor key in admin settings), **link previews**, **disappearing messages** (1h / 24h / 7d / 90d), **live location** (15 min / 1 h / 8 h on a map), **contact sharing**, **chat export** (.txt).
 - **Screen sharing** in video calls (Share button; Android shows a "sharing" notification).
 - **Prayer times** (Settings → Prayer times): calculated on the phone, Karachi/MWL/Makkah/ISNA/Egypt methods, Hanafi/Shafi Asr, Hijri date with ±2 day adjust, Sehri/Iftar card, reminders for 7 days ahead, **Qibla compass**.
 - **Data saver** (Settings → Data & storage): smaller uploads, no auto-download, 480p calls.

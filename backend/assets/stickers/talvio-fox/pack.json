@@ -1,0 +1,85 @@
+{
+  "title": "Tali the Fox",
+  "stickers": [
+    {
+      "file": "hello.png",
+      "emoji": "👋"
+    },
+    {
+      "file": "love.png",
+      "emoji": "❤️"
+    },
+    {
+      "file": "laugh.png",
+      "emoji": "😂"
+    },
+    {
+      "file": "thanks.png",
+      "emoji": "🙏"
+    },
+    {
+      "file": "like.png",
+      "emoji": "👍"
+    },
+    {
+      "file": "wow.png",
+      "emoji": "😮"
+    },
+    {
+      "file": "cry.png",
+      "emoji": "😭"
+    },
+    {
+      "file": "angry.png",
+      "emoji": "😠"
+    },
+    {
+      "file": "sleepy.png",
+      "emoji": "😴"
+    },
+    {
+      "file": "cool.png",
+      "emoji": "😎"
+    },
+    {
+      "file": "party.png",
+      "emoji": "🥳"
+    },
+    {
+      "file": "think.png",
+      "emoji": "🤔"
+    },
+    {
+      "file": "coffee.png",
+      "emoji": "☕"
+    },
+    {
+      "file": "kiss.png",
+      "emoji": "😘"
+    },
+    {
+      "file": "shy.png",
+      "emoji": "😊"
+    },
+    {
+      "file": "starstruck.png",
+      "emoji": "🤩"
+    },
+    {
+      "file": "gift.png",
+      "emoji": "🎁"
+    },
+    {
+      "file": "please.png",
+      "emoji": "🥺"
+    },
+    {
+      "file": "busy.png",
+      "emoji": "📱"
+    },
+    {
+      "file": "king.png",
+      "emoji": "👑"
+    }
+  ]
+}
