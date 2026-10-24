@@ -102,7 +102,7 @@ void main() {
     await t.tap(find.text('Chats'));
     await settle(t);
 
-    await t.tap(find.byType(FloatingActionButton).first);
+    await t.tap(find.byTooltip('New message'));
     await pumpUntil(t, find.text('New message'), what: 'new message screen');
     await snap(t, 'new-message');
     await t.tapAt(const Offset(20, 120)); // close the sheet

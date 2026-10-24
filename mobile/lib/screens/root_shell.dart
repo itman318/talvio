@@ -33,7 +33,12 @@ class _RootShellState extends State<RootShell> {
       },
       child: Scaffold(
         body: IndexedStack(index: _tab, children: [page(0), page(1), page(2)]),
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6), width: 0.6)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, -4))],
+          ),
+          child: NavigationBar(
           selectedIndex: _tab,
           onDestinationSelected: (i) => setState(() {
             _tab = i;
@@ -48,6 +53,7 @@ class _RootShellState extends State<RootShell> {
             const NavigationDestination(icon: Icon(Icons.call_outlined), selectedIcon: Icon(Icons.call_rounded), label: 'Calls'),
             const NavigationDestination(icon: Icon(Icons.tune_rounded), selectedIcon: Icon(Icons.tune_rounded), label: 'Settings'),
           ],
+        ),
         ),
       ),
     );

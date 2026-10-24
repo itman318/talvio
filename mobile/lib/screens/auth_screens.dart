@@ -12,6 +12,7 @@ import '../state/auth_state.dart';
 import '../utils/format.dart';
 import 'more_screens.dart';
 import '../theme/brand.dart';
+import '../widgets/premium.dart';
 
 // ------------------------------------------------------------------ login (email or phone)
 /// First screen: log in with an email code (free) or a phone number (SMS), whichever the admin allows.
@@ -94,8 +95,21 @@ class _PhoneScreenState extends State<PhoneScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const SizedBox(height: 32),
-            const BrandMark(size: 84),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 150,
+              child: Stack(alignment: Alignment.center, children: [
+                Container(
+                  width: 150,
+                  height: 150,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(colors: [Color(0x55F0446E), Color(0x308B5CF6), Color(0x00FFFFFF)], stops: [0, 0.55, 1]),
+                  ),
+                ),
+                const BrandMark(size: 88),
+              ]),
+            ),
             const SizedBox(height: 16),
             Text(email ? 'Welcome to ${AppConfig.appName}' : 'Your phone number',
                 textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
@@ -159,11 +173,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 ],
               ),
             const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _busy ? null : () => _submit(email),
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-              child: _busy ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Next'),
-            ),
+            AuroraButton(label: 'Next', busy: _busy, onPressed: () => _submit(email)),
             if (!auth.addingAccount) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -424,6 +434,8 @@ class SplashScreen extends StatelessWidget {
             BrandMark(size: 96),
             SizedBox(height: 18),
             Text(AppConfig.appName, style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6)),
+            SizedBox(height: 6),
+            Text('Fast · Private · Beautiful', style: TextStyle(color: Color(0x99FFFFFF), fontSize: 13, letterSpacing: 0.4)),
           ]),
         ),
       );

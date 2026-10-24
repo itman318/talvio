@@ -20,6 +20,7 @@ import 'prayer_screen.dart';
 import 'backup_screen.dart';
 import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
+import '../widgets/premium.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -30,174 +31,191 @@ class SettingsScreen extends StatelessWidget {
     final me = auth.me;
     if (me == null) return const Scaffold();
     final support = '${auth.appConfig['support_username'] ?? ''}';
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    void go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    final plus = auth.me?.isPremium == true;
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
           if (auth.isDemo)
             Container(
-              margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Brand.amber.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: Brand.amber.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(16)),
               child: const Row(children: [
                 Icon(Icons.play_circle_outline_rounded),
                 SizedBox(width: 10),
                 Expanded(child: Text('Demo account — sample chats on this phone only. Log out to use a real account.')),
               ]),
             ),
-          ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 64),
-            title: Text(me.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-            subtitle: Text([me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty).join('\n')),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+          // profile card
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () => go(const EditProfileScreen()),
+                child: Ink(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: Brand.auroraSoft(dark),
+                    border: Border.all(color: dark ? Colors.white.withValues(alpha: 0.06) : Colors.white),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, shape: BoxShape.circle),
+                        child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 62)),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4))),
+                          if (plus) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 20)),
+                        ]),
+                        const SizedBox(height: 2),
+                        Text([me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty).join('  ·  '),
+                            maxLines: 2, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5)),
+                      ]),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(20)),
+                      child: const Text('Edit', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
           ),
-          ...auth.otherAccounts.map((a) => ListTile(
-                leading: Avatar(id: a.id, name: a.name, url: a.avatarUrl == null ? null : AppConfig.absolute(a.avatarUrl!), size: 36),
-                title: Text(a.name),
-                subtitle: Text(a.phone ?? 'Tap to switch'),
-                trailing: const Icon(Icons.swap_horiz),
-                onTap: () {
-                  Navigator.of(context).popUntil((r) => r.isFirst);
-                  auth.switchTo(a.id);
-                },
-              )),
-          if (auth.accounts.list.length < auth.maxAccounts)
-            ListTile(
-              leading: const CircleAvatar(radius: 18, child: Icon(Icons.add, size: 20)),
-              title: const Text('Add account'),
+          if (auth.otherAccounts.isNotEmpty || auth.accounts.list.length < auth.maxAccounts)
+            SettingsGroup(children: [
+              ...auth.otherAccounts.map((a) => ListTile(
+                    leading: Avatar(id: a.id, name: a.name, url: a.avatarUrl == null ? null : AppConfig.absolute(a.avatarUrl!), size: 36),
+                    title: Text(a.name),
+                    subtitle: Text(a.phone ?? 'Tap to switch'),
+                    trailing: const Icon(Icons.swap_horiz),
+                    onTap: () {
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      auth.switchTo(a.id);
+                    },
+                  )),
+              if (auth.accounts.list.length < auth.maxAccounts)
+                SettingsTile(
+                  icon: Icons.person_add_alt_1_rounded,
+                  color: Brand.primary,
+                  title: 'Add account',
+                  onTap: () async {
+                    Navigator.of(context).popUntil((r) => r.isFirst);
+                    try {
+                      await auth.addAccount();
+                    } catch (e) {
+                      if (context.mounted) showError(context, e);
+                    }
+                  },
+                ),
+            ]),
+          if (auth.feature('premium'))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => go(const PremiumScreen()),
+                  child: Ink(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: const LinearGradient(colors: [Color(0xFF1B1F36), Color(0xFF2B2440)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      boxShadow: [BoxShadow(color: Brand.ink.withValues(alpha: 0.18), blurRadius: 16, offset: const Offset(0, 6))],
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.workspace_premium_rounded, color: Colors.white),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Talvio Plus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                          Text(plus ? 'Active — thank you for your support' : 'Bigger uploads, more folders, no ads',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
+                        ]),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.7)),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          SettingsGroup(title: 'Account', children: [
+            SettingsTile(icon: Icons.person_rounded, color: Brand.sky, title: 'Edit profile', onTap: () => go(const EditProfileScreen())),
+            SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy', onTap: () => go(const PrivacyScreen())),
+            SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
+            SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', onTap: () => go(const AppLockSettingsScreen())),
+            SettingsTile(icon: Icons.devices_rounded, color: const Color(0xFF5E6B8C), title: 'Devices', onTap: () => go(const SessionsScreen())),
+            SettingsTile(icon: Icons.block_rounded, color: const Color(0xFFE5484D), title: 'Blocked users', onTap: () => go(const BlockedUsersScreen())),
+          ]),
+          SettingsGroup(title: 'Chats', children: [
+            SettingsTile(icon: Icons.palette_rounded, color: Brand.rose, title: 'Appearance', subtitle: 'Dark mode, chat theme, text size', onTap: () => go(const AppearanceScreen())),
+            SettingsTile(icon: Icons.emoji_emotions_rounded, color: Brand.primary, title: 'Stickers & emoji', onTap: () => go(const StickerPacksScreen())),
+            SettingsTile(icon: Icons.folder_rounded, color: Brand.sky, title: 'Chat folders', onTap: () => go(const FoldersScreen())),
+            SettingsTile(icon: Icons.archive_rounded, color: const Color(0xFF8A93B4), title: 'Archived chats', onTap: () => go(const ArchivedChatsScreen())),
+            SettingsTile(icon: Icons.cloud_upload_rounded, color: Brand.violet, title: 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', onTap: () => go(const BackupScreen())),
+            SettingsTile(icon: Icons.data_usage_rounded, color: Brand.green, title: 'Data & storage', onTap: () => go(const StorageScreen())),
+          ]),
+          SettingsGroup(title: 'Extras', children: [
+            SettingsTile(icon: Icons.mosque_rounded, color: const Color(0xFF13A07E), title: 'Prayer times', subtitle: 'Qibla, Suhoor & Iftar reminders', onTap: () => go(const PrayerScreen())),
+            if (auth.feature('bots'))
+              SettingsTile(icon: Icons.smart_toy_rounded, color: const Color(0xFF5B49D6), title: 'My bots', onTap: () => go(const MyBotsScreen())),
+          ]),
+          SettingsGroup(title: 'Help', children: [
+            SettingsTile(
+              icon: Icons.support_agent_rounded,
+              color: Brand.sky,
+              title: 'Help & support',
+              subtitle: support.isNotEmpty ? 'Or message @$support' : null,
+              onTap: () => go(const SupportListScreen()),
+            ),
+            SettingsTile(icon: Icons.quiz_rounded, color: Brand.amber, title: 'FAQ', onTap: () => go(const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
+            SettingsTile(icon: Icons.description_rounded, color: const Color(0xFF8A93B4), title: 'Terms of service', onTap: () => go(const ContentPageScreen(slug: 'terms', fallbackTitle: 'Terms'))),
+            SettingsTile(icon: Icons.privacy_tip_rounded, color: Brand.green, title: 'Privacy policy', onTap: () => go(const ContentPageScreen(slug: 'privacy', fallbackTitle: 'Privacy'))),
+          ]),
+          SettingsGroup(children: [
+            SettingsTile(
+              icon: Icons.logout_rounded,
+              color: const Color(0xFF5E6B8C),
+              title: 'Log out',
               onTap: () async {
-                Navigator.of(context).popUntil((r) => r.isFirst);
-                try {
-                  await auth.addAccount();
-                } catch (e) {
-                  if (context.mounted) showError(context, e);
+                if (await confirm(context, 'Log out?', 'You can log back in with your phone number.', ok: 'Log out')) {
+                  if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                  await auth.logout();
                 }
               },
             ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: const Text('Edit profile'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.lock_outline),
-            title: const Text('Privacy'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.block),
-            title: const Text('Blocked users'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.devices),
-            title: const Text('Devices'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SessionsScreen())),
-          ),
-          if (auth.feature('premium'))
-            ListTile(
-              leading: const Icon(Icons.star_rounded, color: premiumColor),
-              title: const Text('Talvio Plus'),
-              subtitle: Text(auth.me?.isPremium == true ? 'Active' : 'Bigger uploads, more folders, no ads'),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
-            ),
-          if (auth.feature('bots'))
-            ListTile(
-              leading: const Icon(Icons.smart_toy_outlined),
-              title: const Text('My bots'),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyBotsScreen())),
-            ),
-          ListTile(
-            leading: const Icon(Icons.mosque_outlined),
-            title: const Text('Prayer times'),
-            subtitle: const Text('Qibla, Suhoor & Iftar reminders'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrayerScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.emoji_emotions_outlined),
-            title: const Text('Stickers'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StickerPacksScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.backup_outlined),
-            title: const Text('Chat backup'),
-            subtitle: const Text('Save a copy to Google Drive or your phone'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.key_rounded),
-            title: const Text('Two-step verification'),
-            subtitle: const Text('An extra password when logging in'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TwoStepScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.pin_outlined),
-            title: const Text('App lock'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppLockSettingsScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('Appearance'),
-            subtitle: const Text('Dark mode, text size'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AppearanceScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.data_usage),
-            title: const Text('Data & storage'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StorageScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.archive_outlined),
-            title: const Text('Archived chats'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchivedChatsScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.folder_outlined),
-            title: const Text('Chat folders'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FoldersScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.help_outline),
-            title: const Text('Help & support'),
-            subtitle: support.isNotEmpty ? Text('Or message @$support') : null,
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportListScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.quiz_outlined),
-            title: const Text('FAQ'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
-          ),
-          ListTile(
-            leading: const Icon(Icons.description_outlined),
-            title: const Text('Terms of service'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'terms', fallbackTitle: 'Terms'))),
-          ),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
-            title: const Text('Privacy policy'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'privacy', fallbackTitle: 'Privacy'))),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Log out'),
-            onTap: () async {
-              if (await confirm(context, 'Log out?', 'You can log back in with your phone number.', ok: 'Log out')) {
-                if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-                await auth.logout();
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_forever, color: Colors.red),
-            title: const Text('Delete my account', style: TextStyle(color: Colors.red)),
-            onTap: () => _deleteAccount(context),
+            SettingsTile(icon: Icons.delete_forever_rounded, color: const Color(0xFFE5484D), title: 'Delete my account', danger: true, onTap: () => _deleteAccount(context)),
+          ]),
+          const SizedBox(height: 8),
+          Center(
+            child: Column(children: [
+              const BrandMark(size: 28),
+              const SizedBox(height: 6),
+              Text('${AppConfig.appName} v${AppConfig.appVersion}', style: const TextStyle(color: Brand.muted, fontSize: 12)),
+            ]),
           ),
           const SizedBox(height: 16),
-          const Center(child: Text('${AppConfig.appName} v${AppConfig.appVersion}', style: TextStyle(color: Brand.muted))),
-          const SizedBox(height: 24),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/premium.dart';
 import 'package:provider/provider.dart';
 
 import '../core/services.dart';
@@ -119,12 +120,10 @@ class _CallsScreenState extends State<CallsScreen> {
       body: calls == null
           ? const Center(child: CircularProgressIndicator())
           : calls.isEmpty
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.call_outlined, size: 64, color: Theme.of(context).disabledColor),
-                    const SizedBox(height: 8),
-                    Text(_missedOnly ? 'No missed calls' : 'No calls yet'),
-                  ]),
+              ? EmptyState(
+                  tali: _missedOnly ? 'cool' : 'busy',
+                  title: _missedOnly ? 'No missed calls' : 'No calls yet',
+                  subtitle: _missedOnly ? 'You picked up every call. Nice!' : 'Voice and video calls you make or receive will appear here.',
                 )
               : RefreshIndicator(
                   onRefresh: _load,

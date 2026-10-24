@@ -1070,9 +1070,10 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Ink(
             width: 52,
             height: 52,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(colors: [Brand.primaryLight, Brand.primary], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: Brand.aurora,
+              boxShadow: [BoxShadow(color: Brand.rose.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
             ),
             child: InkWell(
               onTap: onTap,

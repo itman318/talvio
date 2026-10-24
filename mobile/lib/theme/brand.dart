@@ -20,10 +20,30 @@ class Brand {
   static const muted = Color(0xFF7D8399);
   static const faint = Color(0xFFA3A8BC);
   static const premium = Color(0xFFC9A45C); // champagne gold (Talvio Plus)
+  static const violet = Color(0xFF7C5CFF);
+  static const sky = Color(0xFF3C9BEA);
+  static const green = Color(0xFF22B573);
+
+  /// Signature "Aurora" gradient: coral → rose → violet. Buttons, badges, story rings, highlights.
+  static const aurora = LinearGradient(
+    colors: [Color(0xFFFF7A59), Color(0xFFF0446E), Color(0xFF8B5CF6)],
+    stops: [0, 0.55, 1],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// A very light aurora wash for backgrounds behind illustrations and headers.
+  static LinearGradient auroraSoft(bool dark) => LinearGradient(
+        colors: dark
+            ? const [Color(0xFF2A1A2E), Color(0xFF231A3A)]
+            : const [Color(0xFFFFEDE7), Color(0xFFFCE7F0), Color(0xFFEEE8FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 
   // gradients
   static const mineGradient = LinearGradient(colors: [Color(0xFF1B2138), Color(0xFF2A3152)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-  static const storyGradient = SweepGradient(colors: [primary, amber, rose, primary]);
+  static const storyGradient = SweepGradient(colors: [Color(0xFFFF7A59), Color(0xFFF0446E), Color(0xFF8B5CF6), Color(0xFFFFB347), Color(0xFFFF7A59)]);
   static const heroGradient = LinearGradient(colors: [Color(0xFFFF7A55), primary, rose], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const plusGradient = LinearGradient(colors: [Color(0xFFE6C987), Color(0xFFC9A45C), Color(0xFFA9853F)], begin: Alignment.topLeft, end: Alignment.bottomRight);
 
@@ -44,8 +64,8 @@ class Brand {
 
   static ThemeData _theme(Brightness b) {
     final dark = b == Brightness.dark;
-    final bg = dark ? const Color(0xFF0B0D17) : const Color(0xFFF6F7FB);
-    final surface = dark ? const Color(0xFF131628) : Colors.white;
+    final bg = dark ? const Color(0xFF090B14) : const Color(0xFFF4F5FA);
+    final surface = dark ? const Color(0xFF12152A) : Colors.white;
     final scheme = ColorScheme.fromSeed(seedColor: primary, brightness: b).copyWith(
       primary: dark ? primaryLight : primary,
       onPrimary: Colors.white,
@@ -82,7 +102,7 @@ class Brand {
         titleTextStyle: TextStyle(fontFamily: font, fontSize: 21, fontWeight: FontWeight.w800, color: scheme.onSurface, letterSpacing: -0.5),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: dark ? primary : ink,
+        backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 2,
         highlightElevation: 4,
@@ -144,12 +164,12 @@ class Brand {
         showCheckmark: false,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 66,
+        height: 68,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         backgroundColor: surface,
-        indicatorColor: dark ? const Color(0xFF262B49) : const Color(0xFFEEF0F6),
-        indicatorShape: RoundedRectangleBorder(borderRadius: radius12),
+        indicatorColor: primary.withValues(alpha: dark ? 0.22 : 0.12),
+        indicatorShape: const StadiumBorder(),
         labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
               fontFamily: font,
               fontSize: 12,

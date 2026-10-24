@@ -19,6 +19,7 @@ import 'new_chat_screen.dart';
 import 'settings_screens.dart';
 import 'story_screens.dart';
 import '../theme/brand.dart';
+import '../widgets/premium.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -120,8 +121,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.4)),
               ]),
         actions: [
+          if (_searching)
           IconButton(
-            icon: Icon(_searching ? Icons.close : Icons.search),
+            icon: const Icon(Icons.close),
             onPressed: () => setState(() {
               _searching = !_searching;
               _search.clear();
@@ -203,8 +205,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: showFound
                         ? _searchResults(chats)
                         : ListView.builder(
-                      itemCount: chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
-                      itemBuilder: (ctx, i) {
+                      itemCount: 1 + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
+                      itemBuilder: (ctx, i0) {
+                        if (i0 == 0) return _searchPill();
+                        final i = i0 - 1;
                         if (showStories && i == 0) return const StoryBar();
                         final si = i - (showStories ? 1 : 0);
                         if (si < secrets.length) {
@@ -213,13 +217,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         final idx = si - secrets.length;
                         if (idx >= chats.length) {
                           return Padding(
-                            padding: const EdgeInsets.only(top: 80),
-                            child: Column(children: [
-                              const Icon(Icons.forum_outlined, size: 64, color: Brand.faint),
-                              const SizedBox(height: 12),
-                              Text(folder == null ? 'No chats yet.\nTap + to start a conversation.' : 'No chats in this folder.',
-                                  textAlign: TextAlign.center),
-                            ]),
+                            padding: const EdgeInsets.only(top: 40),
+                            child: folder == null
+                                ? EmptyState(
+                                    tali: 'hello',
+                                    title: 'Say hello!',
+                                    subtitle: 'Start a conversation with a friend, create a group or a channel.',
+                                    action: 'Start chatting',
+                                    onAction: _compose,
+                                  )
+                                : const EmptyState(tali: 'think', title: 'Nothing here yet', subtitle: 'Chats that match this folder will show up here.'),
                           );
                         }
                         return ChatTile(chat: chats[idx]);
@@ -229,15 +236,40 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _compose,
-        child: const Icon(Icons.add_comment_rounded),
-      ),
+      floatingActionButton: AuroraFab(icon: Icons.edit_rounded, tooltip: 'New message', onPressed: _compose),
     );
   }
 }
 
 extension on _HomeScreenState {
+  Widget _searchPill() {
+    if (_searching) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: Material(
+        color: dark ? const Color(0xFF161A2E) : const Color(0xFFEBEDF4),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => setState(() {
+            _searching = true;
+            _search.clear();
+            _found = [];
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(children: [
+              Icon(Icons.search_rounded, size: 21, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Text('Search', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 15)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _searchResults(List<Chat> chats) {
     return ListView(children: [
       if (chats.isNotEmpty) const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Chats', style: TextStyle(fontWeight: FontWeight.w600))),
@@ -300,6 +332,7 @@ class ChatTile extends StatelessWidget {
     final typing = store.typingText(chat);
     final last = chat.lastMessage;
     final mine = last != null && last.senderId == store.myId && !last.isSystem;
+    final unread = chat.unreadCount > 0 || chat.markedUnread;
 
     String preview = '';
     if (last != null) {
@@ -323,14 +356,32 @@ class ChatTile extends StatelessWidget {
       }
     }
 
+    final online = chat.peer?.online == true && !chat.isSavedMessages && !chat.isBot;
     return ListTile(
-      leading: Avatar(
-        id: chat.id,
-        name: chat.title,
-        url: chat.avatarAbsolute,
-        size: 54,
-        icon: chat.isSavedMessages ? Icons.bookmark : null,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      leading: Stack(clipBehavior: Clip.none, children: [
+        Avatar(
+          id: chat.id,
+          name: chat.title,
+          url: chat.avatarAbsolute,
+          size: 54,
+          icon: chat.isSavedMessages ? Icons.bookmark : null,
+        ),
+        if (online)
+          Positioned(
+            right: -1,
+            bottom: -1,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Brand.accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2.5),
+              ),
+            ),
+          ),
+      ]),
       title: Row(
         children: [
           // The name takes all the room it needs; only the time/ticks stay on the right.
@@ -338,14 +389,21 @@ class ChatTile extends StatelessWidget {
             child: Row(children: [
               if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group, size: 16)),
               if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign, size: 16)),
-              Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+              Flexible(
+                child: Text(chat.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w600, fontSize: 16, letterSpacing: -0.2)),
+              ),
               if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
               if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off, size: 15, color: Brand.faint)),
             ]),
           ),
           const SizedBox(width: 6),
           if (tick != null) Padding(padding: const EdgeInsets.only(right: 4), child: tick),
-          if (last != null) Text(chatListTime(last.createdAt), style: const TextStyle(fontSize: 12, color: Brand.muted)),
+          if (last != null)
+            Text(chatListTime(last.createdAt),
+                style: TextStyle(fontSize: 12, color: unread && !chat.isMuted ? Brand.primary : Brand.muted, fontWeight: unread ? FontWeight.w700 : FontWeight.w500)),
         ],
       ),
       subtitle: Row(
@@ -377,15 +435,7 @@ class ChatTile extends StatelessWidget {
               child: const Text('@', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           if (chat.unreadCount > 0)
-            Container(
-              margin: const EdgeInsets.only(left: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: chat.isMuted ? Brand.faint : Brand.primary,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text('${chat.unreadCount > 999 ? '999+' : chat.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 12)),
-            )
+            Padding(padding: const EdgeInsets.only(left: 6), child: CountBadge(chat.unreadCount, muted: chat.isMuted))
           else if (chat.markedUnread)
             Container(
               margin: const EdgeInsets.only(left: 6),
