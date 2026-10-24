@@ -90,6 +90,12 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
 
+  void _openSearch() => setState(() {
+        _searching = true;
+        _search.clear();
+        _found = [];
+      });
+
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
@@ -252,11 +258,7 @@ extension on _HomeScreenState {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => setState(() {
-            _searching = true;
-            _search.clear();
-            _found = [];
-          }),
+          onTap: _openSearch,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: Row(children: [
