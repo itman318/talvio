@@ -35,7 +35,11 @@ class MessageBubble extends StatelessWidget {
     this.firstInGroup = true,
     this.lastInGroup = true,
     this.showAvatar = false,
+    this.onDiscuss,
   });
+
+  /// Channel posts with a discussion group: open it.
+  final VoidCallback? onDiscuss;
 
   /// Consecutive messages from one sender are drawn as one stack (tighter gaps, joined corners).
   final bool firstInGroup;
@@ -193,6 +197,7 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+      if (m.quote != null) _quoteBlock(m.quote!, accent, textColor),
       if (m.type != 'text') _body(context, accent),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
       if (hasText)
@@ -223,6 +228,18 @@ class MessageBubble extends StatelessWidget {
       ),
       if (m.sendState == SendState.failed && m.errorText != null)
         Text(m.errorText!, style: TextStyle(color: scheme.error, fontSize: 12)),
+      if (_asChannel && onDiscuss != null && !m.isLocal)
+        InkWell(
+          onTap: onDiscuss,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.forum_rounded, size: 15, color: accent),
+              const SizedBox(width: 6),
+              Text('Discuss', style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 13)),
+            ]),
+          ),
+        ),
       if (_asChannel && chat.commentsEnabled && !m.isLocal && !m.isSystem && m.threadId == null)
         InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ThreadScreen(chat: chat, root: m))),
@@ -292,6 +309,34 @@ class MessageBubble extends StatelessWidget {
   }
 
   static final ThemeData _inkTheme = Brand.dark();
+
+  /// "Replying privately" quote of a group message.
+  Widget _quoteBlock(Map<String, dynamic> q, Color accent, Color textColor) {
+    final from = '${q['sender_name'] ?? ''}';
+    final where = '${q['chat_title'] ?? ''}';
+    final text = '${q['text'] ?? ''}';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.fromLTRB(9, 5, 10, 5),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(isMine ? 40 : 26),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.reply_all_rounded, size: 13, color: accent),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(where.isEmpty ? from : '$from · $where',
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 12)),
+          ),
+        ]),
+        Text(text.isEmpty ? _typeLabel('${q['type'] ?? ''}') : stripFormatting(text),
+            maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: textColor.withAlpha(210))),
+      ]),
+    );
+  }
 
   static String _typeLabel(String type) => switch (type) {
         'image' => 'Photo',

@@ -336,6 +336,12 @@ class Message {
 
   bool get isSystem => type == 'system';
 
+  /// Private reply: the group message this one answers ({chat_id, chat_title, message_id, sender_name, text, type}).
+  Map<String, dynamic>? get quote => meta?['quote'] is Map ? Map<String, dynamic>.from(meta!['quote'] as Map) : null;
+
+  /// In a discussion group: the channel post this message came from ({chat_id, message_id}).
+  Map<String, dynamic>? get channelPost => meta?['channel_post'] is Map ? Map<String, dynamic>.from(meta!['channel_post'] as Map) : null;
+
   /// Full-screen effect sent with the message (confetti, hearts, balloons, fireworks).
   String? get effect => meta?['effect'] as String?;
 
@@ -490,6 +496,8 @@ class Chat {
   bool isArchived;
   bool isRequest; // message from someone not in my contacts (waits in Requests)
   bool isLocked; // behind the fingerprint (Locked chats)
+  /// Newer settings straight from the server (rights, rules, welcome, reactions, linked chat…), see getters below.
+  final Map<String, dynamic> extra;
   Message? lastMessage;
   DateTime? lastMessageAt;
   final DateTime createdAt;
@@ -532,12 +540,14 @@ class Chat {
     this.isArchived = false,
     this.isRequest = false,
     this.isLocked = false,
+    Map<String, dynamic>? extra,
     this.lastMessage,
     this.lastMessageAt,
     required this.createdAt,
-  });
+  }) : extra = extra ?? {};
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
+        extra: j,
         id: _int(j['id']),
         type: j['type'] as String,
         title: (j['title'] ?? '') as String,
@@ -585,6 +595,37 @@ class Chat {
   bool get isMulti => type == 'group' || type == 'channel';
   bool get isAdmin => myRole == 'owner' || myRole == 'admin';
   bool get isOwner => myRole == 'owner';
+
+  /// Admin rights: change_info, delete_messages, ban_users, invite_users, pin_messages, post_messages.
+  bool can(String right) {
+    if (isOwner) return true;
+    if (!isAdmin) return false;
+    final r = extra['my_rights'];
+    return r is! Map || r[right] != false;
+  }
+
+  String? get myTitle => extra['my_title'] as String?;
+  DateTime? get restrictedUntil => _date(extra['restricted_until']);
+  bool get isRestricted => restrictedUntil != null && restrictedUntil!.isAfter(DateTime.now());
+  String get welcomeText => '${extra['welcome_text'] ?? ''}';
+  String get rules => '${extra['rules'] ?? ''}';
+  bool get newMemberLimits => extra['new_member_limits'] == true;
+  bool get protectedContent => extra['protected_content'] == true;
+
+  /// Reactions allowed here (null = all, empty = none).
+  List<String>? get allowedReactions => extra['allowed_reactions'] is List ? (extra['allowed_reactions'] as List).map((e) => '$e').toList() : null;
+  String? get category => extra['category'] as String?;
+  ({int id, String title})? get linkedChat {
+    final l = extra['linked_chat'];
+    return l is Map ? (id: _int(l['id']), title: '${l['title'] ?? ''}') : null;
+  }
+
+  int? get linkedChannelId => _intOrNull(extra['linked_channel_id']);
+  int get queueCount => _int(extra['queue_count'] ?? 0);
+  String get serverDraft => '${extra['draft'] ?? ''}';
+
+  /// Copying / forwarding is off for people who aren't admins.
+  bool get noForwards => protectedContent && !isAdmin;
   String? get avatarAbsolute => avatarUrl == null ? null : AppConfig.absolute(avatarUrl!);
   DateTime get sortTime => lastMessage?.createdAt ?? lastMessageAt ?? createdAt;
 }
@@ -593,14 +634,22 @@ class GroupMember {
   final AppUser user;
   String role;
   final DateTime joinedAt;
+  final String? title; // custom admin title ("Moderator")
+  final Map<String, bool>? rights;
+  final DateTime? restrictedUntil;
 
-  GroupMember({required this.user, required this.role, required this.joinedAt});
+  GroupMember({required this.user, required this.role, required this.joinedAt, this.title, this.rights, this.restrictedUntil});
 
   factory GroupMember.fromJson(Map<String, dynamic> j) => GroupMember(
         user: AppUser.fromJson(Map<String, dynamic>.from(j['user'] as Map)),
         role: j['role'] as String,
         joinedAt: _date(j['joined_at']) ?? DateTime.now(),
+        title: j['title'] as String?,
+        rights: j['rights'] is Map ? (j['rights'] as Map).map((k, v) => MapEntry('$k', v == true)) : null,
+        restrictedUntil: _date(j['restricted_until']),
       );
+
+  bool get isRestricted => restrictedUntil != null && restrictedUntil!.isAfter(DateTime.now());
 }
 
 class DeviceSession {

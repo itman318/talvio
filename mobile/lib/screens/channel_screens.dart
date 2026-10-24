@@ -218,15 +218,21 @@ class _ChatStatsScreenState extends State<ChatStatsScreen> {
     });
   }
 
-  Widget _tile(String label, dynamic value) => Expanded(
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(compactNumber((value as num?)?.toInt() ?? 0), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              Text(label, style: const TextStyle(color: Brand.muted, fontSize: 12)),
-            ]),
+  Widget _tile(String label, dynamic value, IconData icon, Color color) => Expanded(
+        child: Container(
+          margin: const EdgeInsets.all(4),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6)),
           ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 8),
+            Text(compactNumber((value as num?)?.toInt() ?? int.tryParse('$value') ?? 0), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+            Text(label, style: const TextStyle(color: Brand.muted, fontSize: 12)),
+          ]),
         ),
       );
 
@@ -234,6 +240,7 @@ class _ChatStatsScreenState extends State<ChatStatsScreen> {
   Widget build(BuildContext context) {
     final s = _s;
     final members = widget.chat.isChannel ? 'Subscribers' : 'Members';
+    int n(dynamic v) => (v as num?)?.toInt() ?? int.tryParse('$v') ?? 0;
     return Scaffold(
       appBar: AppBar(title: const Text('Statistics')),
       body: s == null
@@ -241,21 +248,49 @@ class _ChatStatsScreenState extends State<ChatStatsScreen> {
           : ListView(
               padding: const EdgeInsets.all(12),
               children: [
-                Row(children: [_tile(members, s['members']), _tile('New in 7 days', s['joined_7d'])]),
-                Row(children: [_tile('Posts (30 days)', s['posts_30d']), _tile('Avg. views / post', s['avg_views_30d'])]),
-                Row(children: [_tile('Total views', s['views_total']), _tile('Reactions (30 days)', s['reactions_30d'])]),
-                const SizedBox(height: 12),
-                Text('New $members — last 30 days', style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                SizedBox(height: 120, child: _Bars(points: (s['joins_30d'] as List).map((p) => ((p as Map)['count'] as num).toInt()).toList())),
+                Row(children: [
+                  _tile(members, s['members'], Icons.people_alt_rounded, Brand.violet),
+                  _tile('Net change · 7 days', n(s['joined_7d']) - n(s['left_7d']), Icons.trending_up_rounded, n(s['joined_7d']) >= n(s['left_7d']) ? Brand.green : Colors.red),
+                ]),
+                Row(children: [
+                  _tile('Joined · 7 days', s['joined_7d'], Icons.login_rounded, Brand.green),
+                  _tile('Left · 7 days', s['left_7d'], Icons.logout_rounded, Colors.red),
+                ]),
+                Row(children: [
+                  _tile('Posts · 30 days', s['posts_30d'], Icons.article_rounded, Brand.sky),
+                  _tile('Avg. views / post', s['avg_views_30d'], Icons.visibility_rounded, Brand.primary),
+                ]),
+                Row(children: [
+                  _tile('Reactions · 30 days', s['reactions_30d'], Icons.favorite_rounded, Brand.rose),
+                  _tile('Shares · 30 days', s['shares_30d'], Icons.shortcut_rounded, Brand.amber),
+                ]),
                 const SizedBox(height: 16),
-                const Text('Top posts (30 days)', style: TextStyle(fontWeight: FontWeight.w600)),
-                ...(s['top_posts'] as List).map((p) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(((p as Map)['text'] as String?)?.isNotEmpty == true ? p['text'] as String : '[${p['type']}]',
-                          maxLines: 2, overflow: TextOverflow.ellipsis),
-                      trailing: Text('👁 ${compactNumber((p['views'] as num).toInt())}'),
-                    )),
+                Text('New ${members.toLowerCase()} — last 30 days', style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                SizedBox(height: 120, child: _Bars(points: (s['joins_30d'] as List).map((p) => n((p as Map)['count'])).toList())),
+                const SizedBox(height: 20),
+                const Text('Top posts · 30 days', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                ...(s['top_posts'] as List).map((p) {
+                  final m = Map<String, dynamic>.from(p as Map);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(14)),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${m['text'] ?? ''}'.isNotEmpty ? stripFormatting('${m['text']}') : '[${m['type']}]', maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        const Icon(Icons.visibility_rounded, size: 15, color: Brand.muted),
+                        Text(' ${compactNumber(n(m['views']))}   ', style: const TextStyle(color: Brand.muted, fontSize: 12.5)),
+                        const Icon(Icons.favorite_rounded, size: 15, color: Brand.muted),
+                        Text(' ${compactNumber(n(m['reactions']))}   ', style: const TextStyle(color: Brand.muted, fontSize: 12.5)),
+                        const Icon(Icons.shortcut_rounded, size: 15, color: Brand.muted),
+                        Text(' ${compactNumber(n(m['shares']))}', style: const TextStyle(color: Brand.muted, fontSize: 12.5)),
+                      ]),
+                    ]),
+                  );
+                }),
               ],
             ),
     );
@@ -278,7 +313,11 @@ class _Bars extends StatelessWidget {
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     height: v == 0 ? 2 : 110 * v / maxV,
-                    color: v == 0 ? Colors.black12 : Brand.primary,
+                    decoration: BoxDecoration(
+                      gradient: v == 0 ? null : Brand.aurora,
+                      color: v == 0 ? Colors.black12 : null,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                    ),
                   ),
                 ),
               ))

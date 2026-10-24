@@ -68,6 +68,9 @@ class ChatStore extends ChangeNotifier {
   List<Announcement> announcements = [];
   final Map<int, Set<int>> _viewsSent = {};
 
+  /// Short notices for the chat on screen (e.g. "Sent for approval").
+  final notices = StreamController<String>.broadcast();
+
   /// Message effects to play now: (chatId, effect) — for messages arriving in the chat on screen.
   final effects = StreamController<(int, String)>.broadcast();
 
@@ -145,6 +148,9 @@ class ChatStore extends ChangeNotifier {
     final data = await api.get('/chats') as List;
     if (gen != _session) return;
     chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    for (final c in chats) {
+      if (c.serverDraft.isNotEmpty && c.id != activeChatId) onDraftSynced?.call(c.id, c.serverDraft, false);
+    }
     for (final c in chats) {
       if (c.peer != null) userCache[c.peer!.id] = c.peer!;
     }
@@ -327,7 +333,7 @@ class ChatStore extends ChangeNotifier {
       ? null
       : ReplyInfo(id: r.id, senderId: r.senderId, senderName: r.sender?.name ?? '', type: r.type, text: r.text);
 
-  Future<void> sendText(int chatId, String text, {Message? replyTo, bool silent = false, String? effect}) async {
+  Future<void> sendText(int chatId, String text, {Message? replyTo, bool silent = false, String? effect, Message? quote, bool asDraft = false}) async {
     final local = Message(
       id: _localId--,
       chatId: chatId,
@@ -338,8 +344,20 @@ class ChatStore extends ChangeNotifier {
       clientId: _newClientId(),
       createdAt: DateTime.now(),
       sendState: SendState.sending,
-      meta: effect == null ? null : {'effect': effect},
-      outbox: {'type': 'text', 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id, if (silent) 'silent': true, if (effect != null) 'effect': effect},
+      meta: {
+        if (effect != null) 'effect': effect,
+        if (quote != null)
+          'quote': {'chat_id': quote.chatId, 'message_id': quote.id, 'sender_name': quote.sender?.name ?? '', 'text': quote.text, 'type': quote.type, 'chat_title': ''},
+      },
+      outbox: {
+        'type': 'text',
+        'text': text,
+        if (replyTo != null) 'reply_to_id': replyTo.id,
+        if (silent) 'silent': true,
+        if (effect != null) 'effect': effect,
+        if (quote != null) 'quote_message_id': quote.id,
+        if (asDraft) 'as_draft': true,
+      },
     );
     _insertLocal(local);
     await _deliver(local);
@@ -514,10 +532,12 @@ class ChatStore extends ChangeNotifier {
     try {
       Map<String, dynamic> json;
       if (socket.isConnected) {
-        final r = await socket.request('message:send', payload);
+        final r = Map<String, dynamic>.from(await socket.request('message:send', payload) as Map);
+        if (r['queued'] != null) return _queued(local);
         json = Map<String, dynamic>.from(r['message'] as Map);
       } else {
         json = Map<String, dynamic>.from(await api.post('/chats/${local.chatId}/messages', payload) as Map);
+        if (json['queued'] != null) return _queued(local);
       }
       final real = Message.fromJson(json);
       _confirm(local, real);
@@ -527,6 +547,14 @@ class ChatStore extends ChangeNotifier {
     } catch (_) {
       _fail(local, 'Could not send');
     }
+    return null;
+  }
+
+  /// A channel post that waits for an admin's approval (or was saved as a draft).
+  Message? _queued(Message local) {
+    discard(local);
+    notices.add(local.outbox?['as_draft'] == true ? 'Saved as a draft for the channel admins' : 'Sent to the channel admins for approval');
+    refreshChat(local.chatId);
     return null;
   }
 
@@ -734,9 +762,56 @@ class ChatStore extends ChangeNotifier {
     await loadMembers(chatId);
   }
 
-  Future<void> setRole(int chatId, int userId, String role) async {
-    await api.put('/chats/$chatId/members/$userId/role', {'role': role});
+  Future<void> setRole(int chatId, int userId, String role, {Map<String, bool>? rights, String? title}) async {
+    await api.put('/chats/$chatId/members/$userId/role', {'role': role, if (rights != null) 'rights': rights, if (title != null) 'title': title});
     await loadMembers(chatId);
+  }
+
+  /// Mutes a member (minutes: 60, 1440, 10080, 525600; 0 = lift).
+  Future<void> restrictMember(int chatId, int userId, int minutes) async {
+    await api.post('/chats/$chatId/members/$userId/restrict', {'minutes': minutes});
+    await loadMembers(chatId);
+  }
+
+  Future<List<Map<String, dynamic>>> chatEvents(int chatId, {int? before}) async =>
+      (await api.get('/chats/$chatId/events', query: {if (before != null) 'before': '$before'}) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+  Future<Map<String, dynamic>> messageInfo(Message m) async => Map<String, dynamic>.from(await api.get('/messages/${m.id}/info') as Map);
+
+  Future<Map<String, dynamic>> channelDirectory({String? category, String q = ''}) async => Map<String, dynamic>.from(
+      await api.get('/channels/directory', query: {if (category != null) 'category': category, if (q.isNotEmpty) 'q': q}) as Map);
+
+  Future<Map<String, dynamic>> postQueue(int chatId) async => Map<String, dynamic>.from(await api.get('/chats/$chatId/queue') as Map);
+  Future<void> publishQueued(int chatId, int id) async {
+    await api.post('/chats/$chatId/queue/$id/publish');
+    await refreshChat(chatId);
+  }
+
+  Future<void> deleteQueued(int chatId, int id) async {
+    await api.delete('/chats/$chatId/queue/$id');
+    await refreshChat(chatId);
+  }
+
+  /// Group / channel settings that live on the chat (welcome, rules, reactions, linked group…).
+  Future<Chat> updateChat(int chatId, Map<String, dynamic> body) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.patch('/chats/$chatId', body) as Map));
+    _upsertChat(c);
+    return c;
+  }
+
+  // ------------------------------------------------------------------ drafts on all my devices
+  final Map<int, Timer> _draftTimers = {};
+
+  /// Called with (chatId, text) when a draft arrives from another device (or with the chat list).
+  void Function(int chatId, String text, bool live)? onDraftSynced;
+
+  void syncDraft(int chatId, String text) {
+    _draftTimers[chatId]?.cancel();
+    _draftTimers[chatId] = Timer(const Duration(milliseconds: 800), () {
+      _draftTimers.remove(chatId);
+      if (myId == null) return;
+      api.put('/chats/$chatId/draft', {'text': text}).catchError((_) => null);
+    });
   }
 
   Future<String> regenerateInvite(int chatId) async {
@@ -1141,6 +1216,10 @@ class ChatStore extends ChangeNotifier {
           dChat.deliveredUpTo = max(dChat.deliveredUpTo, _int(d['message_id']));
           notifyListeners();
         }
+        break;
+      case 'draft:updated':
+        final dChatId = _int(d['chat_id']);
+        if (dChatId != activeChatId) onDraftSynced?.call(dChatId, '${d['text'] ?? ''}', true);
         break;
       case 'chat:updated':
         final id = _int(d['chat_id']);

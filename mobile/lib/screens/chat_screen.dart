@@ -12,6 +12,7 @@ import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'shared_media_screen.dart';
 import 'chat_theme_screen.dart';
@@ -48,6 +49,7 @@ import 'secret_screens.dart';
 import 'channel_screens.dart';
 import 'forward_screen.dart';
 import 'group_info_screen.dart';
+import 'group_admin_screens.dart';
 import 'user_profile_screen.dart';
 import '../theme/brand.dart';
 import '../core/chat_export.dart';
@@ -55,10 +57,13 @@ import '../widgets/sticker_widgets.dart';
 import '../widgets/contact_card.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, required this.chatId, this.initial});
+  const ChatScreen({super.key, required this.chatId, this.initial, this.quote});
 
   final int chatId;
   final Chat? initial;
+
+  /// Private reply: a group message to answer in this private chat.
+  final Message? quote;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -75,6 +80,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final _focus = FocusNode();
   bool _emojiOpen = false;
   bool _unlocked = ChatLock.isOpen; // locked chats: fingerprint first
+  final Set<int> _selected = {}; // multi-select (message ids)
+  Message? _quote; // private reply
+  StreamSubscription<String>? _noticeSub;
   int _panelTab = 0; // emoji panel: 0 emoji · 1 stickers · 2 GIFs
   String? _tag; // My Notes tag filter
   final _scroll = ScrollController();
@@ -115,6 +123,10 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _open();
     MessageNotifications.clearChat(widget.chatId);
+    _quote = widget.quote;
+    _noticeSub = _store.notices.stream.listen((t) {
+      if (mounted) showInfo(context, t);
+    });
     _fxSub = _store.effects.stream.listen((e) {
       if (e.$1 == chatId && mounted) playMessageEffect(context, e.$2);
     });
@@ -132,19 +144,58 @@ class _ChatScreenState extends State<ChatScreen> {
       await _store.openChat(chatId);
       if (_chat!.isGroup) _store.loadMembers(chatId).catchError((_) => <GroupMember>[]);
       if (_chat!.isChannel && _chat!.isPublic && mounted) _loadAd();
+      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowRules());
     } catch (e) {
       _error = '$e';
     }
     if (mounted) setState(() => _loading = false);
   }
 
+  /// Groups with rules: shown once (again when the rules change) with "I agree".
+  Future<void> _maybeShowRules() async {
+    final chat = _store.chatById(chatId) ?? _chat;
+    if (chat == null || !chat.isMulti || chat.rules.trim().isEmpty || chat.isAdmin || !mounted) return;
+    final key = 'rules_ok_${chat.id}_${chat.rules.hashCode}';
+    final sp = await SharedPreferences.getInstance();
+    if (sp.getBool(key) == true || !mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                const GradientIcon(Icons.gavel_rounded, color: Brand.violet, size: 40),
+                const SizedBox(width: 12),
+                Expanded(child: Text('${chat.title} rules', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+              ]),
+              const SizedBox(height: 14),
+              Flexible(child: SingleChildScrollView(child: MessageText(chat.rules, style: const TextStyle(fontSize: 15, height: 1.45)))),
+              const SizedBox(height: 16),
+              AuroraButton(label: 'I agree', icon: Icons.check_rounded, onPressed: () => Navigator.pop(ctx)),
+            ]),
+          ),
+        ),
+      ),
+    );
+    await sp.setBool(key, true);
+  }
+
   @override
   void dispose() {
-    _prefs.setDraft(chatId, _editing == null ? _text.text : '');
+    final draft = _editing == null ? _text.text : '';
+    if (draft != (_prefs.draft(chatId) ?? '')) _store.syncDraft(chatId, draft);
+    _prefs.setDraft(chatId, draft);
     _store.closeChat(chatId);
     _recTimer?.cancel();
     _ampSub?.cancel();
     _fxSub?.cancel();
+    _noticeSub?.cancel();
     _preview.dispose();
     _recorder.dispose();
     _text.dispose();
@@ -202,7 +253,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ------------------------------------------------------------------ sending
-  Future<void> _send({bool silent = false, String? effect}) async {
+  Future<void> _send({bool silent = false, String? effect, bool asDraft = false}) async {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     if (_editing != null) {
@@ -219,9 +270,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final reply = _replyTo;
     setState(() => _replyTo = null);
     _text.clear();
-    final fx = effect ?? autoEffectFor(text);
+    final fx = asDraft ? null : (effect ?? autoEffectFor(text));
     if (fx != null) playMessageEffect(context, fx);
-    await _store.sendText(chatId, text, replyTo: reply, silent: silent, effect: effect);
+    final quote = _quote;
+    if (quote != null) setState(() => _quote = null);
+    await _store.sendText(chatId, text, replyTo: reply, silent: silent, effect: effect, quote: quote, asDraft: asDraft);
   }
 
   /// Long-press on send: send silently or schedule.
@@ -233,6 +286,13 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Wrap(children: [
           ListTile(leading: const Icon(Icons.notifications_off_outlined), title: const Text('Send without sound'), onTap: () => Navigator.pop(ctx, 'silent')),
           ListTile(leading: const Icon(Icons.schedule), title: const Text('Schedule message'), onTap: () => Navigator.pop(ctx, 'schedule')),
+          if ((_store.chatById(chatId) ?? _chat)?.isChannel == true)
+            ListTile(
+              leading: const Icon(Icons.drafts_outlined),
+              title: const Text('Save as draft'),
+              subtitle: const Text('Other admins can review and publish it'),
+              onTap: () => Navigator.pop(ctx, 'draft'),
+            ),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text('Send with effect', style: TextStyle(fontWeight: FontWeight.w700, color: Brand.muted, fontSize: 13)),
@@ -268,6 +328,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (a != null && a.startsWith('fx:')) await _send(effect: a.substring(3));
     if (a == 'silent') await _send(silent: true);
+    if (a == 'draft') await _send(asDraft: true);
     if (a == 'schedule') await _scheduleCurrent();
   }
 
@@ -785,6 +846,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Wrap(
               spacing: 2,
               children: ChatStore.reactionEmojis
+                  .where((e) => chat.allowedReactions == null || chat.allowedReactions!.contains(e))
                   .map((e) => InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: () => Navigator.pop(ctx, 'react:$e'),
@@ -805,8 +867,9 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
             child: Row(children: [
               if (chat.canPost) _quick(ctx, Icons.reply_rounded, 'Reply', 'reply'),
-              if (m.text.isNotEmpty) _quick(ctx, Icons.copy_rounded, 'Copy', 'copy'),
-              if (m.type != 'poll' && m.type != 'call' && !m.viewOnce) _quick(ctx, Icons.shortcut_rounded, 'Forward', 'forward'),
+              if (m.text.isNotEmpty && !chat.noForwards) _quick(ctx, Icons.copy_rounded, 'Copy', 'copy'),
+              if (m.type != 'poll' && m.type != 'call' && !m.viewOnce && !chat.noForwards) _quick(ctx, Icons.shortcut_rounded, 'Forward', 'forward'),
+              _quick(ctx, Icons.check_circle_outline_rounded, 'Select', 'select'),
               _quick(ctx, Icons.alarm_add_rounded, 'Remind', 'remind'),
             ]),
           ),
@@ -817,6 +880,10 @@ class _ChatScreenState extends State<ChatScreen> {
               title: Text(chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
               onTap: () => Navigator.pop(ctx, chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin'),
             ),
+          if (mine && !chat.isSavedMessages && !chat.isChannel)
+            ListTile(leading: const Icon(Icons.info_outline_rounded), title: const Text('Message info'), onTap: () => Navigator.pop(ctx, 'info')),
+          if (chat.isGroup && !mine && m.senderId != null && m.sender?.deleted != true && !chat.protectedContent)
+            ListTile(leading: const Icon(Icons.reply_all_rounded), title: const Text('Reply privately'), onTap: () => Navigator.pop(ctx, 'private_reply')),
           if (canClosePoll) ListTile(leading: const Icon(Icons.stop_circle_outlined), title: const Text('Stop poll'), onTap: () => Navigator.pop(ctx, 'close_poll')),
           if (canEdit) ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
           if (m.editedAt != null) ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Edit history'), onTap: () => Navigator.pop(ctx, 'history')),
@@ -888,7 +955,77 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'remind':
         await pickReminder(context, chat, m);
         break;
+      case 'select':
+        setState(() => _selected.add(m.id));
+        break;
+      case 'info':
+        await showMessageInfo(context, m);
+        break;
+      case 'private_reply':
+        try {
+          final pc = await _store.openPrivateWith(m.senderId!);
+          if (!mounted) return;
+          Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: pc.id, initial: pc, quote: m)));
+        } catch (e) {
+          if (mounted) showError(context, e);
+        }
+        break;
     }
+  }
+
+  // ------------------------------------------------------------------ multi-select
+  Future<void> _selectionAction(String action, Chat chat) async {
+    final list = _store.messagesOf(chatId).where((m) => _selected.contains(m.id)).toList()..sort((a, b) => a.id.compareTo(b.id));
+    if (list.isEmpty) return;
+    switch (action) {
+      case 'copy':
+        final text = list.where((m) => m.text.isNotEmpty).map((m) => list.length > 1 && chat.isGroup ? '${m.sender?.name ?? ''}: ${m.text}' : m.text).join('\n\n');
+        await Clipboard.setData(ClipboardData(text: text));
+        if (mounted) showInfo(context, list.length == 1 ? 'Copied' : '${list.length} messages copied');
+        break;
+      case 'forward':
+        final ids = list.where((m) => !m.viewOnce && m.type != 'poll' && m.type != 'call').map((m) => m.id).toList();
+        if (ids.isEmpty) return;
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: ids)));
+        break;
+      case 'delete':
+        final myId = _store.myId;
+        final allMine = list.every((m) => m.senderId == myId);
+        final canAll = !chat.isSavedMessages && (allMine || chat.type == 'private' || chat.can('delete_messages'));
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Delete ${list.length} message${list.length == 1 ? '' : 's'}?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(ctx, 'me'), child: const Text('Delete for me')),
+              if (canAll) TextButton(onPressed: () => Navigator.pop(ctx, 'all'), child: const Text('Delete for everyone', style: TextStyle(color: Colors.red))),
+            ],
+          ),
+        );
+        if (choice == null) return;
+        try {
+          await _store.deleteMessages(chatId, list.map((m) => m.id).toList(), forEveryone: choice == 'all');
+        } catch (e) {
+          if (mounted) showError(context, e);
+          return;
+        }
+        break;
+    }
+    if (mounted) setState(_selected.clear);
+  }
+
+  PreferredSizeWidget _selectionBar(Chat chat) {
+    final noFwd = chat.noForwards;
+    return AppBar(
+      leading: IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => setState(_selected.clear)),
+      title: Text('${_selected.length} selected'),
+      actions: [
+        if (!noFwd) IconButton(tooltip: 'Copy', icon: const Icon(Icons.copy_rounded), onPressed: () => _selectionAction('copy', chat)),
+        if (!noFwd) IconButton(tooltip: 'Forward', icon: const Icon(Icons.shortcut_rounded), onPressed: () => _selectionAction('forward', chat)),
+        IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline_rounded), onPressed: () => _selectionAction('delete', chat)),
+      ],
+    );
   }
 
   Future<void> _delete(Message m, Chat chat, bool mine) async {
@@ -1054,15 +1191,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final look = context.watch<AppPrefs>().chatAppearance(chatId);
     return PopScope(
-      canPop: !_emojiOpen,
+      canPop: !_emojiOpen && _selected.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _emojiOpen) setState(() => _emojiOpen = false);
+        if (didPop) return;
+        if (_selected.isNotEmpty) {
+          setState(_selected.clear);
+        } else if (_emojiOpen) {
+          setState(() => _emojiOpen = false);
+        }
       },
       child: ChatThemeScope(
       appearance: look,
       child: Scaffold(
       backgroundColor: ChatColors.of(context).background,
-      appBar: AppBar(
+      appBar: _selected.isNotEmpty ? _selectionBar(chat) : AppBar(
         titleSpacing: 0,
         title: InkWell(
           onTap: () => _openInfo(chat),
@@ -1182,6 +1324,25 @@ class _ChatScreenState extends State<ChatScreen> {
             if (id != chatId) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)));
           }),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
+          if (chat.isChannel && chat.isAdmin && chat.queueCount > 0)
+            Material(
+              color: Brand.amber.withValues(alpha: 0.14),
+              child: InkWell(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PostQueueScreen(chat: chat))),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  child: Row(children: [
+                    const Icon(Icons.pending_actions_rounded, color: Color(0xFFB7791F), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('${chat.queueCount} post${chat.queueCount == 1 ? '' : 's'} waiting for review',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFB7791F))),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: Color(0xFFB7791F)),
+                  ]),
+                ),
+              ),
+            ),
           if (tags.isNotEmpty)
             SizedBox(
               height: 46,
@@ -1277,13 +1438,19 @@ class _ChatScreenState extends State<ChatScreen> {
         final last = !joined(newer, m) ||
             (newer != null && (newer.createdAt.year != m.createdAt.year || newer.createdAt.month != m.createdAt.month || newer.createdAt.day != m.createdAt.day));
         final showSender = chat.isGroup && !mine && (older == null || older.senderId != m.senderId || older.isSystem || newDay);
+        final selecting = _selected.isNotEmpty;
+        final picked = _selected.contains(m.id);
         return Column(
           children: [
             if (newDay) DateChip(date: m.createdAt),
             if (m.isSystem)
               SystemBubble(text: systemText(m, store))
             else
-              MessageBubble(
+              _selectable(
+                selecting: selecting && !m.isLocal,
+                picked: picked,
+                onTap: () => setState(() => picked ? _selected.remove(m.id) : _selected.add(m.id)),
+                child: MessageBubble(
                 key: ValueKey(m.isLocal ? m.clientId : m.id),
                 message: m,
                 chat: chat,
@@ -1292,8 +1459,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 firstInGroup: first,
                 lastInGroup: last,
                 showAvatar: last && chat.isGroup && !mine,
-                onLongPress: () => _messageMenu(m, chat),
+                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat),
                 onTap: m.sendState == SendState.failed ? () => _messageMenu(m, chat) : null,
+                onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
+              ),
               ),
           ],
         );
@@ -1327,6 +1496,38 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+        ]),
+      ),
+    );
+  }
+
+  void _openChat(int id) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id, initial: _store.chatById(id))));
+
+  /// In selection mode a message row gets a round check on the left and a tint; taps toggle it.
+  Widget _selectable({required bool selecting, required bool picked, required VoidCallback onTap, required Widget child}) {
+    if (!selecting) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        color: picked ? Brand.primary.withValues(alpha: 0.10) : Colors.transparent,
+        child: Row(children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: picked ? Brand.aurora : null,
+                border: picked ? null : Border.all(color: Brand.muted, width: 1.6),
+              ),
+              child: picked ? const Icon(Icons.check_rounded, color: Colors.white, size: 15) : null,
+            ),
+          ),
+          Expanded(child: IgnorePointer(child: child)),
         ]),
       ),
     );
@@ -1771,6 +1972,8 @@ class _ChatScreenState extends State<ChatScreen> {
       blockedText = 'This group has been suspended by the moderators.';
     } else if (chat.peer?.deleted == true) {
       blockedText = 'This account was deleted.';
+    } else if (chat.isRestricted) {
+      blockedText = 'An admin muted you in this group until ${chatListTime(chat.restrictedUntil!)} ${messageTime(chat.restrictedUntil!)}.';
     } else if (chat.peer?.blocked == true) {
       blockedText = 'You blocked this user.';
       blockedAction = TextButton(onPressed: () => _chatMenu('block', chat), child: const Text('Unblock'));
@@ -1791,6 +1994,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final banner = _editing ?? _replyTo;
+    final quote = _quote;
     return SafeArea(
       top: false,
       child: Container(
@@ -1799,6 +2003,30 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (quote != null && banner == null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+                decoration: BoxDecoration(color: Brand.violet.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)),
+                clipBehavior: Clip.antiAlias,
+                child: IntrinsicHeight(
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Container(width: 4, color: Brand.violet),
+                    const SizedBox(width: 10),
+                    const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Icon(Icons.reply_all_rounded, color: Brand.violet, size: 22)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 7),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Replying privately', style: TextStyle(color: Brand.violet, fontWeight: FontWeight.w700, fontSize: 13)),
+                          Text(taliToPlain(quote.preview), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
+                        ]),
+                      ),
+                    ),
+                    IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => setState(() => _quote = null)),
+                  ]),
+                ),
+              ),
             AnimatedSize(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,

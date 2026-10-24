@@ -15,6 +15,8 @@ import 'channel_screens.dart';
 import 'more_screens.dart';
 import 'new_chat_screen.dart';
 import 'user_profile_screen.dart';
+import 'group_admin_screens.dart';
+import 'chat_screen.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
 
@@ -171,7 +173,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   Future<void> _memberActions(Chat chat, GroupMember m) async {
     if (m.user.id == _store.myId) return;
-    final canRemove = chat.isOwner || (chat.myRole == 'admin' && m.role == 'member');
+    final canRemove = chat.isOwner || (chat.myRole == 'admin' && m.role == 'member' && chat.can('ban_users'));
+    final canMute = chat.isGroup && m.role == 'member' && chat.can('ban_users');
     final a = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -180,7 +183,15 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           if (chat.isOwner && m.role == 'member')
             ListTile(leading: const Icon(Icons.admin_panel_settings), title: const Text('Make admin'), onTap: () => Navigator.pop(ctx, 'admin')),
           if (chat.isOwner && m.role == 'admin')
+            ListTile(leading: const Icon(Icons.tune_rounded), title: const Text('Edit admin rights'), onTap: () => Navigator.pop(ctx, 'admin')),
+          if (chat.isOwner && m.role == 'admin')
             ListTile(leading: const Icon(Icons.remove_moderator), title: const Text('Remove admin rights'), onTap: () => Navigator.pop(ctx, 'member')),
+          if (canMute)
+            ListTile(
+              leading: Icon(m.isRestricted ? Icons.volume_up_rounded : Icons.volume_off_rounded),
+              title: Text(m.isRestricted ? 'Muted — change or unmute' : 'Mute in this group'),
+              onTap: () => Navigator.pop(ctx, 'restrict'),
+            ),
           if (chat.isOwner)
             ListTile(leading: const Icon(Icons.key_outlined), title: const Text('Transfer ownership'), onTap: () => Navigator.pop(ctx, 'owner')),
           if (canRemove && m.role != 'owner')
@@ -198,8 +209,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: m.user.id)));
         break;
       case 'admin':
+        final r = await editAdminRights(context, name: m.user.name, channel: chat.isChannel, current: m.rights, title: m.title);
+        if (r == null) return;
+        await _run(() => _store.setRole(chat.id, m.user.id, 'admin', rights: r.$1, title: r.$2), '${m.user.name} is an admin');
+        break;
       case 'member':
-        await _run(() => _store.setRole(chat.id, m.user.id, a));
+        await _run(() => _store.setRole(chat.id, m.user.id, 'member'));
+        break;
+      case 'restrict':
+        final minutes = await pickRestriction(context, name: m.user.name, restricted: m.isRestricted);
+        if (minutes == null) return;
+        await _run(() => _store.restrictMember(chat.id, m.user.id, minutes), minutes == 0 ? '${m.user.name} can write again' : '${m.user.name} is muted');
         break;
       case 'owner':
         if (await confirm(context, 'Make ${m.user.name} the owner?',
@@ -312,6 +332,36 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     : null,
                 onTap: chat.isOwner ? () => _editUsername(chat) : null,
               ),
+            if (chat.rules.isNotEmpty || (chat.isAdmin && chat.can('change_info')))
+              SettingsTile(
+                icon: Icons.gavel_rounded,
+                color: Brand.violet,
+                title: 'Rules',
+                subtitle: chat.rules.isEmpty ? 'Add rules new members see first' : chat.rules,
+                maxSubtitleLines: 2,
+                onTap: chat.can('change_info')
+                    ? () => editChatText(context, chat, field: 'rules', title: 'Rules', hint: '1. Be kind\n2. No spam', max: 2000, current: chat.rules)
+                    : () => showDialog<void>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(title: const Text('Rules'), content: SingleChildScrollView(child: Text(chat.rules))),
+                        ),
+              ),
+            if (chat.linkedChat != null)
+              SettingsTile(
+                icon: Icons.forum_rounded,
+                color: Brand.green,
+                title: 'Discussion group',
+                subtitle: chat.linkedChat!.title,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.linkedChat!.id, initial: store.chatById(chat.linkedChat!.id)))),
+              ),
+            if (chat.linkedChannelId != null)
+              SettingsTile(
+                icon: Icons.campaign_rounded,
+                color: Brand.sky,
+                title: 'Linked channel',
+                subtitle: 'Posts from the channel appear here',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.linkedChannelId!, initial: store.chatById(chat.linkedChannelId!)))),
+              ),
             SettingsSwitchTile(
               icon: Icons.notifications_rounded,
               color: Brand.rose,
@@ -323,6 +373,73 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           if (chat.isAdmin)
             SettingsGroup(title: 'Admin', children: [
               SettingsTile(icon: Icons.insights_rounded, color: Brand.green, title: 'Statistics', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat)))),
+              SettingsTile(
+                icon: Icons.history_rounded,
+                color: const Color(0xFF5E6B8C),
+                title: 'Recent actions',
+                subtitle: 'What admins and members did',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecentActionsScreen(chat: chat))),
+              ),
+              if (chat.isChannel)
+                SettingsTile(
+                  icon: Icons.pending_actions_rounded,
+                  color: Brand.amber,
+                  title: 'Drafts & approvals',
+                  trailingWidget: chat.queueCount > 0 ? CountBadge(chat.queueCount) : null,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PostQueueScreen(chat: chat))),
+                ),
+              if (chat.can('change_info')) ...[
+                if (chat.isGroup)
+                  SettingsTile(
+                    icon: Icons.waving_hand_rounded,
+                    color: Brand.amber,
+                    title: 'Welcome message',
+                    subtitle: chat.welcomeText.isEmpty ? 'Greet new members automatically' : chat.welcomeText,
+                    maxSubtitleLines: 1,
+                    onTap: () => editChatText(context, chat, field: 'welcome_text', title: 'Welcome message', hint: 'Glad to have you! Please read the rules.', max: 500, current: chat.welcomeText),
+                  ),
+                if (chat.isGroup)
+                  SettingsSwitchTile(
+                    icon: Icons.shield_rounded,
+                    color: Brand.green,
+                    title: 'Limit new members',
+                    subtitle: 'No links, photos or files in their first 24 hours',
+                    value: chat.newMemberLimits,
+                    onChanged: (v) => _run(() => _store.updateChat(chat.id, {'new_member_limits': v})),
+                  ),
+                SettingsSwitchTile(
+                  icon: Icons.no_encryption_gmailerrorred_rounded,
+                  color: Brand.rose,
+                  title: 'Protect content',
+                  subtitle: 'Members can’t forward or copy messages',
+                  value: chat.protectedContent,
+                  onChanged: (v) => _run(() => _store.updateChat(chat.id, {'protected_content': v})),
+                ),
+                SettingsTile(
+                  icon: Icons.add_reaction_rounded,
+                  color: Brand.primary,
+                  title: 'Reactions',
+                  trailing: chat.allowedReactions == null ? 'All' : (chat.allowedReactions!.isEmpty ? 'Off' : chat.allowedReactions!.join(' ')),
+                  onTap: () => editAllowedReactions(context, chat),
+                ),
+                if (chat.isChannel)
+                  SettingsTile(
+                    icon: Icons.forum_rounded,
+                    color: Brand.green,
+                    title: 'Discussion group',
+                    trailing: chat.linkedChat?.title ?? 'Off',
+                    onTap: () => pickDiscussionGroup(context, chat),
+                  ),
+                if (chat.isChannel && chat.username != null)
+                  SettingsTile(
+                    icon: Icons.category_rounded,
+                    color: Brand.sky,
+                    title: 'Category',
+                    subtitle: 'Where it shows in Explore channels',
+                    trailing: chat.category == null ? 'None' : (channelCategories[chat.category]?.$2 ?? chat.category!),
+                    onTap: () => pickChannelCategory(context, chat),
+                  ),
+              ],
               if (chat.isChannel)
                 SettingsSwitchTile(
                   icon: Icons.draw_rounded,
@@ -439,6 +556,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                                 style: TextStyle(fontSize: 12.5, color: m.user.online ? Brand.accent : Theme.of(context).colorScheme.onSurfaceVariant)),
                           ]),
                         ),
+                        if (m.isRestricted)
+                          const Padding(padding: EdgeInsets.only(right: 6), child: Icon(Icons.volume_off_rounded, size: 18, color: Brand.amber)),
                         if (m.role != 'member')
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -446,7 +565,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                               color: (m.role == 'owner' ? Brand.premium : Brand.primary).withValues(alpha: dark ? 0.22 : 0.12),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: Text(m.role == 'owner' ? 'Owner' : 'Admin',
+                            child: Text(m.title?.isNotEmpty == true ? m.title! : (m.role == 'owner' ? 'Owner' : 'Admin'),
                                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: m.role == 'owner' ? Brand.premium : Brand.primary)),
                           ),
                       ]),

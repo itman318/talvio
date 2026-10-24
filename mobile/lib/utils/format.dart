@@ -85,6 +85,10 @@ String systemText(Message m, ChatStore store) {
       return '$actor changed the group photo';
     case 'photo_removed':
       return '$actor removed the group photo';
+    case 'welcome':
+      final names = (meta['user_ids'] as List? ?? []).take(3).map(who).join(', ');
+      final text = '${meta['text'] ?? ''}'.trim();
+      return '👋 Welcome $names!${text.isEmpty ? '' : '\n$text'}';
     case 'members_added':
       final ids = (meta['user_ids'] as List? ?? []);
       if (ids.length == 1) return '$actor added ${who(ids.first)}';

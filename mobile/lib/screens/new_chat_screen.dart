@@ -16,6 +16,7 @@ import '../widgets/avatar.dart';
 import 'channel_screens.dart';
 import 'chat_screen.dart';
 import 'more_screens.dart';
+import 'group_admin_screens.dart';
 import '../theme/brand.dart';
 
 /// Search field + results for finding users by @username or phone number.
@@ -178,6 +179,13 @@ class NewChatScreen extends StatelessWidget {
               leading: const GradientIcon(Icons.campaign_rounded, color: Brand.violet),
               title: const Text('New channel'),
               onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewChannelScreen())),
+            ),
+          if (context.read<AuthState>().feature('channels'))
+            ListTile(
+              leading: const GradientIcon(Icons.explore_rounded, color: Brand.rose),
+              title: const Text('Explore channels'),
+              subtitle: const Text('News, tech, sports and more'),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChannelDirectoryScreen())),
             ),
           ListTile(
             leading: const GradientIcon(Icons.bookmark_rounded, color: Brand.sky),

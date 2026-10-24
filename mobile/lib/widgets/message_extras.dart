@@ -10,6 +10,7 @@ import '../models/models.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import 'avatar.dart';
 
 // ------------------------------------------------------------------ edit history
 /// "edited" → the earlier versions of the message.
@@ -47,6 +48,56 @@ Future<void> showEditHistory(BuildContext context, Message m) async {
                   Text('${v['text']}'.isEmpty ? '(no text)' : '${v['text']}'),
                 ]),
               ),
+          ]);
+        },
+      ),
+    ),
+  );
+}
+
+// ------------------------------------------------------------------ message info
+/// Who got and read my message.
+Future<void> showMessageInfo(BuildContext context, Message m) async {
+  final store = context.read<ChatStore>();
+  final fmt = DateFormat('d MMM, HH:mm');
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => SizedBox(
+      height: MediaQuery.of(ctx).size.height * 0.6,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: store.messageInfo(m),
+        builder: (ctx, snap) {
+          if (snap.hasError) return Center(child: Text(friendlyError(snap.error!)));
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          List<AppUser> users(String k) => ((snap.data![k] as List?) ?? const []).map((e) => AppUser.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+          final read = users('read'), delivered = users('delivered'), waiting = users('waiting');
+          Widget section(String title, IconData icon, Color color, List<AppUser> list) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
+                  child: Row(children: [
+                    Icon(icon, size: 18, color: color),
+                    const SizedBox(width: 6),
+                    Text('$title · ${list.length}', style: TextStyle(fontWeight: FontWeight.w800, color: color)),
+                  ]),
+                ),
+                for (final u in list)
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    leading: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute, size: 36),
+                    title: Text(u.name),
+                  ),
+              ]);
+          return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+            const Text('Message info', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Sent ${fmt.format(m.createdAt)}', style: const TextStyle(color: Brand.muted)),
+            if (read.isNotEmpty) section('Read', Icons.done_all_rounded, Brand.accent, read),
+            if (delivered.isNotEmpty) section('Delivered', Icons.done_all_rounded, Brand.muted, delivered),
+            if (waiting.isNotEmpty) section('Not delivered yet', Icons.done_rounded, Brand.faint, waiting),
+            if (read.isEmpty && delivered.isEmpty && waiting.isEmpty)
+              const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Nobody else is here yet'))),
           ]);
         },
       ),

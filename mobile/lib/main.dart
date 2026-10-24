@@ -68,6 +68,11 @@ Future<void> _start() async {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
   final secrets = SecretStore(services);
+  // drafts follow me to my other devices
+  chats.onDraftSynced = (chatId, text, live) {
+    final local = prefs.draft(chatId) ?? '';
+    if (live || local.trim().isEmpty) prefs.setDraft(chatId, text);
+  };
   final voice = VoicePlayback(services)
     ..messagesOf = chats.messagesOf
     ..myId = (() => chats.myId);
