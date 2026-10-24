@@ -174,8 +174,18 @@ router.delete('/chats/:id/members/:userId', h(async (req, res) => {
   res.json(await chatService.removeMember(req.userId, req.params.id, req.params.userId));
 }));
 router.put('/chats/:id/members/:userId/role', h(async (req, res) => {
-  res.json(await chatService.setMemberRole(req.userId, req.params.id, req.params.userId, req.body.role));
+  res.json(await chatService.setMemberRole(req.userId, req.params.id, req.params.userId, req.body.role, { rights: req.body.rights, title: req.body.title }));
 }));
+router.post('/chats/:id/members/:userId/restrict', h(async (req, res) => {
+  res.json(await chatService.restrictMember(req.userId, req.params.id, req.params.userId, req.body.minutes));
+}));
+router.get('/chats/:id/events', h(async (req, res) => res.json(await chatService.listEvents(req.userId, req.params.id, req.query))));
+router.put('/chats/:id/draft', h(async (req, res) => res.json(await chatService.setDraft(req.userId, req.params.id, req.body.text))));
+router.get('/channels/directory', h(async (req, res) => res.json(await chatService.directory(req.userId, req.query))));
+router.get('/messages/:id/info', h(async (req, res) => res.json(await messageService.messageInfo(req.userId, req.params.id))));
+router.get('/chats/:id/queue', h(async (req, res) => res.json(await messageService.listQueue(req.userId, req.params.id))));
+router.post('/chats/:id/queue/:qid/publish', h(async (req, res) => res.json(await messageService.publishQueued(req.userId, req.params.id, req.params.qid))));
+router.delete('/chats/:id/queue/:qid', h(async (req, res) => res.json(await messageService.deleteQueued(req.userId, req.params.id, req.params.qid))));
 router.post('/chats/:id/leave', h(async (req, res) => res.json(await chatService.leaveChat(req.userId, req.params.id))));
 router.post('/chats/:id/request/accept', h(async (req, res) => res.json(await chatService.acceptRequest(req.userId, req.params.id))));
 router.post('/chats/:id/request/decline', h(async (req, res) => res.json(await chatService.declineRequest(req.userId, req.params.id, req.body))));

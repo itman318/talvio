@@ -20,7 +20,8 @@ const isMulti = (chat) => MULTI_TYPES.includes(chat.type);
 async function requireMember(chatIdRaw, userId) {
   const chatId = v.id(chatIdRaw, 'chat_id');
   const row = await db.one(
-    `SELECT c.*, cm.role AS my_role, cm.cleared_before_id, cm.last_read_message_id
+    `SELECT c.*, cm.role AS my_role, cm.cleared_before_id, cm.last_read_message_id,
+            cm.admin_rights AS my_rights, cm.restricted_until AS my_restricted_until, cm.joined_at AS my_joined_at
      FROM chats c JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = $2
      WHERE c.id = $1`,
     [chatId, userId],
@@ -32,6 +33,49 @@ async function requireMember(chatIdRaw, userId) {
 function requireGroupAdmin(chat) {
   if (!isMulti(chat)) throw badRequest('not_a_group', 'This action is only for groups and channels');
   if (!ADMIN_ROLES.includes(chat.my_role)) throw forbidden('not_admin', 'Only admins can do this');
+}
+
+/** What an admin may do (the owner can do everything). Missing = allowed, so older admins keep their powers. */
+const RIGHTS = ['change_info', 'delete_messages', 'ban_users', 'invite_users', 'pin_messages', 'post_messages'];
+const RIGHT_LABELS = {
+  change_info: 'change the info',
+  delete_messages: 'delete messages',
+  ban_users: 'remove or restrict members',
+  invite_users: 'add members and manage invite links',
+  pin_messages: 'pin messages',
+  post_messages: 'publish posts',
+};
+
+function rightsOf(role, raw) {
+  const out = {};
+  for (const r of RIGHTS) out[r] = role === 'owner' || (role === 'admin' && !(raw && raw[r] === false));
+  return out;
+}
+
+function hasRight(chat, right) {
+  return rightsOf(chat.my_role, chat.my_rights)[right];
+}
+
+function requireRight(chat, right) {
+  requireGroupAdmin(chat);
+  if (!hasRight(chat, right)) throw forbidden('no_right', `You don't have permission to ${RIGHT_LABELS[right] || 'do this'}`);
+}
+
+/** Admin log ("Recent actions"). Never fails the action itself. */
+async function logEvent(chatId, actorId, action, targetId = null, details = null) {
+  try {
+    await db.query('INSERT INTO chat_events (chat_id, actor_id, target_id, action, details) VALUES ($1, $2, $3, $4, $5)', [
+      chatId, actorId || null, targetId || null, action, details ? JSON.stringify(details) : null,
+    ]);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+/** "👋 Welcome …" in groups that have a welcome text. */
+async function sendWelcome(chat, userIds) {
+  if (chat.type !== 'group' || !chat.welcome_text || !userIds.length) return;
+  await lazyMessages().createSystemMessage(chat.id, userIds[0], { event: 'welcome', user_ids: userIds.slice(0, 50), text: chat.welcome_text });
 }
 
 async function memberIds(chatId) {
@@ -54,6 +98,11 @@ const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
        c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
+       c.welcome_text, c.rules, c.new_member_limits, c.protected_content, c.allowed_reactions, c.category, c.linked_chat_id,
+       cm.admin_rights AS my_rights, cm.admin_title AS my_title, cm.restricted_until AS my_restricted_until, cm.draft, cm.draft_at,
+       (SELECT l.title FROM chats l WHERE l.id = c.linked_chat_id) AS linked_title,
+       (SELECT ch.id FROM chats ch WHERE ch.linked_chat_id = c.id LIMIT 1) AS linked_channel_id,
+       CASE WHEN c.type = 'channel' AND cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM post_queue q WHERE q.chat_id = c.id) ELSE 0 END AS queue_count,
        cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread, cm.is_request, cm.is_locked,
        (SELECT count(*) FROM message_mentions mm JOIN messages mmsg ON mmsg.id = mm.message_id
           WHERE mm.user_id = $1 AND mm.chat_id = c.id AND mmsg.deleted_at IS NULL
@@ -125,6 +174,20 @@ async function serializeChats(userId, rows) {
       signatures: r.signatures,
       is_verified: isPrivate ? !!(peer && peer.is_verified) : r.is_verified,
       can_post: !r.is_suspended && (r.type !== 'channel' || ADMIN_ROLES.includes(r.my_role)),
+      my_rights: isMulti(r) ? rightsOf(r.my_role, r.my_rights) : null,
+      my_title: r.my_title || null,
+      restricted_until: r.my_restricted_until && new Date(r.my_restricted_until) > now ? new Date(r.my_restricted_until).toISOString() : null,
+      welcome_text: r.welcome_text || '',
+      rules: r.rules || '',
+      new_member_limits: !!r.new_member_limits,
+      protected_content: !!r.protected_content,
+      allowed_reactions: r.allowed_reactions || null,
+      category: r.category || null,
+      linked_chat: r.linked_chat_id ? { id: r.linked_chat_id, title: r.linked_title } : null,
+      linked_channel_id: r.linked_channel_id || null,
+      queue_count: Number(r.queue_count || 0),
+      draft: r.draft || '',
+      draft_at: r.draft_at ? new Date(r.draft_at).toISOString() : null,
       slow_mode_sec: r.slow_mode_sec,
       disappear_after_sec: r.disappear_after_sec || 0,
       join_approval: r.join_approval,
@@ -325,7 +388,7 @@ async function setDisappearing(userId, chatIdRaw, secondsRaw) {
   const chat = await requireMember(chatIdRaw, userId);
   const seconds = Number(secondsRaw);
   if (!DISAPPEAR_OPTIONS.includes(seconds)) throw badRequest('invalid_input', 'Choose off, 1 hour, 24 hours, 7 days or 90 days');
-  if (chat.type !== 'private') requireGroupAdmin(chat);
+  if (chat.type !== 'private') requireRight(chat, 'change_info');
   if ((chat.disappear_after_sec || 0) === seconds) return getChat(userId, chat.id);
   await db.query('UPDATE chats SET disappear_after_sec = $2, updated_at = now() WHERE id = $1', [chat.id, seconds]);
   await lazyMessages().createSystemMessage(chat.id, userId, { event: 'disappearing_changed', seconds });
@@ -333,9 +396,12 @@ async function setDisappearing(userId, chatIdRaw, secondsRaw) {
   return getChat(userId, chat.id);
 }
 
+const CATEGORIES = ['news', 'tech', 'sports', 'entertainment', 'education', 'business', 'religion', 'lifestyle', 'gaming', 'other'];
+
 async function updateGroup(userId, chatIdRaw, body) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'change_info');
+  await updateExtras(userId, chat, body);
   const title = v.str(body.title, { field: 'title', min: 1, max: 128 });
   const description = v.str(body.description, { field: 'description', max: 255 });
   const signatures = body.signatures === undefined ? null : v.bool(body.signatures, 'signatures');
@@ -361,6 +427,8 @@ async function updateGroup(userId, chatIdRaw, body) {
     [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures, slow, approval, comments, forum],
   );
   if (approval === false) await db.query('DELETE FROM chat_join_requests WHERE chat_id = $1', [chat.id]);
+  const changed = Object.keys(body).filter((k) => !['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id'].includes(k));
+  if (changed.length) await logEvent(chat.id, userId, 'info_changed', null, { fields: changed, title: title || undefined });
   if (title !== undefined && title !== chat.title) {
     await lazyMessages().createSystemMessage(chat.id, userId, { event: 'title_changed', title });
   }
@@ -368,9 +436,58 @@ async function updateGroup(userId, chatIdRaw, body) {
   return getChat(userId, chat.id);
 }
 
+/** Welcome text, rules, member limits, protected content, reactions, category, discussion group. */
+async function updateExtras(userId, chat, body) {
+  const sets = [];
+  const params = [chat.id];
+  const set = (col, val) => {
+    params.push(val);
+    sets.push(`${col} = $${params.length}`);
+  };
+  if (body.welcome_text !== undefined) {
+    if (chat.type !== 'group') throw badRequest('invalid_input', 'Welcome messages are for groups');
+    set('welcome_text', v.str(body.welcome_text, { field: 'welcome_text', max: 500 }) || null);
+  }
+  if (body.rules !== undefined) set('rules', v.str(body.rules, { field: 'rules', max: 2000 }) || null);
+  if (body.new_member_limits !== undefined) {
+    if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
+    set('new_member_limits', v.bool(body.new_member_limits, 'new_member_limits'));
+  }
+  if (body.protected_content !== undefined) set('protected_content', v.bool(body.protected_content, 'protected_content'));
+  if (body.allowed_reactions !== undefined) {
+    let list = null;
+    if (body.allowed_reactions !== null) {
+      if (!Array.isArray(body.allowed_reactions)) throw badRequest('invalid_input', 'allowed_reactions must be a list or null');
+      const all = lazyMessages().REACTIONS;
+      list = [...new Set(body.allowed_reactions.map(String))].filter((e) => all.includes(e));
+    }
+    set('allowed_reactions', list === null ? null : JSON.stringify(list));
+  }
+  if (body.category !== undefined) {
+    if (chat.type !== 'channel') throw badRequest('invalid_input', 'Categories are for channels');
+    set('category', body.category === null ? null : v.oneOf(body.category, CATEGORIES, 'category'));
+  }
+  if (body.linked_chat_id !== undefined) {
+    if (chat.type !== 'channel') throw badRequest('invalid_input', 'Only channels have a discussion group');
+    let linked = null;
+    if (body.linked_chat_id !== null) {
+      const g = await requireMember(body.linked_chat_id, userId);
+      if (g.type !== 'group') throw badRequest('invalid_input', 'The discussion must be a group');
+      if (!ADMIN_ROLES.includes(g.my_role)) throw forbidden('not_admin', 'You must be an admin of that group');
+      linked = g.id;
+    }
+    set('linked_chat_id', linked);
+  }
+  if (!sets.length) return;
+  await db.query(`UPDATE chats SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, params);
+  await logEvent(chat.id, userId, 'settings_changed', null, {
+    fields: Object.keys(body).filter((k) => ['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id'].includes(k)),
+  });
+}
+
 async function setGroupAvatar(userId, chatIdRaw, mediaIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'change_info');
   let mediaId = null;
   if (mediaIdRaw !== null && mediaIdRaw !== undefined) {
     const media = await db.one('SELECT * FROM media WHERE id = $1', [v.id(mediaIdRaw, 'media_id')]);
@@ -380,6 +497,7 @@ async function setGroupAvatar(userId, chatIdRaw, mediaIdRaw) {
     mediaId = media.id;
   }
   await db.query('UPDATE chats SET avatar_media_id = $2, updated_at = now() WHERE id = $1', [chat.id, mediaId]);
+  await logEvent(chat.id, userId, mediaId ? 'photo_changed' : 'photo_removed');
   await lazyMessages().createSystemMessage(chat.id, userId, { event: mediaId ? 'photo_changed' : 'photo_removed' });
   await emitUpdated(chat.id);
   return getChat(userId, chat.id);
@@ -387,7 +505,7 @@ async function setGroupAvatar(userId, chatIdRaw, mediaIdRaw) {
 
 async function addMembers(userId, chatIdRaw, userIdsRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   if (chat.is_suspended) throw forbidden('chat_suspended', 'This group has been suspended');
   const existing = new Set(await memberIds(chat.id));
   const candidates = v.idList(userIdsRaw, 'user_ids', 200).filter((id) => !existing.has(id));
@@ -405,6 +523,8 @@ async function addMembers(userId, chatIdRaw, userIdsRaw) {
     if (chat.type === 'group') {
       await lazyMessages().createSystemMessage(chat.id, userId, { event: 'members_added', user_ids: ok });
     }
+    for (const id of ok) await logEvent(chat.id, userId, 'member_added', id);
+    await sendWelcome(chat, ok);
     await emitUpdated(chat.id);
   }
   return { added: ok, skipped };
@@ -438,6 +558,7 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
     return { removed: true, chatDeleted: false, newOwner, chatType };
   });
   if (!outcome.removed) return outcome;
+  if (!outcome.chatDeleted) await logEvent(chatId, by || userId, reason === 'removed' ? 'member_removed' : 'member_left', userId);
   bus.emit('chat:removed', { chatId, userIds: [userId] });
   if (!outcome.chatDeleted) {
     const event = reason === 'removed' ? 'member_removed' : 'member_left';
@@ -456,7 +577,7 @@ async function removeMember(actorId, chatIdRaw, targetIdRaw) {
   const chat = await requireMember(chatIdRaw, actorId);
   const targetId = v.id(targetIdRaw, 'user_id');
   if (targetId === actorId) return leaveChat(actorId, chat.id);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'ban_users');
   const target = await db.one('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, targetId]);
   if (!target) throw notFound('member_not_found', 'This user is not in the group');
   if (target.role === 'owner' || (target.role === 'admin' && chat.my_role !== 'owner')) {
@@ -483,26 +604,115 @@ async function leaveChat(userId, chatIdRaw) {
   return { ok: true };
 }
 
-async function setMemberRole(actorId, chatIdRaw, targetIdRaw, role) {
+async function setMemberRole(actorId, chatIdRaw, targetIdRaw, role, extra = {}) {
   const chat = await requireMember(chatIdRaw, actorId);
   if (!isMulti(chat)) throw badRequest('not_a_group', 'This action is only for groups and channels');
   if (chat.my_role !== 'owner') throw forbidden('not_owner', 'Only the owner can change admins');
   const newRole = v.oneOf(role, ['admin', 'member'], 'role');
   const targetId = v.id(targetIdRaw, 'user_id');
+  let rights = null;
+  let title = null;
+  if (newRole === 'admin') {
+    if (extra.rights && typeof extra.rights === 'object') {
+      rights = {};
+      for (const k of RIGHTS) rights[k] = extra.rights[k] !== false;
+    }
+    title = v.str(extra.title, { field: 'title', max: 24 }) || null;
+  }
   const r = await db.one(
-    `UPDATE chat_members SET role = $3 WHERE chat_id = $1 AND user_id = $2 AND role <> 'owner' RETURNING user_id`,
-    [chat.id, targetId, newRole],
+    `UPDATE chat_members SET role = $3, admin_rights = $4, admin_title = $5
+     WHERE chat_id = $1 AND user_id = $2 AND role <> 'owner' RETURNING user_id`,
+    [chat.id, targetId, newRole, rights ? JSON.stringify(rights) : null, title],
   );
   if (!r) throw notFound('member_not_found', 'This user is not in the group');
+  await logEvent(chat.id, actorId, newRole === 'admin' ? 'admin_set' : 'admin_removed', targetId, newRole === 'admin' ? { rights: rightsOf('admin', rights), title } : null);
   await emitUpdated(chat.id);
   return { ok: true };
+}
+
+/** Mutes a member for a while (minutes = 0 or null lifts it). Admins with "remove or restrict members". */
+async function restrictMember(actorId, chatIdRaw, targetIdRaw, minutesRaw) {
+  const chat = await requireMember(chatIdRaw, actorId);
+  requireRight(chat, 'ban_users');
+  if (chat.type !== 'group') throw badRequest('invalid_input', 'Restrictions are for groups');
+  const targetId = v.id(targetIdRaw, 'user_id');
+  const minutes = minutesRaw === null || minutesRaw === undefined ? 0 : Number(minutesRaw);
+  if (![0, 60, 1440, 10080, 525600].includes(minutes)) throw badRequest('invalid_input', 'Mute for 1 hour, 1 day, 1 week or 1 year');
+  const target = await db.one('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, targetId]);
+  if (!target) throw notFound('member_not_found', 'This user is not in the group');
+  if (target.role !== 'member') throw forbidden('not_allowed', 'Admins can’t be restricted');
+  await db.query(
+    `UPDATE chat_members SET restricted_until = CASE WHEN $3::int > 0 THEN now() + make_interval(mins => $3::int) END
+     WHERE chat_id = $1 AND user_id = $2`,
+    [chat.id, targetId, minutes],
+  );
+  await logEvent(chat.id, actorId, minutes ? 'member_restricted' : 'member_unrestricted', targetId, minutes ? { minutes } : null);
+  bus.emit('chat:updated', { chatId: chat.id, memberIds: [targetId] });
+  return { ok: true };
+}
+
+/** Admin log: who did what (newest first). */
+async function listEvents(userId, chatIdRaw, query = {}) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireGroupAdmin(chat);
+  const before = query.before ? v.id(query.before, 'before') : null;
+  const rows = await db.many(
+    `SELECT * FROM chat_events WHERE chat_id = $1 ${before ? 'AND id < $2' : ''} ORDER BY id DESC LIMIT 100`,
+    before ? [chat.id, before] : [chat.id],
+  );
+  const users = await userService.getUsersMap(userId, [...new Set(rows.flatMap((r) => [r.actor_id, r.target_id]).filter(Boolean))]);
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    actor: r.actor_id ? users.get(r.actor_id) || null : null,
+    target: r.target_id ? users.get(r.target_id) || null : null,
+    details: r.details || null,
+    created_at: new Date(r.created_at).toISOString(),
+  }));
+}
+
+/** My draft in a chat (synced to my other devices). */
+async function setDraft(userId, chatIdRaw, textRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  const text = String(textRaw || '').slice(0, 4096);
+  await db.query('UPDATE chat_members SET draft = $3, draft_at = now() WHERE chat_id = $1 AND user_id = $2', [chat.id, userId, text || null]);
+  bus.emit('draft:updated', { userId, chatId: chat.id, text, at: new Date().toISOString() });
+  return { ok: true };
+}
+
+/** Public channels by category (or trending = most new subscribers this week). */
+async function directory(userId, query = {}) {
+  const category = query.category && query.category !== 'trending' ? v.oneOf(query.category, CATEGORIES, 'category') : null;
+  const q = String(query.q || '').trim().slice(0, 64);
+  const params = [userId];
+  const where = [`c.type = 'channel'`, 'c.username IS NOT NULL', 'NOT c.is_suspended'];
+  if (category) {
+    params.push(category);
+    where.push(`c.category = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
+    where.push(`(c.title ILIKE $${params.length} OR c.username ILIKE $${params.length} OR c.description ILIKE $${params.length})`);
+  }
+  const rows = await db.many(
+    `SELECT c.*, (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id) AS n,
+            (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id AND x.joined_at > now() - interval '7 days') AS n7,
+            EXISTS (SELECT 1 FROM chat_members me WHERE me.chat_id = c.id AND me.user_id = $1) AS me
+     FROM chats c WHERE ${where.join(' AND ')}
+     ORDER BY ${query.category === 'trending' ? 'n7 DESC, n DESC' : 'c.is_verified DESC, n DESC'} LIMIT 60`,
+    params,
+  );
+  return {
+    categories: CATEGORIES,
+    channels: rows.map((c) => ({ ...publicSummary(c, Number(c.n), c.me), id: c.id, category: c.category || null, new_this_week: Number(c.n7) })),
+  };
 }
 
 async function getMembers(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
   const adminsOnly = chat.type === 'channel' && !ADMIN_ROLES.includes(chat.my_role);
   const rows = await db.many(
-    `SELECT user_id, role, joined_at FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
+    `SELECT user_id, role, joined_at, admin_rights, admin_title, restricted_until FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
      ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, joined_at
      LIMIT 5000`,
     [chat.id],
@@ -510,7 +720,14 @@ async function getMembers(userId, chatIdRaw) {
   const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
   return rows
     .filter((r) => users.has(r.user_id))
-    .map((r) => ({ user: users.get(r.user_id), role: r.role, joined_at: new Date(r.joined_at).toISOString() }));
+    .map((r) => ({
+      user: users.get(r.user_id),
+      role: r.role,
+      title: r.admin_title || null,
+      rights: r.role === 'member' ? null : rightsOf(r.role, r.admin_rights),
+      restricted_until: r.restricted_until && new Date(r.restricted_until) > new Date() ? new Date(r.restricted_until).toISOString() : null,
+      joined_at: new Date(r.joined_at).toISOString(),
+    }));
 }
 
 // ------------------------------------------------------------------ per-user chat settings
@@ -575,7 +792,7 @@ async function clearHistory(userId, chatIdRaw) {
 // ------------------------------------------------------------------ invite links
 async function regenerateInvite(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   const code = randomToken(12);
   await db.query('UPDATE chats SET invite_code = $2 WHERE id = $1', [chat.id, code]);
   return { invite_code: code };
@@ -643,8 +860,10 @@ async function joinChat(userId, chat) {
       `INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
       [chat.id, userId],
     );
+    await logEvent(chat.id, userId, 'member_joined', userId);
     if (chat.type === 'group') {
       await lazyMessages().createSystemMessage(chat.id, userId, { event: 'member_joined', user_id: userId });
+      await sendWelcome(chat, [userId]);
       await emitUpdated(chat.id);
     } else {
       bus.emit('chat:updated', { chatId: chat.id, memberIds: [userId] });
@@ -656,7 +875,7 @@ async function joinChat(userId, chat) {
 // ------------------------------------------------------------------ invite links & join requests
 async function listInvites(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   const rows = await db.many(
     `SELECT code, name, expires_at, usage_limit, usage_count, revoked, created_at,
             (revoked OR (expires_at IS NOT NULL AND expires_at <= now()) OR (usage_limit IS NOT NULL AND usage_count >= usage_limit)) AS expired
@@ -668,7 +887,7 @@ async function listInvites(userId, chatIdRaw) {
 
 async function createInvite(userId, chatIdRaw, body = {}) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   const name = v.str(body.name, { field: 'name', max: 32 }) || '';
   let hours = null;
   if (body.expire_hours !== undefined && body.expire_hours !== null && body.expire_hours !== '') {
@@ -693,7 +912,7 @@ async function createInvite(userId, chatIdRaw, body = {}) {
 
 async function revokeInvite(userId, chatIdRaw, code) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   const r = await db.one('UPDATE chat_invites SET revoked = TRUE WHERE chat_id = $1 AND code = $2 RETURNING code', [chat.id, String(code)]);
   if (!r) throw notFound('invite_not_found', 'Invite link not found');
   return { ok: true };
@@ -701,7 +920,7 @@ async function revokeInvite(userId, chatIdRaw, code) {
 
 async function listJoinRequests(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   const rows = await db.many('SELECT user_id, created_at FROM chat_join_requests WHERE chat_id = $1 ORDER BY created_at LIMIT 500', [chat.id]);
   const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
   return rows.filter((r) => users.has(r.user_id)).map((r) => ({ user: users.get(r.user_id), requested_at: new Date(r.created_at).toISOString() }));
@@ -709,7 +928,7 @@ async function listJoinRequests(userId, chatIdRaw) {
 
 async function resolveJoinRequest(userId, chatIdRaw, targetIdRaw, approve) {
   const chat = await requireMember(chatIdRaw, userId);
-  requireGroupAdmin(chat);
+  requireRight(chat, 'invite_users');
   const targetId = v.id(targetIdRaw, 'user_id');
   const req = await db.one('DELETE FROM chat_join_requests WHERE chat_id = $1 AND user_id = $2 RETURNING invite_code', [chat.id, targetId]);
   if (!req) throw notFound('request_not_found', 'This join request no longer exists');
@@ -884,7 +1103,11 @@ async function chatStats(userId, chatIdRaw) {
        (SELECT COALESCE(round(avg(views_count)), 0)::bigint FROM messages WHERE chat_id = $1 AND type <> 'system'
           AND deleted_at IS NULL AND created_at > now() - interval '30 days') AS avg_views_30d,
        (SELECT count(*) FROM message_reactions r JOIN messages m ON m.id = r.message_id
-          WHERE m.chat_id = $1 AND m.created_at > now() - interval '30 days') AS reactions_30d`,
+          WHERE m.chat_id = $1 AND m.created_at > now() - interval '30 days') AS reactions_30d,
+       (SELECT count(*) FROM messages f JOIN messages m ON m.id = f.forward_source_id
+          WHERE m.chat_id = $1 AND f.created_at > now() - interval '30 days') AS shares_30d,
+       (SELECT count(*) FROM chat_events e WHERE e.chat_id = $1 AND e.action IN ('member_left', 'member_removed')
+          AND e.created_at > now() - interval '7 days') AS left_7d`,
     [chat.id],
   );
   const growth = await db.many(
@@ -895,15 +1118,27 @@ async function chatStats(userId, chatIdRaw) {
     [chat.id],
   );
   const top = await db.many(
-    `SELECT id, type, left(text, 120) AS text, views_count AS views, created_at FROM messages
-     WHERE chat_id = $1 AND type <> 'system' AND deleted_at IS NULL AND created_at > now() - interval '30 days'
-     ORDER BY views_count DESC, id DESC LIMIT 5`,
+    `SELECT m.id, m.type, left(m.text, 120) AS text, m.views_count AS views, m.created_at,
+            (SELECT count(*) FROM message_reactions r WHERE r.message_id = m.id)::int AS reactions,
+            (SELECT count(*) FROM messages f WHERE f.forward_source_id = m.id)::int AS shares
+     FROM messages m
+     WHERE m.chat_id = $1 AND m.type <> 'system' AND m.deleted_at IS NULL AND m.created_at > now() - interval '30 days'
+     ORDER BY m.views_count DESC, m.id DESC LIMIT 10`,
     [chat.id],
   );
   return { ...totals, joins_30d: growth, top_posts: top };
 }
 
 module.exports = {
+  RIGHTS,
+  CATEGORIES,
+  hasRight,
+  requireRight,
+  logEvent,
+  restrictMember,
+  listEvents,
+  setDraft,
+  directory,
   acceptRequest,
   declineRequest,
   clearRequestsFrom,

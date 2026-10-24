@@ -832,3 +832,41 @@ CREATE TABLE IF NOT EXISTS message_once_views (
   PRIMARY KEY (message_id, user_id)
 );
 ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ---------------------------------------------------------------- groups & channels: admin rights, restrictions, log, welcome/rules
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS admin_rights JSONB;
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS admin_title VARCHAR(24);
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS restricted_until TIMESTAMPTZ;
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS draft TEXT;
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS draft_at TIMESTAMPTZ;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS welcome_text VARCHAR(500);
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS rules VARCHAR(2000);
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS new_member_limits BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS protected_content BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS allowed_reactions JSONB;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS category VARCHAR(24);
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS linked_chat_id BIGINT REFERENCES chats(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS forward_source_id BIGINT;
+CREATE INDEX IF NOT EXISTS messages_fwd_source_idx ON messages (forward_source_id) WHERE forward_source_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS chats_directory_idx ON chats (category) WHERE type = 'channel' AND username IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS chat_events (
+  id         BIGSERIAL PRIMARY KEY,
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  actor_id   BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  target_id  BIGINT,
+  action     VARCHAR(32) NOT NULL,
+  details    JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_events_chat_idx ON chat_events (chat_id, id DESC);
+
+-- channel posts waiting for approval / saved as drafts by admins
+CREATE TABLE IF NOT EXISTS post_queue (
+  id         BIGSERIAL PRIMARY KEY,
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  author_id  BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body       JSONB       NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS post_queue_chat_idx ON post_queue (chat_id, id);

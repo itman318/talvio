@@ -280,6 +280,9 @@ async function getVisibleMessage(userId, messageIdRaw) {
 /** Throws if `userId` may not post in `chat` (suspended, channel subscriber, blocked / deleted peer). */
 async function assertCanSend(userId, chat, { comment = false } = {}) {
   if (chat.is_suspended) throw forbidden('chat_suspended', 'This group has been suspended');
+  if (chat.my_restricted_until && new Date(chat.my_restricted_until) > new Date()) {
+    throw forbidden('restricted', `An admin muted you in this group until ${new Date(chat.my_restricted_until).toUTCString()}`);
+  }
   if (chat.type === 'channel' && comment) {
     if (!chat.comments_enabled) throw forbidden('comments_disabled', 'Comments are turned off in this channel');
   } else if (chat.type === 'channel' && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
@@ -488,18 +491,21 @@ async function insertMessage({
   replyMarkup = null,
   viaBotId = null,
   albumId = null,
+  forwardSourceId = null,
 }) {
   let row;
   try {
     row = await db.tx(async (c) => {
       const r = await c.query(
         `INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id,
-                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id, album_id, expires_at)
+                               forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id, album_id, expires_at,
+                               forward_source_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-                 CASE WHEN $17 THEN (SELECT CASE WHEN disappear_after_sec > 0 THEN now() + make_interval(secs => disappear_after_sec) END FROM chats WHERE id = $1) END)
+                 CASE WHEN $17 THEN (SELECT CASE WHEN disappear_after_sec > 0 THEN now() + make_interval(secs => disappear_after_sec) END FROM chats WHERE id = $1) END,
+                 $18)
          RETURNING *`,
         [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent,
-          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId, type !== 'system'],
+          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId, type !== 'system', forwardSourceId],
       );
       const m = r.rows[0];
       if (mentionCandidates && senderId) {
@@ -514,6 +520,11 @@ async function insertMessage({
           : { rows: [] };
         const ids = new Set(found.rows.map((x) => x.id));
         if (mentionCandidates.replyAuthor && mentionCandidates.replyAuthor !== senderId) ids.add(mentionCandidates.replyAuthor);
+        if (mentionCandidates.all) {
+          // @all from an admin: everyone in the group (notified even when muted)
+          const all = await c.query('SELECT user_id FROM chat_members WHERE chat_id = $1 AND user_id <> $2 LIMIT 5000', [chatId, senderId]);
+          for (const x of all.rows) ids.add(x.user_id);
+        }
         for (const uid of ids) {
           await c.query(
             'INSERT INTO message_mentions (message_id, user_id, chat_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
@@ -656,6 +667,34 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
   }
 
   const prepared = await prepareMessage(userId, chat, body);
+
+  // channel posts by admins who may not publish (or saved as a draft) wait for approval
+  if (chat.type === 'channel' && !prepared.threadId && !internal.skipQueue && !body.schedule_at
+      && (body.as_draft === true || !chatService.hasRight(chat, 'post_messages'))) {
+    const q = await db.one('INSERT INTO post_queue (chat_id, author_id, body) VALUES ($1, $2, $3) RETURNING id', [
+      chat.id, userId, JSON.stringify({ ...body, client_id: undefined, as_draft: undefined }),
+    ]);
+    await chatService.emitUpdated(chat.id);
+    return { queued: { id: q.id } };
+  }
+
+  // groups can keep links and media away from brand-new members for 24 h
+  if (chat.type === 'group' && chat.new_member_limits && chat.my_role === 'member' && chat.my_joined_at
+      && Date.now() - new Date(chat.my_joined_at).getTime() < 24 * 3600 * 1000
+      && (prepared.type !== 'text' || /https?:\/\/|www\./i.test(prepared.text))) {
+    throw forbidden('new_member_limits', 'New members can send links, photos and files after 24 hours in this group');
+  }
+
+  // private reply: quote a group message in a private chat
+  if (body.quote_message_id && prepared.type === 'text') {
+    const { m: q, chat: qc } = await getVisibleMessage(userId, body.quote_message_id);
+    if (!chatService.isMulti(qc) || qc.protected_content) throw badRequest('invalid_input', 'This message can’t be quoted');
+    const qs = q.sender_id ? await db.one('SELECT * FROM users WHERE id = $1', [q.sender_id]) : null;
+    prepared.meta = {
+      ...(prepared.meta || {}),
+      quote: { chat_id: qc.id, chat_title: qc.title, message_id: q.id, type: q.type, sender_name: qs ? userService.displayName(qs) : '', text: String(q.text || '').slice(0, 200) },
+    };
+  }
   const texts = [prepared.text, ...(prepared.poll ? prepared.poll.options : [])];
   const flags = await moderation.checkOutgoing(sender, texts);
 
@@ -670,7 +709,8 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
       const r = await db.one('SELECT sender_id FROM messages WHERE id = $1', [prepared.replyToId]);
       replyAuthor = r && r.sender_id;
     }
-    if (usernames.length || replyAuthor) mentionCandidates = { usernames: usernames.slice(0, 50), replyAuthor };
+    const all = /(^|\s)@all\b/i.test(prepared.text) && chatService.ADMIN_ROLES.includes(chat.my_role);
+    if (usernames.length || replyAuthor || all) mentionCandidates = { usernames: usernames.slice(0, 50), replyAuthor, all };
   }
 
   const message = await insertMessage({
@@ -691,11 +731,34 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     replyMarkup: internal.replyMarkup || null,
   });
   moderation.afterSend(sender, message, flags).catch((err) => console.error('moderation error', err)); // eslint-disable-line no-console
+  if (chat.type === 'channel' && chat.linked_chat_id && !message.thread_id) {
+    copyToDiscussion(chat, message).catch((err) => console.error('discussion copy failed', err)); // eslint-disable-line no-console
+  }
   return message;
+}
+
+/** A new channel post also appears in the linked discussion group, so people can talk about it there. */
+async function copyToDiscussion(chat, message) {
+  const row = await db.one('SELECT * FROM messages WHERE id = $1', [message.id]);
+  if (!row || ['poll', 'system', 'call'].includes(row.type)) return;
+  const group = await db.one(`SELECT id FROM chats WHERE id = $1 AND type = 'group'`, [chat.linked_chat_id]);
+  if (!group) return;
+  await insertMessage({
+    chatId: group.id,
+    senderId: row.sender_id,
+    type: row.type,
+    text: row.text,
+    mediaId: row.media_id,
+    fwdName: chat.title,
+    meta: { ...(row.meta || {}), channel_post: { chat_id: chat.id, message_id: row.id } },
+  });
 }
 
 async function forwardMessages(userId, body = {}) {
   const from = await chatService.requireMember(body.from_chat_id, userId);
+  if (from.protected_content && !chatService.ADMIN_ROLES.includes(from.my_role)) {
+    throw forbidden('protected_content', 'Forwarding is turned off in this chat');
+  }
   const ids = v.idList(body.message_ids, 'message_ids', 100);
   const targets = v.idList(body.to_chat_ids, 'to_chat_ids', 10);
   if (!ids.length || !targets.length) throw badRequest('invalid_input', 'Nothing to forward');
@@ -736,11 +799,84 @@ async function forwardMessages(userId, body = {}) {
         fwdUserId: from.type === 'channel' ? null : r.forwarded_from_user_id || r.sender_id,
         fwdName: r.forwarded_from_name || fromName,
         meta: r.type === 'location' || r.type === 'voice' ? r.meta : null, // forwarded voice keeps its waveform
+        forwardSourceId: r.forward_source_id || r.id,
       });
       count += 1;
     }
   }
   return { forwarded: count };
+}
+
+// ------------------------------------------------------------------ message info
+/** Who received and read my message (private: the other person; groups: everyone). */
+async function messageInfo(userId, messageIdRaw) {
+  const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
+  if (m.sender_id !== userId) throw forbidden('not_allowed', 'Only the sender can see who read a message');
+  if (chat.type === 'channel') return { views: m.views_count || 0, read: [], delivered: [] };
+  const rows = await db.many(
+    `SELECT user_id, last_read_message_id >= $2 AS read, last_delivered_message_id >= $2 AS delivered
+     FROM chat_members WHERE chat_id = $1 AND user_id <> $3 AND joined_at <= $4
+     ORDER BY user_id LIMIT 1000`,
+    [chat.id, m.id, userId, m.created_at],
+  );
+  const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
+  const pick = (f) => rows.filter(f).map((r) => users.get(r.user_id)).filter(Boolean);
+  return {
+    read: pick((r) => r.read),
+    delivered: pick((r) => !r.read && r.delivered),
+    waiting: pick((r) => !r.read && !r.delivered),
+  };
+}
+
+// ------------------------------------------------------------------ channel post queue (drafts & approval)
+async function listQueue(userId, chatIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  chatService.requireGroupAdmin(chat);
+  const rows = await db.many('SELECT * FROM post_queue WHERE chat_id = $1 ORDER BY id', [chat.id]);
+  const users = await userService.getUsersMap(userId, [...new Set(rows.map((r) => r.author_id))]);
+  return {
+    can_publish: chatService.hasRight(chat, 'post_messages'),
+    posts: rows.map((r) => ({
+      id: r.id,
+      author: users.get(r.author_id) || null,
+      type: r.body.type || 'text',
+      text: String(r.body.text || (r.body.poll && r.body.poll.question) || ''),
+      has_media: !!r.body.media_id,
+      created_at: new Date(r.created_at).toISOString(),
+      mine: r.author_id === userId,
+    })),
+  };
+}
+
+async function publishQueued(userId, chatIdRaw, queueIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  chatService.requireRight(chat, 'post_messages');
+  const q = await db.one('DELETE FROM post_queue WHERE id = $1 AND chat_id = $2 RETURNING *', [v.id(queueIdRaw, 'queue_id'), chat.id]);
+  if (!q) throw notFound('post_not_found', 'This post is no longer waiting');
+  try {
+    // published under the author's name (signatures), approved by this admin
+    const author = await db.one(`SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2`, [chat.id, q.author_id]);
+    const message = await sendMessage(author ? q.author_id : userId, chat.id, q.body, { skipQueue: true, skipRateLimit: true });
+    await chatService.logEvent(chat.id, userId, 'post_approved', q.author_id, { message_id: message.id });
+    await chatService.emitUpdated(chat.id);
+    return message;
+  } catch (err) {
+    await db.query('INSERT INTO post_queue (id, chat_id, author_id, body, created_at) VALUES ($1, $2, $3, $4, $5)', [q.id, q.chat_id, q.author_id, JSON.stringify(q.body), q.created_at]);
+    throw err;
+  }
+}
+
+async function deleteQueued(userId, chatIdRaw, queueIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  chatService.requireGroupAdmin(chat);
+  const id = v.id(queueIdRaw, 'queue_id');
+  const q = await db.one('SELECT author_id FROM post_queue WHERE id = $1 AND chat_id = $2', [id, chat.id]);
+  if (!q) throw notFound('post_not_found', 'This post is no longer waiting');
+  if (q.author_id !== userId && !chatService.hasRight(chat, 'post_messages')) throw forbidden('not_allowed', 'You can only delete your own drafts');
+  await db.query('DELETE FROM post_queue WHERE id = $1', [id]);
+  if (q.author_id !== userId) await chatService.logEvent(chat.id, userId, 'post_declined', q.author_id);
+  await chatService.emitUpdated(chat.id);
+  return { ok: true };
 }
 
 // ------------------------------------------------------------------ view once
@@ -834,7 +970,7 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
   const found = rows.map((r) => r.id);
 
   if (forEveryone) {
-    const isAdmin = chatService.isMulti(chat) && chatService.ADMIN_ROLES.includes(chat.my_role);
+    const isAdmin = chatService.isMulti(chat) && chatService.hasRight(chat, 'delete_messages');
     const hours = await settings.get('message_delete_window_hours');
     for (const r of rows) {
       const own = r.sender_id === userId && r.type !== 'system' && chat.type !== 'channel';
@@ -843,6 +979,12 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
       // admins can always clean up; everyone else only within the window
       if (!isAdmin && hours > 0 && Date.now() - new Date(r.created_at).getTime() > hours * 3600 * 1000) {
         throw forbidden('delete_window_passed', `Messages can be deleted for everyone within ${hours} hours. You can still delete it for yourself.`);
+      }
+    }
+    if (isAdmin) {
+      for (const r of rows.filter((x) => x.sender_id !== userId && x.type !== 'system')) {
+        const full = await db.one('SELECT text, type FROM messages WHERE id = $1', [r.id]);
+        await chatService.logEvent(chat.id, userId, 'message_deleted', r.sender_id, { type: full.type, text: String(full.text || '').slice(0, 120) });
       }
     }
     await db.query(
@@ -883,6 +1025,9 @@ async function react(userId, messageIdRaw, emoji) {
     await db.query('DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2', [m.id, userId]);
   } else {
     v.oneOf(emoji, REACTIONS, 'emoji');
+    if (Array.isArray(chat.allowed_reactions) && !chat.allowed_reactions.includes(emoji)) {
+      throw forbidden('reaction_not_allowed', chat.allowed_reactions.length ? 'This reaction is turned off here' : 'Reactions are turned off here');
+    }
     await db.query(
       `INSERT INTO message_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)
        ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()`,
@@ -1061,6 +1206,7 @@ async function runDueScheduled(limit = 50) {
 const MAX_PINS = 50;
 
 function canPin(chat) {
+  if (chatService.isMulti(chat)) return chatService.hasRight(chat, 'pin_messages');
   if (chat.type === 'private') return true;
   return chatService.ADMIN_ROLES.includes(chat.my_role);
 }
@@ -1081,6 +1227,7 @@ async function pinMessage(userId, chatIdRaw, messageIdRaw) {
     [chat.id, m.id, userId],
   );
   if (r.inserted && chat.type === 'group') await createSystemMessage(chat.id, userId, { event: 'message_pinned', message_id: m.id });
+  if (r.inserted && chatService.isMulti(chat)) await chatService.logEvent(chat.id, userId, 'message_pinned', null, { message_id: m.id });
   await chatService.emitUpdated(chat.id);
   return listPins(userId, chat.id);
 }
@@ -1212,6 +1359,10 @@ async function markAllDelivered(userId) {
 
 module.exports = {
   openOnce,
+  messageInfo,
+  listQueue,
+  publishQueued,
+  deleteQueued,
   editHistory,
   mediaCounts,
   updateLiveLocation,

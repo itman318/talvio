@@ -213,6 +213,7 @@ function wireBus() {
   bus.on('message:deleted', (e) => emitToUsers(e.userIds, 'message:deleted', { chat_id: e.chatId, message_ids: e.messageIds }));
   bus.on('chat:updated', (e) => emitToUsers(e.memberIds, 'chat:updated', { chat_id: e.chatId }));
   bus.on('chat:removed', (e) => emitToUsers(e.userIds, 'chat:removed', { chat_id: e.chatId }));
+  bus.on('draft:updated', (e) => emitToUsers([e.userId], 'draft:updated', { chat_id: e.chatId, text: e.text, at: e.at }));
   bus.on('receipt:read', (e) =>
     emitToUsers(e.memberIds.filter((id) => id !== e.userId), 'receipt:read', {
       chat_id: e.chatId,
@@ -322,7 +323,7 @@ function init(httpServer) {
       'message:send',
       handler(async (p) => {
         const r = await messageService.sendMessage(uid, p.chat_id, p);
-        return r && r.scheduled ? r : { message: r };
+        return r && (r.scheduled || r.queued) ? r : { message: r };
       }),
     );
     socket.on(
