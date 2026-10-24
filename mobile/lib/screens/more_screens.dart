@@ -216,7 +216,7 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
                       subtitle: Text(u.username != null ? '@${u.username}' : 'requested ${chatListTime(DateTime.parse(r['requested_at'] as String).toLocal())}'),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                         IconButton(icon: const Icon(Icons.close, color: Colors.red), tooltip: 'Decline', onPressed: () => _resolve(u.id, false)),
-                        IconButton(icon: const Icon(Icons.check, color: Colors.green), tooltip: 'Approve', onPressed: () => _resolve(u.id, true)),
+                        IconButton(icon: const Icon(Icons.check, color: Brand.accent), tooltip: 'Approve', onPressed: () => _resolve(u.id, true)),
                       ]),
                     );
                   }).toList(),

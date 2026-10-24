@@ -291,7 +291,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen> {
         Card(child: Padding(padding: const EdgeInsets.all(14), child: SelectableText(widget.instructions))),
         const SizedBox(height: 16),
         OutlinedButton.icon(
-          icon: Icon(_shot == null ? Icons.add_photo_alternate_outlined : Icons.check_circle, color: _shot == null ? null : Colors.green),
+          icon: Icon(_shot == null ? Icons.add_photo_alternate_outlined : Icons.check_circle, color: _shot == null ? null : Brand.accent),
           label: Text(_shot == null ? 'Add payment screenshot' : 'Screenshot added'),
           onPressed: () async {
             final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1600);
@@ -346,7 +346,7 @@ class PaymentHistoryScreen extends StatelessWidget {
               return ListTile(
                 leading: Icon(
                   st == 'paid' ? Icons.check_circle : (['failed', 'rejected', 'cancelled'].contains(st) ? Icons.cancel : Icons.schedule),
-                  color: st == 'paid' ? Colors.green : (['failed', 'rejected'].contains(st) ? Colors.red : null),
+                  color: st == 'paid' ? Brand.accent : (['failed', 'rejected'].contains(st) ? Colors.red : null),
                 ),
                 title: Text('Rs ${o['amount_pkr']} · ${o['months']} month${o['months'] == 1 ? '' : 's'}'),
                 subtitle: Text([_labels[st] ?? st, '${o['provider']}', _date(o['created_at'] as String?), if (o['review_note'] != null) '${o['review_note']}'].join(' · ')),

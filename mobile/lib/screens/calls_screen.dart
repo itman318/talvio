@@ -101,6 +101,8 @@ class _CallsScreenState extends State<CallsScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: SegmentedButton<bool>(
+              showSelectedIcon: false,
+              expandedInsets: EdgeInsets.zero,
               segments: const [
                 ButtonSegment(value: false, label: Text('All')),
                 ButtonSegment(value: true, label: Text('Missed')),
@@ -145,10 +147,11 @@ class _CallsScreenState extends State<CallsScreen> {
     final peer = c.peer;
     final red = c.missed;
     final arrow = c.outgoing ? Icons.call_made : (red ? Icons.call_missed : Icons.call_received);
-    final arrowColor = red ? Colors.red : (c.status == 'ended' ? Colors.green : Theme.of(context).disabledColor);
+    final arrowColor = red ? Colors.red : (c.status == 'ended' ? Brand.accent : Theme.of(context).disabledColor);
     return ListTile(
-      leading: Avatar(id: c.peerId, name: peer?.name ?? '?', url: peer?.avatarAbsolute, size: 46),
-      title: Text(peer?.name ?? 'Deleted Account', style: TextStyle(color: red ? Colors.red : null)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      leading: Avatar(id: c.peerId, name: peer?.name ?? '?', url: peer?.avatarAbsolute, size: 50),
+      title: Text(peer?.name ?? 'Deleted Account', style: TextStyle(fontWeight: FontWeight.w700, color: red ? Colors.red : null)),
       subtitle: Row(children: [
         Icon(arrow, size: 16, color: arrowColor),
         const SizedBox(width: 4),
@@ -162,7 +165,8 @@ class _CallsScreenState extends State<CallsScreen> {
       trailing: peer == null || peer.deleted
           ? null
           : IconButton(
-              icon: Icon(c.video ? Icons.videocam_outlined : Icons.call_outlined, color: Brand.primary),
+              style: IconButton.styleFrom(backgroundColor: Brand.primary.withValues(alpha: 0.1)),
+              icon: Icon(c.video ? Icons.videocam_rounded : Icons.call_rounded, color: Brand.primary, size: 21),
               onPressed: () => startCall(context, peer, video: c.video),
             ),
       onLongPress: () async {
@@ -208,7 +212,7 @@ class CallLogBubble extends StatelessWidget {
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: red ? Colors.red : null)),
             Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(isMine ? Icons.call_made : (red ? Icons.call_missed : Icons.call_received), size: 14, color: red ? Colors.red : Colors.green),
+              Icon(isMine ? Icons.call_made : (red ? Icons.call_missed : Icons.call_received), size: 14, color: red ? Colors.red : Brand.accent),
               const SizedBox(width: 3),
               Text(sec > 0 ? formatCallDuration(sec) : (status == 'failed' ? 'Failed' : ''), style: const TextStyle(fontSize: 12.5)),
             ]),

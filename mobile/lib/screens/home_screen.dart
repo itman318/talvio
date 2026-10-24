@@ -170,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _FolderChip(label: 'All', selected: _folderId == null, onTap: () => setState(() => _folderId = null)),
                       ...store.folders.map((f) {
-                        final unread = store.chats.where(f.matches).where((c) => !c.isMuted).fold<int>(0, (s, c) => s + c.unreadCount);
+                        final unread = store.mainChats.where(f.matches).where((c) => !c.isMuted).fold<int>(0, (s, c) => s + c.unreadCount);
                         return _FolderChip(
                           label: unread > 0 ? '${f.name}  $unread' : f.name,
                           selected: _folderId == f.id,

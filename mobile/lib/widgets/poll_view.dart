@@ -112,7 +112,7 @@ class _PollViewState extends State<PollView> {
     final mine = p.myVotes.contains(i);
     final correct = p.quiz && p.correctOption == i;
     final wrongPick = p.quiz && mine && p.correctOption != null && p.correctOption != i;
-    final barColor = p.quiz && results ? (correct ? Colors.green : (wrongPick ? Colors.red : accent)) : accent;
+    final barColor = p.quiz && results ? (correct ? Brand.accent : (wrongPick ? Colors.red : accent)) : accent;
 
     if (!results && !p.closed) {
       return InkWell(
@@ -150,7 +150,7 @@ class _PollViewState extends State<PollView> {
               SizedBox(width: 40, child: Text('${(pct * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
               Expanded(child: Text(o.text)),
               if (mine) Icon(wrongPick ? Icons.cancel : Icons.check_circle, size: 16, color: barColor),
-              if (correct && !mine) const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+              if (correct && !mine) const Icon(Icons.check_circle_outline, size: 16, color: Brand.accent),
             ]),
             const SizedBox(height: 3),
             ClipRRect(

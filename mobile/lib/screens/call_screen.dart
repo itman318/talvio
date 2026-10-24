@@ -149,7 +149,7 @@ class _CallScreenState extends State<CallScreen> {
     if (c.phase == CallPhase.incoming) {
       return Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         _RoundButton(icon: Icons.call_end, label: 'Decline', color: Colors.red, onTap: c.decline),
-        _RoundButton(icon: c.video ? Icons.videocam : Icons.call, label: 'Accept', color: Colors.green, onTap: c.accept),
+        _RoundButton(icon: c.video ? Icons.videocam : Icons.call, label: 'Accept', color: Brand.accent, onTap: c.accept),
       ]);
     }
     if (c.phase == CallPhase.ended) {

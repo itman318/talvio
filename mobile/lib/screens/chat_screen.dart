@@ -520,13 +520,23 @@ class _ChatScreenState extends State<ChatScreen> {
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: m.myReaction == e ? const Color(0x332AABEE) : null,
+                            color: m.myReaction == e ? Brand.primary.withValues(alpha: 0.15) : null,
                           ),
                           child: Text(e, style: const TextStyle(fontSize: 24)),
                         ),
                       ))
                   .toList(),
             ),
+          ),
+          // quick actions
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+            child: Row(children: [
+              if (chat.canPost) _quick(ctx, Icons.reply_rounded, 'Reply', 'reply'),
+              if (m.text.isNotEmpty) _quick(ctx, Icons.copy_rounded, 'Copy', 'copy'),
+              if (m.type != 'poll' && m.type != 'call') _quick(ctx, Icons.shortcut_rounded, 'Forward', 'forward'),
+              _quick(ctx, Icons.alarm_add_rounded, 'Remind', 'remind'),
+            ]),
           ),
           const Divider(height: 1),
           if (chat.type == 'private' || chat.isAdmin)
@@ -536,13 +546,9 @@ class _ChatScreenState extends State<ChatScreen> {
               onTap: () => Navigator.pop(ctx, chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin'),
             ),
           if (canClosePoll) ListTile(leading: const Icon(Icons.stop_circle_outlined), title: const Text('Stop poll'), onTap: () => Navigator.pop(ctx, 'close_poll')),
-          if (chat.canPost) ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(ctx, 'reply')),
-          if (m.text.isNotEmpty) ListTile(leading: const Icon(Icons.copy), title: const Text('Copy text'), onTap: () => Navigator.pop(ctx, 'copy')),
-          if (canEdit) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
+          if (canEdit) ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
           if (m.editedAt != null) ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Edit history'), onTap: () => Navigator.pop(ctx, 'history')),
-          ListTile(leading: const Icon(Icons.alarm_add_rounded), title: const Text('Remind me'), onTap: () => Navigator.pop(ctx, 'remind')),
-          if (m.type != 'poll' && m.type != 'call') ListTile(leading: const Icon(Icons.forward), title: const Text('Forward'), onTap: () => Navigator.pop(ctx, 'forward')),
-          ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Delete'), onTap: () => Navigator.pop(ctx, 'delete')),
+          ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Colors.red), title: const Text('Delete', style: TextStyle(color: Colors.red)), onTap: () => Navigator.pop(ctx, 'delete')),
           if (!mine && !channelAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
         ]),
       ),
@@ -760,7 +766,7 @@ class _ChatScreenState extends State<ChatScreen> {
       subtitle = 'bot';
     } else if (typing != null) {
       subtitle = typing;
-    } else if (chat.isGroup) {
+    } else if (chat.isMulti) {
       subtitle = chat.isChannel ? '${chat.memberCount} subscribers' : '${chat.memberCount} members';
     } else if (chat.peer != null) {
       subtitle = lastSeenText(chat.peer!);
@@ -791,14 +797,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, letterSpacing: -0.2))),
+                      if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
                       if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
                     ]),
                     if (subtitle.isNotEmpty)
                       Text(subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, color: typing != null || chat.peer?.online == true ? Brand.primary : Brand.muted)),
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: typing != null || chat.peer?.online == true ? FontWeight.w600 : FontWeight.w500,
+                              color: typing != null ? Brand.primary : (chat.peer?.online == true ? Brand.accent : Brand.muted))),
                   ],
                 ),
               ),
@@ -810,11 +820,13 @@ class _ChatScreenState extends State<ChatScreen> {
             if (auth.feature('video_calls'))
               IconButton(
                 tooltip: 'Video call',
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.videocam_outlined),
                 onPressed: () => startCall(context, chat.peer!, video: true),
               ),
             IconButton(
               tooltip: 'Call',
+              visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.call_outlined),
               onPressed: () => startCall(context, chat.peer!, video: false),
             ),
@@ -822,20 +834,21 @@ class _ChatScreenState extends State<ChatScreen> {
           PopupMenuButton<String>(
             onSelected: (a) => _chatMenu(a, chat),
             itemBuilder: (_) => [
-              PopupMenuItem(value: 'mute', child: Text(chat.isMuted ? 'Unmute' : 'Mute')),
-              const PopupMenuItem(value: 'media', child: Text('Shared media')),
-              const PopupMenuItem(value: 'theme', child: Text('Theme & wallpaper')),
+              _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
+              _mi('media', Icons.perm_media_outlined, 'Shared media'),
+              _mi('theme', Icons.palette_outlined, 'Theme & wallpaper'),
               if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
-                PopupMenuItem(value: 'disappearing', child: Text(chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages')),
-              const PopupMenuItem(value: 'export', child: Text('Export chat')),
-              const PopupMenuItem(value: 'clear', child: Text('Clear history')),
-              if (chat.canPost) const PopupMenuItem(value: 'scheduled', child: Text('Scheduled messages')),
-              if (chat.isMulti && chat.isAdmin) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
+                _mi('disappearing', Icons.timer_outlined, chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages'),
+              if (chat.canPost) _mi('scheduled', Icons.schedule_send_outlined, 'Scheduled messages'),
+              if (chat.isMulti && chat.isAdmin) _mi('stats', Icons.insights_outlined, 'Statistics'),
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('secret_chats'))
-                const PopupMenuItem(value: 'secret', child: Text('Start vault chat')),
-              if (chat.peer != null) PopupMenuItem(value: 'block', child: Text(chat.peer!.blocked ? 'Unblock user' : 'Block user')),
-              if (!chat.isSavedMessages) const PopupMenuItem(value: 'report', child: Text('Report')),
-              PopupMenuItem(value: 'leave', child: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'))),
+                _mi('secret', Icons.lock_outline_rounded, 'Start vault chat'),
+              _mi('export', Icons.ios_share_rounded, 'Export chat'),
+              const PopupMenuDivider(),
+              _mi('clear', Icons.cleaning_services_outlined, 'Clear history'),
+              if (chat.peer != null) _mi('block', Icons.block_rounded, chat.peer!.blocked ? 'Unblock user' : 'Block user', danger: !chat.peer!.blocked),
+              if (!chat.isSavedMessages) _mi('report', Icons.flag_outlined, 'Report'),
+              _mi('leave', Icons.logout_rounded, chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'), danger: true),
             ],
           ),
         ],
@@ -1200,6 +1213,36 @@ class _ChatScreenState extends State<ChatScreen> {
       ]),
     );
   }
+
+  Widget _quick(BuildContext ctx, IconData icon, String label, String value) => Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => Navigator.pop(ctx, value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(color: Brand.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(15)),
+                child: Icon(icon, color: Brand.primary),
+              ),
+              const SizedBox(height: 5),
+              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      );
+
+  PopupMenuItem<String> _mi(String value, IconData icon, String text, {bool danger = false}) => PopupMenuItem<String>(
+        value: value,
+        height: 44,
+        child: Row(children: [
+          Icon(icon, size: 20, color: danger ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(width: 14),
+          Flexible(child: Text(text, style: TextStyle(color: danger ? Colors.red : null))),
+        ]),
+      );
 
   Widget _requestBar(Chat chat) {
     Future<void> act(Future<void> Function() f, {bool close = true}) async {

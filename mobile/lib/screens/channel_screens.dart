@@ -79,7 +79,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
             Row(children: [
               if (_quiz)
                 IconButton(
-                  icon: Icon(_correct == i ? Icons.check_circle : Icons.radio_button_unchecked, color: _correct == i ? Colors.green : null),
+                  icon: Icon(_correct == i ? Icons.check_circle : Icons.radio_button_unchecked, color: _correct == i ? Brand.accent : null),
                   onPressed: () => setState(() => _correct = i),
                 ),
               Expanded(

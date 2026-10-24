@@ -392,7 +392,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       : _usernameStatus == 'taken'
                           ? 'This username is taken'
                           : _usernameStatus,
-              helperStyle: TextStyle(color: _usernameStatus == 'available' ? Colors.green : (_usernameStatus == null ? null : Colors.red)),
+              helperStyle: TextStyle(color: _usernameStatus == 'available' ? Brand.accent : (_usernameStatus == null ? null : Colors.red)),
             ),
           ),
           TextField(controller: _bio, maxLength: 140, maxLines: 3, decoration: const InputDecoration(labelText: 'Bio')),

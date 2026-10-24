@@ -215,6 +215,27 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
+  Widget _headerAction(IconData icon, String label, VoidCallback onTap) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onTap,
+            child: SizedBox(
+              width: 66,
+              height: 62,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, color: Brand.primary, size: 22),
+                const SizedBox(height: 4),
+                Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
@@ -233,22 +254,49 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       ),
       body: ListView(
         children: [
-          const SizedBox(height: 16),
-          Center(
-            child: GestureDetector(
-              onTap: chat.isAdmin ? () => _changePhoto(chat) : null,
-              child: Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 96),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(chat.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
-          Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}', textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.perm_media_outlined),
-            title: const Text('Shared media'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat))),
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(26), gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark)),
+            child: Column(children: [
+              GestureDetector(
+                onTap: chat.isAdmin ? () => _changePhoto(chat) : null,
+                child: Stack(clipBehavior: Clip.none, children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, shape: BoxShape.circle),
+                      child: ClipOval(child: Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 96)),
+                    ),
+                  ),
+                  if (chat.isAdmin)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                        child: const Icon(Icons.photo_camera_rounded, size: 16, color: Colors.white),
+                      ),
+                    ),
+                ]),
+              ),
+              const SizedBox(height: 12),
+              Text(chat.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+              const SizedBox(height: 2),
+              Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}${chat.username != null ? ' · public' : ''}',
+                  textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 14),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                _headerAction(chat.isMuted ? Icons.notifications_off_rounded : Icons.notifications_rounded, chat.isMuted ? 'Unmute' : 'Mute',
+                    () => _run(() => _store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'}))),
+                _headerAction(Icons.perm_media_rounded, 'Media', () => Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat)))),
+                if (chat.isAdmin && chat.isGroup) _headerAction(Icons.person_add_alt_1_rounded, 'Add', () => _addMembers(chat)),
+                if (chat.isAdmin) _headerAction(Icons.edit_rounded, 'Edit', () => _editText(chat, title: true)),
+              ]),
+            ]),
           ),
           if (chat.isSuspended)
             const Padding(

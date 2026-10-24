@@ -272,8 +272,18 @@ class SystemBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(color: Colors.black.withAlpha(40), borderRadius: BorderRadius.circular(12)),
-        child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withAlpha(22) : Colors.white.withAlpha(225),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: Theme.of(context).brightness == Brightness.dark ? null : [BoxShadow(color: Colors.black.withAlpha(12), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Text(text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF5E647A),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            )),
       ),
     );
   }
