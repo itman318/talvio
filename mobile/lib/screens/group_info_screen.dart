@@ -252,7 +252,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         actions: [
-          if (chat.isAdmin) IconButton(icon: const Icon(Icons.edit_rounded), tooltip: 'Edit name', onPressed: () => _editText(chat, title: true)),
+          if (chat.can('change_info')) IconButton(icon: const Icon(Icons.edit_rounded), tooltip: 'Edit name', onPressed: () => _editText(chat, title: true)),
         ],
       ),
       body: ListView(
@@ -263,10 +263,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             name: chat.title,
             avatarUrl: chat.avatarAbsolute,
             topPadding: MediaQuery.of(context).padding.top + 44,
-            onAvatarTap: chat.isAdmin
+            onAvatarTap: chat.can('change_info')
                 ? () => _changePhoto(chat)
                 : (chat.avatarAbsolute == null ? null : () => showPhotoViewer(context, chat.avatarAbsolute!, tag: 'avatar-${chat.id}')),
-            avatarBadge: chat.isAdmin
+            avatarBadge: chat.can('change_info')
                 ? Container(
                     padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
@@ -282,7 +282,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 onTap: () => _run(() => _store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'})),
               ),
               ProfileAction(icon: Icons.perm_media_rounded, label: 'Media', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat)))),
-              if (chat.isAdmin && !chat.isSuspended)
+              if (chat.can('invite_users') && !chat.isSuspended)
                 ProfileAction(icon: Icons.person_add_alt_1_rounded, label: 'Add', highlight: true, onTap: () => _addMembers(chat)),
               ProfileAction(
                 icon: Icons.ios_share_rounded,
@@ -310,10 +310,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             SettingsTile(
               icon: Icons.info_rounded,
               color: Brand.violet,
-              title: chat.description.isEmpty ? (chat.isAdmin ? 'Add a description' : 'No description') : chat.description,
+              title: chat.description.isEmpty ? (chat.can('change_info') ? 'Add a description' : 'No description') : chat.description,
               subtitle: 'Description',
               maxSubtitleLines: 1,
-              onTap: chat.isAdmin ? () => _editText(chat, title: false) : null,
+              onTap: chat.can('change_info') ? () => _editText(chat, title: false) : null,
             ),
             if (chat.username != null || chat.isOwner)
               SettingsTile(
@@ -440,7 +440,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     onTap: () => pickChannelCategory(context, chat),
                   ),
               ],
-              if (chat.isChannel)
+              if (chat.isChannel && chat.can('change_info'))
                 SettingsSwitchTile(
                   icon: Icons.draw_rounded,
                   color: Brand.amber,
@@ -449,7 +449,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   value: chat.signatures,
                   onChanged: (v) => _run(() => _store.setSignatures(chat.id, v)),
                 ),
-              if (chat.isChannel && auth.feature('channel_comments'))
+              if (chat.isChannel && auth.feature('channel_comments') && chat.can('change_info'))
                 SettingsSwitchTile(
                   icon: Icons.forum_rounded,
                   color: Brand.sky,
@@ -458,7 +458,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   value: chat.commentsEnabled,
                   onChanged: (v) => _run(() => _store.patchChat(chat.id, {'comments_enabled': v})),
                 ),
-              if (chat.isGroup && auth.feature('topics'))
+              if (chat.isGroup && auth.feature('topics') && chat.can('change_info'))
                 SettingsSwitchTile(
                   icon: Icons.topic_rounded,
                   color: Brand.violet,
@@ -468,8 +468,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   onChanged: (v) => _run(() => _store.patchChat(chat.id, {'is_forum': v})),
                 ),
               if (chat.isGroup) ...[
-                SettingsTile(icon: Icons.timer_rounded, color: const Color(0xFF5E6B8C), title: 'Slow mode', trailing: _slowLabel(chat.slowModeSec), onTap: () => _pickSlowMode(chat)),
-                SettingsSwitchTile(
+                if (chat.can('change_info'))
+                  SettingsTile(icon: Icons.timer_rounded, color: const Color(0xFF5E6B8C), title: 'Slow mode', trailing: _slowLabel(chat.slowModeSec), onTap: () => _pickSlowMode(chat)),
+                if (chat.can('change_info'))
+                  SettingsSwitchTile(
                   icon: Icons.how_to_reg_rounded,
                   color: Brand.green,
                   title: 'Approve new members',
@@ -477,7 +479,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   value: chat.joinApproval,
                   onChanged: (v) => _run(() => _store.patchChat(chat.id, {'join_approval': v})),
                 ),
-                if (chat.joinApproval || chat.pendingRequests > 0)
+                if ((chat.joinApproval || chat.pendingRequests > 0) && chat.can('invite_users'))
                   SettingsTile(
                     icon: Icons.person_search_rounded,
                     color: Brand.primary,
@@ -486,7 +488,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))),
                   ),
               ],
-              if (chat.inviteCode != null) ...[
+              if (chat.inviteCode != null && chat.can('invite_users')) ...[
                 SettingsTile(
                   icon: Icons.link_rounded,
                   color: Brand.sky,
@@ -520,7 +522,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           SettingsGroup(
             title: chat.isChannel && !chat.isAdmin ? 'Admins' : '${members.length} ${chat.isChannel ? 'shown' : 'members'}',
             children: [
-              if (chat.isAdmin && !chat.isSuspended)
+              if (chat.can('invite_users') && !chat.isSuspended)
                 SettingsTile(
                   icon: Icons.person_add_rounded,
                   color: Brand.primary,

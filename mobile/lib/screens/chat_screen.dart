@@ -817,7 +817,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // ------------------------------------------------------------------ message menu
   Future<void> _messageMenu(Message m, Chat chat) async {
     final mine = m.senderId == _store.myId && !chat.isChannel;
-    final channelAdmin = chat.isChannel && chat.isAdmin;
+    final channelAdmin = chat.isChannel && chat.can('post_messages');
     if (m.isLocal) {
       if (m.sendState != SendState.failed) return;
       final a = await showModalBottomSheet<String>(
@@ -874,7 +874,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ]),
           ),
           const Divider(height: 1),
-          if (chat.type == 'private' || chat.isAdmin)
+          if (chat.type == 'private' || chat.can('pin_messages'))
             ListTile(
               leading: const Icon(Icons.push_pin_outlined),
               title: Text(chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
@@ -888,7 +888,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (canEdit) ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
           if (m.editedAt != null) ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Edit history'), onTap: () => Navigator.pop(ctx, 'history')),
           ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Colors.red), title: const Text('Delete', style: TextStyle(color: Colors.red)), onTap: () => Navigator.pop(ctx, 'delete')),
-          if (!mine && !channelAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
+          if (!mine && !chat.isAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
         ]),
       ),
     );
@@ -944,7 +944,7 @@ class _ChatScreenState extends State<ChatScreen> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])));
         break;
       case 'delete':
-        await _delete(m, chat, mine || channelAdmin);
+        await _delete(m, chat, mine || (chat.isChannel && chat.can('delete_messages')));
         break;
       case 'report':
         await showReportDialog(context, targetType: 'message', targetId: m.id);
@@ -1029,7 +1029,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _delete(Message m, Chat chat, bool mine) async {
-    final canForEveryone = mine || (chat.type == 'private' && !chat.isSavedMessages) || chat.isAdmin;
+    final canForEveryone = mine || (chat.type == 'private' && !chat.isSavedMessages) || chat.can('delete_messages');
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1594,7 +1594,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Text(taliToPlain(p.preview), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
               ]),
             ),
-            if (chat.type == 'private' || chat.isAdmin)
+            if (chat.type == 'private' || chat.can('pin_messages'))
               IconButton(
                 icon: const Icon(Icons.close_rounded, size: 18),
                 tooltip: 'Unpin',
@@ -1621,7 +1621,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: ListView(shrinkWrap: true, children: [
               ListTile(
                 title: Text('${pins.length} pinned', style: const TextStyle(fontWeight: FontWeight.w600)),
-                trailing: (chat.type == 'private' || chat.isAdmin) && pins.length > 1
+                trailing: (chat.type == 'private' || chat.can('pin_messages')) && pins.length > 1
                     ? TextButton(
                         onPressed: () async {
                           Navigator.pop(ctx);

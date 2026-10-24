@@ -1,5 +1,5 @@
 /* Service worker: caches the app shell so the desktop app opens instantly (API calls always go to the network). */
-const CACHE = 'talvio-web-v7';
+const CACHE = 'talvio-web-v8';
 const SHELL = ['./', 'index.html', 'web.css', 'app.js', 'qr.js', 'icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

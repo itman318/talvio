@@ -668,6 +668,9 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
 
   const prepared = await prepareMessage(userId, chat, body);
 
+  if (chat.type === 'channel' && !prepared.threadId && body.schedule_at && !chatService.hasRight(chat, 'post_messages')) {
+    throw forbidden('no_right', 'Your posts need an admin’s approval — send it now and it will wait for review');
+  }
   // channel posts by admins who may not publish (or saved as a draft) wait for approval
   if (chat.type === 'channel' && !prepared.threadId && !internal.skipQueue && !body.schedule_at
       && (body.as_draft === true || !chatService.hasRight(chat, 'post_messages'))) {
@@ -783,6 +786,13 @@ async function forwardMessages(userId, body = {}) {
   for (const t of targets) {
     const chat = await chatService.requireMember(t, userId);
     await assertCanSend(userId, chat);
+    if (chat.type === 'channel' && !chatService.hasRight(chat, 'post_messages')) {
+      throw forbidden('no_right', 'You need the “publish posts” right to forward into this channel');
+    }
+    if (chat.type === 'group' && chat.new_member_limits && chat.my_role === 'member' && chat.my_joined_at
+        && Date.now() - new Date(chat.my_joined_at).getTime() < 24 * 3600 * 1000) {
+      throw forbidden('new_member_limits', 'New members can forward messages here after 24 hours');
+    }
     targetChats.push(chat);
   }
   let count = 0;
@@ -855,7 +865,8 @@ async function publishQueued(userId, chatIdRaw, queueIdRaw) {
   if (!q) throw notFound('post_not_found', 'This post is no longer waiting');
   try {
     // published under the author's name (signatures), approved by this admin
-    const author = await db.one(`SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2`, [chat.id, q.author_id]);
+    // (if the author is no longer an admin, it goes out under the approving admin)
+    const author = await db.one(`SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2 AND role IN ('owner', 'admin')`, [chat.id, q.author_id]);
     const message = await sendMessage(author ? q.author_id : userId, chat.id, q.body, { skipQueue: true, skipRateLimit: true });
     await chatService.logEvent(chat.id, userId, 'post_approved', q.author_id, { message_id: message.id });
     await chatService.emitUpdated(chat.id);
@@ -913,7 +924,11 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   const m = await db.one('SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL', [v.id(messageIdRaw, 'message_id')]);
   if (!m) throw notFound('message_not_found', 'Message not found');
   const chat = await chatService.requireMember(m.chat_id, userId);
-  const channelAdmin = chat.type === 'channel' && chatService.ADMIN_ROLES.includes(chat.my_role);
+  const channelAdmin = chat.type === 'channel' && chatService.hasRight(chat, 'post_messages');
+  if (chat.type === 'channel' && !m.thread_id && !channelAdmin) {
+    // admins whose posts need approval can't change them afterwards either
+    throw forbidden('no_right', 'You need the “publish posts” right to edit channel posts');
+  }
   if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll', 'location', 'call'].includes(m.type) || m.forwarded_from_name) {
     throw forbidden('cannot_edit', 'You can only edit your own messages');
   }

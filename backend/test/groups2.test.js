@@ -154,6 +154,12 @@ test('channels: directory, discussion group, stats, post queue', async () => {
   const published = await messages.publishQueued(owner, cid, q.queued.id);
   assert.equal(published.text, 'Draft review please');
   assert.equal((await messages.listQueue(owner, cid)).posts.length, 0);
+  // …and can't get around the review: no scheduling, no forwarding in, no editing
+  await assert.rejects(messages.sendMessage(writer, cid, { text: 'sneaky', schedule_at: new Date(Date.now() + 3600e3).toISOString() }), (e) => e.code === 'no_right');
+  const wpc = await chats.getOrCreatePrivate(writer, owner);
+  const wm = await messages.sendMessage(writer, wpc.id, { text: 'to forward' });
+  await assert.rejects(messages.forwardMessages(writer, { from_chat_id: wpc.id, message_ids: [wm.id], to_chat_ids: [cid] }), (e) => e.code === 'no_right');
+  await assert.rejects(messages.editMessage(writer, published.id, { text: 'changed after approval' }), (e) => e.code === 'no_right');
   // drafts on purpose
   const d = await messages.sendMessage(owner, cid, { text: 'later', as_draft: true });
   await messages.deleteQueued(owner, cid, d.queued.id);

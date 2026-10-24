@@ -1120,7 +1120,7 @@
         const t = setTimeout(() => reject(new ApiError(0, 'network', 'The server did not respond')), 20000);
         S.socket.emit('message:send', { chat_id: chatId, ...body }, (ack) => {
           clearTimeout(t);
-          if (ack && ack.ok) resolve(ack.message);
+          if (ack && ack.ok) resolve(ack.queued ? { queued: ack.queued } : ack.message);
           else reject(new ApiError(400, (ack && ack.error) || 'error', (ack && ack.message) || 'Could not send', ack));
         });
       });
@@ -1154,7 +1154,11 @@
     pushMessage(c.id, local);
     try {
       const m = await sendRaw(c.id, { type: 'text', text, client_id: clientId, ...(reply ? { reply_to_id: reply.id } : {}) });
-      replaceLocal(c.id, clientId, m);
+      if (m && m.queued) {
+        // channel admin without "publish" right: the post waits for approval
+        removeLocal(c.id, clientId);
+        toast('Sent to the channel admins for approval');
+      } else replaceLocal(c.id, clientId, m);
     } catch (e) {
       removeLocal(c.id, clientId);
       toast(e.message);
@@ -1174,7 +1178,8 @@
       try {
         const m = await upload(f, kind === 'voice' ? 'file' : kind, (p) => { progressBar.style.width = `${((done + p) / files.length) * 100}%`; });
         const msg = await sendRaw(c.id, { type: sendType, media_id: m.id, client_id: `w${Date.now()}${done}`, ...(albumId && sendType === 'image' ? { album_id: albumId } : {}) });
-        pushMessage(c.id, msg);
+        if (msg && msg.queued) toast(`${f.name}: sent to the channel admins for approval`);
+        else pushMessage(c.id, msg);
       } catch (e) {
         toast(`${f.name}: ${e.message}`);
       }
