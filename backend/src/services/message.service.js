@@ -721,6 +721,19 @@ async function forwardMessages(userId, body = {}) {
 }
 
 // ------------------------------------------------------------------ editing / deleting
+const uncheck = (t) => String(t || '').replace(/^(\s*)\[[xX]\] /gm, '$1[ ] ');
+
+/** Earlier versions of an edited message, oldest first (plus the current text last). */
+async function editHistory(userId, messageIdRaw) {
+  const { m } = await getVisibleMessage(userId, messageIdRaw);
+  const rows = await db.many('SELECT text, edited_at FROM message_edits WHERE message_id = $1 ORDER BY id', [m.id]);
+  return {
+    versions: [
+      ...rows.map((r) => ({ text: r.text, at: new Date(r.edited_at).toISOString() })),
+      { text: m.text, at: new Date(m.edited_at || m.created_at).toISOString(), current: true },
+    ],
+  };
+}
 async function editMessage(userId, messageIdRaw, body = {}) {
   const m = await db.one('SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL', [v.id(messageIdRaw, 'message_id')]);
   if (!m) throw notFound('message_not_found', 'Message not found');
@@ -729,17 +742,26 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   if ((m.sender_id !== userId && !channelAdmin) || ['system', 'poll', 'location', 'call'].includes(m.type) || m.forwarded_from_name) {
     throw forbidden('cannot_edit', 'You can only edit your own messages');
   }
+  const text = cleanText(body.text);
+  // ticking a checklist item ([ ] → [x]) is not an edit: no time limit, no "edited" label, no history
+  const checkOnly = text !== m.text && uncheck(text) === uncheck(m.text) && /^\s*\[[ xX]\] /m.test(text);
+  if (checkOnly) {
+    const row = await db.one('UPDATE messages SET text = $2 WHERE id = $1 RETURNING *', [m.id, text]);
+    const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
+    bus.emit('message:edited', { chatId: m.chat_id, message, memberIds: await chatService.memberIds(m.chat_id) });
+    return message;
+  }
   const hours = await settings.get('message_edit_window_hours');
   if (hours > 0 && Date.now() - new Date(m.created_at).getTime() > hours * 3600 * 1000) {
     throw forbidden('edit_window_passed', 'This message is too old to edit');
   }
-  const text = cleanText(body.text);
   if (m.type === 'text' && !text) throw badRequest('empty_message', 'Message is empty');
   const max = m.type === 'text' ? MAX_TEXT : MAX_CAPTION;
   if (text.length > max) throw badRequest('message_too_long', `At most ${max} characters`);
   if (text === m.text) return (await serializeRows(userId, [m]))[0];
   const flags = await moderation.checkOutgoing(await db.one('SELECT * FROM users WHERE id = $1', [userId]), [text]);
 
+  await db.query('INSERT INTO message_edits (message_id, text, edited_at) VALUES ($1, $2, COALESCE($3::timestamptz, $4::timestamptz))', [m.id, m.text, m.edited_at, m.created_at]);
   const row = await db.one('UPDATE messages SET text = $2, edited_at = now(), link_preview = NULL WHERE id = $1 RETURNING *', [m.id, text]);
   const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
   bus.emit('message:edited', { chatId: m.chat_id, message, memberIds: await chatService.memberIds(m.chat_id) });
@@ -766,7 +788,7 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
   const ids = v.idList(body.message_ids, 'message_ids', 100);
   const forEveryone = body.for_everyone === true;
   const rows = await db.many(
-    'SELECT id, sender_id, type FROM messages WHERE chat_id = $1 AND id = ANY($2::bigint[]) AND deleted_at IS NULL',
+    'SELECT id, sender_id, type, created_at FROM messages WHERE chat_id = $1 AND id = ANY($2::bigint[]) AND deleted_at IS NULL',
     [chat.id, ids],
   );
   if (!rows.length) return { deleted: 0 };
@@ -774,10 +796,15 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
 
   if (forEveryone) {
     const isAdmin = chatService.isMulti(chat) && chatService.ADMIN_ROLES.includes(chat.my_role);
+    const hours = await settings.get('message_delete_window_hours');
     for (const r of rows) {
       const own = r.sender_id === userId && r.type !== 'system' && chat.type !== 'channel';
       const allowed = own || isAdmin || (chat.type === 'private' && r.type !== 'system');
       if (!allowed) throw forbidden('cannot_delete', 'You can only delete your own messages for everyone');
+      // admins can always clean up; everyone else only within the window
+      if (!isAdmin && hours > 0 && Date.now() - new Date(r.created_at).getTime() > hours * 3600 * 1000) {
+        throw forbidden('delete_window_passed', `Messages can be deleted for everyone within ${hours} hours. You can still delete it for yourself.`);
+      }
     }
     await db.query(
       `UPDATE messages SET deleted_at = now(), text = '', media_id = NULL, meta = NULL
@@ -1145,6 +1172,7 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  editHistory,
   mediaCounts,
   updateLiveLocation,
   sweepExpired,

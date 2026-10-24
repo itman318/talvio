@@ -17,6 +17,7 @@ import 'chat_theme_screen.dart';
 import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
+import '../widgets/message_extras.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -64,6 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
+  String? _tag; // My Notes tag filter
   final _scroll = ScrollController();
   Message? _replyTo;
   Message? _editing;
@@ -316,6 +318,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
       ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFFEF5A3C)]),
       ('file', Icons.insert_drive_file_rounded, 'Document', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
+      ('checklist', Icons.checklist_rounded, 'Checklist', const [Color(0xFF6FCB8C), Color(0xFF2F9D5A)]),
       if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Video note', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),
       if (auth.feature('location')) ('location', Icons.location_on_rounded, 'Location', const [Color(0xFF4FD8A6), Color(0xFF10B37A)]),
       ('contact', Icons.person_rounded, 'Contact', const [Color(0xFF5FD0E6), Color(0xFF1597B8)]),
@@ -360,6 +363,12 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
     if (choice == null) return;
+    if (choice == 'checklist') {
+      if (!mounted) return;
+      final text = await buildChecklist(context);
+      if (text != null && text.isNotEmpty) await _store.sendText(chatId, text);
+      return;
+    }
     if (choice == 'videonote') {
       await _recordVideoNote();
       return;
@@ -530,6 +539,8 @@ class _ChatScreenState extends State<ChatScreen> {
           if (chat.canPost) ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(ctx, 'reply')),
           if (m.text.isNotEmpty) ListTile(leading: const Icon(Icons.copy), title: const Text('Copy text'), onTap: () => Navigator.pop(ctx, 'copy')),
           if (canEdit) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
+          if (m.editedAt != null) ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Edit history'), onTap: () => Navigator.pop(ctx, 'history')),
+          ListTile(leading: const Icon(Icons.alarm_add_rounded), title: const Text('Remind me'), onTap: () => Navigator.pop(ctx, 'remind')),
           if (m.type != 'poll' && m.type != 'call') ListTile(leading: const Icon(Icons.forward), title: const Text('Forward'), onTap: () => Navigator.pop(ctx, 'forward')),
           ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Delete'), onTap: () => Navigator.pop(ctx, 'delete')),
           if (!mine && !channelAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
@@ -538,8 +549,10 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (!mounted || a == null) return;
     if (a.startsWith('react:')) {
-      _store.react(m, a.substring(6)).catchError((e) {
-        if (mounted) showError(context, e);
+      final e = a.substring(6);
+      if (m.myReaction != e) showReactionBurst(context, e);
+      _store.react(m, e).catchError((err) {
+        if (mounted) showError(context, err);
       });
       return;
     }
@@ -590,6 +603,12 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       case 'report':
         await showReportDialog(context, targetType: 'message', targetId: m.id);
+        break;
+      case 'history':
+        await showEditHistory(context, m);
+        break;
+      case 'remind':
+        await pickReminder(context, chat, m);
         break;
     }
   }
@@ -729,7 +748,11 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     if (chat.isForum) return TopicsScreen(chat: chat);
-    final messages = store.messagesOf(chatId);
+    final all = store.messagesOf(chatId);
+    // My Notes: #tags to filter notes
+    final tags = (chat.isSavedMessages) ? tagsIn(all) : const <String>[];
+    if (_tag != null && !tags.contains(_tag)) _tag = null;
+    final messages = _tag == null ? all : all.where((m) => messageHasTag(m, _tag!)).toList();
     final typing = store.typingText(chat);
     final auth = context.watch<AuthState>();
     String subtitle;
@@ -829,6 +852,25 @@ class _ChatScreenState extends State<ChatScreen> {
               child: const Text('Connecting…', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
             ),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
+          if (tags.isNotEmpty)
+            SizedBox(
+              height: 46,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                children: [
+                  for (final t in [null, ...tags])
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: ChoiceChip(
+                        label: Text(t == null ? 'All notes' : '#$t'),
+                        selected: _tag == t,
+                        onSelected: (_) => setState(() => _tag = t),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Expanded(child: _messageList(chat, messages, store)),
           _bottomBar(chat),
         ],

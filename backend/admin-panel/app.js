@@ -797,6 +797,7 @@
     max_group_members: ['Max members per group', ''],
     max_upload_mb: ['Max upload size (MB)', 'Also limited by your server / Nginx upload limit.'],
     message_edit_window_hours: ['Edit window (hours)', '0 = messages can always be edited.'],
+    message_delete_window_hours: ['Delete-for-everyone window (hours)', '0 = no limit. Group admins can always delete.'],
     min_app_version: ['Minimum app version', 'Older apps are asked to update.'],
     latest_app_version: ['Latest app version', 'Apps below this see an optional update notice.'],
     support_username: ['Support username', 'Shown in the app for help (without @).'],
@@ -842,7 +843,7 @@
     turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
   };
   const SETTING_SECTIONS = [
-    ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
+    ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Talvio Plus & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions']],

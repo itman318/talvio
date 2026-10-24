@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'message_extras.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
@@ -176,22 +177,50 @@ class ReactionChips extends StatelessWidget {
       child: Wrap(
         spacing: 4,
         runSpacing: 4,
-        children: message.reactions.map((r) {
-          final mine = message.myReaction == r.emoji;
-          return GestureDetector(
-            onTap: () => context.read<ChatStore>().react(message, r.emoji).catchError((e) {
-              if (context.mounted) showError(context, e);
-            }),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: mine ? Brand.primary : Colors.black.withAlpha(15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text('${r.emoji} ${r.count}', style: TextStyle(fontSize: 13, color: mine ? Colors.white : Colors.black87)),
-            ),
-          );
-        }).toList(),
+        children: message.reactions.map((r) => _ReactionChip(message: message, emoji: r.emoji, count: r.count)).toList(),
+      ),
+    );
+  }
+}
+
+/// One reaction pill: pops when its count changes; tapping it toggles your reaction (with a burst).
+class _ReactionChip extends StatelessWidget {
+  const _ReactionChip({required this.message, required this.emoji, required this.count});
+  final Message message;
+  final String emoji;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = message.myReaction == emoji;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () {
+        if (!mine) {
+          final box = context.findRenderObject() as RenderBox?;
+          final at = box == null ? null : box.localToGlobal(box.size.center(Offset.zero));
+          showReactionBurst(context, emoji, at: at);
+        }
+        context.read<ChatStore>().react(message, emoji).catchError((e) {
+          if (context.mounted) showError(context, e);
+        });
+      },
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey('$emoji$count$mine'),
+        tween: Tween(begin: 0.6, end: 1),
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.elasticOut,
+        builder: (_, s, child) => Transform.scale(scale: s, child: child),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            gradient: mine ? Brand.aurora : null,
+            color: mine ? null : (dark ? Colors.white.withAlpha(28) : Colors.black.withAlpha(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text('$emoji $count',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: mine ? Colors.white : (dark ? Colors.white : Colors.black87))),
+        ),
       ),
     );
   }

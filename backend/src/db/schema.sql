@@ -802,3 +802,12 @@ CREATE TABLE IF NOT EXISTS user_passkeys (
   last_used_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS user_passkeys_user_idx ON user_passkeys (user_id);
+
+-- ---------------------------------------------------------------- edit history
+CREATE TABLE IF NOT EXISTS message_edits (
+  id         BIGSERIAL PRIMARY KEY,
+  message_id BIGINT      NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  text       TEXT        NOT NULL,
+  edited_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS message_edits_msg_idx ON message_edits (message_id, id);

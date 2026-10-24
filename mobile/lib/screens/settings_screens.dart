@@ -23,6 +23,7 @@ import '../core/passkeys.dart';
 import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
+import '../widgets/message_extras.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -176,6 +177,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.palette_rounded, color: Brand.rose, title: 'Appearance', subtitle: 'Dark mode, chat theme, text size', onTap: () => go(const AppearanceScreen())),
             SettingsTile(icon: Icons.emoji_emotions_rounded, color: Brand.primary, title: 'Stickers & emoji', onTap: () => go(const StickerPacksScreen())),
             SettingsTile(icon: Icons.folder_rounded, color: Brand.sky, title: 'Chat folders', onTap: () => go(const FoldersScreen())),
+            SettingsTile(icon: Icons.alarm_rounded, color: Brand.amber, title: 'Reminders', subtitle: 'Messages you asked to be reminded about', onTap: () => go(const RemindersScreen())),
             SettingsTile(icon: Icons.archive_rounded, color: const Color(0xFF8A93B4), title: 'Archived chats', onTap: () => go(const ArchivedChatsScreen())),
             SettingsTile(icon: Icons.cloud_upload_rounded, color: Brand.violet, title: 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', onTap: () => go(const BackupScreen())),
             SettingsTile(icon: Icons.data_usage_rounded, color: Brand.green, title: 'Data & storage', onTap: () => go(const StorageScreen())),

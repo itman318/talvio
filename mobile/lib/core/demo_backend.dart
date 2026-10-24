@@ -151,6 +151,14 @@ class DemoBackend {
       }
       if (path == '/me/username-check') return {'available': true};
       if (path == '/me/passkeys') return <dynamic>[];
+      if (seg.length == 3 && seg[0] == 'messages' && seg[2] == 'edits') {
+        final m = _findMessage(idAt(1)!);
+        return {
+          'versions': [
+            {'text': m?['text'] ?? '', 'at': m?['edited_at'] ?? m?['created_at'], 'current': true},
+          ],
+        };
+      }
       if (path == '/me/password') return {'enabled': false, 'hint': '', 'reset_pending_until': null};
       if (path == '/gifs') return {'results': <dynamic>[]};
       if (_responses.containsKey(path)) return _responses[path];
@@ -225,6 +233,16 @@ class DemoBackend {
       p['total_voters'] = ((p['total_voters'] ?? 0) as num) + (mine.isEmpty && picked.isNotEmpty ? 1 : (!mine.isEmpty && picked.isEmpty ? -1 : 0));
       m!['poll'] = p;
       return p;
+    }
+    if (seg.length == 2 && seg[0] == 'messages' && method == 'PATCH') {
+      final m = _findMessage(idAt(1)!);
+      if (m == null || m['sender_id'] != meId) throw _notInDemo();
+      String norm(Object? t) => '${t ?? ''}'.replaceAll(RegExp(r'^(\s*)\[[xX]\] ', multiLine: true), r'$1[ ] ');
+      final text = '${b['text'] ?? ''}';
+      if (norm(text) != norm(m['text'])) m['edited_at'] = DateTime.now().toUtc().toIso8601String();
+      m['text'] = text;
+      onEvent?.call('message:edited', {'message': m});
+      return m;
     }
     if (path == '/me' && method == 'PATCH') {
       final me = _responses['/me'] as Map<String, dynamic>;

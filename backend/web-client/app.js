@@ -790,7 +790,8 @@
     if (album) body.push(albumView(album));
     else body.push(...mediaView(m));
     const text = album ? album.map((x) => x.text).filter(Boolean).join('\n') : ['poll', 'location', 'call', 'sticker', 'contact'].includes(m.type) ? '' : m.text;
-    if (text) body.push(el('div', { class: `text${onlyTali(text) ? ' big-tali' : ''}` }, linkify(text)));
+    const shown = text ? text.replace(/^(\s*)\[ \] /gm, '$1☐ ').replace(/^(\s*)\[[xX]\] /gm, '$1☑ ') : text;
+    if (text) body.push(el('div', { class: `text${onlyTali(text) ? ' big-tali' : ''}` }, linkify(shown)));
     if (m.link_preview && m.type === 'text') {
       const lp = m.link_preview;
       const card = el('a', { class: 'lp', href: lp.url, target: '_blank', rel: 'noopener noreferrer' },

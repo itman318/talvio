@@ -39,7 +39,7 @@ class ChatColors {
   }
 }
 
-final _mentionRe = RegExp(r'(@[A-Za-z][A-Za-z0-9_]{3,31})|(https?://\S+)');
+final _mentionRe = RegExp(r'(@[A-Za-z][A-Za-z0-9_]{3,31})|(https?://\S+)|(#[\p{L}\p{N}_]{2,32})', unicode: true);
 
 /// Message text with highlighted @mentions and tappable links.
 class MessageText extends StatelessWidget {

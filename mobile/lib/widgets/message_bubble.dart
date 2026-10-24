@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'video_note.dart';
+import 'message_extras.dart';
 import '../theme/chat_theme.dart';
 import '../models/models.dart';
 import '../utils/format.dart';
@@ -170,7 +171,11 @@ class MessageBubble extends StatelessWidget {
         ),
       if (m.type != 'text') _body(context, accent),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
-      if (hasText) MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor)),
+      if (hasText)
+        if (m.type == 'text' && hasChecklist(m.text))
+          ChecklistText(message: m, canTick: isMine && !m.isLocal, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor))
+        else
+          MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor)),
       if (m.linkPreview != null && m.type == 'text') LinkPreviewCard(data: m.linkPreview!, accent: accent),
       ReactionChips(message: m),
       if (m.replyMarkup != null) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
@@ -183,7 +188,11 @@ class MessageBubble extends StatelessWidget {
             Text(' ${compactNumber(m.views)}  ', style: TextStyle(fontSize: 11, color: meta)),
           ],
           if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
-          if (m.editedAt != null) Text('edited · ', style: TextStyle(fontSize: 11, color: meta)),
+          if (m.editedAt != null)
+            GestureDetector(
+              onTap: m.isLocal ? null : () => showEditHistory(context, m),
+              child: Text('edited · ', style: TextStyle(fontSize: 11, color: meta, decoration: TextDecoration.underline, decorationColor: meta)),
+            ),
           Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11, color: meta)),
           if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
         ],
