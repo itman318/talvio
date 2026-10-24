@@ -82,7 +82,11 @@ class ChatStore extends ChangeNotifier {
     loadAnnouncements().catchError((_) {});
   }
 
+  /// Bumped on every start/stop: answers that arrive for an earlier session (logout, account switch) are dropped.
+  int _session = 0;
+
   void stop() {
+    _session++;
     _eventSub?.cancel();
     _connSub?.cancel();
     _typingTimer?.cancel();
@@ -120,7 +124,9 @@ class ChatStore extends ChangeNotifier {
   int get totalUnread => chats.where((c) => !c.isMuted).fold(0, (s, c) => s + c.unreadCount);
 
   Future<void> loadChats() async {
+    final gen = _session;
     final data = await api.get('/chats') as List;
+    if (gen != _session) return;
     chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     for (final c in chats) {
       if (c.peer != null) userCache[c.peer!.id] = c.peer!;
@@ -137,7 +143,9 @@ class ChatStore extends ChangeNotifier {
 
   Future<Chat?> refreshChat(int id) async {
     try {
+      final gen = _session;
       final c = Chat.fromJson(Map<String, dynamic>.from(await api.get('/chats/$id') as Map));
+      if (gen != _session) return null;
       _upsertChat(c);
       return c;
     } on ApiException catch (e) {
@@ -196,7 +204,9 @@ class ChatStore extends ChangeNotifier {
   }
 
   Future<void> loadMessages(int chatId) async {
+    final gen = _session;
     final data = Map<String, dynamic>.from(await api.get('/chats/$chatId/messages', query: {'limit': '50'}) as Map);
+    if (gen != _session) return;
     final list = (data['messages'] as List).map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     _cacheSenders(list);
     final locals = (_messages[chatId] ?? []).where((m) => m.isLocal).toList();
@@ -825,7 +835,9 @@ class ChatStore extends ChangeNotifier {
 
   // ------------------------------------------------------------------ folders
   Future<void> loadFolders() async {
+    final gen = _session;
     final data = await api.get('/folders') as List;
+    if (gen != _session) return;
     folders = data.map((j) => ChatFolder.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     notifyListeners();
   }
@@ -853,7 +865,9 @@ class ChatStore extends ChangeNotifier {
 
   // ------------------------------------------------------------------ stories
   Future<void> loadStories() async {
+    final gen = _session;
     final data = await api.get('/stories') as List;
+    if (gen != _session) return;
     stories = data.map((j) => StoryGroup.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     notifyListeners();
   }
@@ -896,7 +910,9 @@ class ChatStore extends ChangeNotifier {
 
   // ------------------------------------------------------------------ announcements
   Future<void> loadAnnouncements() async {
+    final gen = _session;
     final data = await api.get('/announcements') as List;
+    if (gen != _session) return;
     announcements = data.map((j) => Announcement.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     notifyListeners();
   }

@@ -544,3 +544,147 @@ class ChatTile extends StatelessWidget {
       return (null, m.preview);
   }
 }
+
+Future<void> showChatActions(BuildContext context, Chat chat) async {
+  final store = context.read<ChatStore>();
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: Wrap(children: [
+        ListTile(
+          leading: Icon(chat.isPinned ? Icons.push_pin_outlined : Icons.push_pin),
+          title: Text(chat.isPinned ? 'Unpin' : 'Pin to top'),
+          onTap: () => Navigator.pop(ctx, 'pin'),
+        ),
+        ListTile(
+          leading: Icon(chat.unreadCount > 0 || chat.markedUnread ? Icons.mark_chat_read_outlined : Icons.mark_chat_unread_outlined),
+          title: Text(chat.unreadCount > 0 || chat.markedUnread ? 'Mark as read' : 'Mark as unread'),
+          onTap: () => Navigator.pop(ctx, 'unread'),
+        ),
+        ListTile(
+          leading: Icon(chat.isMuted ? Icons.volume_up : Icons.volume_off),
+          title: Text(chat.isMuted ? 'Unmute' : 'Mute notifications'),
+          onTap: () => Navigator.pop(ctx, 'mute'),
+        ),
+        ListTile(
+          leading: Icon(chat.isArchived ? Icons.unarchive : Icons.archive),
+          title: Text(chat.isArchived ? 'Unarchive' : 'Archive'),
+          onTap: () => Navigator.pop(ctx, 'archive'),
+        ),
+        ListTile(
+          leading: const Icon(Icons.delete_outline, color: Colors.red),
+          title: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'), style: const TextStyle(color: Colors.red)),
+          onTap: () => Navigator.pop(ctx, 'delete'),
+        ),
+      ]),
+    ),
+  );
+  if (action == null || !context.mounted) return;
+  try {
+    switch (action) {
+      case 'pin':
+        await store.updateChatSettings(chat.id, {'is_pinned': !chat.isPinned});
+        break;
+      case 'mute':
+        await store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'});
+        break;
+      case 'unread':
+        await store.setMarkedUnread(chat, !(chat.unreadCount > 0 || chat.markedUnread));
+        break;
+      case 'archive':
+        await store.updateChatSettings(chat.id, {'is_archived': !chat.isArchived});
+        break;
+      case 'delete':
+        final ok = await confirm(
+          context,
+          chat.isMulti ? 'Leave “${chat.title}”?' : 'Delete chat?',
+          chat.isMulti ? 'You will stop receiving messages from “${chat.title}”.' : 'The chat history will be removed for you.',
+          ok: chat.isMulti ? 'Leave' : 'Delete',
+          danger: true,
+        );
+        if (ok) await store.leaveOrDelete(chat.id);
+        break;
+    }
+  } catch (e) {
+    if (context.mounted) showError(context, e);
+  }
+}
+
+class ArchivedChatsScreen extends StatefulWidget {
+  const ArchivedChatsScreen({super.key});
+
+  @override
+  State<ArchivedChatsScreen> createState() => _ArchivedChatsScreenState();
+}
+
+class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
+  late Future<List<Chat>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<ChatStore>().loadArchived();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Archived chats')),
+      body: FutureBuilder<List<Chat>>(
+        future: _future,
+        builder: (ctx, snap) {
+          if (!snap.hasData) {
+            return snap.hasError ? Center(child: Text('${snap.error}')) : const Center(child: CircularProgressIndicator());
+          }
+          final list = snap.data!;
+          if (list.isEmpty) return const Center(child: Text('No archived chats'));
+          return ListView.builder(
+            itemCount: list.length,
+            itemBuilder: (_, i) => ListTile(
+              leading: Avatar(id: list[i].id, name: list[i].title, url: list[i].avatarAbsolute),
+              title: Text(list[i].title),
+              subtitle: Text(list[i].lastMessage?.preview ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.unarchive),
+                tooltip: 'Unarchive',
+                onPressed: () async {
+                  try {
+                    await context.read<ChatStore>().updateChatSettings(list[i].id, {'is_archived': false});
+                    if (mounted) setState(() => _future = context.read<ChatStore>().loadArchived());
+                  } catch (e) {
+                    if (context.mounted) showError(context, e);
+                  }
+                },
+              ),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: list[i].id, initial: list[i]))),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+/// Chats → Message requests.
+class RequestsScreen extends StatelessWidget {
+  const RequestsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final list = context.watch<ChatStore>().requests;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Message requests')),
+      body: list.isEmpty
+          ? const EmptyState(tali: 'cool', title: 'No requests', subtitle: 'Messages from people who are not in your contacts wait here, without notifications.')
+          : ListView(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                child: Text('These people are not in your contacts. Open a chat to accept, block or delete it.',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+              ),
+              ...list.map((c) => ChatTile(chat: c)),
+            ]),
+    );
+  }
+}
