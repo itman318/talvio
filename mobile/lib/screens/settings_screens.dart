@@ -387,33 +387,63 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final me = context.watch<AuthState>().me!;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    Widget label(String t) => Padding(
+          padding: const EdgeInsets.fromLTRB(6, 14, 6, 6),
+          child: Text(t.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        );
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit profile'),
-        actions: [TextButton(onPressed: _busy ? null : _save, child: const Text('Save'))],
-      ),
+      appBar: AppBar(title: const Text('Edit profile')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
-          Center(
-            child: GestureDetector(
-              onTap: _avatar,
-              child: Stack(children: [
-                Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 96),
-                const Positioned(right: 0, bottom: 0, child: CircleAvatar(radius: 16, child: Icon(Icons.camera_alt, size: 18))),
-              ]),
-            ),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(26), gradient: Brand.auroraSoft(dark)),
+            child: Column(children: [
+              GestureDetector(
+                onTap: _avatar,
+                child: Stack(clipBehavior: Clip.none, children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                      child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 100)),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: bg, width: 3)),
+                      child: const Icon(Icons.photo_camera_rounded, size: 18, color: Colors.white),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              TextButton(onPressed: _avatar, child: const Text('Change photo')),
+            ]),
           ),
-          const SizedBox(height: 16),
-          TextField(controller: _first, maxLength: 64, decoration: const InputDecoration(labelText: 'First name')),
-          TextField(controller: _last, maxLength: 64, decoration: const InputDecoration(labelText: 'Last name')),
+          label('Your name'),
+          TextField(controller: _first, maxLength: 64, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'First name', prefixIcon: Icon(Icons.person_rounded))),
+          const SizedBox(height: 6),
+          TextField(controller: _last, maxLength: 64, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Last name (optional)', prefixIcon: Icon(Icons.badge_rounded))),
+          label('Username'),
           TextField(
             controller: _username,
             maxLength: 32,
             onChanged: _checkUsername,
             decoration: InputDecoration(
               labelText: 'Username',
-              prefixText: '@',
+              prefixIcon: const Icon(Icons.alternate_email_rounded),
+              suffixIcon: _usernameStatus == 'available'
+                  ? const Icon(Icons.check_circle_rounded, color: Brand.accent)
+                  : (_usernameStatus == null ? null : const Icon(Icons.error_rounded, color: Colors.red)),
               helperText: _usernameStatus == null
                   ? 'People can find you by this name. 5–32 letters, digits or _'
                   : _usernameStatus == 'available'
@@ -421,10 +451,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       : _usernameStatus == 'taken'
                           ? 'This username is taken'
                           : _usernameStatus,
+              helperMaxLines: 2,
               helperStyle: TextStyle(color: _usernameStatus == 'available' ? Brand.accent : (_usernameStatus == null ? null : Colors.red)),
             ),
           ),
-          TextField(controller: _bio, maxLength: 140, maxLines: 3, decoration: const InputDecoration(labelText: 'Bio')),
+          label('About'),
+          TextField(
+            controller: _bio,
+            maxLength: 140,
+            maxLines: 3,
+            minLines: 2,
+            decoration: const InputDecoration(labelText: 'Bio', hintText: 'A few words about you', alignLabelWithHint: true),
+          ),
+          const SizedBox(height: 18),
+          AuroraButton(label: 'Save', icon: Icons.check_rounded, busy: _busy, onPressed: _save),
         ],
       ),
     );
@@ -442,6 +482,13 @@ class PrivacyScreen extends StatelessWidget {
     'phone': 'Phone number',
     'group_add': 'Who can add me to groups',
     'calls': 'Who can call me',
+  };
+  static const _icons = {
+    'last_seen': (Icons.visibility_rounded, Brand.green),
+    'avatar': (Icons.account_circle_rounded, Brand.sky),
+    'phone': (Icons.phone_rounded, Brand.violet),
+    'group_add': (Icons.group_add_rounded, Brand.amber),
+    'calls': (Icons.call_rounded, Brand.primary),
   };
 
   Future<void> _change(BuildContext context, String key, String current) async {
@@ -474,26 +521,35 @@ class PrivacyScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Privacy')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
-          ..._rows.entries.map((r) => ListTile(
-                title: Text(r.value),
-                subtitle: Text(_labels[p[r.key]] ?? '—'),
+          SettingsGroup(title: 'Who can see and reach me', children: [
+            for (final r in _rows.entries)
+              SettingsTile(
+                icon: _icons[r.key]!.$1,
+                color: _icons[r.key]!.$2,
+                title: r.value,
+                trailing: _labels[p[r.key]] ?? '—',
                 onTap: () => _change(context, r.key, p[r.key] ?? 'everyone'),
-              )),
-          const Divider(),
-          SwitchListTile(
-            title: const Text('Message requests'),
-            subtitle: const Text('Messages from people who are not in your contacts wait in Requests, without notifications'),
-            value: p['message_requests'] != 'off',
-            onChanged: (v) async {
-              try {
-                final u = await context.read<AppServices>().api.put('/me/privacy', {'message_requests': v});
-                if (context.mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
-              } catch (e) {
-                if (context.mounted) showError(context, e);
-              }
-            },
-          ),
+              ),
+          ]),
+          SettingsGroup(title: 'Spam protection', children: [
+            SettingsSwitchTile(
+              icon: Icons.mark_email_unread_rounded,
+              color: Brand.rose,
+              title: 'Message requests',
+              subtitle: 'Messages from people who are not in your contacts wait in Requests, without notifications',
+              value: p['message_requests'] != 'off',
+              onChanged: (v) async {
+                try {
+                  final u = await context.read<AppServices>().api.put('/me/privacy', {'message_requests': v});
+                  if (context.mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+                } catch (e) {
+                  if (context.mounted) showError(context, e);
+                }
+              },
+            ),
+          ]),
         ],
       ),
     );
@@ -534,7 +590,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       body: users == null
           ? const Center(child: CircularProgressIndicator())
           : users.isEmpty
-              ? const Center(child: Text('You haven’t blocked anyone'))
+              ? const EmptyState(tali: 'cool', title: 'Nobody blocked', subtitle: 'People you block can’t message or call you. They show up here.')
               : ListView(
                   children: users
                       .map((u) => ListTile(

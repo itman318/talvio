@@ -214,7 +214,7 @@ const FILTERS = {
   links: "m.type = 'text' AND (m.link_preview IS NOT NULL OR m.text ~* 'https?://')",
 };
 function filterSql(f) {
-  const sql = FILTERS[f];
+  const sql = Object.prototype.hasOwnProperty.call(FILTERS, f) ? FILTERS[f] : null;
   if (!sql) throw badRequest('invalid_filter', 'Unknown filter');
   return sql;
 }

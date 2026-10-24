@@ -124,7 +124,7 @@ async function get(key) {
 }
 
 function validateValue(key, value) {
-  const d = DEFINITIONS[key];
+  const d = Object.prototype.hasOwnProperty.call(DEFINITIONS, key) ? DEFINITIONS[key] : null;
   if (!d) throw badRequest('invalid_setting', `Unknown setting: ${key}`);
   if (d.type === 'boolean' && typeof value !== 'boolean') {
     throw badRequest('invalid_setting', `${key} must be true/false`);

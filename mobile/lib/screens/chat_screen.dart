@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show FontFeature;
 
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -221,6 +220,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) showInfo(context, 'Turn on location (GPS) first');
         return;
       }
+      if (!mounted) return;
       final liveOk = context.read<AuthState>().feature('live_location');
       final choice = await showModalBottomSheet<int>(
         context: context,
