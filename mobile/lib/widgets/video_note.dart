@@ -207,14 +207,16 @@ class _VideoNoteRecorderState extends State<VideoNoteRecorder> {
     if (c == null || _recording) return;
     try {
       await c.startVideoRecording();
+      if (!mounted) return;
       _ms = 0;
       _timer = Timer.periodic(const Duration(milliseconds: 100), (t) {
+        if (!mounted) return t.cancel();
         setState(() => _ms += 100);
         if (_ms >= VideoNoteRecorder.maxSeconds * 1000) _stop();
       });
       setState(() => _recording = true);
     } catch (_) {
-      setState(() => _error = 'Could not start recording');
+      if (mounted) setState(() => _error = 'Could not start recording');
     }
   }
 
@@ -233,7 +235,10 @@ class _VideoNoteRecorderState extends State<VideoNoteRecorder> {
       await p.initialize();
       await p.setLooping(true);
       await p.play();
-      if (!mounted) return;
+      if (!mounted) {
+        await p.dispose();
+        return;
+      }
       setState(() {
         _recorded = x.path;
         _preview = p;

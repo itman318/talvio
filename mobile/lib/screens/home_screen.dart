@@ -588,7 +588,7 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
                 onPressed: () async {
                   try {
                     await context.read<ChatStore>().updateChatSettings(list[i].id, {'is_archived': false});
-                    setState(() => _future = context.read<ChatStore>().loadArchived());
+                    if (mounted) setState(() => _future = context.read<ChatStore>().loadArchived());
                   } catch (e) {
                     if (context.mounted) showError(context, e);
                   }

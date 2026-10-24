@@ -94,12 +94,14 @@ class _BackupScreenState extends State<BackupScreen> {
       setState(() => _status = 'Choose where to save (Google Drive, Downloads…)');
       final name = '${AppConfig.appName}-backup-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.${password.isEmpty ? 'zip' : 'tlvbackup'}';
       final path = await FilePicker.platform.saveFile(dialogTitle: 'Save backup', fileName: name, bytes: bytes);
+      if (!mounted) return;
       if (path == null) {
         setState(() => _status = 'Not saved');
         return;
       }
       final now = DateTime.now();
       (await SharedPreferences.getInstance()).setString('last_backup_at', now.toIso8601String());
+      if (!mounted) return;
       setState(() {
         _last = now;
         _status = 'Backup saved (${fileSize(bytes.length)})';

@@ -1154,6 +1154,7 @@ class ChatStore extends ChangeNotifier {
       refreshChat(m.chatId);
     } else {
       if ((chat.lastMessage?.id ?? 0) <= m.id || chat.lastMessage!.isLocal) chat.lastMessage = m;
+      if (mine && chat.isRequest) chat.isRequest = false; // replying accepts a message request (server does the same)
       if (!mine && (m.senderId != myId || m.senderId == null)) {
         final viewing = activeChatId == m.chatId && appInForeground;
         if (!viewing) {

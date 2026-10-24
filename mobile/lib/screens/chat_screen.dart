@@ -18,6 +18,7 @@ import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
 import '../widgets/message_extras.dart';
+import '../core/message_notifications.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -93,6 +94,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
     _open();
+    MessageNotifications.clearChat(widget.chatId);
   }
 
   Future<void> _open() async {
@@ -262,8 +264,9 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await _store.scheduleText(chatId, text, at);
       _text.clear();
+      if (!mounted) return;
       setState(() {});
-      if (mounted) showInfo(context, 'Scheduled for ${chatListTime(at)} ${messageTime(at)}');
+      showInfo(context, 'Scheduled for ${chatListTime(at)} ${messageTime(at)}');
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -290,6 +293,7 @@ class _ChatScreenState extends State<ChatScreen> {
         img.dispose();
       } catch (_) {}
     }
+    if (!mounted) return; // the chat was closed while the photo was being read
     final caption = _text.text.trim();
     final noCaption = type == 'voice' || type == 'video_note';
     if (caption.isNotEmpty && !noCaption) _text.clear();

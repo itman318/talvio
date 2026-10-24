@@ -66,6 +66,13 @@ test('contacts are not requests; adding a contact clears a request; decline + bl
   await chats.declineRequest(b, c3.id, { block: true });
   assert.equal(await mine(b, c3.id), undefined, 'declined request disappears');
   await assert.rejects(messages.sendMessage(x, c3.id, { text: 'again' }));
+  // declined without blocking: a new message lands in Requests again, not in the chat list
+  const w = await user('+923441110009', 'Pushy');
+  const c6 = await chats.getOrCreatePrivate(w, b);
+  await messages.sendMessage(w, c6.id, { text: 'hi' });
+  await chats.declineRequest(b, c6.id, {});
+  await messages.sendMessage(w, c6.id, { text: 'hi again' });
+  assert.equal((await mine(b, c6.id)).is_request, true);
 
   // turned off in privacy: no more requests
   await users.updatePrivacy(b, { message_requests: false });

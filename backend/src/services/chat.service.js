@@ -234,7 +234,8 @@ async function declineRequest(userId, chatIdRaw, body = {}) {
   if (chat.type !== 'private') throw badRequest('invalid_input', 'Only private chats can be requests');
   const peerId = await privatePeerId(chat.id, userId);
   await db.query(
-    `UPDATE chat_members SET is_request = FALSE, is_hidden = TRUE,
+    // stays a request: if they write again it comes back to Requests (silently), not to the chat list
+    `UPDATE chat_members SET is_request = TRUE, is_hidden = TRUE,
        cleared_before_id = COALESCE((SELECT last_message_id FROM chats WHERE id = $1), cleared_before_id)
      WHERE chat_id = $1 AND user_id = $2`,
     [chat.id, userId],

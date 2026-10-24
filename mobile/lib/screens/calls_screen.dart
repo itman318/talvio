@@ -67,7 +67,7 @@ class _CallsScreenState extends State<CallsScreen> {
   Future<void> _delete(CallInfo c) async {
     try {
       await context.read<AppServices>().api.post('/calls/delete', {'ids': [c.id]});
-      setState(() => _calls?.removeWhere((x) => x.id == c.id));
+      if (mounted) setState(() => _calls?.removeWhere((x) => x.id == c.id));
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -78,7 +78,7 @@ class _CallsScreenState extends State<CallsScreen> {
     if (!mounted) return;
     try {
       await context.read<AppServices>().api.post('/calls/delete', {'all': true});
-      setState(() => _calls = []);
+      if (mounted) setState(() => _calls = []);
     } catch (e) {
       if (mounted) showError(context, e);
     }

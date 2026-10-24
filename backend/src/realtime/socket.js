@@ -122,6 +122,11 @@ async function broadcastPresence(userId, online) {
 }
 
 function previewText(message) {
+  // Talvio custom emoji (Private Use Area U+E900…) show as a fox in notifications
+  return previewRaw(message).replace(/[\uE900-\uE9FF]/g, '🦊');
+}
+
+function previewRaw(message) {
   switch (message.type) {
     case 'image':
       return message.text ? `📷 ${message.text}` : '📷 Photo';
@@ -144,8 +149,7 @@ function previewText(message) {
     case 'contact':
       return `👤 ${(message.meta && message.meta.contact && message.meta.contact.name) || 'Contact'}`;
     default:
-      // Talvio custom emoji (Private Use Area U+E900…) show as a fox in notifications
-      return String(message.text || '').replace(/[\uE900-\uE9FF]/g, '🦊');
+      return String(message.text || '');
   }
 }
 

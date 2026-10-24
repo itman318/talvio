@@ -266,6 +266,15 @@ class DemoBackend {
       (_responses['/chats'] as List).remove(c);
       return {'ok': true};
     }
+    if (seg.length == 4 && seg[0] == 'chats' && seg[2] == 'messages' && seg[3] == 'delete') {
+      final chatId = idAt(1)!;
+      final ids = ((b['message_ids'] as List?) ?? const []).map((e) => (e as num).toInt()).toSet();
+      final list = _messages[chatId] ?? <Map<String, dynamic>>[];
+      list.removeWhere((m) => ids.contains(m['id']));
+      final c = _chat(chatId);
+      if (c != null) c['last_message'] = list.isEmpty ? null : list.first;
+      return {'deleted': ids.length};
+    }
     if (seg.length == 3 && seg[0] == 'messages' && seg[2] == 'live') return {'ok': true, 'until': DateTime.now().toUtc().toIso8601String()};
     if (seg.length == 3 && seg[0] == 'chats' && seg[2] == 'disappearing') {
       final c = _chat(idAt(1)!);
@@ -355,6 +364,7 @@ class DemoBackend {
     };
     _messages.putIfAbsent(chatId, () => []).insert(0, m);
     chat['last_message'] = m;
+    chat['is_request'] = false; // replying accepts a message request
     chat['last_message_at'] = now;
     // the other side "reads" it and sometimes answers
     final peer = chat['peer'];

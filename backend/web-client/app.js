@@ -1224,7 +1224,7 @@
     return undefined;
   }
   function notify(c, m) {
-    if (!('Notification' in window) || Notification.permission !== 'granted' || c.is_muted) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted' || c.is_muted || c.is_request) return; // requests arrive silently
     if (!document.hidden && S.open === c.id) return;
     const n = new Notification(c.type === 'group' && m.sender ? `${userName(m.sender)} · ${c.title}` : c.title, { body: preview(m), tag: `chat-${c.id}`, silent: !!m.silent });
     n.onclick = () => { window.focus(); openChat(c.id); n.close(); };
@@ -1257,6 +1257,7 @@
       c.last_message = m;
       c.last_message_at = m.created_at;
       const mine = auth.me && m.sender_id === auth.me.id;
+      if (mine && c.is_request) { c.is_request = false; if (S.open === chatId) renderComposer(); } // replied from another device
       if (!mine && m.type !== 'system') {
         if (S.open !== chatId || document.hidden) c.unread_count = (c.unread_count || 0) + 1;
         const t = S.typing.get(chatId);

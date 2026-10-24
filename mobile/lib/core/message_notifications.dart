@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -70,6 +71,18 @@ class MessageNotifications {
     }
   }
 
+  /// Notification id of a chat (below 600000: reminders use 700000+, prayer times 900000+).
+  static int idFor(int chatId) => chatId % 600000;
+
+  /// Removes a chat's notification (the chat was opened).
+  static Future<void> clearChat(int chatId) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      await init();
+      await plugin.cancel(idFor(chatId));
+    } catch (_) {}
+  }
+
   /// Draws a message notification from a data-only push.
   static Future<void> show(Map<String, dynamic> data) async {
     if (data['type'] != 'message' || data['title'] == null) return;
@@ -77,7 +90,7 @@ class MessageNotifications {
     final chatId = int.tryParse('${data['chat_id']}') ?? 0;
     final canReply = data['reply_token'] != null;
     await plugin.show(
-      chatId,
+      idFor(chatId),
       '${data['title']}',
       '${data['body'] ?? ''}',
       NotificationDetails(
@@ -117,11 +130,11 @@ class MessageNotifications {
         await http.post(Uri.parse('${AppConfig.apiBase}/notify/reply'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'token': token, 'text': text, 'client_id': 'n${DateTime.now().microsecondsSinceEpoch}'}));
-        await plugin.cancel(chatId);
+        await plugin.cancel(idFor(chatId));
       } else if (r.actionId == 'read') {
         await http.post(Uri.parse('${AppConfig.apiBase}/notify/read'),
             headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': token, 'message_id': p['message_id']}));
-        await plugin.cancel(chatId);
+        await plugin.cancel(idFor(chatId));
       }
     } catch (e) {
       debugPrint('notification action failed: $e');

@@ -257,6 +257,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
         _video = c;
         _progress.duration = c.value.duration.inMilliseconds > 0 ? c.value.duration : const Duration(seconds: 15);
         await c.play();
+        if (!mounted) return;
       } else {
         _progress.duration = const Duration(seconds: 6);
       }
