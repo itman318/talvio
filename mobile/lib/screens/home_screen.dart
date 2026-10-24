@@ -216,6 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: showFound
                         ? _searchResults(chats)
                         : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 96), // room above the floating button
                       itemCount: 1 + (requests.isEmpty ? 0 : 1) + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i0) {
                         if (i0 == 0) return _searchPill();

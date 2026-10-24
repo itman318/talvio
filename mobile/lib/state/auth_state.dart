@@ -360,28 +360,44 @@ class AuthState extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------ logout
+  /// True while we end the session ourselves (the server's "session revoked" echo must not log out a new session).
+  bool _endingSession = false;
+
   Future<void> logout() async {
     final id = me?.id;
+    _endingSession = true;
     try {
-      await api.post('/auth/logout');
-    } catch (_) {}
-    await _clearLocal();
-    if (await _continueWithAnother(id)) return;
-    status = AuthStatus.loggedOut;
-    notifyListeners();
+      // stop listening first: the server tells this socket "session revoked" when we log out
+      services.socket.disconnect();
+      try {
+        await api.post('/auth/logout');
+      } catch (_) {}
+      await _clearLocal();
+      if (await _continueWithAnother(id)) return;
+      status = AuthStatus.loggedOut;
+      notifyListeners();
+    } finally {
+      _endingSession = false;
+    }
   }
 
   Future<void> deleteAccount() async {
     final id = me?.id;
-    await api.delete('/me', {'confirm': 'DELETE'});
-    await _clearLocal();
-    if (await _continueWithAnother(id)) return;
-    status = AuthStatus.loggedOut;
-    notifyListeners();
+    _endingSession = true;
+    try {
+      await api.delete('/me', {'confirm': 'DELETE'});
+      services.socket.disconnect();
+      await _clearLocal();
+      if (await _continueWithAnother(id)) return;
+      status = AuthStatus.loggedOut;
+      notifyListeners();
+    } finally {
+      _endingSession = false;
+    }
   }
 
   Future<void> _forceLogout(String reason) async {
-    if (status == AuthStatus.loggedOut) return;
+    if (status == AuthStatus.loggedOut || _endingSession) return;
     final id = me?.id;
     logoutReason = reason;
     await _clearLocal();

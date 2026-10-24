@@ -86,8 +86,8 @@ class SettingsScreen extends StatelessWidget {
                           if (plus) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 20)),
                         ]),
                         const SizedBox(height: 2),
-                        Text([me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty).join('  ·  '),
-                            maxLines: 2, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5)),
+                        for (final line in [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty))
+                          Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5)),
                       ]),
                     ),
                     IconButton.filledTonal(
