@@ -113,6 +113,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _guarded = false;
 
+  // "jump to the newest message" button, with how many came in while scrolled up
+  bool _showDown = false;
+  int _newBelow = 0;
+  int? _newestSeen;
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +128,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.addListener(() {
       if (_scroll.hasClients && _scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
         _store.loadMore(chatId).catchError((_) {});
+      }
+      final down = _scroll.hasClients && _scroll.position.pixels > 600;
+      if (down != _showDown) {
+        setState(() {
+          _showDown = down;
+          if (!down) _newBelow = 0;
+        });
       }
     });
     _open();
@@ -1226,6 +1238,7 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: ChatColors.of(context).background,
       appBar: _selected.isNotEmpty ? _selectionBar(chat) : AppBar(
         titleSpacing: 0,
+        shape: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7), width: 0.6)),
         title: InkWell(
           onTap: () => _openInfo(chat),
           child: Row(
@@ -1382,13 +1395,64 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
-          Expanded(child: _messageList(chat, messages, store)),
+          Expanded(
+            child: Stack(children: [
+              Positioned.fill(child: _messageList(chat, messages, store)),
+              Positioned(right: 12, bottom: 10, child: _downButton(messages)),
+            ]),
+          ),
           _bottomBar(chat),
         ],
       ),
       ),
     ),
     ),
+    );
+  }
+
+  Widget _downButton(List<Message> messages) {
+    final newest = messages.isEmpty ? null : messages.first.id;
+    if (newest != null && _newestSeen != null && newest > _newestSeen! && _showDown && messages.first.senderId != _store.myId) {
+      _newBelow += messages.takeWhile((x) => x.id > _newestSeen!).length;
+    }
+    _newestSeen = newest;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedScale(
+      scale: _showDown ? 1 : 0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutBack,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Material(
+          color: dark ? const Color(0xFF1E2238) : Colors.white,
+          shape: const CircleBorder(),
+          elevation: 3,
+          shadowColor: Colors.black26,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () {
+              _scroll.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+              setState(() => _newBelow = 0);
+            },
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Icon(Icons.keyboard_double_arrow_down_rounded, color: dark ? Colors.white70 : Brand.ink),
+            ),
+          ),
+        ),
+        if (_newBelow > 0)
+          Positioned(
+            top: -6,
+            left: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              constraints: const BoxConstraints(minWidth: 20),
+              decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(10)),
+              child: Text(_newBelow > 99 ? '99+' : '$_newBelow',
+                  textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+            ),
+          ),
+      ]),
     );
   }
 

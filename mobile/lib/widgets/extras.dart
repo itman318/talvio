@@ -27,16 +27,11 @@ class ChatColors {
   static ChatColors of(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final look = ChatThemeScope.maybeOf(context);
-    if (look != null && look.themeId != 'classic') {
-      final d = look.def;
-      return dark
-          ? ChatColors._(d.dark.first, d.mineDark.last, const Color(0xFF171A2C), const Color(0xFF131628), Colors.white60)
-          : ChatColors._(d.light.first, d.mine.last, Colors.white, Colors.white, const Color(0xFF7D8399));
-    }
-    // Ink & Coral: my messages in deep ink (light text), others on clean white cards.
+    // my bubbles take the theme's colour (light text); other people's sit on clean cards
+    final d = (look ?? const ChatAppearance()).def;
     return dark
-        ? ChatColors._(const Color(0xFF0B0D17), const Color(0xFF2A3052), const Color(0xFF171A2C), const Color(0xFF131628), Colors.white60)
-        : ChatColors._(const Color(0xFFEEF1F7), Brand.ink, Colors.white, Colors.white, const Color(0xFF7D8399));
+        ? ChatColors._(d.dark.first, d.mineDark.last, const Color(0xFF191D31), const Color(0xFF131628), Colors.white60)
+        : ChatColors._(d.light.first, d.mine.last, Colors.white, Colors.white, const Color(0xFF7D8399));
   }
 }
 

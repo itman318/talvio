@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import 'video_note.dart';
@@ -68,7 +70,7 @@ class MessageBubble extends StatelessWidget {
     if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
     if (chat.isSavedMessages || _asChannel) return const SizedBox.shrink();
-    if (m.id <= chat.readUpTo) return const Icon(Icons.done_all, size: 15, color: Brand.accent);
+    if (m.id <= chat.readUpTo) return Icon(Icons.done_all, size: 15, color: isMine ? const Color(0xFF7DF3DB) : Brand.accent);
     if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: meta);
     return Icon(Icons.done, size: 15, color: meta);
   }
@@ -118,6 +120,18 @@ class MessageBubble extends StatelessWidget {
     final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
     final textColor = isMine ? Colors.white : scheme.onSurface;
     final reserveAvatar = chat.isGroup && !isMine && !_asChannel && !commentMode;
+    // a photo / video on its own: no padding around it, the time sits on the picture
+    final mediaOnly = (m.type == 'image' || m.type == 'video') &&
+        !m.viewOnce &&
+        !hasText &&
+        m.replyTo == null &&
+        m.quote == null &&
+        m.storyRef == null &&
+        m.forwardedFromName == null &&
+        !(showSender && !isMine) &&
+        !_asChannel &&
+        m.reactions.isEmpty &&
+        m.replyMarkup == null;
 
     if ((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) {
       // stickers float without a bubble; a small time chip sits under them
@@ -200,7 +214,26 @@ class MessageBubble extends StatelessWidget {
         ),
       if (m.quote != null) _quoteBlock(m.quote!, accent, textColor),
       if (m.storyRef != null) _storyBlock(m.storyRef!, accent, textColor),
-      if (m.type != 'text') _body(context, accent),
+      if (m.type != 'text' && !mediaOnly) _body(context, accent),
+      if (mediaOnly)
+        Stack(children: [
+          ClipRRect(borderRadius: BorderRadius.circular(16), child: _body(context, accent)),
+          Positioned(
+            right: 6,
+            bottom: 6,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: Colors.black.withAlpha(110), borderRadius: BorderRadius.circular(10)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (m.editedAt != null) const Text('edited · ', style: TextStyle(fontSize: 11, color: Colors.white)),
+                  Text(messageTime(m.createdAt), style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                  if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
+                ]),
+              ),
+            ),
+          ),
+        ]),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
       if (hasText)
         if (m.type == 'text' && hasChecklist(m.text))
@@ -210,7 +243,8 @@ class MessageBubble extends StatelessWidget {
       if (m.linkPreview != null && m.type == 'text') LinkPreviewCard(data: m.linkPreview!, accent: accent),
       ReactionChips(message: m),
       if (m.replyMarkup != null) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
-      const SizedBox(height: 2),
+      if (!mediaOnly) const SizedBox(height: 2),
+      if (!mediaOnly)
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -263,7 +297,7 @@ class MessageBubble extends StatelessWidget {
         child: Container(
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : 0.78)),
           margin: EdgeInsets.fromLTRB(showAvatar || reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+          padding: mediaOnly ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
             color: isMine && (themed != null || !dark) ? null : bg,
             gradient: isMine ? (themed ?? (dark ? null : Brand.mineGradient)) : null,
@@ -275,8 +309,16 @@ class MessageBubble extends StatelessWidget {
               bottomLeft: Radius.circular(isMine ? 20 : (lastInGroup ? 20 : 6)),
               bottomRight: Radius.circular(isMine ? (lastInGroup ? 20 : 6) : 20),
             ),
-            border: isMine || dark ? null : Border.all(color: const Color(0xFFE6E9F1)),
-            boxShadow: [BoxShadow(color: (isMine ? Brand.ink : const Color(0xFF1B2138)).withAlpha(isMine ? 40 : 14), blurRadius: 10, offset: const Offset(0, 3))],
+            border: isMine ? null : Border.all(color: dark ? Colors.white.withAlpha(16) : const Color(0xFFE8EBF2), width: 0.8),
+            boxShadow: dark
+                ? null
+                : [
+                    BoxShadow(
+                      color: (isMine ? (themed?.colors.last ?? Brand.ink) : const Color(0xFF1B2138)).withAlpha(isMine ? 46 : 12),
+                      blurRadius: isMine ? 12 : 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
           ),
           child: Theme(
             data: isMine ? _inkTheme : Theme.of(context),
@@ -387,27 +429,40 @@ class MessageBubble extends StatelessWidget {
 }
 
 class SystemBubble extends StatelessWidget {
-  const SystemBubble({super.key, required this.text});
+  const SystemBubble({super.key, required this.text, this.date = false});
   final String text;
+  final bool date;
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withAlpha(22) : Colors.white.withAlpha(225),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: date ? 10 : 6, horizontal: 24),
+        child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          boxShadow: Theme.of(context).brightness == Brightness.dark ? null : [BoxShadow(color: Colors.black.withAlpha(12), blurRadius: 8, offset: const Offset(0, 2))],
+          // frosted glass only for the few date chips (blur in a long list is costly)
+          child: BackdropFilter(
+            enabled: date,
+            filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: date ? 14 : 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: dark ? Colors.white.withAlpha(20) : Colors.white.withAlpha(190),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: dark ? Colors.white.withAlpha(14) : Colors.white.withAlpha(230), width: 0.8),
+              ),
+              child: Text(text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: dark ? Colors.white.withAlpha(200) : const Color(0xFF4E556B),
+                    fontSize: date ? 12 : 12.5,
+                    fontWeight: date ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: date ? 0.3 : 0,
+                  )),
+            ),
+          ),
         ),
-        child: Text(text,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF5E647A),
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-            )),
       ),
     );
   }
@@ -418,5 +473,5 @@ class DateChip extends StatelessWidget {
   final DateTime date;
 
   @override
-  Widget build(BuildContext context) => SystemBubble(text: dateSeparator(date));
+  Widget build(BuildContext context) => SystemBubble(text: dateSeparator(date), date: true);
 }

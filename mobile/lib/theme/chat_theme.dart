@@ -20,18 +20,25 @@ class ChatThemeDef {
 }
 
 const chatThemes = <ChatThemeDef>[
-  ChatThemeDef('classic', 'Classic', [Color(0xFFEEF1F7), Color(0xFFE6EAF3)], [Color(0xFF0B0D17), Color(0xFF0E1120)], Color(0xFFDCE1EC),
-      Color(0xFF181C2F), [Color(0xFF1B2138), Color(0xFF2A3152)], [Color(0xFF2A3052), Color(0xFF353C66)]),
+  // Default: sapphire ink — calm, professional, easy on the eyes.
+  ChatThemeDef('classic', 'Sapphire', [Color(0xFFEEF1F8), Color(0xFFE7EBF5)], [Color(0xFF0A0D18), Color(0xFF0D1122)], Color(0xFFDDE3EF),
+      Color(0xFF161B30), [Color(0xFF25306B), Color(0xFF3B4798)], [Color(0xFF2E3A84), Color(0xFF4655B3)]),
+  ChatThemeDef('teal', 'Teal', [Color(0xFFE6F3F1), Color(0xFFD8ECE8)], [Color(0xFF061614), Color(0xFF0A221F)], Color(0xFFCCE5E0),
+      Color(0xFF12312C), [Color(0xFF0E6F68), Color(0xFF159488)], [Color(0xFF0E6A63), Color(0xFF13877C)]),
+  ChatThemeDef('graphite', 'Graphite', [Color(0xFFEDEEF0), Color(0xFFE3E5E9)], [Color(0xFF0C0D10), Color(0xFF121418)], Color(0xFFD8DBE0),
+      Color(0xFF1C1F25), [Color(0xFF2D333F), Color(0xFF4A5263)], [Color(0xFF3A4150), Color(0xFF545D71)]),
+  ChatThemeDef('royal', 'Royal', [Color(0xFFEDEAFB), Color(0xFFE2DDF7)], [Color(0xFF100D22), Color(0xFF171230)], Color(0xFFD9D2F5),
+      Color(0xFF221C42), [Color(0xFF3C2E99), Color(0xFF5B48CB)], [Color(0xFF45369F), Color(0xFF6352D2)]),
   ChatThemeDef('ocean', 'Ocean', [Color(0xFFDDEFFB), Color(0xFFC6E2F6)], [Color(0xFF07182A), Color(0xFF0C2840)], Color(0xFFBFDDF2),
       Color(0xFF12324D), [Color(0xFF1767CF), Color(0xFF3C9BEA)], [Color(0xFF1558B0), Color(0xFF2F86D6)]),
   ChatThemeDef('forest', 'Forest', [Color(0xFFE2F4EA), Color(0xFFCCEADB)], [Color(0xFF08190F), Color(0xFF0E271B)], Color(0xFFC3E5D2),
       Color(0xFF143424), [Color(0xFF0C8A64), Color(0xFF18B892)], [Color(0xFF0B7556), Color(0xFF13A07E)]),
-  ChatThemeDef('sunset', 'Sunset', [Color(0xFFFFEADF), Color(0xFFFFD8E4)], [Color(0xFF21101A), Color(0xFF2D1323)], Color(0xFFFFD3C9),
-      Color(0xFF3A1A2C), [Color(0xFFEF5A3C), Color(0xFFE0417A)], [Color(0xFFD2432A), Color(0xFFC23468)]),
+  ChatThemeDef('sunset', 'Coral', [Color(0xFFFFEEE6), Color(0xFFFFE1E8)], [Color(0xFF21101A), Color(0xFF2D1323)], Color(0xFFFFD8CE),
+      Color(0xFF3A1A2C), [Color(0xFFE2553A), Color(0xFFD63F73)], [Color(0xFFC9452D), Color(0xFFB8356A)]),
   ChatThemeDef('lavender', 'Lavender', [Color(0xFFEDE9FF), Color(0xFFDFD8FF)], [Color(0xFF120F26), Color(0xFF1A1636)], Color(0xFFD9D1FA),
       Color(0xFF241F45), [Color(0xFF5B4BD6), Color(0xFF8E7CF8)], [Color(0xFF4F41BF), Color(0xFF7765E6)]),
   ChatThemeDef('gold', 'Gold', [Color(0xFFFBF3E2), Color(0xFFF3E4C2)], [Color(0xFF17130A), Color(0xFF221B0D)], Color(0xFFEEDDB7),
-      Color(0xFF2E2512), [Color(0xFFB8913F), Color(0xFFD7B56A)], [Color(0xFF9C7A33), Color(0xFFC29E52)]),
+      Color(0xFF2E2512), [Color(0xFFA9822F), Color(0xFFCCA957)], [Color(0xFF9C7A33), Color(0xFFC29E52)]),
   ChatThemeDef('midnight', 'Midnight', [Color(0xFFE4E6EE), Color(0xFFD5D9E5)], [Color(0xFF000000), Color(0xFF07080F)], Color(0xFFCDD1DE),
       Color(0xFF10121C), [Color(0xFF0E1122), Color(0xFF232945)], [Color(0xFF1C2140), Color(0xFF2B3360)]),
 ];
