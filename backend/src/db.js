@@ -5,6 +5,8 @@ const config = require('./config');
 
 // Return BIGINT/COUNT(*) values as JS numbers (ids stay far below 2^53).
 types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));
+// DATE columns stay 'YYYY-MM-DD' strings (no timezone shifts).
+types.setTypeParser(1082, (v) => v);
 
 const pool = new Pool({
   connectionString: config.databaseUrl,

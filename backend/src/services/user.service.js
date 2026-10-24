@@ -30,9 +30,12 @@ function isBanned(u) {
  *  iBlocked:   users the viewer blocked
  */
 async function relations(viewerId, userIds) {
-  const rel = { theyHaveMe: new Set(), iHaveThem: new Set(), blockedMe: new Set(), iBlocked: new Set() };
+  const rel = { theyHaveMe: new Set(), iHaveThem: new Set(), blockedMe: new Set(), iBlocked: new Set(), exceptions: new Map() };
   const ids = userIds.filter((id) => id && id !== viewerId);
   if (!viewerId || ids.length === 0) return rel;
+  // "always / never share with" lists the other users made about the viewer
+  const exc = await db.many('SELECT owner_id, setting, allow FROM privacy_exceptions WHERE target_id = $1 AND owner_id = ANY($2::bigint[])', [viewerId, ids]);
+  for (const e of exc) rel.exceptions.set(`${e.owner_id}:${e.setting}`, e.allow);
   const contacts = await db.many(
     `SELECT owner_id, contact_id FROM contacts
      WHERE (owner_id = ANY($2::bigint[]) AND contact_id = $1) OR (owner_id = $1 AND contact_id = ANY($2::bigint[]))`,
@@ -58,6 +61,14 @@ function allowedBy(setting, theyHaveMe) {
   return setting === 'everyone' || (setting === 'contacts' && theyHaveMe);
 }
 
+/** Privacy check with the owner's exceptions ("always share with" / "never share with"). */
+function allowedFor(rel, ownerId, key, setting) {
+  const e = rel.exceptions ? rel.exceptions.get(`${ownerId}:${key}`) : undefined;
+  if (e === true) return true;
+  if (e === false) return false;
+  return allowedBy(setting, rel.theyHaveMe.has(ownerId));
+}
+
 /** Public representation of a user, as seen by `viewerId`. */
 function serialize(u, viewerId, rel) {
   const self = u.id === viewerId;
@@ -77,11 +88,11 @@ function serialize(u, viewerId, rel) {
       last_seen_hidden: true,
     };
   }
-  const r = rel || { theyHaveMe: new Set(), iHaveThem: new Set(), blockedMe: new Set(), iBlocked: new Set() };
-  const theyHaveMe = r.theyHaveMe.has(u.id);
+  const r = rel || { theyHaveMe: new Set(), iHaveThem: new Set(), blockedMe: new Set(), iBlocked: new Set(), exceptions: new Map() };
   const blockedMe = r.blockedMe.has(u.id);
-  const can = (setting) => self || (!blockedMe && allowedBy(setting, theyHaveMe));
-  const canSeeSeen = can(u.privacy_last_seen);
+  const can = (key, setting) => self || (!blockedMe && allowedFor(r, u.id, key, setting));
+  const canSeeSeen = can('last_seen', u.privacy_last_seen);
+  const bday = u.birthday && can('birthday', u.privacy_birthday || 'contacts') ? String(u.birthday).split('-').map(Number) : null;
 
   const out = {
     id: u.id,
@@ -92,8 +103,9 @@ function serialize(u, viewerId, rel) {
     is_verified: u.is_verified,
     is_bot: !!u.is_bot,
     is_premium: !!(u.premium_until && new Date(u.premium_until) > new Date()),
-    avatar_url: can(u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
-    phone: can(u.privacy_phone) ? u.phone : null,
+    avatar_url: can('avatar', u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
+    phone: can('phone', u.privacy_phone) ? u.phone : null,
+    birthday: bday ? { day: bday[2], month: bday[1], ...(self && bday[0] !== 1904 ? { year: bday[0] } : {}) } : null,
     online: canSeeSeen && presence.isOnline(u.id),
     last_seen: canSeeSeen && u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
     last_seen_hidden: !canSeeSeen,
@@ -106,6 +118,8 @@ function serialize(u, viewerId, rel) {
       group_add: u.privacy_group_add,
       calls: u.privacy_calls || 'everyone',
       message_requests: u.message_requests !== false ? 'on' : 'off',
+      birthday: u.privacy_birthday || 'contacts',
+      read_receipts: u.read_receipts !== false ? 'on' : 'off',
     };
     out.email = u.email || null;
     out.has_password = !!u.password_hash;
@@ -154,6 +168,7 @@ async function updateProfile(userId, body) {
   if (body.first_name !== undefined) add('first_name', v.str(body.first_name, { field: 'first_name', min: 1, max: 64 }));
   if (body.last_name !== undefined) add('last_name', v.str(body.last_name, { field: 'last_name', max: 64 }));
   if (body.bio !== undefined) add('bio', v.str(body.bio, { field: 'bio', max: 140 }));
+  if (body.birthday !== undefined) add('birthday', parseBirthday(body.birthday));
   if (body.username !== undefined) {
     const raw = typeof body.username === 'string' ? body.username.trim().replace(/^@/, '') : body.username;
     const name = v.validateUsername(raw);
@@ -200,6 +215,113 @@ async function removeAvatar(userId) {
   return getMe(userId);
 }
 
+/** "YYYY-MM-DD" or "MM-DD" (no year → stored as 1904, a leap year) or null. */
+function parseBirthday(raw) {
+  if (raw === null || raw === '') return null;
+  const m = /^(?:(\d{4})-)?(\d{2})-(\d{2})$/.exec(String(raw));
+  if (!m) throw badRequest('invalid_input', 'Birthday must look like 1995-08-21 or 08-21');
+  const year = m[1] ? Number(m[1]) : 1904;
+  const d = new Date(Date.UTC(year, Number(m[2]) - 1, Number(m[3])));
+  if (d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) throw badRequest('invalid_input', 'That date does not exist');
+  if (m[1] && (year < 1900 || d > new Date())) throw badRequest('invalid_input', 'Check the year');
+  return d.toISOString().slice(0, 10);
+}
+
+const EXCEPTION_SETTINGS = ['last_seen', 'avatar', 'phone', 'group_add', 'calls', 'birthday'];
+
+/** { setting: { allow: [users], deny: [users] } } */
+async function getPrivacyExceptions(userId) {
+  const rows = await db.many('SELECT setting, target_id, allow FROM privacy_exceptions WHERE owner_id = $1', [userId]);
+  const users = await getUsersMap(userId, [...new Set(rows.map((r) => r.target_id))]);
+  const out = {};
+  for (const k of EXCEPTION_SETTINGS) out[k] = { allow: [], deny: [] };
+  for (const r of rows) {
+    const u = users.get(r.target_id);
+    if (u && out[r.setting]) out[r.setting][r.allow ? 'allow' : 'deny'].push(u);
+  }
+  return out;
+}
+
+/** Replaces the "always share with" / "never share with" lists of one setting. */
+async function setPrivacyExceptions(userId, settingRaw, body = {}) {
+  const setting = v.oneOf(settingRaw, EXCEPTION_SETTINGS, 'setting');
+  const allow = v.idList(body.allow || [], 'allow', 300).filter((id) => id !== userId);
+  const deny = v.idList(body.deny || [], 'deny', 300).filter((id) => id !== userId && !allow.includes(id));
+  await db.tx(async (c) => {
+    await c.query('DELETE FROM privacy_exceptions WHERE owner_id = $1 AND setting = $2', [userId, setting]);
+    for (const [ids, ok] of [[allow, true], [deny, false]]) {
+      if (ids.length) {
+        await c.query(
+          `INSERT INTO privacy_exceptions (owner_id, setting, target_id, allow)
+           SELECT $1, $2, x, $3 FROM unnest($4::bigint[]) AS x JOIN users u ON u.id = x ON CONFLICT DO NOTHING`,
+          [userId, setting, ok, ids],
+        );
+      }
+    }
+  });
+  bus.emit('user:updated', { userId });
+  return getPrivacyExceptions(userId);
+}
+
+/** Contacts whose birthday is today or in the next 7 days (when they share it with me). */
+async function upcomingBirthdays(userId) {
+  const rows = await db.many(
+    `SELECT u.*
+     FROM contacts ct JOIN users u ON u.id = ct.contact_id
+     WHERE ct.owner_id = $1 AND u.birthday IS NOT NULL AND u.status = 'active'`,
+    [userId],
+  );
+  const rel = await relations(userId, rows.map((r) => r.id));
+  const today = new Date();
+  const out = [];
+  for (const u of rows) {
+    if (rel.blockedMe.has(u.id) || !allowedFor(rel, u.id, 'birthday', u.privacy_birthday || 'contacts')) continue;
+    const [, bm, bd] = String(u.birthday).split('-').map(Number);
+    let next = new Date(Date.UTC(today.getUTCFullYear(), bm - 1, bd));
+    const t0 = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    if (next.getTime() < t0) next = new Date(Date.UTC(today.getUTCFullYear() + 1, bm - 1, bd));
+    const days = Math.round((next.getTime() - t0) / 86400000);
+    if (days <= 7) out.push({ user: serialize(u, userId, rel), in_days: days });
+  }
+  return out.sort((a, b) => a.in_days - b.in_days);
+}
+
+/** Once a day: "🎂 It's Sara's birthday today" to everyone who saved her and may see her birthday. */
+async function sendBirthdayReminders() {
+  const run = await db.one(`INSERT INTO job_runs (name, day) VALUES ('birthdays', current_date) ON CONFLICT DO NOTHING RETURNING day`);
+  if (!run) return 0;
+  const rows = await db.many(
+    `SELECT u.id AS user_id, ct.owner_id FROM users u
+     JOIN contacts ct ON ct.contact_id = u.id
+     LEFT JOIN privacy_exceptions pe ON pe.owner_id = u.id AND pe.setting = 'birthday' AND pe.target_id = ct.owner_id
+     WHERE u.status = 'active' AND u.birthday IS NOT NULL
+       -- Feb 29 birthdays are remembered on Feb 28 in other years
+       AND (to_char(u.birthday, 'MM-DD') = to_char(current_date, 'MM-DD')
+            OR (to_char(u.birthday, 'MM-DD') = '02-29' AND to_char(current_date, 'MM-DD') = '02-28'
+                AND to_char(current_date + 1, 'MM-DD') = '03-01'))
+       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = u.id AND b.blocked_id = ct.owner_id) OR (b.blocker_id = ct.owner_id AND b.blocked_id = u.id))
+       AND (pe.allow IS TRUE OR (pe.allow IS NULL AND (u.privacy_birthday = 'everyone'
+             OR (u.privacy_birthday = 'contacts' AND EXISTS (SELECT 1 FROM contacts c2 WHERE c2.owner_id = u.id AND c2.contact_id = ct.owner_id)))))
+     LIMIT 50000`,
+  );
+  if (!rows.length) return 0;
+  const users = new Map((await db.many('SELECT * FROM users WHERE id = ANY($1::bigint[])', [[...new Set(rows.map((r) => r.user_id))]])).map((u) => [u.id, u]));
+  const push = require('./push.service');
+  for (const r of rows) {
+    const u = users.get(r.user_id);
+    if (!u) continue;
+    push
+      .sendToUsers(
+        [r.owner_id],
+        { title: `🎂 ${displayName(u)}'s birthday`, body: 'It’s their birthday today. Send a wish!' },
+        { type: 'birthday', user_id: u.id },
+        { tag: `bday-${u.id}` },
+      )
+      .catch(() => {});
+  }
+  return rows.length;
+}
+
 async function updatePrivacy(userId, body) {
   const map = {
     last_seen: 'privacy_last_seen',
@@ -207,6 +329,7 @@ async function updatePrivacy(userId, body) {
     phone: 'privacy_phone',
     group_add: 'privacy_group_add',
     calls: 'privacy_calls',
+    birthday: 'privacy_birthday',
   };
   const sets = [];
   const params = [userId];
@@ -219,6 +342,10 @@ async function updatePrivacy(userId, body) {
   if (body.message_requests !== undefined) {
     params.push(v.bool(body.message_requests, 'message_requests'));
     sets.push(`message_requests = $${params.length}`);
+  }
+  if (body.read_receipts !== undefined) {
+    params.push(v.bool(body.read_receipts, 'read_receipts'));
+    sets.push(`read_receipts = $${params.length}`);
   }
   if (sets.length) await db.query(`UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, params);
   return getMe(userId);
@@ -442,6 +569,12 @@ function assertActive(u) {
 }
 
 module.exports = {
+  sendBirthdayReminders,
+  allowedFor,
+  getPrivacyExceptions,
+  setPrivacyExceptions,
+  upcomingBirthdays,
+  parseBirthday,
   PRIVACY_VALUES,
   displayName,
   avatarUrl,

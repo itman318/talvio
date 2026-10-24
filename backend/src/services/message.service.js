@@ -817,6 +817,12 @@ async function forwardMessages(userId, body = {}) {
   return { forwarded: count };
 }
 
+/** True when every one of these users shares read receipts. */
+async function receiptsOn(userIds) {
+  const r = await db.one('SELECT bool_and(read_receipts) AS ok FROM users WHERE id = ANY($1::bigint[])', [userIds]);
+  return !r || r.ok !== false;
+}
+
 // ------------------------------------------------------------------ message info
 /** Who received and read my message (private: the other person; groups: everyone). */
 async function messageInfo(userId, messageIdRaw) {
@@ -829,6 +835,14 @@ async function messageInfo(userId, messageIdRaw) {
      ORDER BY user_id LIMIT 1000`,
     [chat.id, m.id, userId, m.created_at],
   );
+  if (chat.type === 'private' && rows.length && !(await receiptsOn([userId, ...rows.map((r) => r.user_id)]))) {
+    for (const r of rows) {
+      if (r.read) {
+        r.read = false;
+        r.delivered = true;
+      }
+    }
+  }
   const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
   const pick = (f) => rows.filter(f).map((r) => users.get(r.user_id)).filter(Boolean);
   return {
@@ -1332,7 +1346,10 @@ async function markRead(userId, chatIdRaw, messageIdRaw) {
   );
   // Channels don't show read receipts, so skip the fan-out to every subscriber.
   if (r && chat.type !== 'channel') {
-    bus.emit('receipt:read', { chatId: chat.id, userId, messageId: target, memberIds: await chatService.memberIds(chat.id) });
+    const memberIds = await chatService.memberIds(chat.id);
+    // read receipts turned off (by either person) in a private chat: the sender only sees "delivered"
+    const event = chat.type === 'private' && !(await receiptsOn(memberIds)) ? 'receipt:delivered' : 'receipt:read';
+    bus.emit(event, { chatId: chat.id, userId, messageId: target, memberIds });
   }
   return { last_read_message_id: r ? r.last_read_message_id : chat.last_read_message_id };
 }

@@ -276,7 +276,8 @@ test('stories: privacy, media access, views, viewers, reply, delete', async () =
   assert.equal((await stories.feed(B.id))[0].has_unseen, false);
 
   const reply = await stories.reply(B.id, s.id, { text: 'Beautiful!' });
-  assert.deepEqual(reply.meta, { story_reply: s.id });
+  assert.equal(reply.meta.story_reply, s.id);
+  assert.equal(reply.meta.story.id, s.id);
 
   await stories.remove(A.id, s.id);
   assert.equal((await stories.feed(B.id)).length, 0);

@@ -92,7 +92,7 @@ async function iceServers(userId) {
 }
 
 // ------------------------------------------------------------------ permission checks
-async function assertCanCall(caller, calleeId, video) {
+async function assertCanCall(caller, calleeId, video, { viaLink = false } = {}) {
   await settings.requireFeature('feature_calls', 'Calls');
   if (video) await settings.requireFeature('feature_video_calls', 'Video calls');
   moderation.assertNotRestricted(caller);
@@ -100,12 +100,24 @@ async function assertCanCall(caller, calleeId, video) {
   const callee = await db.one('SELECT id, status, privacy_calls FROM users WHERE id = $1', [calleeId]);
   if (!callee || callee.status !== 'active') throw notFound('user_not_found', 'This user can’t be called');
   if (await userService.isBlockedEither(caller.id, calleeId)) throw forbidden('blocked', 'You can’t call this user');
-  if (callee.privacy_calls === 'nobody') throw forbidden('privacy_calls', 'This user doesn’t accept calls');
-  if (callee.privacy_calls === 'contacts') {
-    const c = await db.one('SELECT 1 AS x FROM contacts WHERE owner_id = $1 AND contact_id = $2', [calleeId, caller.id]);
-    if (!c) throw forbidden('privacy_calls', 'This user only accepts calls from their contacts');
+  if (viaLink) return callee; // the callee shared a call link: privacy allows it, blocks still apply
+  const rel = await userService.relations(caller.id, [calleeId]);
+  if (!userService.allowedFor(rel, calleeId, 'calls', callee.privacy_calls || 'everyone')) {
+    throw forbidden(
+      'privacy_calls',
+      callee.privacy_calls === 'contacts' ? 'This user only accepts calls from their contacts' : 'This user doesn’t accept calls',
+    );
   }
   return callee;
+}
+
+/** Every ringing / accepted call of a user (a second one can ring while the first is connected = call waiting). */
+async function activeCallsOf(userId, client = db) {
+  const r = await client.query(
+    `SELECT * FROM calls WHERE status IN ('ringing', 'accepted') AND (caller_id = $1 OR callee_id = $1) ORDER BY id DESC`,
+    [userId],
+  );
+  return r.rows;
 }
 
 async function activeCallOf(userId, client = db) {
@@ -123,9 +135,17 @@ async function activeCallOf(userId, client = db) {
  * Returns { call, ice_servers } — call.status is 'busy' when the other person is already on a call.
  */
 async function startCall(userId, sessionId, body = {}) {
-  const video = body.video === true;
+  let video = body.video === true;
   let calleeId;
-  if (body.chat_id !== undefined && body.chat_id !== null) {
+  let viaLink = false;
+  if (body.link !== undefined && body.link !== null) {
+    const link = await db.one('SELECT * FROM call_links WHERE code = $1', [String(body.link).slice(0, 24)]);
+    if (!link) throw notFound('link_not_found', 'This call link is not valid anymore');
+    calleeId = link.user_id;
+    if (calleeId === userId) throw badRequest('invalid_call', 'This is your own call link');
+    video = video || link.video;
+    viaLink = true;
+  } else if (body.chat_id !== undefined && body.chat_id !== null) {
     const chat = await chatService.getChat(userId, body.chat_id);
     if (chat.type !== 'private') throw badRequest('invalid_call', 'Calls are only available in private chats');
     calleeId = await chatService.privatePeerId(chat.id, userId);
@@ -134,7 +154,7 @@ async function startCall(userId, sessionId, body = {}) {
     calleeId = v.id(body.user_id, 'user_id');
   }
   const caller = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
-  await assertCanCall(caller, calleeId, video);
+  await assertCanCall(caller, calleeId, video, { viaLink });
   rateLimit.enforce(`call:${userId}`, 20, 10 * 60 * 1000, 'Too many calls. Please wait a few minutes.');
 
   const chat = await chatService.getOrCreatePrivate(userId, calleeId);
@@ -149,14 +169,17 @@ async function startCall(userId, sessionId, body = {}) {
       if (mine.status === 'ringing' && mine.caller_id === calleeId && mine.callee_id === userId) return { answer: mine };
       throw conflict('already_in_call', 'Finish your current call first');
     }
-    const theirs = await activeCallOf(calleeId, c);
-    const status = theirs ? 'busy' : 'ringing';
+    // Call waiting: one call may ring while the other person is talking; a third call is "busy".
+    const theirs = await activeCallsOf(calleeId, c);
+    const waiting = theirs.length === 1 && theirs[0].status === 'accepted';
+    const busy = theirs.length > 0 && !waiting;
+    const status = busy ? 'busy' : 'ringing';
     const r = await c.query(
       `INSERT INTO calls (chat_id, caller_id, callee_id, caller_session_id, video, status, ended_at, end_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, ${theirs ? 'now()' : 'NULL'}, ${theirs ? "'busy'" : 'NULL'}) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, ${busy ? 'now()' : 'NULL'}, ${busy ? "'busy'" : 'NULL'}) RETURNING *`,
       [chat.id, userId, calleeId, sessionId || null, video, status],
     );
-    return { created: r.rows[0] };
+    return { created: r.rows[0], waiting };
   });
   if (row.answer) return acceptCall(userId, sessionId, row.answer.id);
 
@@ -175,17 +198,20 @@ async function startCall(userId, sessionId, body = {}) {
   ringTimers.set(call.id, t);
 
   const forCallee = await serializeOne(call, calleeId);
+  if (row.waiting) forCallee.waiting = true;
   emit('call:incoming', { call: forCallee }, { userIds: [calleeId] });
   const name = userService.displayName(caller);
   push
     .sendToUsers(
       [calleeId],
-      { title: name, body: video ? '📹 Incoming video call' : '📞 Incoming voice call' },
+      { title: name, body: (row.waiting ? 'Waiting · ' : '') + (video ? '📹 Incoming video call' : '📞 Incoming voice call') },
       { type: 'call', call_id: call.id, chat_id: chat.id, video: video ? '1' : '0' },
       { ttlSec: timeoutSec, tag: `call-${call.id}` },
     )
     .catch(() => {});
-  return { call: await serializeOne(call, userId), ice_servers: await iceServers(userId) };
+  const out = await serializeOne(call, userId);
+  if (row.waiting) out.waiting = true; // the other person is on another call; it rings for them as "waiting"
+  return { call: out, ice_servers: await iceServers(userId) };
 }
 
 async function lockCall(c, callIdRaw) {
@@ -207,6 +233,11 @@ async function acceptCall(userId, sessionId, callIdRaw) {
     return r.rows[0];
   });
   clearRing(row.id);
+  // "End & answer": the call this person was on ends now.
+  const others = (await activeCallsOf(userId)).filter((c) => c.id !== row.id);
+  for (const o of others) {
+    await finishCall(o.id, { status: o.status === 'accepted' ? 'ended' : (o.callee_id === userId ? 'declined' : 'missed'), reason: 'hangup', by: userId, onlyIf: ACTIVE });
+  }
   live.set(row.id, {
     callerId: row.caller_id,
     calleeId: row.callee_id,
@@ -402,8 +433,13 @@ async function deleteCalls(userId, body = {}) {
 
 /** The ringing/ongoing call of this user, if any (the app calls this when opened from a call notification). */
 async function getActive(userId) {
-  const row = await activeCallOf(userId);
-  return { call: row ? await serializeOne(row, userId) : null };
+  const rows = await activeCallsOf(userId);
+  const row = rows.find((r) => r.status === 'accepted') || rows[0];
+  const waiting = rows.find((r) => r !== row && r.status === 'ringing' && r.callee_id === userId);
+  return {
+    call: row ? await serializeOne(row, userId) : null,
+    waiting: waiting ? { ...(await serializeOne(waiting, userId)), waiting: true } : null,
+  };
 }
 
 async function rateCall(userId, callIdRaw, body = {}) {
@@ -515,7 +551,48 @@ function _reset() {
   live.clear();
 }
 
+
+// ------------------------------------------------------------------ call links
+function newLinkCode() {
+  return crypto.randomBytes(9).toString('base64url'); // 12 chars
+}
+
+function serializeLink(row) {
+  return { code: row.code, video: row.video, path: `/call/${row.code}`, created_at: iso(row.created_at) };
+}
+
+/** A link that lets anyone who has it call me (my calls privacy is skipped; blocks still apply). */
+async function createLink(userId, body = {}) {
+  await settings.requireFeature('feature_calls', 'Calls');
+  const n = await db.one('SELECT count(*)::int AS n FROM call_links WHERE user_id = $1', [userId]);
+  if (n.n >= 10) throw badRequest('too_many_links', 'You can have up to 10 call links. Delete one first.');
+  const row = await db.one('INSERT INTO call_links (code, user_id, video) VALUES ($1, $2, $3) RETURNING *', [newLinkCode(), userId, body.video === true]);
+  return { link: serializeLink(row) };
+}
+
+async function listLinks(userId) {
+  const rows = await db.many('SELECT * FROM call_links WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+  return { links: rows.map(serializeLink) };
+}
+
+async function deleteLink(userId, code) {
+  await db.query('DELETE FROM call_links WHERE user_id = $1 AND code = $2', [userId, String(code).slice(0, 24)]);
+  return {};
+}
+
+/** Who a call link calls. */
+async function resolveLink(viewerId, code) {
+  const row = await db.one('SELECT * FROM call_links WHERE code = $1', [String(code).slice(0, 24)]);
+  if (!row) throw notFound('link_not_found', 'This call link is not valid anymore');
+  const user = await userService.getUser(viewerId, row.user_id);
+  return { link: serializeLink(row), user, mine: row.user_id === viewerId };
+}
+
 module.exports = {
+  createLink,
+  listLinks,
+  deleteLink,
+  resolveLink,
   iceServers,
   startCall,
   acceptCall,

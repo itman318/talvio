@@ -135,7 +135,29 @@ async function createSession(userId, device, ip) {
      VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(days => $7)) RETURNING id`,
     [userId, sha256(refresh), d.name, d.platform, d.appVersion, ip || null, config.refreshTokenTtlDays],
   );
+  alertNewLogin(userId, s.id, d).catch(() => {});
   return issueTokens(userId, s.id, refresh);
+}
+
+/** "New login on <device>": tells the account's other devices, so a stranger's login can be logged out at once. */
+async function alertNewLogin(userId, sessionId, d) {
+  const others = await db.many(
+    'SELECT id FROM sessions WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL AND expires_at > now()',
+    [userId, sessionId],
+  );
+  if (!others.length) return;
+  const device = [d.name, d.platform].filter(Boolean).join(' · ') || 'a new device';
+  bus.emit('rt:emit', {
+    event: 'session:new',
+    payload: { session_id: sessionId, device_name: d.name || null, platform: d.platform || null, at: new Date().toISOString() },
+    sessionIds: others.map((o) => o.id),
+  });
+  await require('./push.service').sendToUsers(
+    [userId],
+    { title: 'New login to your account', body: `${device} just logged in. Not you? Open Talvio to log it out.` },
+    { type: 'new_login', session_id: sessionId },
+    { tag: `login-${sessionId}` },
+  );
 }
 
 async function checkCode(target, rawCode, ip) {

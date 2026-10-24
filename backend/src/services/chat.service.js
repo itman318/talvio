@@ -120,8 +120,10 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
             AND m.sender_id IS DISTINCT FROM $1
             AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $1 AND h.message_id = m.id)
        ) AS unread_count,
-       COALESCE((SELECT max(o.last_read_message_id) FROM chat_members o
-                 WHERE o.chat_id = c.id AND o.user_id <> $1), 0) AS read_up_to,
+       COALESCE((SELECT max(o.last_read_message_id) FROM chat_members o JOIN users ou ON ou.id = o.user_id
+                 WHERE o.chat_id = c.id AND o.user_id <> $1
+                   -- read receipts off (either side) = no blue ticks in private chats
+                   AND (c.type <> 'private' OR (ou.read_receipts AND (SELECT me.read_receipts FROM users me WHERE me.id = $1)))), 0) AS read_up_to,
        COALESCE((SELECT max(o.last_delivered_message_id) FROM chat_members o
                  WHERE o.chat_id = c.id AND o.user_id <> $1), 0) AS delivered_up_to,
        (SELECT o.user_id FROM chat_members o WHERE o.chat_id = c.id AND o.user_id <> $1 LIMIT 1) AS peer_id,
@@ -343,7 +345,7 @@ async function filterAddable(adderId, ids) {
       result.skipped.push({ user_id: id, reason: 'not_found' });
     } else if (rel.blockedMe.has(id) || rel.iBlocked.has(id)) {
       result.skipped.push({ user_id: id, reason: 'privacy' });
-    } else if (u.privacy_group_add === 'nobody' || (u.privacy_group_add === 'contacts' && !rel.theyHaveMe.has(id))) {
+    } else if (!userService.allowedFor(rel, id, 'group_add', u.privacy_group_add)) {
       result.skipped.push({ user_id: id, reason: 'privacy' });
     } else {
       result.ok.push(id);
@@ -1168,6 +1170,7 @@ module.exports = {
   memberIds,
   privatePeerId,
   listChats,
+  filterAddable,
   getChat,
   getOrCreatePrivate,
   createGroup,

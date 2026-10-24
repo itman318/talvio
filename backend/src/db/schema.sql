@@ -870,3 +870,40 @@ CREATE TABLE IF NOT EXISTS post_queue (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS post_queue_chat_idx ON post_queue (chat_id, id);
+
+-- ---------------------------------------------------------------- call links, birthdays, highlights, privacy exceptions, read receipts
+CREATE TABLE IF NOT EXISTS call_links (
+  code       VARCHAR(24) PRIMARY KEY,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video      BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS call_links_user_idx ON call_links (user_id);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS birthday DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_birthday VARCHAR(16) NOT NULL DEFAULT 'contacts';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS read_receipts BOOLEAN NOT NULL DEFAULT TRUE;
+
+CREATE TABLE IF NOT EXISTS privacy_exceptions (
+  owner_id  BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  setting   VARCHAR(16) NOT NULL,
+  target_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  allow     BOOLEAN     NOT NULL,
+  PRIMARY KEY (owner_id, setting, target_id)
+);
+CREATE INDEX IF NOT EXISTS privacy_exceptions_target_idx ON privacy_exceptions (target_id);
+
+CREATE TABLE IF NOT EXISTS story_highlights (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title      VARCHAR(32) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS story_highlights_user_idx ON story_highlights (user_id, id);
+CREATE TABLE IF NOT EXISTS story_highlight_items (
+  highlight_id BIGINT NOT NULL REFERENCES story_highlights(id) ON DELETE CASCADE,
+  story_id     BIGINT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  PRIMARY KEY (highlight_id, story_id)
+);
+CREATE INDEX IF NOT EXISTS story_highlight_items_story_idx ON story_highlight_items (story_id);
+CREATE TABLE IF NOT EXISTS job_runs (name VARCHAR(32) NOT NULL, day DATE NOT NULL, PRIMARY KEY (name, day));

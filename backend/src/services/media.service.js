@@ -106,6 +106,7 @@ async function registerUpload(userId, file, body) {
 async function getAccessible(userId, mediaIdRaw) {
   const mediaId = v.id(mediaIdRaw, 'media_id');
   const storyVisible = require('./story.service').visibleSql('$2'); // lazy: avoids circular import
+  const highlightVisible = require('./story.service').highlightVisibleSql('$2');
   const m = await db.one(
     `SELECT m.* FROM media m
      WHERE m.id = $1 AND (
@@ -121,6 +122,7 @@ async function getAccessible(userId, mediaIdRaw) {
            ))
        )
        OR EXISTS (SELECT 1 FROM stories s WHERE s.media_id = m.id AND ${storyVisible})
+       OR EXISTS (SELECT 1 FROM stories s JOIN story_highlight_items hi ON hi.story_id = s.id WHERE s.media_id = m.id AND ${highlightVisible})
        OR EXISTS (
          SELECT 1 FROM secret_messages sm JOIN secret_chats sc ON sc.id = sm.secret_chat_id
          WHERE sm.media_id = m.id AND sc.status = 'active' AND (sc.initiator_id = $2 OR sc.peer_id = $2)

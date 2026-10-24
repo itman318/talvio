@@ -152,17 +152,19 @@ test('decline, caller cancel = missed, busy line, missed filter', async () => {
   assert.equal(cancel.call.status, 'missed');
   assert.equal(cancel.call.end_reason, 'cancelled');
 
-  // B on a call with C → A gets "busy"
+  // B on a call with C → A's call waits (call waiting); busy for a third call is in social.test.js
   const bc = await calls.startCall(C.id, C.sid, { user_id: B.id });
   await calls.acceptCall(B.id, B.sid, bc.call.id);
-  const busy = await calls.startCall(A.id, A.sid, { user_id: B.id });
-  assert.equal(busy.call.status, 'busy');
+  const waiting = await calls.startCall(A.id, A.sid, { user_id: B.id });
+  assert.equal(waiting.call.status, 'ringing');
+  assert.equal(waiting.call.waiting, true);
   // and C can't start a second call while on one
   await rejects(calls.startCall(C.id, C.sid, { user_id: A.id }), 'already_in_call');
+  await calls.hangup(A.id, waiting.call.id);
   await calls.hangup(B.id, bc.call.id);
 
   const missedB = await calls.listCalls(B.id, { missed: '1' });
-  assert.deepEqual(missedB.map((x) => x.status).sort(), ['busy', 'missed']);
+  assert.deepEqual(missedB.map((x) => x.status).sort(), ['missed', 'missed']);
 
   // delete history only for me
   await calls.deleteCalls(B.id, { ids: [c2.call.id] });

@@ -97,15 +97,19 @@ function emitToUsers(userIds, event, payload) {
 /** Users allowed to see `userId`'s online status: private-chat peers, filtered by privacy and blocks. */
 async function presenceAudience(userId) {
   const u = await db.one('SELECT privacy_last_seen FROM users WHERE id = $1', [userId]);
-  if (!u || u.privacy_last_seen === 'nobody') return [];
+  if (!u) return [];
+  // "last seen" privacy + its exceptions (always / never share with)
   const rows = await db.many(
     `SELECT DISTINCT cm2.user_id FROM chat_members cm1
      JOIN chats c ON c.id = cm1.chat_id AND c.type = 'private'
      JOIN chat_members cm2 ON cm2.chat_id = c.id AND cm2.user_id <> cm1.user_id
+     LEFT JOIN privacy_exceptions pe ON pe.owner_id = $1 AND pe.setting = 'last_seen' AND pe.target_id = cm2.user_id
      WHERE cm1.user_id = $1
        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = cm2.user_id)
                                                 OR (b.blocker_id = cm2.user_id AND b.blocked_id = $1))
-       AND ($2 = 'everyone' OR EXISTS (SELECT 1 FROM contacts ct WHERE ct.owner_id = $1 AND ct.contact_id = cm2.user_id))`,
+       AND (pe.allow IS TRUE OR (pe.allow IS NULL AND (
+             $2 = 'everyone'
+             OR ($2 = 'contacts' AND EXISTS (SELECT 1 FROM contacts ct WHERE ct.owner_id = $1 AND ct.contact_id = cm2.user_id)))))`,
     [userId, u.privacy_last_seen],
   );
   return rows.map((r) => r.user_id);

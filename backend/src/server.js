@@ -46,6 +46,8 @@ const scheduler = setInterval(() => {
   require('./services/payment.service').sweep().catch(() => {});
   if (secretSweepTick % 20 === 2) require('./services/qr.service').sweep().catch(() => {});
   require('./services/bot.service').sweep().catch((err) => console.error('bot sweep error', err)); // eslint-disable-line no-console
+  // birthday reminders: once a day, after 05:00 UTC
+  if (secretSweepTick % 40 === 5 && new Date().getUTCHours() >= 5) require('./services/user.service').sendBirthdayReminders().catch(() => {});
   if (secretSweepTick === 1) secretService.sweep().catch((err) => console.error('secret sweep error', err)); // eslint-disable-line no-console
 }, 15000);
 scheduler.unref();
