@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -17,6 +18,7 @@ import 'chat_theme_screen.dart';
 import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
+import '../widgets/premium.dart';
 import '../widgets/message_extras.dart';
 import '../core/message_notifications.dart';
 import '../core/prefs.dart';
@@ -66,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
+  int _panelTab = 0; // emoji panel: 0 emoji · 1 stickers · 2 GIFs
   String? _tag; // My Notes tag filter
   final _scroll = ScrollController();
   Message? _replyTo;
@@ -794,7 +797,23 @@ class _ChatScreenState extends State<ChatScreen> {
           onTap: () => _openInfo(chat),
           child: Row(
             children: [
-              Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 40, icon: chat.isSavedMessages ? Icons.bookmark : null),
+              Stack(clipBehavior: Clip.none, children: [
+                Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 40, icon: chat.isSavedMessages ? Icons.bookmark_rounded : null),
+                if (chat.peer?.online == true && !chat.isSavedMessages && !chat.isBot)
+                  Positioned(
+                    right: -1,
+                    bottom: -1,
+                    child: Container(
+                      width: 13,
+                      height: 13,
+                      decoration: BoxDecoration(
+                        color: Brand.accent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Theme.of(context).appBarTheme.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor, width: 2),
+                      ),
+                    ),
+                  ),
+              ]),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -805,7 +824,16 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
                       if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
                     ]),
-                    if (subtitle.isNotEmpty)
+                    if (typing != null)
+                      Row(children: [
+                        Flexible(
+                          child: Text(typing.replaceAll('…', ''),
+                              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Brand.primary)),
+                        ),
+                        const SizedBox(width: 4),
+                        const TypingDots(size: 4),
+                      ])
+                    else if (subtitle.isNotEmpty)
                       Text(subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -861,13 +889,21 @@ class _ChatScreenState extends State<ChatScreen> {
         appearance: look,
         child: Column(
         children: [
-          if (!store.connected)
-            Container(
-              width: double.infinity,
-              color: Colors.amber.shade100,
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: const Text('Connecting…', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            child: store.connected
+                ? const SizedBox(width: double.infinity)
+                : Container(
+                    margin: const EdgeInsets.fromLTRB(0, 6, 0, 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Brand.amber.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.8, color: Color(0xFFB7791F))),
+                      SizedBox(width: 8),
+                      Text('Connecting…', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFB7791F))),
+                    ]),
+                  ),
+          ),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
           if (tags.isNotEmpty)
             SizedBox(
@@ -904,7 +940,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return BotIntro(chat: chat, onStart: () => _store.sendText(chatId, '/start'));
     }
     if (messages.isEmpty) {
-      return Center(child: SystemBubble(text: _error ?? (chat.isSavedMessages ? 'Save notes, links and files here' : 'No messages here yet. Say hi! 👋')));
+      if (_error != null) return Center(child: SystemBubble(text: _error!));
+      return Center(child: _emptyChat(chat));
     }
     final hasMore = store.hasMore(chatId);
     if (chat.isChannel) {
@@ -948,6 +985,20 @@ class _ChatScreenState extends State<ChatScreen> {
             older.createdAt.month != m.createdAt.month ||
             older.createdAt.day != m.createdAt.day;
         final mine = chat.isChannel ? m.isLocal : m.senderId == store.myId;
+        // stacks: same sender, same day, less than 5 minutes apart
+        bool joined(Message? a, Message b) =>
+            a != null &&
+            !a.isSystem &&
+            a.senderId == b.senderId &&
+            a.albumId == null &&
+            a.createdAt.year == b.createdAt.year &&
+            a.createdAt.month == b.createdAt.month &&
+            a.createdAt.day == b.createdAt.day &&
+            a.createdAt.difference(b.createdAt).inMinutes.abs() < 5;
+        final newer = i > 0 ? messages[i - 1] : null;
+        final first = newDay || !joined(older, m);
+        final last = !joined(newer, m) ||
+            (newer != null && (newer.createdAt.year != m.createdAt.year || newer.createdAt.month != m.createdAt.month || newer.createdAt.day != m.createdAt.day));
         final showSender = chat.isGroup && !mine && (older == null || older.senderId != m.senderId || older.isSystem || newDay);
         return Column(
           children: [
@@ -961,12 +1012,57 @@ class _ChatScreenState extends State<ChatScreen> {
                 chat: chat,
                 isMine: mine,
                 showSender: showSender,
+                firstInGroup: first,
+                lastInGroup: last,
+                showAvatar: last && chat.isGroup && !mine,
                 onLongPress: () => _messageMenu(m, chat),
                 onTap: m.sendState == SendState.failed ? () => _messageMenu(m, chat) : null,
               ),
           ],
         );
       },
+    );
+  }
+
+  /// A fresh chat: a friendly card with Tali and one-tap greetings.
+  Widget _emptyChat(Chat chat) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final canSend = !chat.isChannel || chat.canPost;
+    return SingleChildScrollView(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+        constraints: const BoxConstraints(maxWidth: 300),
+        decoration: BoxDecoration(
+          color: dark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: dark ? null : [BoxShadow(color: Brand.ink.withValues(alpha: 0.08), blurRadius: 24, offset: const Offset(0, 8))],
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Image.asset('assets/emoji/tali/${chat.isSavedMessages ? 'think' : 'hello'}.png', width: 110, height: 110),
+          const SizedBox(height: 10),
+          Text(chat.isSavedMessages ? 'Your notes' : 'No messages yet',
+              textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+            chat.isSavedMessages
+                ? 'Save notes, links and files here. Add #tags to find them later, or send a checklist.'
+                : (canSend ? 'Send a message or tap a greeting below.' : 'Nothing has been posted yet.'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.35, fontSize: 13.5),
+          ),
+          if (canSend && !chat.isSavedMessages) ...[
+            const SizedBox(height: 14),
+            Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+              for (final g in ['👋 Hi!', 'Hello 🙂', '${taliChar(0)} Hey'])
+                ActionChip(
+                  label: Text.rich(TextSpan(children: taliSpans(g, const TextStyle(fontWeight: FontWeight.w700)))),
+                  onPressed: () => _store.sendText(chatId, g),
+                ),
+            ]),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -977,21 +1073,21 @@ class _ChatScreenState extends State<ChatScreen> {
       child: InkWell(
         onTap: () => _showPins(chat),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black12))),
+          padding: const EdgeInsets.fromLTRB(12, 7, 4, 7),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)))),
           child: Row(children: [
-            Container(width: 3, height: 34, color: Brand.primary),
-            const SizedBox(width: 8),
+            Container(width: 3, height: 34, decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(chat.pinnedCount > 1 ? 'Pinned message (${chat.pinnedCount})' : 'Pinned message',
                     style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600, fontSize: 13)),
-                Text(p.preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+                Text(taliToPlain(p.preview), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
               ]),
             ),
             if (chat.type == 'private' || chat.isAdmin)
               IconButton(
-                icon: const Icon(Icons.close, size: 18),
+                icon: const Icon(Icons.close_rounded, size: 18),
                 tooltip: 'Unpin',
                 onPressed: () => _store.unpin(chat.id, p.id).catchError((e) {
                   if (mounted) showError(context, e);
@@ -1150,69 +1246,88 @@ class _ChatScreenState extends State<ChatScreen> {
     if (MediaQuery.viewInsetsOf(context).bottom > 0) return const SizedBox.shrink();
     // small phones: keep room for the messages above
     final pickerH = (MediaQuery.of(context).size.height * 0.25).clamp(140.0, 300.0);
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
-        Divider(height: 1, color: dark ? Colors.white10 : const Color(0xFFE9ECF3)),
-        SizedBox(
-          height: pickerH,
-          child: EmojiPicker(
-            textEditingController: _text,
-            onEmojiSelected: (_, __) => setState(() {}),
-            onBackspacePressed: () => setState(() {}),
-            config: Config(
-              height: pickerH,
-              checkPlatformCompatibility: true,
-              emojiViewConfig: EmojiViewConfig(
-                backgroundColor: bg,
-                columns: 8,
-                emojiSizeMax: 28,
-                recentsLimit: 32,
-                noRecents: const Text('No recent emoji', style: TextStyle(fontSize: 15, color: Brand.muted)),
+    final tabs = <(IconData, String, int)>[
+      (Icons.emoji_emotions_rounded, 'Emoji', 0),
+      if (auth.feature('stickers')) (Icons.sticky_note_2_rounded, 'Stickers', 1),
+      if (auth.feature('gifs')) (Icons.gif_box_rounded, 'GIFs', 2),
+    ];
+    if (!tabs.any((t) => t.$3 == _panelTab)) _panelTab = 0;
+    final selected = tabs.indexWhere((t) => t.$3 == _panelTab);
+    final Widget body;
+    switch (_panelTab) {
+      case 1:
+        body = SizedBox(height: pickerH + 55, child: StickerPanel(chatId: chatId));
+        break;
+      case 2:
+        body = SizedBox(
+          height: pickerH + 55,
+          child: GifPanel(
+            chatId: chatId,
+            onSearchTap: () {
+              setState(() => _emojiOpen = false);
+              showStickerGifSheet(context, chatId, openGifs: true);
+            },
+          ),
+        );
+        break;
+      default:
+        body = Column(mainAxisSize: MainAxisSize.min, children: [
+          TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
+          Divider(height: 1, color: dark ? Colors.white10 : const Color(0xFFE9ECF3)),
+          SizedBox(
+            height: pickerH,
+            child: EmojiPicker(
+              textEditingController: _text,
+              onEmojiSelected: (_, __) => setState(() {}),
+              onBackspacePressed: () => setState(() {}),
+              config: Config(
+                height: pickerH,
+                checkPlatformCompatibility: true,
+                emojiViewConfig: EmojiViewConfig(
+                  backgroundColor: bg,
+                  columns: 8,
+                  emojiSizeMax: 28,
+                  recentsLimit: 32,
+                  gridPadding: const EdgeInsets.symmetric(horizontal: 6),
+                  noRecents: const Text('No recent emoji', style: TextStyle(fontSize: 15, color: Brand.muted)),
+                ),
+                categoryViewConfig: CategoryViewConfig(
+                  backgroundColor: bg,
+                  indicatorColor: Brand.primary,
+                  iconColorSelected: Brand.primary,
+                  iconColor: Brand.muted,
+                  dividerColor: Colors.transparent,
+                  extraTab: CategoryExtraTab.BACKSPACE,
+                  backspaceColor: Brand.muted,
+                ),
+                skinToneConfig: SkinToneConfig(dialogBackgroundColor: bg, indicatorColor: Brand.muted),
+                bottomActionBarConfig: BottomActionBarConfig(
+                  showBackspaceButton: false,
+                  backgroundColor: bg,
+                  buttonColor: bg,
+                  buttonIconColor: Brand.muted,
+                ),
+                searchViewConfig: SearchViewConfig(backgroundColor: bg, buttonIconColor: Brand.muted),
               ),
-              categoryViewConfig: CategoryViewConfig(
-                backgroundColor: bg,
-                indicatorColor: Brand.primary,
-                iconColorSelected: Brand.primary,
-                iconColor: Brand.muted,
-                dividerColor: Colors.transparent,
-              ),
-              skinToneConfig: const SkinToneConfig(),
-              bottomActionBarConfig: BottomActionBarConfig(
-                backgroundColor: bg,
-                buttonColor: bg,
-                buttonIconColor: Brand.muted,
-              ),
-              searchViewConfig: SearchViewConfig(backgroundColor: bg, buttonIconColor: Brand.muted),
             ),
           ),
-        ),
-        if (auth.feature('stickers') || auth.feature('gifs'))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-            child: Row(children: [
-              if (auth.feature('stickers'))
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() => _emojiOpen = false);
-                    showStickerGifSheet(context, chatId);
-                  },
-                  icon: const Icon(Icons.sticky_note_2_outlined, size: 20),
-                  label: const Text('Stickers'),
-                ),
-              if (auth.feature('gifs'))
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() => _emojiOpen = false);
-                    showStickerGifSheet(context, chatId, openGifs: true);
-                  },
-                  icon: const Icon(Icons.gif_box_outlined, size: 20),
-                  label: const Text('GIFs'),
-                ),
-            ]),
+        ]);
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        AnimatedSwitcher(duration: const Duration(milliseconds: 180), child: KeyedSubtree(key: ValueKey(_panelTab), child: body)),
+        if (tabs.length > 1)
+          PanelTabs(
+            tabs: [for (final t in tabs) (t.$1, t.$2)],
+            selected: selected,
+            onSelect: (i) => setState(() => _panelTab = tabs[i].$3),
           ),
       ]),
     );
@@ -1350,43 +1465,85 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (banner != null)
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 6, 0, 0),
-                child: Row(children: [
-                  Icon(_editing != null ? Icons.edit : Icons.reply, color: Brand.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(
-                        _editing != null ? 'Edit message' : 'Reply to ${banner.sender?.name ?? _store.userName(banner.senderId)}',
-                        style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600, fontSize: 13),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              child: banner == null
+                  ? const SizedBox(width: double.infinity)
+                  : Container(
+                      margin: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.06) : Brand.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      Text(banner.preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                    ]),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() {
-                      if (_editing != null) _text.clear();
-                      _editing = null;
-                      _replyTo = null;
-                    }),
-                  ),
-                ]),
-              ),
+                      clipBehavior: Clip.antiAlias,
+                      child: IntrinsicHeight(
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          Container(width: 4, decoration: const BoxDecoration(gradient: Brand.aurora)),
+                          const SizedBox(width: 10),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Icon(_editing != null ? Icons.edit_rounded : Icons.reply_rounded, color: Brand.primary, size: 22),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Text(
+                                  _editing != null ? 'Edit message' : 'Reply to ${banner.sender?.name ?? _store.userName(banner.senderId)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(taliToPlain(banner.preview), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
+                              ]),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            tooltip: 'Cancel',
+                            onPressed: () => setState(() {
+                              if (_editing != null) _text.clear();
+                              _editing = null;
+                              _replyTo = null;
+                            }),
+                          ),
+                        ]),
+                      ),
+                    ),
+            ),
             if (_recording)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.fromLTRB(4, 2, 0, 2),
                 child: Row(children: [
-                  const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.fiber_manual_record, color: Colors.red, size: 16)),
-                  Text(duration(_recSeconds), style: const TextStyle(fontSize: 16)),
-                  const Spacer(),
-                  TextButton(onPressed: () => _stopRecording(send: false), child: const Text('Cancel')),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_upward_rounded, color: Brand.primary),
-                    onPressed: () => _stopRecording(send: true),
+                  Expanded(
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1C2033) : Colors.white,
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(children: [
+                        const RecordingDot(),
+                        const SizedBox(width: 10),
+                        Text(duration(_recSeconds), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                        const SizedBox(width: 12),
+                        const Expanded(child: RecordingWave()),
+                        TextButton(
+                          onPressed: () => _stopRecording(send: false),
+                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                          child: const Text('Cancel'),
+                        ),
+                      ]),
+                    ),
                   ),
+                  const SizedBox(width: 6),
+                  _roundAction(icon: Icons.send_rounded, tooltip: 'Send voice message', onTap: () => _stopRecording(send: true)),
                 ]),
               )
             else
@@ -1414,20 +1571,25 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (_editing != null) const SizedBox(width: 4),
                   Expanded(child: _inputPill(chat)),
                   const SizedBox(width: 6),
-                  if (_text.text.trim().isNotEmpty || _editing != null || !context.read<AuthState>().feature('voice_messages'))
-                    GestureDetector(
-                      onLongPress: _editing == null ? _sendOptions : null,
-                      child: _roundAction(
-                        icon: _editing != null ? Icons.check_rounded : Icons.send_rounded,
-                        tooltip: 'Send (hold to schedule)',
-                        onTap: _send,
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      onLongPress: _recordVideoNote,
-                      child: _roundAction(icon: Icons.mic_rounded, tooltip: 'Voice message (hold for video)', onTap: _startRecording),
-                    ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (child, a) => ScaleTransition(scale: a, child: FadeTransition(opacity: a, child: child)),
+                    child: _text.text.trim().isNotEmpty || _editing != null || !context.read<AuthState>().feature('voice_messages')
+                        ? GestureDetector(
+                            key: const ValueKey('send'),
+                            onLongPress: _editing == null ? _sendOptions : null,
+                            child: _roundAction(
+                              icon: _editing != null ? Icons.check_rounded : Icons.send_rounded,
+                              tooltip: 'Send (hold to schedule)',
+                              onTap: _send,
+                            ),
+                          )
+                        : GestureDetector(
+                            key: const ValueKey('mic'),
+                            onLongPress: _recordVideoNote,
+                            child: _roundAction(icon: Icons.mic_rounded, tooltip: 'Voice message (hold for video)', onTap: _startRecording),
+                          ),
+                  ),
                 ],
               ),
             if (_emojiOpen && !_recording) _emojiPanel(),

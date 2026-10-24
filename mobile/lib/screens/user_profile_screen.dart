@@ -7,7 +7,6 @@ import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
-import '../widgets/avatar.dart';
 import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
 import 'secret_screens.dart';
@@ -78,7 +77,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final store = context.watch<ChatStore>();
     final myId = store.myId;
     final auth = context.read<AuthState>();
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final chat = u == null ? null : store.chats.where((c) => c.peer?.id == u.id).firstOrNull;
     final other = u != null && !u.deleted && u.id != myId;
     return Scaffold(
@@ -89,51 +87,39 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           : ListView(
               padding: EdgeInsets.zero,
               children: [
-                // header
-                Container(
-                  padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 56, 16, 22),
-                  decoration: BoxDecoration(gradient: Brand.auroraSoft(dark)),
-                  child: Column(children: [
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(gradient: u.online ? null : Brand.aurora, color: u.online ? Brand.accent : null, shape: BoxShape.circle),
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, shape: BoxShape.circle),
-                        child: ClipOval(child: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute, size: 104)),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Flexible(
-                        child: Text(u.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-                      ),
-                      if (u.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified_rounded, color: Brand.sky, size: 22)),
-                      if (u.isPremium) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22)),
-                    ]),
-                    const SizedBox(height: 4),
-                    Text(
-                      u.isBot ? 'bot' : lastSeenText(u),
-                      style: TextStyle(color: u.online ? Brand.accent : Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-                    ),
+                ProfileHero(
+                  id: u.id,
+                  name: u.name,
+                  avatarUrl: u.avatarAbsolute,
+                  online: u.online,
+                  topPadding: MediaQuery.of(context).padding.top + 44,
+                  status: u.isBot ? 'bot' : lastSeenText(u),
+                  statusColor: u.online ? Brand.accent : null,
+                  badges: [
+                    if (u.isVerified) const Icon(Icons.verified_rounded, color: Brand.sky, size: 22),
+                    if (u.isPremium) const Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22),
+                  ],
+                  actions: [
                     if (other) ...[
-                      const SizedBox(height: 18),
-                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        _action(Icons.chat_bubble_rounded, 'Message', () => _message(u)),
-                        if (auth.feature('calls')) _action(Icons.call_rounded, 'Call', () => startCall(context, u, video: false)),
-                        if (auth.feature('calls') && auth.feature('video_calls')) _action(Icons.videocam_rounded, 'Video', () => startCall(context, u, video: true)),
-                        if (chat != null)
-                          _action(chat.isMuted ? Icons.notifications_off_rounded : Icons.notifications_rounded, chat.isMuted ? 'Unmute' : 'Mute', () async {
+                      ProfileAction(icon: Icons.chat_bubble_rounded, label: 'Message', highlight: true, onTap: () => _message(u)),
+                      if (auth.feature('calls')) ProfileAction(icon: Icons.call_rounded, label: 'Call', onTap: () => startCall(context, u, video: false)),
+                      if (auth.feature('calls') && auth.feature('video_calls'))
+                        ProfileAction(icon: Icons.videocam_rounded, label: 'Video', onTap: () => startCall(context, u, video: true)),
+                      if (chat != null)
+                        ProfileAction(
+                          icon: chat.isMuted ? Icons.notifications_off_rounded : Icons.notifications_rounded,
+                          label: chat.isMuted ? 'Unmute' : 'Mute',
+                          onTap: () async {
                             try {
                               await store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'});
                             } catch (e) {
                               if (mounted) showError(this.context, e);
                             }
-                          }),
-                        if (auth.feature('secret_chats')) _action(Icons.lock_rounded, 'Vault', () => startSecretChat(context, u)),
-                      ]),
+                          },
+                        ),
+                      if (auth.feature('secret_chats')) ProfileAction(icon: Icons.lock_rounded, label: 'Vault', onTap: () => startSecretChat(context, u)),
                     ],
-                  ]),
+                  ],
                 ),
                 SettingsGroup(title: 'Info', children: [
                   if (u.phone != null)
@@ -141,7 +127,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       icon: Icons.phone_rounded,
                       color: Brand.green,
                       title: u.phone!,
-                      subtitle: 'Mobile · hold to copy',
+                      subtitle: 'Mobile · tap to copy',
                       onTap: () {
                         Clipboard.setData(ClipboardData(text: u.phone!));
                         showInfo(context, 'Phone number copied');
@@ -205,26 +191,4 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
     );
   }
-
-  Widget _action(IconData icon, String label, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(18),
-          elevation: 0,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: SizedBox(
-              width: 64,
-              height: 62,
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(icon, color: Brand.primary, size: 22),
-                const SizedBox(height: 4),
-                Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ),
-        ),
-      );
 }

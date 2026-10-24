@@ -21,6 +21,7 @@ import 'settings_screens.dart';
 import 'story_screens.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
+import '../widgets/tali_emoji.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -367,12 +368,14 @@ class ChatTile extends StatelessWidget {
     final unread = chat.unreadCount > 0 || chat.markedUnread;
 
     String preview = '';
+    String prefix = '';
+    IconData? kindIcon;
     if (last != null) {
       if (last.isSystem) {
         preview = systemText(last, store);
       } else {
-        final prefix = mine && !chat.isChannel ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
-        preview = '$prefix${last.preview}';
+        prefix = mine && !chat.isChannel ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
+        (kindIcon, preview) = previewParts(last);
       }
     }
 
@@ -389,7 +392,8 @@ class ChatTile extends StatelessWidget {
     }
 
     final online = chat.peer?.online == true && !chat.isSavedMessages && !chat.isBot;
-    return ListTile(
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final tile = ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
       leading: Stack(clipBehavior: Clip.none, children: [
         Avatar(
@@ -419,16 +423,16 @@ class ChatTile extends StatelessWidget {
           // The name takes all the room it needs; only the time/ticks stay on the right.
           Expanded(
             child: Row(children: [
-              if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group, size: 16)),
-              if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign, size: 16)),
+              if (chat.isGroup) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.group_rounded, size: 17, color: Brand.muted)),
+              if (chat.isChannel) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.campaign_rounded, size: 17, color: Brand.muted)),
               Flexible(
                 child: Text(chat.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w600, fontSize: 16, letterSpacing: -0.2)),
               ),
-              if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
-              if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off, size: 15, color: Brand.faint)),
+              if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
+              if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off_rounded, size: 15, color: Brand.faint)),
             ]),
           ),
           const SizedBox(width: 6),
@@ -444,18 +448,38 @@ class ChatTile extends StatelessWidget {
             child: typing == null && draft != null && draft.trim().isNotEmpty
                 ? Text.rich(
                     TextSpan(children: [
-                      const TextSpan(text: 'Draft: ', style: TextStyle(color: Colors.red)),
+                      const TextSpan(text: 'Draft: ', style: TextStyle(color: Brand.rose, fontWeight: FontWeight.w700)),
                       TextSpan(text: draft.replaceAll('\n', ' ')),
                     ]),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   )
-                : Text(
-                    typing ?? preview,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: typing != null ? const TextStyle(color: Brand.primary) : null,
-                  ),
+                : typing != null
+                    ? Row(children: [
+                        Flexible(
+                          child: Text(typing.replaceAll('…', ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600)),
+                        ),
+                        const SizedBox(width: 4),
+                        const TypingDots(color: Brand.primary),
+                      ])
+                    : Text.rich(
+                        TextSpan(children: [
+                          if (prefix.isNotEmpty)
+                            TextSpan(text: prefix, style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8), fontWeight: FontWeight.w600)),
+                          if (kindIcon != null)
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Padding(padding: const EdgeInsets.only(right: 4), child: Icon(kindIcon, size: 16, color: Brand.muted)),
+                            ),
+                          ...taliSpans(preview.replaceAll('\n', ' '), null, scale: 1.15),
+                        ]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: unread && !chat.isMuted ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85) : null,
+                          fontWeight: unread && !chat.isMuted ? FontWeight.w500 : null,
+                        ),
+                      ),
           ),
           if (chat.unreadMentions > 0)
             Container(
@@ -463,8 +487,8 @@ class ChatTile extends StatelessWidget {
               width: 22,
               height: 22,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(color: Brand.primary, shape: BoxShape.circle),
-              child: const Text('@', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+              child: const Text('@', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
             ),
           if (chat.unreadCount > 0)
             Padding(padding: const EdgeInsets.only(left: 6), child: CountBadge(chat.unreadCount, muted: chat.isMuted))
@@ -476,155 +500,47 @@ class ChatTile extends StatelessWidget {
               decoration: BoxDecoration(color: chat.isMuted ? Brand.faint : Brand.primary, shape: BoxShape.circle),
             )
           else if (chat.isPinned)
-            const Icon(Icons.push_pin, size: 16, color: Brand.faint),
+            Transform.rotate(angle: 0.6, child: const Icon(Icons.push_pin_rounded, size: 16, color: Brand.faint)),
         ],
       ),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat))),
       onLongPress: () => showChatActions(context, chat),
     );
+    if (!chat.isPinned) return tile;
+    // pinned chats sit on a faint tint so the top of the list reads as one block
+    return ColoredBox(color: dark ? Colors.white.withValues(alpha: 0.025) : Brand.ink.withValues(alpha: 0.025), child: tile);
   }
 }
 
-Future<void> showChatActions(BuildContext context, Chat chat) async {
-  final store = context.read<ChatStore>();
-  final action = await showModalBottomSheet<String>(
-    context: context,
-    builder: (ctx) => SafeArea(
-      child: Wrap(children: [
-        ListTile(
-          leading: Icon(chat.isPinned ? Icons.push_pin_outlined : Icons.push_pin),
-          title: Text(chat.isPinned ? 'Unpin' : 'Pin to top'),
-          onTap: () => Navigator.pop(ctx, 'pin'),
-        ),
-        ListTile(
-          leading: Icon(chat.unreadCount > 0 || chat.markedUnread ? Icons.mark_chat_read_outlined : Icons.mark_chat_unread_outlined),
-          title: Text(chat.unreadCount > 0 || chat.markedUnread ? 'Mark as read' : 'Mark as unread'),
-          onTap: () => Navigator.pop(ctx, 'unread'),
-        ),
-        ListTile(
-          leading: Icon(chat.isMuted ? Icons.volume_up : Icons.volume_off),
-          title: Text(chat.isMuted ? 'Unmute' : 'Mute notifications'),
-          onTap: () => Navigator.pop(ctx, 'mute'),
-        ),
-        ListTile(
-          leading: Icon(chat.isArchived ? Icons.unarchive : Icons.archive),
-          title: Text(chat.isArchived ? 'Unarchive' : 'Archive'),
-          onTap: () => Navigator.pop(ctx, 'archive'),
-        ),
-        ListTile(
-          leading: const Icon(Icons.delete_outline, color: Colors.red),
-          title: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'), style: const TextStyle(color: Colors.red)),
-          onTap: () => Navigator.pop(ctx, 'delete'),
-        ),
-      ]),
-    ),
-  );
-  if (action == null || !context.mounted) return;
-  try {
-    switch (action) {
-      case 'pin':
-        await store.updateChatSettings(chat.id, {'is_pinned': !chat.isPinned});
-        break;
-      case 'mute':
-        await store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'});
-        break;
-      case 'unread':
-        await store.setMarkedUnread(chat, !(chat.unreadCount > 0 || chat.markedUnread));
-        break;
-      case 'archive':
-        await store.updateChatSettings(chat.id, {'is_archived': !chat.isArchived});
-        break;
-      case 'delete':
-        final ok = await confirm(
-          context,
-          chat.isMulti ? 'Leave “${chat.title}”?' : 'Delete chat?',
-          chat.isMulti ? 'You will stop receiving messages from “${chat.title}”.' : 'The chat history will be removed for you.',
-          ok: chat.isMulti ? 'Leave' : 'Delete',
-          danger: true,
-        );
-        if (ok) await store.leaveOrDelete(chat.id);
-        break;
-    }
-  } catch (e) {
-    if (context.mounted) showError(context, e);
-  }
-}
-
-class ArchivedChatsScreen extends StatefulWidget {
-  const ArchivedChatsScreen({super.key});
-
-  @override
-  State<ArchivedChatsScreen> createState() => _ArchivedChatsScreenState();
-}
-
-class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
-  late Future<List<Chat>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = context.read<ChatStore>().loadArchived();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Archived chats')),
-      body: FutureBuilder<List<Chat>>(
-        future: _future,
-        builder: (ctx, snap) {
-          if (!snap.hasData) {
-            return snap.hasError ? Center(child: Text('${snap.error}')) : const Center(child: CircularProgressIndicator());
-          }
-          final list = snap.data!;
-          if (list.isEmpty) return const Center(child: Text('No archived chats'));
-          return ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (_, i) => ListTile(
-              leading: Avatar(id: list[i].id, name: list[i].title, url: list[i].avatarAbsolute),
-              title: Text(list[i].title),
-              subtitle: Text(list[i].lastMessage?.preview ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-              trailing: IconButton(
-                icon: const Icon(Icons.unarchive),
-                tooltip: 'Unarchive',
-                onPressed: () async {
-                  try {
-                    await context.read<ChatStore>().updateChatSettings(list[i].id, {'is_archived': false});
-                    if (mounted) setState(() => _future = context.read<ChatStore>().loadArchived());
-                  } catch (e) {
-                    if (context.mounted) showError(context, e);
-                  }
-                },
-              ),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: list[i].id, initial: list[i]))),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-
-/// Chats → Message requests.
-class RequestsScreen extends StatelessWidget {
-  const RequestsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final list = context.watch<ChatStore>().requests;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Message requests')),
-      body: list.isEmpty
-          ? const EmptyState(tali: 'cool', title: 'No requests', subtitle: 'Messages from people who are not in your contacts wait here, without notifications.')
-          : ListView(children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                child: Text('These people are not in your contacts. Open a chat to accept, block or delete it.',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-              ),
-              ...list.map((c) => ChatTile(chat: c)),
-            ]),
-    );
+/// Icon + text for a chat-list preview ("Photo", "Voice message"…), without emoji prefixes.
+(IconData?, String) previewParts(Message m) {
+  switch (m.type) {
+    case 'image':
+      return (Icons.photo_rounded, m.text.isNotEmpty ? m.text : 'Photo');
+    case 'video':
+      return (Icons.videocam_rounded, m.text.isNotEmpty ? m.text : 'Video');
+    case 'gif':
+      return (Icons.gif_box_rounded, m.text.isNotEmpty ? m.text : 'GIF');
+    case 'voice':
+      return (Icons.mic_rounded, 'Voice message');
+    case 'video_note':
+      return (Icons.radio_button_checked_rounded, 'Video message');
+    case 'file':
+      return (Icons.insert_drive_file_rounded, m.media?.name ?? 'File');
+    case 'poll':
+      return (Icons.poll_rounded, m.text);
+    case 'location':
+      return (Icons.location_on_rounded, m.meta?['live'] != null ? 'Live location' : (m.text.isNotEmpty ? m.text : 'Location'));
+    case 'contact':
+      return (Icons.person_rounded, '${(m.meta?['contact'] as Map?)?['name'] ?? 'Contact'}');
+    case 'sticker':
+      return (null, '${(m.meta?['sticker'] as Map?)?['emoji'] ?? '🙂'} Sticker');
+    case 'call':
+      final c = m.callMeta ?? const {};
+      final st = '${c['status'] ?? ''}';
+      final missed = st == 'missed' || st == 'busy';
+      return (missed ? Icons.call_missed_rounded : (c['video'] == true ? Icons.videocam_rounded : Icons.call_rounded), m.preview.replaceFirst(RegExp(r'^\S+ '), ''));
+    default:
+      return (null, m.preview);
   }
 }

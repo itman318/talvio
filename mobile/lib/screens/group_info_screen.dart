@@ -16,6 +16,7 @@ import 'more_screens.dart';
 import 'new_chat_screen.dart';
 import 'user_profile_screen.dart';
 import '../theme/brand.dart';
+import '../widgets/premium.dart';
 
 class GroupInfoScreen extends StatefulWidget {
   const GroupInfoScreen({super.key, required this.chatId});
@@ -215,27 +216,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
-  Widget _headerAction(IconData icon, String label, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: SizedBox(
-              width: 66,
-              height: 62,
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(icon, color: Brand.primary, size: 22),
-                const SizedBox(height: 4),
-                Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ),
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
@@ -245,210 +225,253 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
     final members = store.members[chat.id] ?? [];
     final what = chat.isChannel ? 'channel' : 'group';
+    final auth = context.read<AuthState>();
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text(chat.isChannel ? 'Channel info' : 'Group info'),
+        backgroundColor: Colors.transparent,
         actions: [
-          if (chat.isAdmin) IconButton(icon: const Icon(Icons.edit), onPressed: () => _editText(chat, title: true)),
+          if (chat.isAdmin) IconButton(icon: const Icon(Icons.edit_rounded), tooltip: 'Edit name', onPressed: () => _editText(chat, title: true)),
         ],
       ),
       body: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(26), gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark)),
-            child: Column(children: [
-              GestureDetector(
-                onTap: chat.isAdmin ? () => _changePhoto(chat) : null,
-                child: Stack(clipBehavior: Clip.none, children: [
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, shape: BoxShape.circle),
-                      child: ClipOval(child: Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 96)),
-                    ),
-                  ),
-                  if (chat.isAdmin)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                        child: const Icon(Icons.photo_camera_rounded, size: 16, color: Colors.white),
-                      ),
-                    ),
-                ]),
+          ProfileHero(
+            id: chat.id,
+            name: chat.title,
+            avatarUrl: chat.avatarAbsolute,
+            topPadding: MediaQuery.of(context).padding.top + 44,
+            onAvatarTap: chat.isAdmin
+                ? () => _changePhoto(chat)
+                : (chat.avatarAbsolute == null ? null : () => showPhotoViewer(context, chat.avatarAbsolute!, tag: 'avatar-${chat.id}')),
+            avatarBadge: chat.isAdmin
+                ? Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
+                    child: const Icon(Icons.photo_camera_rounded, size: 16, color: Colors.white),
+                  )
+                : null,
+            badges: [if (chat.isVerified) const Icon(Icons.verified_rounded, color: Brand.sky, size: 22)],
+            status: '${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}${chat.username != null ? ' · public' : ''}',
+            actions: [
+              ProfileAction(
+                icon: chat.isMuted ? Icons.notifications_off_rounded : Icons.notifications_rounded,
+                label: chat.isMuted ? 'Unmute' : 'Mute',
+                onTap: () => _run(() => _store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'})),
               ),
-              const SizedBox(height: 12),
-              Text(chat.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
-              const SizedBox(height: 2),
-              Text('${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}${chat.username != null ? ' · public' : ''}',
-                  textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 14),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                _headerAction(chat.isMuted ? Icons.notifications_off_rounded : Icons.notifications_rounded, chat.isMuted ? 'Unmute' : 'Mute',
-                    () => _run(() => _store.updateChatSettings(chat.id, {'muted_until': chat.isMuted ? null : 'forever'}))),
-                _headerAction(Icons.perm_media_rounded, 'Media', () => Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat)))),
-                if (chat.isAdmin && chat.isGroup) _headerAction(Icons.person_add_alt_1_rounded, 'Add', () => _addMembers(chat)),
-                if (chat.isAdmin) _headerAction(Icons.edit_rounded, 'Edit', () => _editText(chat, title: true)),
-              ]),
-            ]),
+              ProfileAction(icon: Icons.perm_media_rounded, label: 'Media', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SharedMediaScreen(chat: chat)))),
+              if (chat.isAdmin && !chat.isSuspended)
+                ProfileAction(icon: Icons.person_add_alt_1_rounded, label: 'Add', highlight: true, onTap: () => _addMembers(chat)),
+              ProfileAction(
+                icon: Icons.ios_share_rounded,
+                label: 'Share',
+                onTap: () async {
+                  final code = chat.username != null ? '@${chat.username}' : chat.inviteCode;
+                  if (code == null) {
+                    showInfo(context, 'Only admins can share the invite code');
+                    return;
+                  }
+                  await Clipboard.setData(ClipboardData(text: code));
+                  if (context.mounted) showInfo(context, chat.username != null ? 'Link copied' : 'Invite code copied');
+                },
+              ),
+            ],
           ),
           if (chat.isSuspended)
-            const Padding(
-              padding: EdgeInsets.all(8),
-              child: Text('Suspended by moderators', textAlign: TextAlign.center, style: TextStyle(color: Colors.red)),
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
+              child: const Text('Suspended by moderators', textAlign: TextAlign.center, style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
             ),
-          const Divider(height: 32),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: Text(chat.description.isEmpty ? (chat.isAdmin ? 'Add a description' : 'No description') : chat.description),
-            onTap: chat.isAdmin ? () => _editText(chat, title: false) : null,
-          ),
-          if (chat.username != null || chat.isOwner)
-            ListTile(
-              leading: const Icon(Icons.alternate_email),
-              title: Text(chat.username != null ? '@${chat.username}' : 'Make this $what public'),
-              subtitle: Text(chat.username != null ? 'Public link — anyone can find and join' : 'Private — joins only with an invite code'),
-              trailing: chat.username != null
-                  ? IconButton(
-                      icon: const Icon(Icons.copy),
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: '@${chat.username}'));
-                        if (context.mounted) showInfo(context, 'Copied');
-                      },
-                    )
-                  : null,
-              onTap: chat.isOwner ? () => _editUsername(chat) : null,
+          SettingsGroup(title: 'Info', children: [
+            SettingsTile(
+              icon: Icons.info_rounded,
+              color: Brand.violet,
+              title: chat.description.isEmpty ? (chat.isAdmin ? 'Add a description' : 'No description') : chat.description,
+              subtitle: 'Description',
+              maxSubtitleLines: 1,
+              onTap: chat.isAdmin ? () => _editText(chat, title: false) : null,
             ),
-          if (chat.isChannel && chat.isAdmin)
-            SwitchListTile(
-              secondary: const Icon(Icons.draw_outlined),
-              title: const Text('Sign messages'),
-              subtitle: const Text('Show the admin’s name on posts'),
-              value: chat.signatures,
-              onChanged: (v) => _run(() => _store.setSignatures(chat.id, v)),
-            ),
-          if (chat.isAdmin)
-            ListTile(
-              leading: const Icon(Icons.insights),
-              title: const Text('Statistics'),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat))),
-            ),
-          if (chat.isChannel && chat.isAdmin && context.read<AuthState>().feature('channel_comments'))
-            SwitchListTile(
-              secondary: const Icon(Icons.forum_outlined),
-              title: const Text('Comments'),
-              subtitle: const Text('Subscribers can comment under posts'),
-              value: chat.commentsEnabled,
-              onChanged: (v) => _run(() => _store.patchChat(chat.id, {'comments_enabled': v})),
-            ),
-          if (chat.isGroup && chat.isAdmin && context.read<AuthState>().feature('topics'))
-            SwitchListTile(
-              secondary: const Icon(Icons.topic_outlined),
-              title: const Text('Topics'),
-              subtitle: const Text('Split the group into topics like “Help” and “Off-topic”'),
-              value: chat.isForum,
-              onChanged: (v) => _run(() => _store.patchChat(chat.id, {'is_forum': v})),
-            ),
-          if (chat.isGroup && chat.isAdmin) ...[
-            ListTile(
-              leading: const Icon(Icons.timer_outlined),
-              title: const Text('Slow mode'),
-              trailing: Text(_slowLabel(chat.slowModeSec)),
-              onTap: () => _pickSlowMode(chat),
-            ),
-            SwitchListTile(
-              secondary: const Icon(Icons.how_to_reg_outlined),
-              title: const Text('Approve new members'),
-              subtitle: const Text('People with an invite must be approved by an admin'),
-              value: chat.joinApproval,
-              onChanged: (v) => _run(() => _store.patchChat(chat.id, {'join_approval': v})),
-            ),
-            if (chat.joinApproval || chat.pendingRequests > 0)
-              ListTile(
-                leading: const Icon(Icons.person_search_outlined),
-                title: const Text('Join requests'),
-                trailing: chat.pendingRequests > 0
-                    ? CircleAvatar(radius: 12, backgroundColor: Brand.primary, child: Text('${chat.pendingRequests}', style: const TextStyle(fontSize: 12, color: Colors.white)))
+            if (chat.username != null || chat.isOwner)
+              SettingsTile(
+                icon: Icons.alternate_email_rounded,
+                color: Brand.sky,
+                title: chat.username != null ? '@${chat.username}' : 'Make this $what public',
+                subtitle: chat.username != null ? 'Public link — anyone can find and join' : 'Private — joins only with an invite code',
+                trailingWidget: chat.username != null
+                    ? IconButton(
+                        icon: const Icon(Icons.copy_rounded, size: 20),
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: '@${chat.username}'));
+                          if (context.mounted) showInfo(context, 'Copied');
+                        },
+                      )
                     : null,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))),
+                onTap: chat.isOwner ? () => _editUsername(chat) : null,
               ),
-          ],
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications_outlined),
-            title: const Text('Notifications'),
-            value: !chat.isMuted,
-            onChanged: (on) => _run(() => _store.updateChatSettings(chat.id, {'muted_until': on ? null : 'forever'})),
-          ),
-          if (chat.isAdmin && chat.inviteCode != null)
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('Invite code'),
-              subtitle: Text(chat.inviteCode!),
-              trailing: PopupMenuButton<String>(
-                onSelected: (v) async {
-                  if (v == 'copy') {
-                    await Clipboard.setData(ClipboardData(text: chat.inviteCode!));
-                    if (context.mounted) showInfo(context, 'Invite code copied');
-                  } else {
-                    await _run(() => _store.regenerateInvite(chat.id), 'New invite code created — the old one no longer works');
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'copy', child: Text('Copy')),
-                  PopupMenuItem(value: 'reset', child: Text('Reset code')),
-                ],
-              ),
+            SettingsSwitchTile(
+              icon: Icons.notifications_rounded,
+              color: Brand.rose,
+              title: 'Notifications',
+              value: !chat.isMuted,
+              onChanged: (on) => _run(() => _store.updateChatSettings(chat.id, {'muted_until': on ? null : 'forever'})),
             ),
-          if (chat.isAdmin && chat.inviteCode != null)
-            ListTile(
-              leading: const Icon(Icons.add_link),
-              title: const Text('Invite links'),
-              subtitle: const Text('Links with expiry date or a member limit'),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InviteLinksScreen(chat: chat))),
-            ),
-          const Divider(),
-          if (chat.isAdmin && !chat.isSuspended)
-            ListTile(
-              leading: const Icon(Icons.person_add, color: Brand.primary),
-              title: Text(chat.isChannel ? 'Add subscribers' : 'Add members', style: const TextStyle(color: Brand.primary)),
-              onTap: () => _addMembers(chat),
-            ),
-          if (chat.isChannel && !chat.isAdmin)
-            const Padding(padding: EdgeInsets.fromLTRB(16, 8, 16, 0), child: Text('Admins', style: TextStyle(fontWeight: FontWeight.w600))),
-          ...members.map((m) => ListTile(
-                leading: Avatar(id: m.user.id, name: m.user.name, url: m.user.avatarAbsolute, size: 42),
-                title: Text(m.user.id == store.myId ? '${m.user.name} (you)' : m.user.name),
-                subtitle: Text(lastSeenText(m.user)),
-                trailing: m.role == 'member'
-                    ? null
-                    : Text(m.role == 'owner' ? 'owner' : 'admin', style: const TextStyle(color: Brand.primary)),
-                onTap: () => _memberActions(chat, m),
-              )),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.flag_outlined),
-            title: Text('Report $what'),
-            onTap: () => showReportDialog(context, targetType: 'chat', targetId: chat.id),
+          ]),
+          if (chat.isAdmin)
+            SettingsGroup(title: 'Admin', children: [
+              SettingsTile(icon: Icons.insights_rounded, color: Brand.green, title: 'Statistics', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat)))),
+              if (chat.isChannel)
+                SettingsSwitchTile(
+                  icon: Icons.draw_rounded,
+                  color: Brand.amber,
+                  title: 'Sign messages',
+                  subtitle: 'Show the admin’s name on posts',
+                  value: chat.signatures,
+                  onChanged: (v) => _run(() => _store.setSignatures(chat.id, v)),
+                ),
+              if (chat.isChannel && auth.feature('channel_comments'))
+                SettingsSwitchTile(
+                  icon: Icons.forum_rounded,
+                  color: Brand.sky,
+                  title: 'Comments',
+                  subtitle: 'Subscribers can comment under posts',
+                  value: chat.commentsEnabled,
+                  onChanged: (v) => _run(() => _store.patchChat(chat.id, {'comments_enabled': v})),
+                ),
+              if (chat.isGroup && auth.feature('topics'))
+                SettingsSwitchTile(
+                  icon: Icons.topic_rounded,
+                  color: Brand.violet,
+                  title: 'Topics',
+                  subtitle: 'Split the group into topics like “Help” and “Off-topic”',
+                  value: chat.isForum,
+                  onChanged: (v) => _run(() => _store.patchChat(chat.id, {'is_forum': v})),
+                ),
+              if (chat.isGroup) ...[
+                SettingsTile(icon: Icons.timer_rounded, color: const Color(0xFF5E6B8C), title: 'Slow mode', trailing: _slowLabel(chat.slowModeSec), onTap: () => _pickSlowMode(chat)),
+                SettingsSwitchTile(
+                  icon: Icons.how_to_reg_rounded,
+                  color: Brand.green,
+                  title: 'Approve new members',
+                  subtitle: 'People with an invite must be approved by an admin',
+                  value: chat.joinApproval,
+                  onChanged: (v) => _run(() => _store.patchChat(chat.id, {'join_approval': v})),
+                ),
+                if (chat.joinApproval || chat.pendingRequests > 0)
+                  SettingsTile(
+                    icon: Icons.person_search_rounded,
+                    color: Brand.primary,
+                    title: 'Join requests',
+                    trailingWidget: chat.pendingRequests > 0 ? CountBadge(chat.pendingRequests) : null,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))),
+                  ),
+              ],
+              if (chat.inviteCode != null) ...[
+                SettingsTile(
+                  icon: Icons.link_rounded,
+                  color: Brand.sky,
+                  title: 'Invite code',
+                  subtitle: chat.inviteCode!,
+                  trailingWidget: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded),
+                    onSelected: (v) async {
+                      if (v == 'copy') {
+                        await Clipboard.setData(ClipboardData(text: chat.inviteCode!));
+                        if (context.mounted) showInfo(context, 'Invite code copied');
+                      } else {
+                        await _run(() => _store.regenerateInvite(chat.id), 'New invite code created — the old one no longer works');
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'copy', child: Text('Copy')),
+                      PopupMenuItem(value: 'reset', child: Text('Reset code')),
+                    ],
+                  ),
+                ),
+                SettingsTile(
+                  icon: Icons.add_link_rounded,
+                  color: Brand.rose,
+                  title: 'Invite links',
+                  subtitle: 'Links with expiry date or a member limit',
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InviteLinksScreen(chat: chat))),
+                ),
+              ],
+            ]),
+          SettingsGroup(
+            title: chat.isChannel && !chat.isAdmin ? 'Admins' : '${members.length} ${chat.isChannel ? 'shown' : 'members'}',
+            children: [
+              if (chat.isAdmin && !chat.isSuspended)
+                SettingsTile(
+                  icon: Icons.person_add_rounded,
+                  color: Brand.primary,
+                  title: chat.isChannel ? 'Add subscribers' : 'Add members',
+                  onTap: () => _addMembers(chat),
+                ),
+              ...members.map((m) => InkWell(
+                    onTap: () => _memberActions(chat, m),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      child: Row(children: [
+                        Stack(clipBehavior: Clip.none, children: [
+                          Avatar(id: m.user.id, name: m.user.name, url: m.user.avatarAbsolute, size: 42),
+                          if (m.user.online)
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                width: 13,
+                                height: 13,
+                                decoration: BoxDecoration(color: Brand.accent, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).colorScheme.surface, width: 2)),
+                              ),
+                            ),
+                        ]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(m.user.id == store.myId ? '${m.user.name} (you)' : m.user.name,
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                            Text(lastSeenText(m.user),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12.5, color: m.user.online ? Brand.accent : Theme.of(context).colorScheme.onSurfaceVariant)),
+                          ]),
+                        ),
+                        if (m.role != 'member')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (m.role == 'owner' ? Brand.premium : Brand.primary).withValues(alpha: dark ? 0.22 : 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(m.role == 'owner' ? 'Owner' : 'Admin',
+                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: m.role == 'owner' ? Brand.premium : Brand.primary)),
+                          ),
+                      ]),
+                    ),
+                  )),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.exit_to_app, color: Colors.red),
-            title: Text('Leave $what', style: const TextStyle(color: Colors.red)),
-            onTap: () async {
-              if (!await confirm(context, 'Leave $what?', 'You will stop receiving messages from “${chat.title}”.', ok: 'Leave', danger: true)) return;
-              try {
-                await _store.leaveOrDelete(chat.id);
-                if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-              } catch (e) {
-                if (context.mounted) showError(context, e);
-              }
-            },
-          ),
+          SettingsGroup(children: [
+            SettingsTile(icon: Icons.flag_rounded, color: Brand.amber, title: 'Report $what', onTap: () => showReportDialog(context, targetType: 'chat', targetId: chat.id)),
+            SettingsTile(
+              icon: Icons.exit_to_app_rounded,
+              color: const Color(0xFFE5484D),
+              title: 'Leave $what',
+              danger: true,
+              onTap: () async {
+                if (!await confirm(context, 'Leave $what?', 'You will stop receiving messages from “${chat.title}”.', ok: 'Leave', danger: true)) return;
+                try {
+                  await _store.leaveOrDelete(chat.id);
+                  if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                } catch (e) {
+                  if (context.mounted) showError(context, e);
+                }
+              },
+            ),
+          ]),
           const SizedBox(height: 24),
         ],
       ),

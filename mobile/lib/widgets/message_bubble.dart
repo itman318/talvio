@@ -11,6 +11,7 @@ import 'extras.dart';
 import 'poll_view.dart';
 import '../screens/calls_screen.dart';
 import '../screens/thread_screen.dart';
+import '../screens/user_profile_screen.dart';
 import 'bot_widgets.dart';
 import '../theme/brand.dart';
 import 'link_preview.dart';
@@ -28,7 +29,17 @@ class MessageBubble extends StatelessWidget {
     this.onTap,
     this.onReplyTap,
     this.commentMode = false,
+    this.firstInGroup = true,
+    this.lastInGroup = true,
+    this.showAvatar = false,
   });
+
+  /// Consecutive messages from one sender are drawn as one stack (tighter gaps, joined corners).
+  final bool firstInGroup;
+  final bool lastInGroup;
+
+  /// Groups: the sender's photo next to the last message of their stack.
+  final bool showAvatar;
 
   final Message message;
   final Chat chat;
@@ -95,6 +106,7 @@ class MessageBubble extends StatelessWidget {
     final colors = ChatColors.of(context);
     final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
     final textColor = isMine ? Colors.white : scheme.onSurface;
+    final reserveAvatar = chat.isGroup && !isMine && !_asChannel && !commentMode;
 
     if ((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) {
       // stickers float without a bubble; a small time chip sits under them
@@ -139,19 +151,25 @@ class MessageBubble extends StatelessWidget {
       if (m.forwardedFromName != null)
         Padding(
           padding: const EdgeInsets.only(bottom: 4),
-          child: Text('Forwarded from ${m.forwardedFromName}',
-              style: TextStyle(color: accent, fontSize: 12, fontStyle: FontStyle.italic)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.shortcut_rounded, size: 14, color: accent),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text('Forwarded from ${m.forwardedFromName}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ]),
         ),
       if (m.replyTo != null)
         GestureDetector(
           onTap: onReplyTap,
           child: Container(
-            margin: const EdgeInsets.only(bottom: 4),
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+            margin: const EdgeInsets.only(bottom: 5),
+            padding: const EdgeInsets.fromLTRB(9, 5, 10, 5),
             decoration: BoxDecoration(
-              color: accent.withAlpha(25),
+              color: accent.withAlpha(isMine ? 40 : 26),
               border: Border(left: BorderSide(color: accent, width: 3)),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,24 +232,23 @@ class MessageBubble extends StatelessWidget {
         ),
     ];
 
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
+    final bubble = GestureDetector(
         onLongPress: onLongPress,
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : 0.78)),
+          margin: EdgeInsets.fromLTRB(showAvatar || reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
             color: isMine && (themed != null || !dark) ? null : bg,
             gradient: isMine ? (themed ?? (dark ? null : Brand.mineGradient)) : null,
             // "Pebble" bubbles: very round, with a soft inner corner instead of a tail.
+            // stacked messages share a straighter edge, the last one closes the stack with a round corner
             borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(isMine ? 20 : 8),
-              topRight: Radius.circular(isMine ? 8 : 20),
-              bottomLeft: const Radius.circular(20),
-              bottomRight: const Radius.circular(20),
+              topLeft: Radius.circular(isMine ? 20 : (firstInGroup ? 8 : 6)),
+              topRight: Radius.circular(isMine ? (firstInGroup ? 8 : 6) : 20),
+              bottomLeft: Radius.circular(isMine ? 20 : (lastInGroup ? 20 : 6)),
+              bottomRight: Radius.circular(isMine ? (lastInGroup ? 20 : 6) : 20),
             ),
             border: isMine || dark ? null : Border.all(color: const Color(0xFFE6E9F1)),
             boxShadow: [BoxShadow(color: (isMine ? Brand.ink : const Color(0xFF1B2138)).withAlpha(isMine ? 40 : 14), blurRadius: 10, offset: const Offset(0, 3))],
@@ -245,8 +262,27 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+      );
+    if (!reserveAvatar) {
+      return Align(alignment: isMine ? Alignment.centerRight : Alignment.centerLeft, child: bubble);
+    }
+    // group chats: a column for the sender's photo, shown next to the last message of each stack
+    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Padding(
+        padding: EdgeInsets.fromLTRB(8, 0, 6, lastInGroup ? 3 : 1),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: showAvatar && m.sender != null
+              ? GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: m.sender!.id))),
+                  child: ClipOval(child: Avatar(id: m.sender!.id, name: m.sender!.name, url: m.sender!.avatarAbsolute, size: 32)),
+                )
+              : null,
+        ),
       ),
-    );
+      Flexible(child: Align(alignment: Alignment.centerLeft, child: bubble)),
+    ]);
   }
 
   static final ThemeData _inkTheme = Brand.dark();

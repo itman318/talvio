@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 import '../core/demo_backend.dart';
@@ -98,7 +101,13 @@ Future<void> showStickerGifSheet(BuildContext context, int chatId, {bool openGif
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: MediaQuery.of(context).size.height * 0.55, child: _StickerGifSheet(chatId: chatId, openGifs: openGifs)),
+    builder: (ctx) => SizedBox(
+      height: MediaQuery.of(context).size.height * 0.62,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _StickerGifSheet(chatId: chatId, openGifs: openGifs),
+      ),
+    ),
   );
 }
 
@@ -135,33 +144,117 @@ class _StickerGifSheetState extends State<_StickerGifSheet> with SingleTickerPro
     final gifs = auth.feature('gifs');
     final stickers = auth.feature('stickers');
     if (!gifs && !stickers) return const Center(child: Text('Stickers are turned off'));
+    void close() => Navigator.pop(context);
     return Column(children: [
-      TabBar(
+      PanelTabs(
         controller: _tabs,
-        dividerColor: Colors.transparent,
-        tabs: [if (stickers) const Tab(text: 'Stickers'), if (gifs) const Tab(text: 'GIFs')],
+        tabs: [
+          if (stickers) (Icons.sticky_note_2_rounded, 'Stickers'),
+          if (gifs) (Icons.gif_box_rounded, 'GIFs'),
+        ],
       ),
       Expanded(
         child: TabBarView(controller: _tabs, children: [
-          if (stickers) _StickerTab(chatId: widget.chatId),
-          if (gifs) _GifTab(chatId: widget.chatId),
+          if (stickers) StickerPanel(chatId: widget.chatId, onSent: close),
+          if (gifs) GifPanel(chatId: widget.chatId, onSent: close, autofocus: widget.openGifs),
         ]),
       ),
     ]);
   }
 }
 
-class _StickerTab extends StatefulWidget {
-  const _StickerTab({required this.chatId});
-  final int chatId;
+/// Pill-shaped tab switcher (Emoji · Stickers · GIFs).
+class PanelTabs extends StatelessWidget {
+  const PanelTabs({super.key, required this.tabs, this.controller, this.selected, this.onSelect});
+  final List<(IconData, String)> tabs;
+  final TabController? controller;
+  final int? selected;
+  final ValueChanged<int>? onSelect;
 
   @override
-  State<_StickerTab> createState() => _StickerTabState();
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    Widget bar(int sel) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEEF0F6),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(children: [
+            for (var i = 0; i < tabs.length; i++)
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    controller?.animateTo(i);
+                    onSelect?.call(i);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      gradient: i == sel ? Brand.aurora : null,
+                      boxShadow: i == sel ? [BoxShadow(color: Brand.rose.withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 3))] : null,
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(tabs[i].$1, size: 18, color: i == sel ? Colors.white : Brand.muted),
+                      const SizedBox(width: 6),
+                      Text(tabs[i].$2,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: i == sel ? Colors.white : Brand.muted)),
+                    ]),
+                  ),
+                ),
+              ),
+          ]),
+        );
+    final c = controller;
+    if (c == null) return bar(selected ?? 0);
+    return AnimatedBuilder(animation: c, builder: (_, __) => bar(c.index));
+  }
 }
 
-class _StickerTabState extends State<_StickerTab> {
+// ------------------------------------------------------------------ recent stickers
+class RecentStickers {
+  RecentStickers._();
+  static const _key = 'recent_stickers';
+  static const max = 24;
+
+  static Future<List<Map<String, dynamic>>> load() async {
+    try {
+      final raw = (await SharedPreferences.getInstance()).getString(_key);
+      if (raw == null) return [];
+      return (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> add(Map<String, dynamic> sticker) async {
+    final list = (await load()).where((s) => s['id'] != sticker['id']).toList()
+      ..insert(0, {'id': sticker['id'], 'url': sticker['url'], 'emoji': sticker['emoji'], 'pack_id': sticker['pack_id']});
+    try {
+      await (await SharedPreferences.getInstance()).setString(_key, jsonEncode(list.take(max).toList()));
+    } catch (_) {}
+  }
+}
+
+/// Stickers: pack bar on top (Recent first), a grid below. Tap sends, long-press previews.
+class StickerPanel extends StatefulWidget {
+  const StickerPanel({super.key, required this.chatId, this.onSent});
+  final int chatId;
+  final VoidCallback? onSent;
+
+  @override
+  State<StickerPanel> createState() => _StickerPanelState();
+}
+
+class _StickerPanelState extends State<StickerPanel> {
   List<Map<String, dynamic>>? _packs;
-  int _sel = 0;
+  List<Map<String, dynamic>> _recent = [];
+  int _sel = 0; // 0 = recent (when there are recents), otherwise pack index offset
 
   @override
   void initState() {
@@ -170,70 +263,154 @@ class _StickerTabState extends State<_StickerTab> {
   }
 
   Future<void> _load() async {
+    final recent = await RecentStickers.load();
     try {
       final r = await context.read<AppServices>().api.get('/stickers/packs') as List;
-      if (mounted) setState(() => _packs = r.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      if (!mounted) return;
+      setState(() {
+        _recent = recent;
+        _packs = r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _sel = recent.isEmpty ? 1 : 0;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _packs = []);
-        showError(context, e);
-      }
+      if (!mounted) return;
+      setState(() {
+        _recent = recent;
+        _packs = [];
+        _sel = 0;
+      });
+      if (recent.isEmpty) showError(context, e);
     }
+  }
+
+  void _send(Map<String, dynamic> sticker) {
+    final store = context.read<ChatStore>();
+    HapticFeedback.selectionClick();
+    widget.onSent?.call();
+    store.sendSticker(widget.chatId, sticker);
+    RecentStickers.add(sticker);
+  }
+
+  Future<void> _preview(Map<String, dynamic> sticker) async {
+    HapticFeedback.mediumImpact();
+    final send = await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (ctx, _, __) => Material(
+        type: MaterialType.transparency,
+        child: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+            width: 230,
+            height: 230,
+            child: netImage(AppConfig.absolute('${sticker['url']}'), fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Center(child: Text('${sticker['emoji']}', style: const TextStyle(fontSize: 120)))),
+          ),
+          const SizedBox(height: 10),
+          Text('${sticker['emoji'] ?? ''}', style: const TextStyle(fontSize: 30)),
+          const SizedBox(height: 14),
+          SizedBox(width: 180, child: AuroraButtonLite(label: 'Send sticker', onPressed: () => Navigator.pop(ctx, true))),
+        ]),
+        ),
+      ),
+      transitionBuilder: (_, a, __, child) => ScaleTransition(
+        scale: CurvedAnimation(parent: a, curve: Curves.easeOutBack),
+        child: FadeTransition(opacity: a, child: child),
+      ),
+    );
+    if (send == true && mounted) _send(sticker);
   }
 
   @override
   Widget build(BuildContext context) {
     final packs = _packs;
-    if (packs == null) return const Center(child: CircularProgressIndicator());
-    final current = packs.isEmpty ? null : packs[_sel.clamp(0, packs.length - 1)];
-    final stickers = ((current?['stickers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    if (packs == null) return const Center(child: CircularProgressIndicator(strokeWidth: 2.4));
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final hasRecent = _recent.isNotEmpty;
+    final List<Map<String, dynamic>> stickers;
+    String title;
+    if (_sel == 0 && hasRecent) {
+      stickers = _recent;
+      title = 'Recently used';
+    } else {
+      final idx = (_sel - 1).clamp(0, packs.isEmpty ? 0 : packs.length - 1);
+      final current = packs.isEmpty ? null : packs[idx];
+      stickers = ((current?['stickers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      title = '${current?['title'] ?? 'Stickers'}';
+    }
+    Widget packButton({required bool selected, required Widget child, required VoidCallback onTap, String? tooltip}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+          child: Tooltip(
+            message: tooltip ?? '',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 46,
+                decoration: BoxDecoration(
+                  gradient: selected ? Brand.auroraSoft(dark) : null,
+                  borderRadius: BorderRadius.circular(14),
+                  border: selected ? Border.all(color: Brand.primary.withValues(alpha: 0.35), width: 1.4) : null,
+                ),
+                padding: const EdgeInsets.all(5),
+                child: child,
+              ),
+            ),
+          ),
+        );
     return Column(children: [
       SizedBox(
         height: 56,
         child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8), children: [
-          for (var i = 0; i < packs.length; i++)
-            Padding(
-              padding: const EdgeInsets.all(4),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => setState(() => _sel = i),
-                child: Container(
-                  width: 48,
-                  decoration: BoxDecoration(
-                    color: i == _sel ? Theme.of(context).colorScheme.surfaceContainerHighest : null,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.all(5),
-                  child: packs[i]['cover_url'] == null
-                      ? const Icon(Icons.emoji_emotions_outlined)
-                      : netImage(AppConfig.absolute('${packs[i]['cover_url']}')),
-                ),
-              ),
+          if (hasRecent)
+            packButton(
+              selected: _sel == 0,
+              tooltip: 'Recent',
+              onTap: () => setState(() => _sel = 0),
+              child: Icon(Icons.access_time_rounded, color: _sel == 0 ? Brand.primary : Brand.muted),
             ),
-          IconButton(
+          for (var i = 0; i < packs.length; i++)
+            packButton(
+              selected: _sel == i + 1 || (!hasRecent && _sel == 0 && i == 0),
+              tooltip: '${packs[i]['title'] ?? ''}',
+              onTap: () => setState(() => _sel = i + 1),
+              child: packs[i]['cover_url'] == null
+                  ? const Icon(Icons.emoji_emotions_outlined)
+                  : netImage(AppConfig.absolute('${packs[i]['cover_url']}'), fit: BoxFit.contain),
+            ),
+          packButton(
+            selected: false,
             tooltip: 'Sticker packs',
-            icon: const Icon(Icons.add_circle_outline),
-            onPressed: () async {
+            onTap: () async {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => const StickerPacksScreen()));
-              _load();
+              if (mounted) _load();
             },
+            child: const Icon(Icons.add_rounded, color: Brand.muted),
           ),
         ]),
       ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(title.toUpperCase(), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Brand.muted)),
+        ),
+      ),
       Expanded(
         child: stickers.isEmpty
-            ? const Center(child: Text('No stickers in this pack yet'))
+            ? const Center(child: Text('No stickers here yet', style: TextStyle(color: Brand.muted)))
             : GridView.builder(
-                padding: const EdgeInsets.all(10),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 90, mainAxisSpacing: 8, crossAxisSpacing: 8),
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 86, mainAxisSpacing: 6, crossAxisSpacing: 6),
                 itemCount: stickers.length,
-                itemBuilder: (_, i) => InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.read<ChatStore>().sendSticker(widget.chatId, stickers[i]);
-                  },
-                  child: netImage(AppConfig.absolute('${stickers[i]['url']}'), errorBuilder: (_, __, ___) => Center(child: Text('${stickers[i]['emoji']}'))),
+                itemBuilder: (_, i) => _StickerCell(
+                  sticker: stickers[i],
+                  onTap: () => _send(stickers[i]),
+                  onLongPress: () => _preview(stickers[i]),
                 ),
               ),
       ),
@@ -241,19 +418,64 @@ class _StickerTabState extends State<_StickerTab> {
   }
 }
 
-class _GifTab extends StatefulWidget {
-  const _GifTab({required this.chatId});
-  final int chatId;
+/// A sticker in the picker: shrinks a little while pressed.
+class _StickerCell extends StatefulWidget {
+  const _StickerCell({required this.sticker, required this.onTap, required this.onLongPress});
+  final Map<String, dynamic> sticker;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
-  State<_GifTab> createState() => _GifTabState();
+  State<_StickerCell> createState() => _StickerCellState();
 }
 
-class _GifTabState extends State<_GifTab> {
+class _StickerCellState extends State<_StickerCell> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.sticker;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapCancel: () => setState(() => _down = false),
+      onTapUp: (_) => setState(() => _down = false),
+      onTap: widget.onTap,
+      onLongPress: () {
+        setState(() => _down = false);
+        widget.onLongPress();
+      },
+      child: AnimatedScale(
+        scale: _down ? 0.86 : 1,
+        duration: const Duration(milliseconds: 120),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: netImage(AppConfig.absolute('${s['url']}'), fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Center(child: Text('${s['emoji']}', style: const TextStyle(fontSize: 36)))),
+        ),
+      ),
+    );
+  }
+}
+
+/// GIFs: trending + search. [searchOnly] = a tap on the search field opens the full sheet (the inline panel hides
+/// while the keyboard is up, so typing happens in the sheet).
+class GifPanel extends StatefulWidget {
+  const GifPanel({super.key, required this.chatId, this.onSent, this.onSearchTap, this.autofocus = false});
+  final int chatId;
+  final VoidCallback? onSent;
+  final VoidCallback? onSearchTap;
+  final bool autofocus;
+
+  @override
+  State<GifPanel> createState() => _GifPanelState();
+}
+
+class _GifPanelState extends State<GifPanel> {
   final _q = TextEditingController();
   final _results = <Map<String, dynamic>>[];
   String? _next;
   bool _loading = false;
+  bool _loadedOnce = false;
   Timer? _debounce;
 
   @override
@@ -284,59 +506,123 @@ class _GifTabState extends State<_GifTab> {
         _next = r['next'] as String?;
       });
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted && !more) showError(context, e);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadedOnce = true;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final placeholder = dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEEF0F6);
     return Column(children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
         child: TextField(
           controller: _q,
-          decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search GIFs', isDense: true),
+          autofocus: widget.autofocus,
+          readOnly: widget.onSearchTap != null,
+          onTap: widget.onSearchTap,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search_rounded),
+            hintText: 'Search GIFs',
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 11),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: const BorderSide(color: Brand.primary, width: 1.4)),
+            suffixIcon: _q.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () {
+                      _q.clear();
+                      _search();
+                    },
+                  ),
+          ),
           onChanged: (_) {
+            setState(() {});
             _debounce?.cancel();
             _debounce = Timer(const Duration(milliseconds: 450), _search);
           },
         ),
       ),
       Expanded(
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (n) {
-            if (n.metrics.extentAfter < 300) _search(more: true);
-            return false;
-          },
-          child: GridView.builder(
-            padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 160, mainAxisSpacing: 6, crossAxisSpacing: 6),
-            itemCount: _results.length,
-            itemBuilder: (_, i) {
-              final g = _results[i];
-              return InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                  context.read<ChatStore>().sendGif(widget.chatId, {
-                    'url': g['url'],
-                    'preview': g['preview'],
-                    'mp4': g['mp4'],
-                    'width': g['width'],
-                    'height': g['height'],
-                  });
+        child: _loadedOnce && !_loading && _results.isEmpty
+            ? Center(child: Text(_q.text.isEmpty ? 'GIFs are not available right now' : 'No GIFs found', style: const TextStyle(color: Brand.muted)))
+            : NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  if (n.metrics.extentAfter < 300) _search(more: true);
+                  return false;
                 },
-                child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network('${g['preview']}', fit: BoxFit.cover)),
-              );
-            },
-          ),
-        ),
+                child: GridView.builder(
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, mainAxisSpacing: 6, crossAxisSpacing: 6),
+                  itemCount: _results.isEmpty && _loading ? 9 : _results.length,
+                  itemBuilder: (_, i) {
+                    if (_results.isEmpty) {
+                      return DecoratedBox(decoration: BoxDecoration(color: placeholder, borderRadius: BorderRadius.circular(12)));
+                    }
+                    final g = _results[i];
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        final store = context.read<ChatStore>();
+                        widget.onSent?.call();
+                        store.sendGif(widget.chatId, {
+                          'url': g['url'],
+                          'preview': g['preview'],
+                          'mp4': g['mp4'],
+                          'width': g['width'],
+                          'height': g['height'],
+                        });
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ColoredBox(
+                          color: placeholder,
+                          child: Image.network('${g['preview']}', fit: BoxFit.cover, gaplessPlayback: true,
+                              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.gif_box_outlined, color: Brand.muted))),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
       ),
-      if (_loading) const LinearProgressIndicator(minHeight: 2),
-      const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('Powered by Tenor', style: TextStyle(fontSize: 11, color: Brand.muted))),
+      if (_loading && _results.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
+      const Padding(padding: EdgeInsets.only(bottom: 4, top: 2), child: Text('Powered by Tenor', style: TextStyle(fontSize: 10.5, color: Brand.muted))),
     ]);
   }
+}
+
+/// Small gradient button used inside dialogs of this file (keeps widgets/premium.dart free of a cycle).
+class AuroraButtonLite extends StatelessWidget {
+  const AuroraButtonLite({super.key, required this.label, required this.onPressed});
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onPressed,
+          child: Ink(
+            height: 48,
+            decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(16)),
+            child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15))),
+          ),
+        ),
+      );
 }
 
 // ------------------------------------------------------------------ manage packs

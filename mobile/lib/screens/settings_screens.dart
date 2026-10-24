@@ -8,6 +8,8 @@ import '../config.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import '../state/auth_state.dart';
+import 'chat_screen.dart';
+import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import 'folder_support_screens.dart';
@@ -100,6 +102,33 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+          // quick shortcuts
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+            child: Row(children: [
+              Expanded(
+                child: QuickTile(
+                  icon: Icons.bookmark_rounded,
+                  label: 'My Notes',
+                  color: Brand.sky,
+                  onTap: () async {
+                    try {
+                      final chat = await context.read<ChatStore>().openPrivateWith(me.id);
+                      if (context.mounted) go(ChatScreen(chatId: chat.id, initial: chat));
+                    } catch (e) {
+                      if (context.mounted) showError(context, e);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: QuickTile(icon: Icons.qr_code_2_rounded, label: 'QR code', color: Brand.violet, onTap: () => go(const MyQrScreen()))),
+              const SizedBox(width: 10),
+              Expanded(child: QuickTile(icon: Icons.palette_rounded, label: 'Theme', color: Brand.rose, onTap: () => go(const AppearanceScreen()))),
+              const SizedBox(width: 10),
+              Expanded(child: QuickTile(icon: Icons.devices_rounded, label: 'Devices', color: Brand.green, onTap: () => go(const SessionsScreen()))),
+            ]),
           ),
           if (auth.otherAccounts.isNotEmpty || auth.accounts.list.length < auth.maxAccounts)
             SettingsGroup(children: [

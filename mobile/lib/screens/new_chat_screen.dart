@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../widgets/premium.dart';
 
 import '../config.dart';
 import '../core/services.dart';
@@ -168,28 +169,28 @@ class NewChatScreen extends StatelessWidget {
         onTap: (u) => _openWith(context, u.id),
         header: Column(children: [
           ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.group_add)),
+            leading: const GradientIcon(Icons.group_add_rounded, color: Brand.primary),
             title: const Text('New group'),
             onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewGroupScreen())),
           ),
           if (context.read<AuthState>().feature('channels'))
             ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.campaign)),
+              leading: const GradientIcon(Icons.campaign_rounded, color: Brand.violet),
               title: const Text('New channel'),
               onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NewChannelScreen())),
             ),
           ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.bookmark)),
+            leading: const GradientIcon(Icons.bookmark_rounded, color: Brand.sky),
             title: const Text('My Notes'),
             onTap: () => _openWith(context, myId),
           ),
           ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.contacts_outlined)),
+            leading: const GradientIcon(Icons.contacts_rounded, color: Brand.green),
             title: const Text('Find friends from contacts'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactsSyncScreen())),
           ),
           ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.link)),
+            leading: const GradientIcon(Icons.link_rounded, color: Brand.amber),
             title: const Text('Join with invite code'),
             onTap: () => showJoinGroupDialog(context),
           ),
