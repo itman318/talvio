@@ -307,6 +307,7 @@
       case 'channel_created': return `Channel “${meta.title || ''}” created`;
       case 'title_changed': return `${actor} changed the group name to “${meta.title || ''}”`;
       case 'photo_changed': return `${actor} changed the group photo`;
+      case 'welcome': return `👋 Welcome ${(meta.user_ids || []).slice(0, 3).map(who).join(', ')}!${meta.text ? `\n${meta.text}` : ''}`;
       case 'members_added': return (meta.user_ids || []).length === 1 ? `${actor} added ${who(meta.user_ids[0])}` : `${actor} added ${(meta.user_ids || []).length} members`;
       case 'member_removed': return `${actor} removed ${who(meta.user_id)}`;
       case 'member_left': return `${who(meta.user_id)} left the group`;
@@ -788,6 +789,10 @@
     if (m.reply_to) {
       body.push(el('div', { class: 'reply', onclick: () => scrollToMessage(m.reply_to.id) },
         el('b', {}, m.reply_to.sender_name || c.title), m.reply_to.deleted ? 'Deleted message' : (m.reply_to.text || m.reply_to.type)));
+    }
+    if (m.meta && m.meta.quote) {
+      const q = m.meta.quote;
+      body.push(el('div', { class: 'reply' }, el('b', {}, `↩ ${q.sender_name || ''}${q.chat_title ? ` · ${q.chat_title}` : ''}`), q.text || q.type || ''));
     }
     if (album) body.push(albumView(album));
     else body.push(...mediaView(m));
