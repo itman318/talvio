@@ -3,7 +3,7 @@
 set -o pipefail
 mkdir -p ci-app
 adb logcat -c || true
-(cd mobile && flutter drive \
+(cd mobile && timeout 1800 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/app_test.dart \
   --dart-define=API_BASE=http://10.0.2.2:4000 \
