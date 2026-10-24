@@ -407,6 +407,11 @@ async function prepareMessage(userId, chat, body) {
       if (media.duration_sec && media.duration_sec > 60) throw badRequest('video_note_too_long', 'Video messages can be up to 60 seconds');
     }
     out.mediaId = media.id;
+    if (type === 'voice' && Array.isArray(body.waveform)) {
+      // loudness bars recorded on the phone (0–31 each), drawn by the voice player
+      const wave = body.waveform.slice(0, 100).map((x) => Math.max(0, Math.min(31, Math.round(Number(x) || 0))));
+      if (wave.length >= 8) out.meta = { waveform: wave };
+    }
   }
 
   out.threadId = null;
@@ -712,7 +717,7 @@ async function forwardMessages(userId, body = {}) {
         mediaId: r.media_id,
         fwdUserId: from.type === 'channel' ? null : r.forwarded_from_user_id || r.sender_id,
         fwdName: r.forwarded_from_name || fromName,
-        meta: r.type === 'location' ? r.meta : null,
+        meta: r.type === 'location' || r.type === 'voice' ? r.meta : null, // forwarded voice keeps its waveform
       });
       count += 1;
     }

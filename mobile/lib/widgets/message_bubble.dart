@@ -73,7 +73,7 @@ class MessageBubble extends StatelessWidget {
       case 'video':
         return MessageVideo(message: m);
       case 'voice':
-        return VoicePlayer(message: m, color: accent);
+        return VoicePlayer(message: m, color: isMine ? Colors.white : accent, isMine: isMine);
       case 'video_note':
         return VideoNoteBubble(message: m, size: 200);
       case 'file':

@@ -259,6 +259,7 @@ class _StickerPanelState extends State<StickerPanel> {
   @override
   void initState() {
     super.initState();
+    context.read<ChatStore>().sendTyping(widget.chatId, action: 'choosing_sticker');
     _load();
   }
 

@@ -46,6 +46,7 @@ class ChatStore extends ChangeNotifier {
   final Map<int, bool> _hasMore = {};
   final Set<int> _loadingMore = {};
   final Map<int, Map<int, DateTime>> _typing = {}; // chatId -> userId -> expiry
+  final Map<int, Map<int, String>> _typingAction = {}; // chatId -> userId -> typing | recording_voice | uploading_photo…
   final Map<int, DateTime> _typingSent = {};
   final Map<int, int> _lastReadSent = {};
   final Map<int, AppUser> userCache = {};
@@ -98,6 +99,7 @@ class ChatStore extends ChangeNotifier {
     _messages.clear();
     _hasMore.clear();
     _typing.clear();
+    _typingAction.clear();
     _lastReadSent.clear();
     userCache.clear();
     members.clear();
@@ -412,6 +414,7 @@ class ChatStore extends ChangeNotifier {
     int? height,
     Message? replyTo,
     String? albumId,
+    List<int>? waveform,
   }) async {
     final file = File(path);
     final local = Message(
@@ -426,6 +429,7 @@ class ChatStore extends ChangeNotifier {
       createdAt: DateTime.now(),
       sendState: SendState.sending,
       localFilePath: path,
+      meta: waveform == null ? null : {'waveform': waveform},
       uploadKind: type == 'video_note' ? 'video' : type,
       media: MediaInfo(
         id: 0,
@@ -438,7 +442,13 @@ class ChatStore extends ChangeNotifier {
         height: height,
         url: '',
       ),
-      outbox: {'type': type, 'text': caption, if (replyTo != null) 'reply_to_id': replyTo.id, if (albumId != null) 'album_id': albumId},
+      outbox: {
+        'type': type,
+        'text': caption,
+        if (replyTo != null) 'reply_to_id': replyTo.id,
+        if (albumId != null) 'album_id': albumId,
+        if (waveform != null) 'waveform': waveform,
+      },
     );
     _insertLocal(local);
     await _uploadAndDeliver(local);
@@ -446,6 +456,15 @@ class ChatStore extends ChangeNotifier {
 
   Future<void> _uploadAndDeliver(Message local) async {
     if (local.uploadKind != null) {
+      final action = switch (local.type) {
+        'image' => 'uploading_photo',
+        'video' => 'uploading_video',
+        'video_note' => 'recording_video',
+        'voice' => 'recording_voice',
+        _ => 'uploading_file',
+      };
+      sendTyping(local.chatId, action: action);
+      final pulse = Timer.periodic(const Duration(seconds: 3), (_) => sendTyping(local.chatId, action: action));
       try {
         final m = local.media!;
         final media = await api.upload(local.localFilePath!, kind: local.uploadKind!, mime: m.mime, fields: {
@@ -463,6 +482,9 @@ class ChatStore extends ChangeNotifier {
       } catch (e) {
         _fail(local, 'Upload failed');
         return;
+      } finally {
+        pulse.cancel();
+        sendTyping(local.chatId, action: 'cancel');
       }
     }
     await _deliver(local);
@@ -542,11 +564,19 @@ class ChatStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void sendTyping(int chatId) {
+  final Map<int, String> _typingSentAction = {};
+
+  /// Tells the chat what I'm doing: typing (default), recording_voice, recording_video,
+  /// uploading_photo / _video / _file, choosing_sticker — or cancel when I stopped.
+  void sendTyping(int chatId, {String action = 'typing'}) {
     final last = _typingSent[chatId];
-    if (last != null && DateTime.now().difference(last).inMilliseconds < 3000) return;
+    final same = _typingSentAction[chatId] == action;
+    if (same && last != null && DateTime.now().difference(last).inMilliseconds < 3000) return;
+    if (action == 'cancel' && _typingSentAction[chatId] == null) return;
     _typingSent[chatId] = DateTime.now();
-    socket.emit('typing', {'chat_id': chatId});
+    _typingSentAction[chatId] = action == 'cancel' ? '' : action;
+    if (action == 'cancel') _typingSentAction.remove(chatId);
+    socket.emit('typing', {'chat_id': chatId, 'action': action});
   }
 
   // ------------------------------------------------------------------ message actions
@@ -1024,12 +1054,30 @@ class ChatStore extends ChangeNotifier {
     return userCache[id]?.name ?? 'a member';
   }
 
-  /// "typing…" / "Ali is typing…" / "2 people are typing…", or null.
+  static const _actionText = {
+    'typing': 'typing',
+    'recording_voice': 'recording a voice message',
+    'recording_video': 'recording a video message',
+    'uploading_photo': 'sending a photo',
+    'uploading_video': 'sending a video',
+    'uploading_file': 'sending a file',
+    'choosing_sticker': 'choosing a sticker',
+  };
+
+  /// What the other side is doing right now: typing, recording_voice, uploading_photo… (null = nothing).
+  String? typingAction(Chat chat) {
+    final t = _typing[chat.id];
+    if (t == null || t.isEmpty) return null;
+    return _typingAction[chat.id]?[t.keys.first] ?? 'typing';
+  }
+
+  /// "typing…" / "Ali is recording a voice message…" / "2 people are typing…", or null.
   String? typingText(Chat chat) {
     final t = _typing[chat.id];
     if (t == null || t.isEmpty) return null;
-    if (!chat.isGroup) return 'typing…';
-    if (t.length == 1) return '${userCache[t.keys.first]?.firstName ?? 'Someone'} is typing…';
+    final what = _actionText[typingAction(chat)] ?? 'typing';
+    if (!chat.isGroup) return '$what…';
+    if (t.length == 1) return '${userCache[t.keys.first]?.firstName ?? 'Someone'} is $what…';
     return '${t.length} people are typing…';
   }
 
@@ -1086,7 +1134,14 @@ class ChatStore extends ChangeNotifier {
       case 'typing':
         final uid = _int(d['user_id']);
         if (uid == myId) break;
-        _typing.putIfAbsent(_int(d['chat_id']), () => {})[uid] = DateTime.now().add(const Duration(seconds: 5));
+        final tChat = _int(d['chat_id']);
+        final action = '${d['action'] ?? 'typing'}';
+        if (action == 'cancel') {
+          _typing[tChat]?.remove(uid);
+        } else {
+          _typing.putIfAbsent(tChat, () => {})[uid] = DateTime.now().add(const Duration(seconds: 6));
+          _typingAction.putIfAbsent(tChat, () => {})[uid] = action;
+        }
         notifyListeners();
         break;
       case 'presence':

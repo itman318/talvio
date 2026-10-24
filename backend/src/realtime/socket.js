@@ -321,14 +321,17 @@ function init(httpServer) {
       'message:delivered',
       handler((p) => messageService.markDelivered(uid, p.chat_id, p.message_id)),
     );
+    // "typing…", "recording a voice message…", "sending a photo…" (cancel = stopped)
+    const TYPING_ACTIONS = ['typing', 'recording_voice', 'recording_video', 'uploading_photo', 'uploading_video', 'uploading_file', 'choosing_sticker', 'cancel'];
     socket.on('typing', async (p) => {
       try {
         const chatId = parseInt(p && p.chat_id, 10);
         if (!Number.isSafeInteger(chatId) || chatId <= 0) return;
-        if (!rateLimit.hit(`typing:${socket.id}:${chatId}`, 1, 2500).allowed) return;
+        const action = TYPING_ACTIONS.includes(p && p.action) ? p.action : 'typing';
+        if (!rateLimit.hit(`typing:${socket.id}:${chatId}:${action}`, 1, 2500).allowed) return;
         if (!(await isMember(chatId))) return;
         const ids = (await chatService.memberIds(chatId)).filter((id) => id !== uid);
-        emitToUsers(ids, 'typing', { chat_id: chatId, user_id: uid });
+        emitToUsers(ids, 'typing', { chat_id: chatId, user_id: uid, action });
       } catch (_) {
         /* ignore */
       }

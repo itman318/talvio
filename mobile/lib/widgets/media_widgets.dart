@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../theme/brand.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/prefs.dart';
@@ -221,24 +223,63 @@ class _VideoScreenState extends State<VideoScreen> {
   }
 }
 
+/// Voice message player: loudness bars you can tap or drag to seek, 1× / 1.5× / 2× speed,
+/// one voice message plays at a time, and a dot marks voice messages you haven't played yet.
 class VoicePlayer extends StatefulWidget {
-  const VoicePlayer({super.key, required this.message, required this.color});
+  const VoicePlayer({super.key, required this.message, required this.color, this.isMine = false});
   final Message message;
   final Color color;
+  final bool isMine;
+
+  /// Playback speed shared by all voice messages (like the big messengers remember it).
+  static double speed = 1.0;
 
   @override
   State<VoicePlayer> createState() => _VoicePlayerState();
 }
 
+/// Remembers which voice messages were played (the "new" dot).
+class PlayedVoices {
+  PlayedVoices._();
+  static const _key = 'played_voice_ids';
+  static final Set<int> _ids = {};
+  static bool _loaded = false;
+
+  static Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    try {
+      final l = (await SharedPreferences.getInstance()).getStringList(_key) ?? const [];
+      _ids.addAll(l.map(int.tryParse).whereType<int>());
+    } catch (_) {}
+  }
+
+  static bool played(int id) => _ids.contains(id);
+
+  static Future<void> mark(int id) async {
+    if (!_ids.add(id)) return;
+    try {
+      final list = _ids.toList();
+      await (await SharedPreferences.getInstance()).setStringList(_key, list.sublist(list.length > 600 ? list.length - 600 : 0).map((e) => '$e').toList());
+    } catch (_) {}
+  }
+}
+
 class _VoicePlayerState extends State<VoicePlayer> {
+  static _VoicePlayerState? _current; // the one playing now
   final _player = AudioPlayer();
   bool _loading = false;
   bool _ready = false;
+  double? _drag; // 0..1 while the finger is on the waveform
   StreamSubscription<PlayerState>? _stateSub;
+  late final List<double> _bars = _waveform();
 
   @override
   void initState() {
     super.initState();
+    PlayedVoices.load().then((_) {
+      if (mounted) setState(() {});
+    });
     _stateSub = _player.playerStateStream.listen((s) {
       if (s.processingState == ProcessingState.completed) {
         _player.pause();
@@ -250,67 +291,192 @@ class _VoicePlayerState extends State<VoicePlayer> {
 
   @override
   void dispose() {
+    if (_current == this) _current = null;
     _stateSub?.cancel();
     _player.dispose();
     super.dispose();
   }
 
+  /// Bars from the recording (meta.waveform), or a calm generated shape for older messages.
+  List<double> _waveform() {
+    final w = widget.message.meta?['waveform'];
+    if (w is List && w.length >= 8) {
+      final raw = w.map((e) => ((e as num?)?.toDouble() ?? 0) / 31).toList();
+      return _resample(raw, 42);
+    }
+    final r = math.Random(widget.message.id.abs() + 7);
+    return List.generate(42, (i) => 0.25 + 0.55 * (0.5 + 0.5 * math.sin(i * 0.55 + r.nextDouble())) * (0.6 + 0.4 * r.nextDouble()));
+  }
+
+  static List<double> _resample(List<double> src, int n) {
+    if (src.length == n) return src;
+    return List.generate(n, (i) {
+      final a = (i * src.length / n).floor();
+      final b = math.max(a + 1, ((i + 1) * src.length / n).floor());
+      var peak = 0.0;
+      for (var k = a; k < b && k < src.length; k++) {
+        peak = math.max(peak, src[k]);
+      }
+      return peak;
+    });
+  }
+
+  Future<bool> _prepare() async {
+    if (_ready) return true;
+    setState(() => _loading = true);
+    try {
+      final f = await resolveMediaFile(context, widget.message);
+      await _player.setFilePath(f.path);
+      _ready = true;
+      return true;
+    } catch (_) {
+      if (mounted) showInfo(context, 'Could not load the voice message');
+      return false;
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _toggle() async {
     if (_player.playing) return _player.pause();
-    if (!_ready) {
-      setState(() => _loading = true);
-      try {
-        final f = await resolveMediaFile(context, widget.message);
-        await _player.setFilePath(f.path);
-        _ready = true;
-      } catch (_) {
-        if (mounted) showInfo(context, 'Could not load the voice message');
-        return;
-      } finally {
-        if (mounted) setState(() => _loading = false);
-      }
-    }
+    if (!await _prepare()) return;
+    if (_current != null && _current != this) await _current!._player.pause();
+    _current = this;
+    await _player.setSpeed(VoicePlayer.speed);
+    if (!widget.message.isLocal) PlayedVoices.mark(widget.message.id);
     _player.play();
+  }
+
+  Future<void> _seekTo(double frac) async {
+    if (!await _prepare()) return;
+    final total = _player.duration ?? Duration(seconds: widget.message.media?.duration ?? 0);
+    await _player.seek(Duration(milliseconds: (total.inMilliseconds * frac.clamp(0.0, 1.0)).round()));
+  }
+
+  void _cycleSpeed() {
+    VoicePlayer.speed = VoicePlayer.speed == 1.0 ? 1.5 : (VoicePlayer.speed == 1.5 ? 2.0 : 1.0);
+    _player.setSpeed(VoicePlayer.speed);
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final total = widget.message.media?.duration ?? _player.duration?.inSeconds ?? 0;
+    final c = widget.color;
+    final playing = _player.playing;
+    final fresh = !widget.isMine && !widget.message.isLocal && !PlayedVoices.played(widget.message.id);
     return SizedBox(
-      width: 220,
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: widget.message.isLocal ? null : _toggle,
-            icon: _loading
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                : Icon(_player.playing ? Icons.pause_circle_filled : Icons.play_circle_fill, size: 38, color: widget.color),
-          ),
-          Expanded(
-            child: StreamBuilder<Duration>(
-              stream: _player.positionStream,
-              builder: (ctx, snap) {
-                final pos = snap.data ?? Duration.zero;
-                final frac = total > 0 ? (pos.inMilliseconds / (total * 1000)).clamp(0.0, 1.0) : 0.0;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LinearProgressIndicator(value: frac, color: widget.color, backgroundColor: widget.color.withAlpha(50)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _player.playing || pos > Duration.zero ? duration(pos.inSeconds) : duration(total),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
-                );
-              },
+      width: 236,
+      child: Row(children: [
+        // play / pause
+        GestureDetector(
+          onTap: widget.message.isLocal ? null : _toggle,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.isMine ? Colors.white.withValues(alpha: 0.16) : null,
+              gradient: widget.isMine ? null : Brand.aurora,
+              boxShadow: widget.isMine ? null : [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
             ),
+            child: _loading || widget.message.isLocal
+                ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 150),
+                    transitionBuilder: (ch, a) => ScaleTransition(scale: a, child: ch),
+                    child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, key: ValueKey(playing), color: Colors.white, size: 28),
+                  ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: StreamBuilder<Duration>(
+            stream: _player.positionStream,
+            builder: (ctx, snap) {
+              final pos = snap.data ?? Duration.zero;
+              final frac = _drag ?? (total > 0 ? (pos.inMilliseconds / (total * 1000)).clamp(0.0, 1.0) : 0.0);
+              final started = playing || pos > Duration.zero;
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                LayoutBuilder(
+                  builder: (ctx, box) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: widget.message.isLocal ? null : (d) => _seekTo(d.localPosition.dx / box.maxWidth),
+                    onHorizontalDragStart: widget.message.isLocal ? null : (d) => setState(() => _drag = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)),
+                    onHorizontalDragUpdate: widget.message.isLocal ? null : (d) => setState(() => _drag = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)),
+                    onHorizontalDragEnd: widget.message.isLocal
+                        ? null
+                        : (_) {
+                            final f = _drag ?? 0;
+                            setState(() => _drag = null);
+                            _seekTo(f);
+                          },
+                    child: SizedBox(
+                      height: 30,
+                      width: box.maxWidth,
+                      child: CustomPaint(painter: _WavePainter(_bars, frac, played: c, rest: c.withValues(alpha: 0.32))),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(children: [
+                  Text(
+                    started ? duration(pos.inSeconds) : duration(total),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.withValues(alpha: 0.9), fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                  if (fresh) ...[
+                    const SizedBox(width: 5),
+                    Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                  ],
+                  const Spacer(),
+                  if (started)
+                    GestureDetector(
+                      onTap: _cycleSpeed,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+                        decoration: BoxDecoration(color: c.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(10)),
+                        child: Text(
+                          VoicePlayer.speed == 1.0 ? '1×' : (VoicePlayer.speed == 1.5 ? '1.5×' : '2×'),
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: c),
+                        ),
+                      ),
+                    ),
+                ]),
+              ]);
+            },
+          ),
+        ),
+      ]),
     );
   }
+}
+
+/// Rounded loudness bars; the played part is drawn in full colour.
+class _WavePainter extends CustomPainter {
+  _WavePainter(this.bars, this.progress, {required this.played, required this.rest});
+  final List<double> bars;
+  final double progress;
+  final Color played;
+  final Color rest;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (bars.isEmpty) return;
+    final step = size.width / bars.length;
+    final w = math.max(2.0, step * 0.55);
+    final on = Paint()..color = played;
+    final off = Paint()..color = rest;
+    for (var i = 0; i < bars.length; i++) {
+      final h = math.max(3.0, size.height * (0.12 + 0.88 * bars[i].clamp(0.0, 1.0)));
+      final x = i * step + (step - w) / 2;
+      final r = RRect.fromRectAndRadius(Rect.fromLTWH(x, (size.height - h) / 2, w, h), Radius.circular(w / 2));
+      canvas.drawRRect(r, (i + 0.5) / bars.length <= progress ? on : off);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WavePainter old) => old.progress != progress || old.played != played || old.bars != bars;
 }
 
 class MessageFile extends StatefulWidget {

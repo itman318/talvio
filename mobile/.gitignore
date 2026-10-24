@@ -4,6 +4,6 @@ build/
 .flutter-plugins-dependencies
 .packages
 pubspec.lock
-android/
-ios/
+/android/
+/ios/
 *.iml

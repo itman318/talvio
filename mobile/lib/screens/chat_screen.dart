@@ -31,6 +31,7 @@ import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
 import 'calls_screen.dart';
+import 'home_screen.dart' show activityIcon;
 import 'premium_screens.dart';
 import 'image_editor_screen.dart';
 import '../widgets/album_view.dart';
@@ -75,7 +76,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final _recorder = AudioRecorder();
   bool _recording = false;
+  bool _recPaused = false;
   int _recSeconds = 0;
+  StreamSubscription<Amplitude>? _ampSub;
+  final List<double> _levels = []; // loudness 0..1, ~every 100 ms (live bars + the waveform we send)
   Timer? _recTimer;
 
   int get chatId => widget.chatId;
@@ -116,6 +120,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _prefs.setDraft(chatId, _editing == null ? _text.text : '');
     _store.closeChat(chatId);
     _recTimer?.cancel();
+    _ampSub?.cancel();
     _recorder.dispose();
     _text.dispose();
     _focus.dispose();
@@ -284,7 +289,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return true;
   }
 
-  Future<void> _sendFile(String path, {required String type, String? name, int? duration, String? albumId}) async {
+  Future<void> _sendFile(String path, {required String type, String? name, int? duration, String? albumId, List<int>? waveform}) async {
     if (!_checkSize(path)) return;
     int? w;
     int? h;
@@ -314,6 +319,7 @@ class _ChatScreenState extends State<ChatScreen> {
       height: h,
       albumId: albumId,
       replyTo: reply,
+      waveform: waveform,
     );
   }
 
@@ -461,13 +467,28 @@ class _ChatScreenState extends State<ChatScreen> {
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100), path: path);
+      if (!mounted) {
+        await _recorder.cancel();
+        return;
+      }
       HapticFeedback.mediumImpact();
+      _levels.clear();
+      _ampSub?.cancel();
+      _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((a) {
+        if (_recPaused || !mounted) return;
+        // dBFS (-60 quiet … 0 loud) → 0..1
+        setState(() => _levels.add(((a.current + 55) / 55).clamp(0.0, 1.0)));
+      });
       setState(() {
         _recording = true;
+        _recPaused = false;
         _recSeconds = 0;
       });
+      _store.sendTyping(chatId, action: 'recording_voice');
       _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted || _recPaused) return;
         setState(() => _recSeconds++);
+        if (_recSeconds % 3 == 0) _store.sendTyping(chatId, action: 'recording_voice');
         if (_recSeconds >= 15 * 60) _stopRecording(send: true);
       });
     } catch (e) {
@@ -475,17 +496,65 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Pause / continue the same voice message.
+  Future<void> _togglePause() async {
+    try {
+      if (_recPaused) {
+        await _recorder.resume();
+        HapticFeedback.selectionClick();
+        _store.sendTyping(chatId, action: 'recording_voice');
+      } else {
+        await _recorder.pause();
+        HapticFeedback.selectionClick();
+        _store.sendTyping(chatId, action: 'cancel');
+      }
+      if (mounted) setState(() => _recPaused = !_recPaused);
+    } catch (_) {
+      if (mounted) showInfo(context, 'Pause is not supported on this phone');
+    }
+  }
+
+  /// The loudness bars sent with the voice message (up to 64 values, 0–31).
+  List<int> _waveformFromLevels() {
+    if (_levels.isEmpty) return const [];
+    const n = 64;
+    final out = <int>[];
+    for (var i = 0; i < n; i++) {
+      final a = (i * _levels.length / n).floor();
+      final b = (((i + 1) * _levels.length) / n).ceil().clamp(a + 1, _levels.length);
+      var peak = 0.0;
+      for (var k = a; k < b; k++) {
+        if (_levels[k] > peak) peak = _levels[k];
+      }
+      out.add((peak * 31).round());
+    }
+    return out;
+  }
+
   Future<void> _stopRecording({required bool send}) async {
     _recTimer?.cancel();
+    await _ampSub?.cancel();
+    _ampSub = null;
     final seconds = _recSeconds;
-    setState(() => _recording = false);
+    final wave = _waveformFromLevels();
+    if (mounted) {
+      setState(() {
+        _recording = false;
+        _recPaused = false;
+      });
+    }
+    _store.sendTyping(chatId, action: 'cancel');
     if (!send) {
       await _recorder.cancel();
+      HapticFeedback.lightImpact();
       return;
     }
     final path = await _recorder.stop();
-    if (path == null || seconds < 1) return;
-    await _sendFile(path, type: 'voice', duration: seconds, name: 'voice.m4a');
+    if (path == null || seconds < 1) {
+      if (mounted && seconds < 1) showInfo(context, 'Hold on a bit longer — the voice message is too short');
+      return;
+    }
+    await _sendFile(path, type: 'voice', duration: seconds, name: 'voice.m4a', waveform: wave.length >= 8 ? wave : null);
   }
 
   // ------------------------------------------------------------------ message menu
@@ -826,6 +895,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     ]),
                     if (typing != null)
                       Row(children: [
+                        if (activityIcon(store.typingAction(chat)) != null)
+                          Padding(padding: const EdgeInsets.only(right: 3), child: Icon(activityIcon(store.typingAction(chat)), size: 14, color: Brand.primary)),
                         Flexible(
                           child: Text(typing.replaceAll('…', ''),
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Brand.primary)),
@@ -1517,27 +1588,35 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             if (_recording)
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 2, 0, 2),
+                padding: const EdgeInsets.fromLTRB(2, 2, 0, 2),
                 child: Row(children: [
                   Expanded(
                     child: Container(
                       height: 52,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      padding: const EdgeInsets.only(left: 2, right: 4),
                       decoration: BoxDecoration(
                         color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1C2033) : Colors.white,
                         borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+                        border: Border.all(color: (_recPaused ? Brand.amber : const Color(0xFFE5484D)).withValues(alpha: 0.3)),
                       ),
                       child: Row(children: [
-                        const RecordingDot(),
-                        const SizedBox(width: 10),
-                        Text(duration(_recSeconds), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
-                        const SizedBox(width: 12),
-                        const Expanded(child: RecordingWave()),
-                        TextButton(
+                        IconButton(
+                          tooltip: 'Delete recording',
+                          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE5484D)),
                           onPressed: () => _stopRecording(send: false),
-                          style: TextButton.styleFrom(foregroundColor: Colors.red),
-                          child: const Text('Cancel'),
+                        ),
+                        if (_recPaused)
+                          const Icon(Icons.pause_circle_filled_rounded, color: Brand.amber, size: 16)
+                        else
+                          const RecordingDot(),
+                        const SizedBox(width: 8),
+                        Text(duration(_recSeconds), style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                        const SizedBox(width: 10),
+                        Expanded(child: LiveWave(levels: _levels, color: _recPaused ? Brand.muted : Brand.primary)),
+                        IconButton(
+                          tooltip: _recPaused ? 'Continue recording' : 'Pause',
+                          icon: Icon(_recPaused ? Icons.mic_rounded : Icons.pause_rounded, color: _recPaused ? Brand.primary : Brand.muted),
+                          onPressed: _togglePause,
                         ),
                       ]),
                     ),

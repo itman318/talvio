@@ -642,3 +642,45 @@ class _TypingDotsState extends State<TypingDots> with SingleTickerProviderStateM
 
   static double _bounce(double t) => t < 0.4 ? math.sin(math.pi * t / 0.4) : 0;
 }
+
+
+/// Bars of the voice being recorded right now (newest on the right).
+class LiveWave extends StatelessWidget {
+  const LiveWave({super.key, required this.levels, this.color = Brand.primary});
+  final List<double> levels;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 28,
+        child: CustomPaint(painter: _LiveWavePainter(List.of(levels), color), size: Size.infinite),
+      );
+}
+
+class _LiveWavePainter extends CustomPainter {
+  _LiveWavePainter(this.levels, this.color);
+  final List<double> levels;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const w = 3.0;
+    const gap = 2.5;
+    final n = (size.width / (w + gap)).floor();
+    final p = Paint()..color = color;
+    final faint = Paint()..color = color.withValues(alpha: 0.25);
+    for (var i = 0; i < n; i++) {
+      final idx = levels.length - n + i;
+      final v = idx >= 0 ? levels[idx] : 0.0;
+      final h = math.max(3.0, size.height * (0.1 + 0.9 * v));
+      final x = i * (w + gap);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(x, (size.height - h) / 2, w, h), const Radius.circular(1.5)),
+        idx >= 0 ? p : faint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiveWavePainter old) => old.levels.length != levels.length || old.color != color;
+}

@@ -456,6 +456,8 @@ class ChatTile extends StatelessWidget {
                   )
                 : typing != null
                     ? Row(children: [
+                        if (activityIcon(store.typingAction(chat)) != null)
+                          Padding(padding: const EdgeInsets.only(right: 4), child: Icon(activityIcon(store.typingAction(chat)), size: 15, color: Brand.primary)),
                         Flexible(
                           child: Text(typing.replaceAll('…', ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w600)),
                         ),
@@ -688,3 +690,14 @@ class RequestsScreen extends StatelessWidget {
     );
   }
 }
+
+/// Small icon for what someone is doing (null for plain typing).
+IconData? activityIcon(String? action) => switch (action) {
+      'recording_voice' => Icons.mic_rounded,
+      'recording_video' => Icons.radio_button_checked_rounded,
+      'uploading_photo' => Icons.photo_rounded,
+      'uploading_video' => Icons.videocam_rounded,
+      'uploading_file' => Icons.insert_drive_file_rounded,
+      'choosing_sticker' => Icons.sticky_note_2_rounded,
+      _ => null,
+    };

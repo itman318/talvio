@@ -61,4 +61,9 @@ test('shared media filters, counts and round video messages', async () => {
   const voice = await messages.listMessages(b, chat.id, { filter: 'voice' });
   assert.deepEqual(voice.messages.map((m) => m.type).sort(), ['video_note', 'voice']);
   await assert.rejects(messages.listMessages(b, chat.id, { filter: 'nope' }), (e) => e.code === 'invalid_filter');
+  await assert.rejects(messages.listMessages(b, chat.id, { filter: 'constructor' }), (e) => e.code === 'invalid_filter');
+
+  // voice messages carry their waveform (clamped to 0–31, at most 100 bars)
+  const w = await send({ type: 'voice', media_id: (await media(a, 'voice')).id, waveform: [0, 5, 40, -3, 12, 31, 7, 9, 'x', 3] });
+  assert.deepEqual(w.meta.waveform, [0, 5, 31, 0, 12, 31, 7, 9, 0, 3]);
 });

@@ -277,6 +277,7 @@
     messages: new Map(), // chatId -> [] oldest → newest
     hasMore: new Map(),
     typing: new Map(), // chatId -> {userId: until}
+    typingAction: new Map(), // "chatId:userId" -> typing | recording_voice | uploading_photo…
     users: new Map(),
     reply: null,
     editing: null,
@@ -1213,7 +1214,11 @@
     const now = Date.now();
     const who = Object.entries(t).filter(([, until]) => until > now).map(([id]) => S.users.get(Number(id)));
     if (!who.length) return '';
-    if (c.type === 'private') return 'typing…';
+    const ACTIONS = { typing: 'typing', recording_voice: 'recording a voice message', recording_video: 'recording a video message', uploading_photo: 'sending a photo', uploading_video: 'sending a video', uploading_file: 'sending a file', choosing_sticker: 'choosing a sticker' };
+    const firstId = Object.entries(t).find(([, until]) => until > now)[0];
+    const what = ACTIONS[S.typingAction.get(`${c.id}:${firstId}`)] || 'typing';
+    if (c.type === 'private') return `${what}…`;
+    if (who.length === 1) return `${who[0] ? who[0].first_name : 'Someone'} is ${what}…`;
     return `${who.map((u) => (u ? u.first_name : 'Someone')).join(', ')} typing…`;
   }
 
@@ -1293,13 +1298,14 @@
       const c = chatById(chatId);
       if (c) { c.delivered_up_to = Math.max(c.delivered_up_to || 0, id); if (chatId === S.open) renderMessages(false); }
     });
-    s.on('typing', ({ chat_id: chatId, user_id: uid }) => {
+    s.on('typing', ({ chat_id: chatId, user_id: uid, action }) => {
       const t = S.typing.get(chatId) || {};
-      t[uid] = Date.now() + 5000;
+      if (action === 'cancel') delete t[uid]; else t[uid] = Date.now() + 6000;
+      S.typingAction.set(`${chatId}:${uid}`, action || 'typing');
       S.typing.set(chatId, t);
       renderChatList();
       if (chatId === S.open) renderHeader();
-      setTimeout(() => { renderChatList(); if (chatId === S.open) renderHeader(); }, 5200);
+      setTimeout(() => { renderChatList(); if (chatId === S.open) renderHeader(); }, 6200);
     });
     s.on('presence', ({ user_id: uid, online, last_seen: ls }) => {
       remember([{ id: uid, online, ...(ls ? { last_seen: ls } : {}) }]);
