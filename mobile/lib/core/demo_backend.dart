@@ -238,6 +238,16 @@ class DemoBackend {
       }
       throw _notInDemo();
     }
+    if (seg.length == 4 && seg[0] == 'chats' && seg[2] == 'request') {
+      final c = _chat(idAt(1)!);
+      if (c == null) throw _notInDemo();
+      if (seg[3] == 'accept') {
+        c['is_request'] = false;
+        return c;
+      }
+      (_responses['/chats'] as List).remove(c);
+      return {'ok': true};
+    }
     if (seg.length == 3 && seg[0] == 'messages' && seg[2] == 'live') return {'ok': true, 'until': DateTime.now().toUtc().toIso8601String()};
     if (seg.length == 3 && seg[0] == 'chats' && seg[2] == 'disappearing') {
       final c = _chat(idAt(1)!);
