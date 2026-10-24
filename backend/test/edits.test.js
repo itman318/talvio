@@ -58,4 +58,8 @@ test('edit history keeps earlier versions; checklist ticks are free; delete-for-
   assert.equal((await messages.deleteMessages(a, chat.id, { message_ids: [old.id] })).deleted, 1);
   const fresh = await messages.sendMessage(a, chat.id, { text: 'oops' });
   assert.equal((await messages.deleteMessages(a, chat.id, { message_ids: [fresh.id], for_everyone: true })).deleted, 1);
+
+  // deleting for everyone also wipes the earlier versions
+  await messages.deleteMessages(a, chat.id, { message_ids: [m.id], for_everyone: true });
+  assert.equal((await db.many('SELECT 1 FROM message_edits WHERE message_id = $1', [m.id])).length, 0);
 });

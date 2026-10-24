@@ -811,3 +811,15 @@ CREATE TABLE IF NOT EXISTS message_edits (
   edited_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS message_edits_msg_idx ON message_edits (message_id, id);
+
+-- deleting a message (for everyone, expiry, admin) also wipes its earlier versions
+CREATE OR REPLACE FUNCTION message_edits_purge() RETURNS trigger AS $$
+BEGIN
+  DELETE FROM message_edits WHERE message_id = NEW.id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS messages_purge_edits ON messages;
+CREATE TRIGGER messages_purge_edits AFTER UPDATE OF deleted_at ON messages
+  FOR EACH ROW WHEN (NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL)
+  EXECUTE FUNCTION message_edits_purge();

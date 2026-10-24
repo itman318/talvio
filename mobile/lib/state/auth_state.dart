@@ -222,6 +222,7 @@ class AuthState extends ChangeNotifier {
   Map<String, dynamic>? passwordChallenge;
 
   Future<void> _verify(String path, Map<String, dynamic> body) async {
+    passwordChallenge = null;
     final data = Map<String, dynamic>.from(await api.post(path, {...body, 'device': _device}) as Map);
     if (data['needs_password'] == true) {
       passwordChallenge = data;
@@ -246,6 +247,7 @@ class AuthState extends ChangeNotifier {
 
   /// Passkey login (fingerprint / face). Returns false when the user cancelled the check.
   Future<bool> loginWithPasskey(LocalPasskey p) async {
+    passwordChallenge = null;
     final data = await Passkeys.login(api, p, _device);
     if (data == null) return false;
     await _completeLogin(data);
@@ -258,6 +260,8 @@ class AuthState extends ChangeNotifier {
     if (ch == null) return null;
     final r = Map<String, dynamic>.from(await api.post('/auth/password/reset', {'login_token': ch['login_token']}) as Map);
     final until = r['reset_pending_until'] as String?;
+    passwordChallenge = {...ch, 'reset_pending_until': until};
+    notifyListeners();
     return until == null ? null : DateTime.parse(until).toLocal();
   }
 

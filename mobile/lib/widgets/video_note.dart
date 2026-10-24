@@ -50,6 +50,11 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble> {
       final f = await resolveMediaFile(context, widget.message);
       final ctrl = VideoPlayerController.file(f);
       await ctrl.initialize();
+      if (!mounted) {
+        await ctrl.dispose(); // scrolled away / chat closed while loading
+        return;
+      }
+      _failed = false;
       ctrl.addListener(() {
         if (mounted) setState(() {});
       });

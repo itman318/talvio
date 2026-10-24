@@ -526,6 +526,7 @@ class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.code == 'login_expired') {
+        context.read<AuthState>().passwordChallenge = null;
         showInfo(context, e.message);
         Navigator.of(context).popUntil((r) => r.isFirst);
         return;

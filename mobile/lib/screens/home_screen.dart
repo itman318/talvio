@@ -231,7 +231,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (idx >= chats.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 40),
-                            child: folder == null
+                            child: q.isNotEmpty
+                                ? const EmptyState(tali: 'think', title: 'No chats found', subtitle: 'Try another name.')
+                                : folder == null
                                 ? EmptyState(
                                     tali: 'hello',
                                     title: 'Say hello!',
