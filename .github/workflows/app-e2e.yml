@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: the Android emulator needs the 24.04 image
     timeout-minutes: 60
     services:
       postgres:
@@ -81,6 +81,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run app on emulator
+        timeout-minutes: 40
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30

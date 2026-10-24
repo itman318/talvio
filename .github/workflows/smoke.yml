@@ -14,7 +14,7 @@ permissions:
 jobs:
   smoke:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: the Android emulator needs the 24.04 image
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
