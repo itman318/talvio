@@ -89,13 +89,16 @@ class CountBadge extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 22),
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 7),
-      alignment: Alignment.center,
       decoration: BoxDecoration(
         gradient: muted ? null : Brand.aurora,
         color: muted ? Brand.faint : null,
         borderRadius: BorderRadius.circular(11),
       ),
-      child: Text(count > 999 ? '999+' : '$count', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+      // widthFactor 1: the pill hugs the number (never stretches to fill a ListTile)
+      child: Center(
+        widthFactor: 1,
+        child: Text(count > 999 ? '999+' : '$count', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+      ),
     );
   }
 }
