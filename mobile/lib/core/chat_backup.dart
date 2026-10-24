@@ -59,7 +59,7 @@ class ChatBackup {
       if (withMedia) {
         for (final m in msgs) {
           final media = m['media'];
-          if (media is! Map || media['url'] == null) continue;
+          if (media is! Map || media['url'] == null || m['view_once'] == true) continue; // view once is never saved
           final size = (media['size'] as num?)?.toInt() ?? 0;
           if (size > maxFileBytes || mediaBytes + size > maxMediaBytes) {
             skippedMedia++;

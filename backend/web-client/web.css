@@ -178,3 +178,10 @@ img.tali { width: 1.35em; height: 1.35em; vertical-align: -0.3em; margin: 0 1px;
 .request-bar { display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
 .request-bar .req-actions { display: flex; gap: 8px; }
 .btn.danger { color: #E5484D; }
+
+/* message formatting & view once */
+.text code{font-family:ui-monospace,Menlo,Consolas,monospace;background:rgba(127,127,127,.15);padding:1px 4px;border-radius:5px;font-size:.92em}
+.spoiler{background:currentColor;border-radius:4px;cursor:pointer;transition:background .2s}
+.spoiler.shown{background:rgba(127,127,127,.15)}
+.once{display:flex;gap:10px;align-items:center;padding:4px 2px}
+.once-ico{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;background:linear-gradient(135deg,#FF7A59,#F0446E 55%,#8B5CF6)}

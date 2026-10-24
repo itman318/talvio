@@ -130,6 +130,7 @@
 
   function preview(m) {
     if (!m) return '';
+    if (m.view_once) return m.type === 'voice' ? '🎤 View once voice message' : m.type === 'video' ? '🎬 View once video' : '📷 View once photo';
     switch (m.type) {
       case 'image': return m.text ? `🖼 ${m.text}` : '🖼 Photo';
       case 'video': return m.text ? `🎬 ${m.text}` : '🎬 Video';
@@ -147,7 +148,7 @@
         return c.duration_sec ? `📞 Call (${dur(c.duration_sec)})` : '📞 Call';
       }
       case 'system': return systemText(m);
-      default: return (m.text || '').replace(TALI_RE, '🦊');
+      default: return (m.text || '').replace(FMT_RE, (x, b, i, st, code, sp) => (sp !== undefined ? '▒▒▒▒' : (b || i || st || code || ''))).replace(TALI_RE, '🦊');
     }
   }
 
@@ -840,7 +841,32 @@
   }
   const onlyTali = (t) => { const s = String(t || '').replace(/\s/g, ''); return s.length > 0 && s.length <= 3 && /^[\uE900-\uE9FF]+$/.test(s); };
 
+  // **bold** _italic_ ~strike~ `code` ||spoiler||
+  const FMT_RE = /\*\*([^\n]+?)\*\*|(?<![\w\\])_([^\n_]+?)_(?!\w)|(?<![\w~])~([^\n~]+?)~(?![\w~])|`([^`\n]+)`|\|\|([^\n]+?)\|\|/g;
+  function formatted(text) {
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(FMT_RE)) {
+      if (m.index > last) out.push(...linkifyPlain(text.slice(last, m.index)));
+      if (m[1] !== undefined) out.push(el('b', {}, ...linkifyPlain(m[1])));
+      else if (m[2] !== undefined) out.push(el('i', {}, ...linkifyPlain(m[2])));
+      else if (m[3] !== undefined) out.push(el('s', {}, ...linkifyPlain(m[3])));
+      else if (m[4] !== undefined) out.push(el('code', {}, m[4]));
+      else {
+        const sp = el('span', { class: 'spoiler', title: 'Tap to reveal' }, m[5]);
+        sp.addEventListener('click', () => sp.classList.add('shown'));
+        out.push(sp);
+      }
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(...linkifyPlain(text.slice(last)));
+    return out;
+  }
   function linkify(text) {
+    return formatted(text);
+  }
+
+  function linkifyPlain(text) {
     const out = [];
     const re = /(https?:\/\/[^\s<]+)/g;
     let last = 0;
@@ -870,6 +896,10 @@
 
   function mediaView(m) {
     const md = m.media;
+    if (m.view_once) {
+      const what = m.type === 'voice' ? 'Voice message' : m.type === 'video' ? 'Video' : 'Photo';
+      return [el('div', { class: 'once' }, el('span', { class: 'once-ico' }, '1'), el('div', {}, el('b', {}, `${what} · view once`), el('div', { class: 'muted' }, 'Open it in the Talvio app')))];
+    }
     switch (m.type) {
       case 'image':
         return md ? [el('div', { class: 'media' }, imageNode(md.url))] : [];
