@@ -3,9 +3,15 @@
 set -o pipefail
 mkdir -p ci-app
 adb logcat -c || true
+# Build first, then stop Gradle/Kotlin daemons (they hold several GB the emulator needs while the test runs)
+(cd mobile && flutter build apk --debug --target=integration_test/app_test.dart --dart-define=API_BASE=http://10.0.2.2:4000 2>&1 | tail -5)
+(cd mobile/android && ./gradlew --stop >/dev/null 2>&1 || true)
+pkill -f KotlinCompileDaemon || true
+free -m || true
 (cd mobile && timeout 1800 flutter drive \
   --driver=test_driver/integration_test.dart \
   --target=integration_test/app_test.dart \
+  --use-application-binary=build/app/outputs/flutter-apk/app-debug.apk \
   --dart-define=API_BASE=http://10.0.2.2:4000 \
   -d emulator-5554 2>&1) | tee ci-app/drive.txt
 rc=$?
