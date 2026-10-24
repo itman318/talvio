@@ -1,0 +1,9 @@
+Talvio API listening on http://localhost:4000  (admin panel: /admin)
+OTP dev mode is ON — codes are returned in the API response
+[OTP dev mode] demo@talvio.app → 019627
+[OTP dev mode] +447700900001 → 017155
+[OTP dev mode] +447700900002 → 975776
+[OTP dev mode] +447700900003 → 630809
+[OTP dev mode] +447700900004 → 083236
+[OTP dev mode] +447700900005 → 617338
+[OTP dev mode] +447700900006 → 341559
