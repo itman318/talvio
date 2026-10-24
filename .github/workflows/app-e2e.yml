@@ -73,6 +73,11 @@ jobs:
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties
           printf '%s\n' 'org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g' 'org.gradle.workers.max=2' 'kotlin.daemon.jvmargs=-Xmx1g' >> android/gradle.properties
           flutter pub get
+          # build the test app now (before the emulator starts), then free the memory Gradle holds
+          flutter build apk --debug --target=integration_test/app_test.dart --dart-define=API_BASE=http://10.0.2.2:4000 2>&1 | tail -5
+          (cd android && ./gradlew --stop >/dev/null 2>&1 || true)
+          pkill -f KotlinCompileDaemon || true
+          free -m
 
       - name: Enable KVM
         run: |
@@ -88,8 +93,7 @@ jobs:
           api-level: 30
           target: google_apis
           arch: x86_64
-          ram-size: 4096M
-          cores: 4
+          ram-size: 3072M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/app-e2e.sh
