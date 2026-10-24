@@ -39,6 +39,10 @@ async function seed() {
   const sana = await login('+923005550002', 'Sana', 'Ahmed');
   const ali = await login('+923005550003', 'Ali', 'Raza');
 
+  // the app user knows these people (otherwise their messages would wait in "Message requests")
+  await call('POST', `/contacts/${sana.id}`, {}, me.token);
+  await call('POST', `/contacts/${ali.id}`, {}, me.token);
+
   const pc = await call('POST', '/chats/private', { user_id: me.id }, sana.token);
   await call('POST', `/chats/${pc.id}/messages`, { text: 'Assalam o alaikum! App kaisi chal rahi hai?' }, sana.token);
   await call('POST', `/chats/${pc.id}/messages`, { text: 'Naya design dekha? 🔥' }, sana.token);

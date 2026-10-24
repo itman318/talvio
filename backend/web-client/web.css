@@ -173,3 +173,8 @@ img.tali { width: 1.35em; height: 1.35em; vertical-align: -0.3em; margin: 0 1px;
 .vnote-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .vnote-play { position: absolute; inset: 0; margin: auto; width: 54px; height: 54px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; }
 .vnote-wrap.playing .vnote-play { display: none; }
+
+.requests-row .req-ic { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: linear-gradient(135deg, #FFEDE7, #EEE8FF); color: #E0417A; flex: none; }
+.request-bar { display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
+.request-bar .req-actions { display: flex; gap: 8px; }
+.btn.danger { color: #E5484D; }

@@ -67,6 +67,9 @@ async function main() {
   const ammi = await phoneUser('+447700900005', 'Mom', '');
   const usman = await phoneUser('+447700900006', 'Alex', 'Turner');
 
+  // the demo user's contacts — Alex is not one, so his chat shows up as a message request
+  for (const p of [ayesha, bilal, sana, ali, ammi]) await call('POST', `/contacts/${p.id}`, {}, me.token);
+
   // ---------------------------------------------------------------- my notes
   const saved = await optional('notes', () => call('POST', '/chats/private', { user_id: me.id }, me.token));
   if (saved) {

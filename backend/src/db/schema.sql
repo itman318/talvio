@@ -787,3 +787,18 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_after TIMESTAMPTZ;
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
 ALTER TABLE messages ADD CONSTRAINT messages_type_check
   CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact'));
+
+-- ---------------------------------------------------------------- message requests (spam protection)
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS is_request BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS message_requests BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- ---------------------------------------------------------------- passkeys (device key + fingerprint login)
+CREATE TABLE IF NOT EXISTS user_passkeys (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  public_key   TEXT         NOT NULL,
+  name         VARCHAR(100) NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS user_passkeys_user_idx ON user_passkeys (user_id);

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../config.dart';
 import '../core/api_client.dart';
+import '../core/passkeys.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
 import 'more_screens.dart';
@@ -29,6 +30,28 @@ class _PhoneScreenState extends State<PhoneScreen> {
   final _email = TextEditingController();
   bool _busy = false;
   bool? _useEmail; // null → default from server settings
+  List<LocalPasskey> _passkeys = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    Passkeys.forThisServer().then((l) {
+      if (mounted) setState(() => _passkeys = l);
+    });
+  }
+
+  Future<void> _passkeyLogin(LocalPasskey p) async {
+    setState(() => _busy = true);
+    try {
+      await context.read<AuthState>().loginWithPasskey(p);
+    } catch (e) {
+      if (mounted) showError(context, e);
+      final l = await Passkeys.forThisServer();
+      if (mounted) setState(() => _passkeys = l);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   String get _phone {
     var n = _number.text.replaceAll(RegExp(r'[^0-9]'), '');
@@ -174,6 +197,15 @@ class _PhoneScreenState extends State<PhoneScreen> {
               ),
             const SizedBox(height: 24),
             AuroraButton(label: 'Next', busy: _busy, onPressed: () => _submit(email)),
+            for (final p in _passkeys) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _passkeyLogin(p),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), side: const BorderSide(color: Brand.primary, width: 1.4)),
+                icon: const Icon(Icons.fingerprint_rounded, color: Brand.primary),
+                label: Text('Log in as ${p.name} with passkey'),
+              ),
+            ],
             if (!auth.addingAccount) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(

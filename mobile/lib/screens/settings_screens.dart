@@ -18,6 +18,8 @@ import 'bot_screens.dart';
 import 'link_device_screen.dart';
 import 'prayer_screen.dart';
 import 'backup_screen.dart';
+import 'qr_screens.dart';
+import '../core/passkeys.dart';
 import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
@@ -87,10 +89,11 @@ class SettingsScreen extends StatelessWidget {
                             maxLines: 2, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5)),
                       ]),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(20)),
-                      child: const Text('Edit', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    IconButton.filledTonal(
+                      tooltip: 'My QR code',
+                      style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.surface),
+                      icon: const Icon(Icons.qr_code_2_rounded),
+                      onPressed: () => go(const MyQrScreen()),
                     ),
                   ]),
                 ),
@@ -164,6 +167,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.person_rounded, color: Brand.sky, title: 'Edit profile', onTap: () => go(const EditProfileScreen())),
             SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy', onTap: () => go(const PrivacyScreen())),
             SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
+            SettingsTile(icon: Icons.fingerprint_rounded, color: Brand.rose, title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
             SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', onTap: () => go(const AppLockSettingsScreen())),
             SettingsTile(icon: Icons.devices_rounded, color: const Color(0xFF5E6B8C), title: 'Devices', onTap: () => go(const SessionsScreen())),
             SettingsTile(icon: Icons.block_rounded, color: const Color(0xFFE5484D), title: 'Blocked users', onTap: () => go(const BlockedUsersScreen())),
@@ -439,13 +443,27 @@ class PrivacyScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Privacy')),
       body: ListView(
-        children: _rows.entries
-            .map((r) => ListTile(
-                  title: Text(r.value),
-                  subtitle: Text(_labels[p[r.key]] ?? '—'),
-                  onTap: () => _change(context, r.key, p[r.key] ?? 'everyone'),
-                ))
-            .toList(),
+        children: [
+          ..._rows.entries.map((r) => ListTile(
+                title: Text(r.value),
+                subtitle: Text(_labels[p[r.key]] ?? '—'),
+                onTap: () => _change(context, r.key, p[r.key] ?? 'everyone'),
+              )),
+          const Divider(),
+          SwitchListTile(
+            title: const Text('Message requests'),
+            subtitle: const Text('Messages from people who are not in your contacts wait in Requests, without notifications'),
+            value: p['message_requests'] != 'off',
+            onChanged: (v) async {
+              try {
+                final u = await context.read<AppServices>().api.put('/me/privacy', {'message_requests': v});
+                if (context.mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+              } catch (e) {
+                if (context.mounted) showError(context, e);
+              }
+            },
+          ),
+        ],
       ),
     );
   }
@@ -773,6 +791,117 @@ class _TwoStepScreenState extends State<TwoStepScreen> {
                   onTap: _remove,
                 ),
               ],
+            ]),
+    );
+  }
+}
+
+
+/// Settings → Passkeys: log in with the phone's fingerprint / face instead of a code.
+class PasskeysScreen extends StatefulWidget {
+  const PasskeysScreen({super.key});
+
+  @override
+  State<PasskeysScreen> createState() => _PasskeysScreenState();
+}
+
+class _PasskeysScreenState extends State<PasskeysScreen> {
+  List<Map<String, dynamic>>? _server;
+  Set<int> _local = {};
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await context.read<AppServices>().api.get('/me/passkeys') as List;
+      final local = (await Passkeys.forThisServer()).map((p) => p.credentialId).toSet();
+      if (mounted) {
+        setState(() {
+          _server = r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          _local = local;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _server = const []);
+        showError(context, e);
+      }
+    }
+  }
+
+  Future<void> _create() async {
+    final auth = context.read<AuthState>();
+    setState(() => _busy = true);
+    try {
+      await Passkeys.create(context.read<AppServices>().api, userId: auth.me!.id, accountName: auth.me!.name);
+      await _load();
+      if (mounted) showInfo(context, 'Passkey created — next time just use your fingerprint');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _remove(Map<String, dynamic> p) async {
+    if (!await confirm(context, 'Remove passkey?', 'That device will need a login code again.', ok: 'Remove', danger: true)) return;
+    if (!mounted) return;
+    try {
+      final id = (p['id'] as num).toInt();
+      await context.read<AppServices>().api.delete('/me/passkeys/$id');
+      await Passkeys.forget(id);
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = _server;
+    final hasHere = list?.any((p) => _local.contains((p['id'] as num).toInt())) ?? false;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Passkeys')),
+      body: list == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark)),
+                  child: const Row(children: [
+                    Icon(Icons.fingerprint_rounded, size: 44, color: Brand.rose),
+                    SizedBox(width: 14),
+                    Expanded(
+                      child: Text('Log in with your fingerprint, face or screen lock — no code needed. The key stays on this phone and never leaves it.',
+                          style: TextStyle(height: 1.4)),
+                    ),
+                  ]),
+                ),
+              ),
+              if (!hasHere)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AuroraButton(label: 'Create a passkey on this phone', icon: Icons.add_rounded, busy: _busy, onPressed: _create),
+                ),
+              if (list.isNotEmpty)
+                SettingsGroup(title: 'Your passkeys', children: [
+                  for (final p in list)
+                    ListTile(
+                      leading: const Icon(Icons.phone_android_rounded),
+                      title: Text('${p['name']}${_local.contains((p['id'] as num).toInt()) ? ' (this phone)' : ''}'),
+                      subtitle: Text(p['last_used_at'] == null
+                          ? 'Never used'
+                          : 'Last used ${chatListTime(DateTime.parse('${p['last_used_at']}').toLocal())}'),
+                      trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _remove(p)),
+                    ),
+                ]),
             ]),
     );
   }

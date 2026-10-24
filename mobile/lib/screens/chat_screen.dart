@@ -1159,7 +1159,61 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _requestBar(Chat chat) {
+    Future<void> act(Future<void> Function() f, {bool close = true}) async {
+      try {
+        await f();
+        if (close && mounted) Navigator.pop(context);
+      } catch (e) {
+        if (mounted) showError(context, e);
+      }
+    }
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        color: ChatColors.of(context).bar,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${chat.title} is not in your contacts', style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          const Text('Accept to reply and get notifications from this chat.', textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 13)),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: Colors.red, minimumSize: const Size.fromHeight(46)),
+                onPressed: () async {
+                  final ok = await confirm(context, 'Block ${chat.title}?', 'They won\'t be able to message you, and the chat is reported as spam.', ok: 'Block & report', danger: true);
+                  if (ok) await act(() => _store.declineRequest(chatId, block: true, report: true));
+                },
+                child: const Text('Block'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                onPressed: () => act(() => _store.declineRequest(chatId)),
+                child: const Text('Delete'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(46)),
+                onPressed: () => act(() => _store.acceptRequest(chatId), close: false),
+                child: const Text('Accept'),
+              ),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+
   Widget _bottomBar(Chat chat) {
+    if (chat.isRequest) return _requestBar(chat);
     if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
       return SafeArea(
         top: false,

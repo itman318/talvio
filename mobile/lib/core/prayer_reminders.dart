@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'message_notifications.dart';
 import 'prayer_times.dart';
 import 'prefs.dart';
 
@@ -11,7 +12,7 @@ import 'prefs.dart';
 class PrayerReminders {
   PrayerReminders._();
 
-  static final _plugin = FlutterLocalNotificationsPlugin();
+  static FlutterLocalNotificationsPlugin get _plugin => MessageNotifications.plugin;
   static bool _ready = false;
   static const _channel = AndroidNotificationDetails(
     'prayer_times',
@@ -25,10 +26,7 @@ class PrayerReminders {
     if (_ready) return;
     tzdata.initializeTimeZones();
     tz.setLocalLocation(tz.UTC); // we schedule absolute instants, so UTC is fine
-    await _plugin.initialize(const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(requestAlertPermission: false, requestBadgePermission: false, requestSoundPermission: false),
-    ));
+    await MessageNotifications.init();
     _ready = true;
   }
 
@@ -45,10 +43,12 @@ class PrayerReminders {
   static Future<void> reschedule(AppPrefs p) async {
     try {
       await _init();
-      await _plugin.cancelAll();
+      for (var i = 900000; i < 900200; i++) {
+        await _plugin.cancel(i); // only our reminders (message notifications use chat ids)
+      }
       if ((!p.prayerReminders && !p.ramadanReminders) || p.prayerLat == null || p.prayerLng == null) return;
       final now = DateTime.now();
-      var id = 1;
+      var id = 900000; // far from chat ids (message notifications)
       for (var d = 0; d < 7; d++) {
         final day = DateTime(now.year, now.month, now.day).add(Duration(days: d));
         final t = prayerTimes(day, lat: p.prayerLat!, lng: p.prayerLng!, method: CalcMethod.values[p.prayerMethod], hanafiAsr: p.hanafiAsr);

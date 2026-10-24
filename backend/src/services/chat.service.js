@@ -54,7 +54,7 @@ const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
        c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
-       cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread,
+       cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread, cm.is_request,
        (SELECT count(*) FROM message_mentions mm JOIN messages mmsg ON mmsg.id = mm.message_id
           WHERE mm.user_id = $1 AND mm.chat_id = c.id AND mmsg.deleted_at IS NULL
             AND mm.message_id > GREATEST(cm.last_read_message_id, cm.cleared_before_id)) AS unread_mentions,
@@ -145,6 +145,7 @@ async function serializeChats(userId, rows) {
       is_muted: !!r.muted_until && new Date(r.muted_until) > now,
       is_pinned: r.is_pinned,
       is_archived: r.is_archived,
+      is_request: !!r.is_request,
       last_message: r.last_visible_message_id ? lastMsgs.get(r.last_visible_message_id) || null : null,
       last_message_at: r.last_message_at ? new Date(r.last_message_at).toISOString() : null,
       created_at: new Date(r.created_at).toISOString(),
@@ -201,14 +202,63 @@ async function getOrCreatePrivate(userId, peerIdRaw) {
       [id, userId],
     );
     if (peerId !== userId) {
+      // Message requests: someone who isn't in the peer's contacts lands in their "Requests"
+      // (no notification) until the peer replies, accepts or adds them as a contact.
       await c.query(
-        'INSERT INTO chat_members (chat_id, user_id, is_hidden) VALUES ($1, $2, TRUE) ON CONFLICT DO NOTHING',
-        [id, peerId],
+        `INSERT INTO chat_members (chat_id, user_id, is_hidden, is_request)
+         SELECT $1, $2, TRUE,
+                u.message_requests AND NOT u.is_bot
+                AND NOT EXISTS (SELECT 1 FROM contacts ct WHERE ct.owner_id = $2 AND ct.contact_id = $3)
+                AND NOT EXISTS (SELECT 1 FROM users me WHERE me.id = $3 AND me.is_bot)
+         FROM users u WHERE u.id = $2
+         ON CONFLICT DO NOTHING`,
+        [id, peerId, userId],
       );
     }
     return id;
   });
   return getChat(userId, chatId);
+}
+
+/** Accepts a message request (the chat moves to the normal list, notifications start). */
+async function acceptRequest(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  await db.query('UPDATE chat_members SET is_request = FALSE WHERE chat_id = $1 AND user_id = $2', [chat.id, userId]);
+  bus.emit('chat:updated', { chatId: chat.id, memberIds: [userId] });
+  return getChat(userId, chat.id);
+}
+
+/** Deletes a message request; optionally blocks (and reports) the sender. */
+async function declineRequest(userId, chatIdRaw, body = {}) {
+  const chat = await requireMember(chatIdRaw, userId);
+  if (chat.type !== 'private') throw badRequest('invalid_input', 'Only private chats can be requests');
+  const peerId = await privatePeerId(chat.id, userId);
+  await db.query(
+    `UPDATE chat_members SET is_request = FALSE, is_hidden = TRUE,
+       cleared_before_id = COALESCE((SELECT last_message_id FROM chats WHERE id = $1), cleared_before_id)
+     WHERE chat_id = $1 AND user_id = $2`,
+    [chat.id, userId],
+  );
+  if (peerId && body.block) await userService.block(userId, peerId).catch(() => null);
+  if (peerId && body.report) {
+    await require('./report.service') // lazy: avoids a require cycle
+      .createReport(userId, { target_type: 'user', target_id: peerId, reason: 'spam', details: 'Reported from message requests' })
+      .catch(() => null);
+  }
+  bus.emit('chat:removed', { chatId: chat.id, userIds: [userId] });
+  return { ok: true };
+}
+
+/** Called when [ownerId] adds people as contacts: their pending requests become normal chats. */
+async function clearRequestsFrom(ownerId, contactIds) {
+  if (!contactIds.length) return;
+  await db.query(
+    `UPDATE chat_members cm SET is_request = FALSE
+     FROM chats c
+     WHERE cm.chat_id = c.id AND c.type = 'private' AND cm.user_id = $1 AND cm.is_request
+       AND EXISTS (SELECT 1 FROM chat_members o WHERE o.chat_id = c.id AND o.user_id = ANY($2::bigint[]))`,
+    [ownerId, contactIds],
+  );
 }
 
 // ------------------------------------------------------------------ groups
@@ -847,6 +897,9 @@ async function chatStats(userId, chatIdRaw) {
 }
 
 module.exports = {
+  acceptRequest,
+  declineRequest,
+  clearRequestsFrom,
   setDisappearing,
   DISAPPEAR_OPTIONS,
   ADMIN_ROLES,

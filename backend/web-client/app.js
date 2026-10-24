@@ -557,7 +557,7 @@
     S.chats.sort((a, b) => (b.is_pinned - a.is_pinned) || (new Date(b.last_message_at || b.created_at) - new Date(a.last_message_at || a.created_at)));
   }
   function updateTitle() {
-    const n = S.chats.reduce((s, c) => s + (c.is_muted ? 0 : c.unread_count || 0), 0);
+    const n = S.chats.reduce((s, c) => s + (c.is_muted || c.is_request ? 0 : c.unread_count || 0), 0);
     document.title = n ? `(${n}) Talvio` : 'Talvio';
   }
 
@@ -600,9 +600,18 @@
   function renderChatList() {
     if (!sideList) return;
     const q = S.search.toLowerCase();
-    const chats = q ? S.chats.filter((c) => c.title.toLowerCase().includes(q)) : S.chats.filter((c) => !c.is_archived);
+    const requests = S.chats.filter((c) => c.is_request && !c.is_archived);
+    const chats = q ? S.chats.filter((c) => c.title.toLowerCase().includes(q))
+      : S.chats.filter((c) => !c.is_archived && (S.showRequests ? c.is_request : !c.is_request));
     const nodes = [];
     if (!S.chatsLoaded) nodes.push(el('div', { class: 'section-title' }, 'Loading…'));
+    if (!q && (requests.length || S.showRequests)) {
+      nodes.push(el('div', { class: 'tile requests-row', onclick: () => { S.showRequests = !S.showRequests; renderChatList(); } },
+        el('div', { class: 'req-ic' }, S.showRequests ? '←' : '✉'),
+        el('div', { class: 'mid' },
+          el('div', { class: 'title' }, S.showRequests ? 'Back to chats' : 'Message requests'),
+          el('div', { class: 'sub' }, S.showRequests ? 'People who are not in your contacts' : `${requests.length} waiting`))));
+    }
     if (q && chats.length) nodes.push(el('div', { class: 'section-title' }, 'Chats'));
     nodes.push(...chats.map(chatTile));
     if (q && S.found.length) {
@@ -1011,6 +1020,26 @@
     }
     if (c.is_suspended || (c.peer && (c.peer.deleted || c.peer.blocked))) {
       composerBox.replaceChildren(el('div', { class: 'notice' }, c.is_suspended ? 'This group was suspended' : c.peer.deleted ? 'This account was deleted' : 'You blocked this user'));
+      return;
+    }
+    if (c.is_request) {
+      const act = async (path, body) => {
+        try {
+          const r = await api('POST', `/chats/${c.id}/request/${path}`, body || {});
+          if (path === 'accept') { upsertChat(r); renderComposer(); renderChatList(); } else {
+            S.chats = S.chats.filter((x) => x.id !== c.id);
+            S.open = null;
+            mainPane.replaceChildren(el('div', { class: 'empty-main' }, 'Select a chat to start messaging'));
+            renderChatList();
+          }
+        } catch (e) { toast(e.message); }
+      };
+      composerBox.replaceChildren(el('div', { class: 'notice request-bar' },
+        el('div', {}, el('b', {}, `${c.title} is not in your contacts`), el('div', { class: 'muted' }, 'Accept to reply and get notifications from this chat.')),
+        el('div', { class: 'req-actions' },
+          el('button', { class: 'btn ghost danger', onclick: () => { if (confirm(`Block ${c.title} and report as spam?`)) act('decline', { block: true, report: true }); } }, 'Block'),
+          el('button', { class: 'btn ghost', onclick: () => act('decline') }, 'Delete'),
+          el('button', { class: 'btn', onclick: () => act('accept') }, 'Accept'))));
       return;
     }
     const fileInput = el('input', { type: 'file', multiple: true, class: 'hidden', onchange: () => { sendFiles([...fileInput.files]); fileInput.value = ''; } });

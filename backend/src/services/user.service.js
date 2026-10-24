@@ -105,6 +105,7 @@ function serialize(u, viewerId, rel) {
       phone: u.privacy_phone,
       group_add: u.privacy_group_add,
       calls: u.privacy_calls || 'everyone',
+      message_requests: u.message_requests !== false ? 'on' : 'off',
     };
     out.email = u.email || null;
     out.has_password = !!u.password_hash;
@@ -215,6 +216,10 @@ async function updatePrivacy(userId, body) {
       sets.push(`${col} = $${params.length}`);
     }
   }
+  if (body.message_requests !== undefined) {
+    params.push(v.bool(body.message_requests, 'message_requests'));
+    sets.push(`message_requests = $${params.length}`);
+  }
   if (sets.length) await db.query(`UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, params);
   return getMe(userId);
 }
@@ -306,6 +311,7 @@ async function syncContacts(userId, phones) {
       `INSERT INTO contacts (owner_id, contact_id) SELECT $1, x FROM unnest($2::bigint[]) AS x ON CONFLICT DO NOTHING`,
       [userId, ids],
     );
+    await require('./chat.service').clearRequestsFrom(userId, ids);
   }
   const map = await getUsersMap(userId, ids);
   return ids.map((id) => map.get(id)).filter(Boolean);
@@ -317,6 +323,7 @@ async function addContact(userId, targetId) {
   const target = await db.one(`SELECT id FROM users WHERE id = $1 AND status <> 'deleted'`, [id]);
   if (!target) throw notFound('user_not_found', 'User not found');
   await db.query('INSERT INTO contacts (owner_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, id]);
+  await require('./chat.service').clearRequestsFrom(userId, [id]);
   return getUser(userId, id);
 }
 

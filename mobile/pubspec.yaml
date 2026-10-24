@@ -66,6 +66,8 @@ dependencies:
   flutter_foreground_task: ^8.17.0
   emoji_picker_flutter: ^4.3.0
   camera: ^0.11.0+2
+  qr_flutter: ^4.1.0
+  app_links: ^6.3.2
   archive: '>=3.6.1 <5.0.0'
   latlong2: ^0.9.1
 

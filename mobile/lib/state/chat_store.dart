@@ -20,6 +20,22 @@ class ChatStore extends ChangeNotifier {
 
   int? myId;
   List<Chat> chats = [];
+
+  /// Chats shown in the main list (message requests wait separately).
+  List<Chat> get mainChats => chats.where((c) => !c.isRequest).toList();
+
+  /// Message requests: private chats started by people who aren't in my contacts.
+  List<Chat> get requests => chats.where((c) => c.isRequest).toList();
+
+  Future<void> acceptRequest(int chatId) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/$chatId/request/accept') as Map));
+    _upsertChat(c);
+  }
+
+  Future<void> declineRequest(int chatId, {bool block = false, bool report = false}) async {
+    await api.post('/chats/$chatId/request/decline', {'block': block, 'report': report});
+    _removeChat(chatId);
+  }
   bool chatsLoaded = false;
   bool connected = false;
   int? activeChatId;

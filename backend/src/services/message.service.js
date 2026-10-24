@@ -519,6 +519,8 @@ async function insertMessage({
       if (topicId) await c.query('UPDATE chat_topics SET last_message_at = $2 WHERE id = $1', [topicId, m.created_at]);
       await c.query('UPDATE chat_members SET is_hidden = FALSE WHERE chat_id = $1 AND is_hidden', [chatId]);
       if (senderId) {
+        // replying to a message request accepts it
+        await c.query('UPDATE chat_members SET is_request = FALSE WHERE chat_id = $1 AND user_id = $2 AND is_request', [chatId, senderId]);
         await c.query(
           `UPDATE chat_members SET last_read_message_id = GREATEST(last_read_message_id, $3),
              last_delivered_message_id = GREATEST(last_delivered_message_id, $3)

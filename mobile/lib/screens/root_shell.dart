@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,6 +8,8 @@ import '../state/chat_store.dart';
 import 'calls_screen.dart';
 import 'home_screen.dart';
 import 'settings_screens.dart';
+import 'qr_screens.dart';
+import 'user_profile_screen.dart';
 
 /// Main shell after login: Chats · Calls · Settings in a bottom bar (keeps each tab alive).
 class RootShell extends StatefulWidget {
@@ -17,10 +22,29 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _tab = 0;
   final _built = <int>{0};
+  StreamSubscription<Uri>? _links;
+
+  @override
+  void initState() {
+    super.initState();
+    // talvio://u/<id> links (profile QR codes scanned with the phone camera)
+    try {
+      _links = AppLinks().uriLinkStream.listen((uri) {
+        final id = profileIdFromLink(uri.toString());
+        if (id != null && mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: id)));
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _links?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final unread = context.select<ChatStore, int>((s) => s.chats.where((c) => !c.isMuted).fold<int>(0, (a, c) => a + c.unreadCount));
+    final unread = context.select<ChatStore, int>((s) => s.chats.where((c) => !c.isMuted && !c.isRequest).fold<int>(0, (a, c) => a + c.unreadCount));
     Widget page(int i) {
       if (!_built.contains(i)) return const SizedBox.shrink();
       return switch (i) { 0 => const HomeScreen(), 1 => const CallsScreen(), _ => const SettingsScreen() };

@@ -6,10 +6,15 @@ import '../config.dart';
 import '../core/api_client.dart';
 import '../core/services.dart';
 import '../utils/format.dart';
+import 'qr_screens.dart';
+import 'user_profile_screen.dart';
 
 /// Settings → Devices → Link a device: scan the QR code shown on chat.example.com/web.
 class LinkDeviceScreen extends StatefulWidget {
-  const LinkDeviceScreen({super.key});
+  const LinkDeviceScreen({super.key, this.anyCode = false});
+
+  /// Also accept profile QR codes (talvio://u/<id>) — the general "Scan QR code" screen.
+  final bool anyCode;
 
   @override
   State<LinkDeviceScreen> createState() => _LinkDeviceScreenState();
@@ -29,7 +34,15 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
     if (_busy) return;
     String? raw;
     for (final b in capture.barcodes) {
-      if ((b.rawValue ?? '').startsWith('talvio://login?token=')) raw = b.rawValue;
+      final v = b.rawValue ?? '';
+      if (v.startsWith('talvio://login?token=')) raw = v;
+      final uid = widget.anyCode ? profileIdFromLink(v) : null;
+      if (uid != null) {
+        _busy = true;
+        await _controller.stop();
+        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: uid)));
+        return;
+      }
     }
     if (raw == null) return;
     setState(() => _busy = true);
@@ -78,7 +91,7 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
   Widget build(BuildContext context) {
     final host = Uri.parse(AppConfig.serverUrl).host;
     return Scaffold(
-      appBar: AppBar(title: const Text('Link a device')),
+      appBar: AppBar(title: Text(widget.anyCode ? 'Scan QR code' : 'Link a device')),
       body: Column(children: [
         Expanded(
           child: Stack(fit: StackFit.expand, children: [

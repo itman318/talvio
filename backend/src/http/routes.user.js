@@ -10,6 +10,7 @@ const express = require('express');
 const multer = require('multer');
 const config = require('../config');
 const passwordService = require('../services/password.service');
+const passkeyService = require('../services/passkey.service');
 const authService = require('../services/auth.service');
 const userService = require('../services/user.service');
 const chatService = require('../services/chat.service');
@@ -80,6 +81,13 @@ router.post('/auth/password/verify', h(async (req, res) => {
 }));
 router.post('/auth/password/reset', h(async (req, res) => res.json(await passwordService.requestReset(req.body.login_token))));
 
+// notification actions (the reply token in the push is the credential)
+router.post('/notify/reply', h(async (req, res) => res.json(await require('../services/notify.service').reply(req.body))));
+router.post('/notify/read', h(async (req, res) => res.json(await require('../services/notify.service').read(req.body))));
+
+router.post('/auth/passkey/challenge', h(async (req, res) => res.json(await passkeyService.challenge(req.body, req.ip))));
+router.post('/auth/passkey/verify', h(async (req, res) => res.json(await passkeyService.verify(req.body, req.ip))));
+
 router.post('/auth/qr', h(async (req, res) => res.json(await qrService.create(req.body.device || {}, req.ip))));
 router.get('/auth/qr/status', h(async (req, res) => res.json(await qrService.status(req.query.token, req.query.wait, req.ip))));
 
@@ -94,6 +102,9 @@ router.get('/media/:id/public', h(async (req, res) => {
 // ------------------------------------------------------------------ authenticated
 router.use(requireUser);
 
+router.get('/me/passkeys', h(async (req, res) => res.json(await passkeyService.list(req.userId))));
+router.post('/me/passkeys', h(async (req, res) => res.json(await passkeyService.register(req.userId, req.body))));
+router.delete('/me/passkeys/:id', h(async (req, res) => res.json(await passkeyService.remove(req.userId, req.params.id))));
 router.get('/me/password', h(async (req, res) => res.json(await passwordService.get(req.userId))));
 router.put('/me/password', h(async (req, res) => res.json(await passwordService.set(req.userId, req.body))));
 router.post('/me/password/remove', h(async (req, res) => res.json(await passwordService.remove(req.userId, req.body))));
@@ -166,6 +177,8 @@ router.put('/chats/:id/members/:userId/role', h(async (req, res) => {
   res.json(await chatService.setMemberRole(req.userId, req.params.id, req.params.userId, req.body.role));
 }));
 router.post('/chats/:id/leave', h(async (req, res) => res.json(await chatService.leaveChat(req.userId, req.params.id))));
+router.post('/chats/:id/request/accept', h(async (req, res) => res.json(await chatService.acceptRequest(req.userId, req.params.id))));
+router.post('/chats/:id/request/decline', h(async (req, res) => res.json(await chatService.declineRequest(req.userId, req.params.id, req.body))));
 router.put('/chats/:id/disappearing', h(async (req, res) => res.json(await chatService.setDisappearing(req.userId, req.params.id, req.body.seconds))));
 router.patch('/chats/:id/settings', h(async (req, res) => res.json(await chatService.updateMySettings(req.userId, req.params.id, req.body))));
 router.post('/chats/:id/clear', h(async (req, res) => res.json(await chatService.clearHistory(req.userId, req.params.id))));

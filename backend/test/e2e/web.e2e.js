@@ -29,6 +29,7 @@ async function login(phone, first) {
 (async () => {
   const me = await login('+923007770001', 'Web');
   const friend = await login('+923007770002', 'Hina');
+  await call('POST', `/contacts/${friend.id}`, {}, me.token);
   const chat = await call('POST', '/chats/private', { user_id: me.id }, friend.token);
   await call('POST', `/chats/${chat.id}/messages`, { text: 'Web pe aa gaye?' }, friend.token);
 
@@ -78,6 +79,18 @@ async function login(phone, first) {
   await page.waitForFunction(() => { const i = document.querySelector('img.sticker'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 });
   await page.screenshot({ path: `${OUT}/web-2-chat.png` });
 
+  // a stranger's message waits in "Message requests"
+  const stranger = await login('+923007770003', 'Stranger');
+  const sc = await call('POST', '/chats/private', { user_id: me.id }, stranger.token);
+  await call('POST', `/chats/${sc.id}/messages`, { text: 'Hello from a stranger' }, stranger.token);
+  await page.waitForSelector('.requests-row:has-text("Message requests")', { timeout: 15000 });
+  if (await page.$('.tile:has-text("Stranger")')) throw new Error('request shown in the main chat list');
+  await page.click('.requests-row');
+  await page.click('.tile:has-text("Stranger")');
+  await page.waitForSelector('.request-bar button:has-text("Accept")', { timeout: 15000 });
+  await page.click('.request-bar button:has-text("Accept")');
+  await page.waitForSelector('textarea', { timeout: 15000 });
+
   const r = await call('GET', `/chats/${chat.id}/messages`, null, friend.token);
   const list = Array.isArray(r) ? r : r.messages || [];
   if (!list.some((m) => m.text === 'Haan, web se likh raha hoon')) throw new Error('message sent from web did not reach the other user');
@@ -103,7 +116,7 @@ async function login(phone, first) {
   const usingSocket = await page.evaluate(() => !!(window.io && document.querySelector('script[src*="socket.io"]')));
   await browser.close();
   const bad = errors.filter((e) => !/favicon|ERR_ABORTED/.test(e));
-  console.log(`PASS web client: QR login, open chat, send, live receive (socket.io: ${usingSocket}), sticker/contact/live location/disappearing, email-code login + profile`);
+  console.log(`PASS web client: QR login, open chat, send, live receive (socket.io: ${usingSocket}), sticker/contact/live location/disappearing, message requests, email-code login + profile`);
   if (bad.length) {
     console.log('Browser errors:\n' + bad.join('\n'));
     process.exit(1);

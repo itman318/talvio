@@ -475,6 +475,7 @@ class Chat {
   bool isMuted;
   bool isPinned;
   bool isArchived;
+  bool isRequest; // message from someone not in my contacts (waits in Requests)
   Message? lastMessage;
   DateTime? lastMessageAt;
   final DateTime createdAt;
@@ -515,6 +516,7 @@ class Chat {
     this.isMuted = false,
     this.isPinned = false,
     this.isArchived = false,
+    this.isRequest = false,
     this.lastMessage,
     this.lastMessageAt,
     required this.createdAt,
@@ -556,6 +558,7 @@ class Chat {
         isMuted: j['is_muted'] == true,
         isPinned: j['is_pinned'] == true,
         isArchived: j['is_archived'] == true,
+        isRequest: j['is_request'] == true,
         lastMessage: j['last_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['last_message'] as Map)),
         lastMessageAt: _date(j['last_message_at']),
         createdAt: _date(j['created_at']) ?? DateTime.now(),

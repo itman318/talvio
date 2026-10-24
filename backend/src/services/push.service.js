@@ -47,29 +47,44 @@ async function sendToUsers(userIds, notification, data = {}, options = {}) {
   const m = init();
   if (!m || userIds.length === 0) return;
   const rows = await db.many(
-    `SELECT id, fcm_token FROM sessions
+    `SELECT id, user_id, fcm_token FROM sessions
      WHERE user_id = ANY($1::bigint[]) AND revoked_at IS NULL AND expires_at > now() AND fcm_token IS NOT NULL`,
     [userIds],
   );
   if (rows.length === 0) return;
-  const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
+  const str = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => [k, String(v)]));
+  const title = notification.title.slice(0, 100);
+  const body = notification.body.slice(0, 240);
+  const build = (row) => {
+    const d = str({ ...data, ...(options.perSession ? options.perSession(row) : {}) });
+    const msg = {
+      token: row.fcm_token,
+      data: options.dataOnlyAndroid ? { ...d, title, body } : d,
+      android: {
+        priority: 'high',
+        ...(options.ttlSec ? { ttl: options.ttlSec * 1000 } : {}),
+        // data-only on Android: the app draws the notification itself (with Reply / Mark as read buttons)
+        ...(options.dataOnlyAndroid ? {} : { notification: { tag: options.tag || d.chat_id || undefined } }),
+      },
+      apns: {
+        ...(options.ttlSec ? { headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + options.ttlSec) } } : {}),
+        payload: {
+          aps: {
+            sound: 'default',
+            'thread-id': d.chat_id || '',
+            ...(options.dataOnlyAndroid ? { alert: { title, body } } : {}),
+            ...(options.category ? { category: options.category } : {}),
+          },
+        },
+      },
+    };
+    if (!options.dataOnlyAndroid) msg.notification = { title, body };
+    return msg;
+  };
   for (let i = 0; i < rows.length; i += 500) {
     const batch = rows.slice(i, i + 500);
     try {
-      const res = await m.sendEachForMulticast({
-        tokens: batch.map((r) => r.fcm_token),
-        notification: { title: notification.title.slice(0, 100), body: notification.body.slice(0, 240) },
-        data: stringData,
-        android: {
-          priority: 'high',
-          ...(options.ttlSec ? { ttl: options.ttlSec * 1000 } : {}),
-          notification: { tag: options.tag || stringData.chat_id || undefined },
-        },
-        apns: {
-          ...(options.ttlSec ? { headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + options.ttlSec) } } : {}),
-          payload: { aps: { sound: 'default', 'thread-id': stringData.chat_id || '' } },
-        },
-      });
+      const res = await m.sendEach(batch.map(build));
       const invalid = [];
       res.responses.forEach((r, idx) => {
         if (!r.success && r.error && INVALID_TOKEN_CODES.has(r.error.code)) invalid.push(batch[idx].id);

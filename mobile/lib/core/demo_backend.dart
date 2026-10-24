@@ -150,6 +150,7 @@ class DemoBackend {
         return users;
       }
       if (path == '/me/username-check') return {'available': true};
+      if (path == '/me/passkeys') return <dynamic>[];
       if (path == '/me/password') return {'enabled': false, 'hint': '', 'reset_pending_until': null};
       if (path == '/gifs') return {'results': <dynamic>[]};
       if (_responses.containsKey(path)) return _responses[path];

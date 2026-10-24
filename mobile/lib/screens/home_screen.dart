@@ -15,6 +15,7 @@ import 'secret_screens.dart';
 import '../state/secret_store.dart';
 import 'chat_screen.dart';
 import 'folder_support_screens.dart';
+import 'link_device_screen.dart';
 import 'new_chat_screen.dart';
 import 'settings_screens.dart';
 import 'story_screens.dart';
@@ -105,7 +106,9 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final f in store.folders) {
       if (f.id == _folderId) folder = f;
     }
-    var chats = folder == null ? store.chats : store.chats.where(folder.matches).toList();
+    final main = store.mainChats;
+    final requests = q.isEmpty && folder == null ? store.requests : const <Chat>[];
+    var chats = folder == null ? main : main.where(folder.matches).toList();
     if (q.isNotEmpty) chats = chats.where((c) => c.title.toLowerCase().contains(q)).toList();
     final showStories = q.isEmpty && folder == null && auth.feature('stories');
     final secrets = q.isEmpty && folder == null ? context.watch<SecretStore>().sortedChats : const <SecretChat>[];
@@ -142,11 +145,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 'archived' => const ArchivedChatsScreen(),
                 'folders' => const FoldersScreen(),
                 'support' => const SupportListScreen(),
+                'scan' => const LinkDeviceScreen(anyCode: true),
                 _ => const SettingsScreen(),
               };
               Navigator.push(context, MaterialPageRoute(builder: (_) => page));
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'scan', child: Text('Scan QR code')),
               PopupMenuItem(value: 'archived', child: Text('Archived chats')),
               PopupMenuItem(value: 'folders', child: Text('Chat folders')),
               PopupMenuItem(value: 'support', child: Text('Help & support')),
@@ -211,10 +216,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: showFound
                         ? _searchResults(chats)
                         : ListView.builder(
-                      itemCount: 1 + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
+                      itemCount: 1 + (requests.isEmpty ? 0 : 1) + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i0) {
                         if (i0 == 0) return _searchPill();
-                        final i = i0 - 1;
+                        if (requests.isNotEmpty && i0 == 1) return _requestsRow(requests);
+                        final i = i0 - 1 - (requests.isEmpty ? 0 : 1);
                         if (showStories && i == 0) return const StoryBar();
                         final si = i - (showStories ? 1 : 0);
                         if (si < secrets.length) {
@@ -269,6 +275,27 @@ extension on _HomeScreenState {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _requestsRow(List<Chat> requests) {
+    final unread = requests.fold<int>(0, (a, c) => a + c.unreadCount);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      leading: Container(
+        width: 54,
+        height: 54,
+        decoration: BoxDecoration(gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark), borderRadius: BorderRadius.circular(18)),
+        child: const Icon(Icons.mark_email_unread_rounded, color: Brand.rose),
+      ),
+      title: const Text('Message requests', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+      subtitle: Text(
+        requests.length == 1 ? '${requests.first.title} wants to message you' : '${requests.length} people want to message you',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: unread > 0 ? CountBadge(unread, muted: true) : const Icon(Icons.chevron_right_rounded),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestsScreen())),
     );
   }
 
@@ -571,6 +598,30 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+
+/// Chats → Message requests.
+class RequestsScreen extends StatelessWidget {
+  const RequestsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final list = context.watch<ChatStore>().requests;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Message requests')),
+      body: list.isEmpty
+          ? const EmptyState(tali: 'cool', title: 'No requests', subtitle: 'Messages from people who are not in your contacts wait here, without notifications.')
+          : ListView(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                child: Text('These people are not in your contacts. Open a chat to accept, block or delete it.',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+              ),
+              ...list.map((c) => ChatTile(chat: c)),
+            ]),
     );
   }
 }

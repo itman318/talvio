@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config.dart';
 import '../core/accounts.dart';
 import '../core/api_client.dart';
+import '../core/passkeys.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -241,6 +242,14 @@ class AuthState extends ChangeNotifier {
     }) as Map);
     passwordChallenge = null;
     await _completeLogin(data);
+  }
+
+  /// Passkey login (fingerprint / face). Returns false when the user cancelled the check.
+  Future<bool> loginWithPasskey(LocalPasskey p) async {
+    final data = await Passkeys.login(api, p, _device);
+    if (data == null) return false;
+    await _completeLogin(data);
+    return true;
   }
 
   /// "Forgot password": the password is removed after 7 days. Returns when.

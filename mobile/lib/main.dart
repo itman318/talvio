@@ -6,6 +6,7 @@ import 'config.dart';
 import 'core/crash_reporter.dart';
 import 'core/prefs.dart';
 import 'core/prayer_reminders.dart';
+import 'core/message_notifications.dart';
 import 'core/services.dart';
 import 'screens/more_screens.dart';
 import 'screens/auth_screens.dart';
@@ -80,6 +81,22 @@ Future<void> _start() async {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
   };
+  // our own message notifications (Reply / Mark as read): tapping one opens the chat
+  MessageNotifications.onOpenChat = (chatId) {
+    if (auth.status == AuthStatus.loggedIn) {
+      navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
+    } else {
+      // still starting up: wait for the session
+      void wait() {
+        if (auth.status == AuthStatus.loggedIn) {
+          auth.removeListener(wait);
+          navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
+        }
+      }
+      auth.addListener(wait);
+    }
+  };
+  unawaited(MessageNotifications.handleLaunch());
   services.push.onOpenSupport = () {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SupportListScreen()));

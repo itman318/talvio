@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import 'api_client.dart';
+import 'message_notifications.dart';
 
 /// Firebase Cloud Messaging. If Firebase isn't configured (no google-services.json /
 /// GoogleService-Info.plist), push is silently disabled and the app keeps working.
@@ -37,6 +38,8 @@ class PushService {
       debugPrint('Push disabled (Firebase not configured): $e');
       return;
     }
+    // message pushes are data-only on Android: draw them ourselves (with Reply / Mark as read)
+    FirebaseMessaging.onBackgroundMessage(firebaseBackgroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
     final initial = await FirebaseMessaging.instance.getInitialMessage();
     if (initial != null) {

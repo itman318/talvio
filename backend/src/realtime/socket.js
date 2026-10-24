@@ -156,7 +156,7 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   // muted chats still notify people who were @mentioned / replied to
   const rows = await db.many(
     `SELECT user_id FROM chat_members
-     WHERE chat_id = $1 AND user_id = ANY($2::bigint[])
+     WHERE chat_id = $1 AND user_id = ANY($2::bigint[]) AND NOT is_request
        AND (muted_until IS NULL OR muted_until < now() OR user_id = ANY($3::bigint[]))`,
     [chatId, offline, message.mentions || []],
   );
@@ -173,7 +173,19 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   const body = previewText(message);
   const notification =
     chat.type === 'group' ? { title: chat.title, body: `${senderName}: ${body}` } : { title: senderName, body };
-  await push.sendToUsers(targets, notification, { type: 'message', chat_id: chatId, message_id: message.id });
+  const notify = require('../services/notify.service');
+  await push.sendToUsers(targets, notification, {
+    type: 'message',
+    chat_id: chatId,
+    message_id: message.id,
+    chat_title: chat.type === 'group' ? chat.title : senderName,
+    sender: senderName,
+    group: chat.type === 'group' ? 1 : 0,
+  }, {
+    dataOnlyAndroid: true,
+    category: 'MESSAGE',
+    perSession: (row) => ({ reply_token: notify.replyToken(row.user_id, row.id, chatId) }),
+  });
 }
 
 function wireBus() {
