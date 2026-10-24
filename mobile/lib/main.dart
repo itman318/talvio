@@ -16,6 +16,7 @@ import 'screens/call_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/folder_support_screens.dart';
 import 'screens/root_shell.dart';
+import 'screens/settings_screens.dart' show SessionsScreen;
 import 'state/auth_state.dart';
 import 'state/call_manager.dart';
 import 'state/chat_store.dart';
@@ -109,6 +110,40 @@ Future<void> _start() async {
     }
   };
   unawaited(MessageNotifications.handleLaunch());
+  services.push.onOpenDevices = () {
+    if (auth.status != AuthStatus.loggedIn) return;
+    navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SessionsScreen()));
+  };
+  // "New login — was this you?" on my other devices
+  chats.onNewLogin = (s) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null || auth.status != AuthStatus.loggedIn) return;
+    final device = [s['device_name'], s['platform']].where((x) => x != null && '$x'.isNotEmpty).join(' · ');
+    showDialog<void>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        icon: const Icon(Icons.shield_rounded, color: Brand.primary, size: 36),
+        title: const Text('New login to your account'),
+        content: Text('${device.isEmpty ? 'A new device' : device} just logged in to your Talvio account. Was this you?'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(d);
+              try {
+                await services.api.delete('/me/sessions/${s['session_id']}');
+                final c2 = navigatorKey.currentContext;
+                if (c2 != null && c2.mounted) {
+                  ScaffoldMessenger.of(c2).showSnackBar(const SnackBar(content: Text('That device was logged out. Consider turning on two-step verification.')));
+                }
+              } catch (_) {}
+            },
+            child: const Text('No, log it out', style: TextStyle(color: Color(0xFFE5484D))),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(d), child: const Text('Yes, it’s me')),
+        ],
+      ),
+    );
+  };
   services.push.onOpenSupport = () {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SupportListScreen()));

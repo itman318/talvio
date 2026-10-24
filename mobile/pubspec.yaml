@@ -26,6 +26,7 @@ dependencies:
   proximity_sensor: ^1.3.2 # voice messages: hold the phone to the ear
   google_mlkit_subject_segmentation: '>=0.1.0 <0.3.0' # sticker maker: remove the background (on the phone)
   video_player: ^2.9.1
+  video_compress: ^3.1.3 # trim & shrink videos before sending
   open_filex: ^4.5.0
   mime: ^1.0.6
   path_provider: ^2.1.4

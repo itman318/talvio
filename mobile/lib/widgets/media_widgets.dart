@@ -20,6 +20,25 @@ Future<File> resolveMediaFile(BuildContext context, Message m) {
   return context.read<AppServices>().media.get(m.media!);
 }
 
+/// Downloads a video / file in the background when the auto-download setting allows it.
+/// Returns true when the file is (now) on the phone.
+Future<bool> autoFetchMedia(BuildContext context, Message m, String kind) async {
+  final media = m.media;
+  if (media == null || media.id == 0) return false;
+  final services = context.read<AppServices>();
+  final prefs = context.read<AppPrefs>();
+  if (m.localFilePath != null && File(m.localFilePath!).existsSync()) return true;
+  if (await services.media.cached(media) != null) return true;
+  final limit = kind == 'videos' ? 100 << 20 : 50 << 20;
+  if (media.size > limit || !await prefs.autoDownload(kind)) return false;
+  try {
+    await services.media.get(media);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 class MessageImage extends StatefulWidget {
   const MessageImage({super.key, required this.message, this.maxWidth = 260});
 
@@ -119,12 +138,30 @@ class FullImageScreen extends StatelessWidget {
   }
 }
 
-class MessageVideo extends StatelessWidget {
+class MessageVideo extends StatefulWidget {
   const MessageVideo({super.key, required this.message});
   final Message message;
 
   @override
+  State<MessageVideo> createState() => _MessageVideoState();
+}
+
+class _MessageVideoState extends State<MessageVideo> {
+  bool? _ready; // null = checking / downloading
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.message.isLocal) {
+      autoFetchMedia(context, widget.message, 'videos').then((ok) {
+        if (mounted) setState(() => _ready = ok);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final message = widget.message;
     final m = message.media!;
     return InkWell(
       onTap: message.isLocal
@@ -137,7 +174,9 @@ class MessageVideo extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            const Icon(Icons.play_circle_fill, color: Colors.white, size: 52),
+            Icon(_ready == false ? Icons.download_for_offline_rounded : Icons.play_circle_fill, color: Colors.white, size: 52),
+            if (_ready == null && !message.isLocal)
+              const Positioned(right: 10, top: 10, child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70))),
             Positioned(
               left: 8,
               bottom: 6,
@@ -425,6 +464,17 @@ class MessageFile extends StatefulWidget {
 
 class _MessageFileState extends State<MessageFile> {
   bool _busy = false;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.message.isLocal) {
+      autoFetchMedia(context, widget.message, 'files').then((ok) {
+        if (mounted && ok) setState(() => _ready = true);
+      });
+    }
+  }
 
   Future<void> _open() async {
     setState(() => _busy = true);
@@ -452,7 +502,7 @@ class _MessageFileState extends State<MessageFile> {
               backgroundColor: widget.color,
               child: _busy
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.insert_drive_file, color: Colors.white),
+                  : Icon(_ready || widget.message.isLocal ? Icons.insert_drive_file : Icons.download_rounded, color: Colors.white),
             ),
             const SizedBox(width: 10),
             Expanded(

@@ -652,20 +652,29 @@ class _StorageScreenState extends State<StorageScreen> {
           trailing: TextButton(onPressed: (_size ?? 0) == 0 ? null : _clear, child: const Text('Clear')),
         ),
         const Divider(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Text('Auto-download photos', style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
-        ),
-        for (final o in const [('always', 'On Wi-Fi and mobile data'), ('wifi', 'Only on Wi-Fi'), ('never', 'Never (tap to download)')])
-          RadioListTile<String>(
-            value: o.$1,
-            groupValue: context.watch<AppPrefs>().autoPhotos,
-            title: Text(o.$2),
-            onChanged: (v) => context.read<AppPrefs>().setAutoPhotos(v!),
+        for (final (net, title, icon) in const [
+          ('wifi', 'When on Wi-Fi', Icons.wifi_rounded),
+          ('mobile', 'When using mobile data', Icons.signal_cellular_alt_rounded),
+        ]) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(children: [
+              Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
+            ]),
           ),
+          for (final (kind, label) in const [('photos', 'Photos'), ('videos', 'Videos'), ('files', 'Files')])
+            CheckboxListTile(
+              dense: true,
+              value: (net == 'wifi' ? context.watch<AppPrefs>().autoWifi : context.watch<AppPrefs>().autoMobile).contains(kind),
+              title: Text(label),
+              onChanged: (v) => context.read<AppPrefs>().setAutoDownload(net, kind, v ?? false),
+            ),
+        ],
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text('Videos and files always download when you tap them.', style: TextStyle(fontSize: 12)),
+          child: Text('Voice messages always download. Videos over 100 MB and files over 50 MB wait for a tap.', style: TextStyle(fontSize: 12)),
         ),
         const Divider(),
         ListTile(

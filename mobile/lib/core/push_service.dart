@@ -73,6 +73,9 @@ class PushService {
     _tokenSub = null;
   }
 
+  /// "New login to your account" notification → Devices screen.
+  void Function()? onOpenDevices;
+
   void _handleTap(RemoteMessage m) {
     if (m.data['type'] == 'support') {
       onOpenSupport?.call();
@@ -80,6 +83,10 @@ class PushService {
     }
     if (m.data['type'] == 'call') {
       onOpenCall?.call();
+      return;
+    }
+    if (m.data['type'] == 'new_login') {
+      onOpenDevices?.call();
       return;
     }
     final id = int.tryParse('${m.data['chat_id']}');

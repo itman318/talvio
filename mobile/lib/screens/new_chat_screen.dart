@@ -300,6 +300,57 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
   }
 }
 
+/// Pick people (privacy exceptions and more). Returns the chosen list, or null when backed out.
+class PickUsersScreen extends StatefulWidget {
+  const PickUsersScreen({super.key, required this.title, this.initial = const []});
+  final String title;
+  final List<AppUser> initial;
+
+  @override
+  State<PickUsersScreen> createState() => _PickUsersScreenState();
+}
+
+class _PickUsersScreenState extends State<PickUsersScreen> {
+  late final Map<int, AppUser> _selected = {for (final u in widget.initial) u.id: u};
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_selected.isEmpty ? widget.title : '${_selected.length} selected'),
+        actions: [TextButton(onPressed: () => Navigator.pop(context, _selected.values.toList()), child: const Text('Done'))],
+      ),
+      body: Column(children: [
+        if (_selected.isNotEmpty)
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              children: [
+                for (final u in _selected.values)
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: InputChip(
+                      avatar: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute, size: 24),
+                      label: Text(u.firstName.isEmpty ? u.name : u.firstName),
+                      onDeleted: () => setState(() => _selected.remove(u.id)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: UserSearch(
+            selectedIds: _selected.keys.toSet(),
+            onTap: (u) => setState(() => _selected.containsKey(u.id) ? _selected.remove(u.id) : _selected[u.id] = u),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 class _GroupDetailsScreen extends StatefulWidget {
   const _GroupDetailsScreen({required this.members});
   final List<AppUser> members;

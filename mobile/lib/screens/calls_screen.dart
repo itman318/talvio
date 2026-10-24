@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../config.dart';
+import '../state/chat_store.dart';
 import '../widgets/premium.dart';
 import 'package:provider/provider.dart';
 
@@ -91,6 +94,11 @@ class _CallsScreenState extends State<CallsScreen> {
       appBar: AppBar(
         title: const Text('Calls'),
         actions: [
+          IconButton(
+            tooltip: 'Call links',
+            icon: const Icon(Icons.add_link_rounded),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CallLinksScreen())),
+          ),
           PopupMenuButton<String>(
             onSelected: (_) => _clearAll(),
             itemBuilder: (_) => const [PopupMenuItem(value: 'clear', child: Text('Clear call history'))],
@@ -220,6 +228,153 @@ class CallLogBubble extends StatelessWidget {
           const SizedBox(width: 6),
         ]),
       ),
+    );
+  }
+}
+
+
+// ================================================================== call links
+/// The web address of a call link (opens the app; works in any chat or SMS).
+String callLinkUrl(String code) => '${AppConfig.serverUrl}/call/$code';
+
+/// Reads the code from talvio://call/<code> or https://…/call/<code>.
+String? callCodeFromLink(String s) {
+  final m = RegExp(r'^(?:talvio://call/|https?://[^/\s]+/call/)([A-Za-z0-9_-]{6,24})/?$').firstMatch(s.trim());
+  return m?.group(1);
+}
+
+/// Someone opened a call link: show who it calls, then call them.
+Future<void> openCallLink(BuildContext context, String code) async {
+  final store = context.read<ChatStore>();
+  final calls = context.read<CallManager>();
+  try {
+    final (user, video, mine) = await store.resolveCallLink(code);
+    if (!context.mounted) return;
+    if (mine) {
+      showInfo(context, 'This is your own call link — share it so others can call you');
+      return;
+    }
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Avatar(id: user.id, name: user.name, url: user.avatarAbsolute, size: 72),
+            const SizedBox(height: 12),
+            Text(user.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(video ? 'Call link · video call' : 'Call link · voice call', style: const TextStyle(color: Brand.muted)),
+            const SizedBox(height: 18),
+            AuroraButton(label: 'Call now', icon: video ? Icons.videocam_rounded : Icons.call_rounded, onPressed: () => Navigator.pop(ctx, true)),
+          ]),
+        ),
+      ),
+    );
+    if (go != true || !context.mounted) return;
+    if (calls.active) {
+      showInfo(context, 'Finish your current call first');
+      return;
+    }
+    await calls.start(user, video: video, link: code);
+  } catch (e) {
+    if (context.mounted) showError(context, e);
+  }
+}
+
+/// My call links: anyone with the link can call me (even if my calls are limited to contacts).
+class CallLinksScreen extends StatefulWidget {
+  const CallLinksScreen({super.key});
+
+  @override
+  State<CallLinksScreen> createState() => _CallLinksScreenState();
+}
+
+class _CallLinksScreenState extends State<CallLinksScreen> {
+  List<Map<String, dynamic>>? _links;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final l = await context.read<ChatStore>().callLinks();
+      if (mounted) setState(() => _links = l);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _links = const []);
+        showError(context, e);
+      }
+    }
+  }
+
+  Future<void> _create(bool video) async {
+    setState(() => _busy = true);
+    try {
+      final l = await context.read<ChatStore>().createCallLink(video: video);
+      await Clipboard.setData(ClipboardData(text: callLinkUrl('${l['code']}')));
+      if (mounted) showInfo(context, 'Link created and copied — paste it in any chat');
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final links = _links;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Call links')),
+      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+          child: Text(
+            'Share a link and anyone who has it can call you with one tap — even when “Who can call me” is set to contacts. People you block still can’t.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ),
+        SettingsGroup(children: [
+          SettingsTile(icon: Icons.call_rounded, color: Brand.green, title: 'New voice call link', onTap: _busy ? null : () => _create(false)),
+          SettingsTile(icon: Icons.videocam_rounded, color: Brand.sky, title: 'New video call link', onTap: _busy ? null : () => _create(true)),
+        ]),
+        if (links == null)
+          const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))
+        else if (links.isNotEmpty)
+          SettingsGroup(title: 'My links', children: [
+            for (final l in links)
+              SettingsTile(
+                icon: l['video'] == true ? Icons.videocam_rounded : Icons.call_rounded,
+                color: Brand.primary,
+                title: callLinkUrl('${l['code']}'),
+                subtitle: '${l['video'] == true ? 'Video' : 'Voice'} · tap to copy',
+                maxSubtitleLines: 1,
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: callLinkUrl('${l['code']}')));
+                  showInfo(context, 'Link copied');
+                },
+                trailingWidget: IconButton(
+                  tooltip: 'Delete link',
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  onPressed: () async {
+                    if (!await confirm(context, 'Delete this link?', 'People who have it won’t be able to use it anymore.', ok: 'Delete', danger: true)) return;
+                    try {
+                      if (!context.mounted) return;
+                      await context.read<ChatStore>().deleteCallLink('${l['code']}');
+                      await _load();
+                    } catch (e) {
+                      if (context.mounted) showError(context, e);
+                    }
+                  },
+                ),
+              ),
+          ]),
+      ]),
     );
   }
 }

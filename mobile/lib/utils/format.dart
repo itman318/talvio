@@ -147,3 +147,29 @@ String disappearLabel(int seconds) {
   final d = seconds ~/ 86400;
   return '$d day${d == 1 ? '' : 's'}';
 }
+
+/// Asks for one line of text. Returns null when cancelled.
+Future<String?> promptText(BuildContext context, String title, {String hint = '', String initial = '', int max = 64, String ok = 'Save'}) async {
+  final c = TextEditingController(text: initial);
+  final r = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: c,
+        autofocus: true,
+        maxLength: max,
+        decoration: InputDecoration(hintText: hint),
+        onSubmitted: (v) => Navigator.pop(ctx, v),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx, c.text), child: Text(ok)),
+      ],
+    ),
+  );
+  return r; // the controller is left to the GC: the dialog may still be animating out
+}
+
+/// "21 Aug" (this year) or "21 Aug 2024".
+String shortDate(DateTime t) => DateFormat(t.year == DateTime.now().year ? 'd MMM' : 'd MMM y').format(t);

@@ -75,13 +75,16 @@ class CallManager extends ChangeNotifier {
   Timer? _failTimer;
   bool _ringing = false;
 
+  /// Call waiting: someone else is calling while I'm on this call.
+  CallInfo? waitingCall;
+
   bool get active => phase != CallPhase.idle;
   bool get isCaller => call?.outgoing ?? (phase == CallPhase.outgoing);
 
   String get statusText {
     switch (phase) {
       case CallPhase.outgoing:
-        return call == null ? 'Calling…' : 'Ringing…';
+        return call == null ? 'Calling…' : (waitingNotice ?? 'Ringing…');
       case CallPhase.incoming:
         return video ? 'Incoming video call' : 'Incoming voice call';
       case CallPhase.connecting:
@@ -99,7 +102,7 @@ class CallManager extends ChangeNotifier {
 
   // ------------------------------------------------------------------ public actions
   /// Starts a call to [user]. Shows the call screen right away.
-  Future<void> start(AppUser user, {required bool video}) async {
+  Future<void> start(AppUser user, {required bool video, String? link}) async {
     if (active) return;
     _resetState();
     peer = user;
@@ -112,7 +115,7 @@ class CallManager extends ChangeNotifier {
     try {
       await _ensureRenderers();
       await _openMedia();
-      final r = await services.socket.request('call:start', {'user_id': user.id, 'video': video});
+      final r = await services.socket.request('call:start', link != null ? {'link': link, 'video': video} : {'user_id': user.id, 'video': video});
       call = CallInfo.fromJson(Map<String, dynamic>.from(r['call'] as Map));
       _iceServers = _parseIce(r['ice_servers']);
       if (_cancelled) {
@@ -122,6 +125,10 @@ class CallManager extends ChangeNotifier {
       if (call!.status == 'busy') {
         _finish('Line busy');
         return;
+      }
+      if (call!.waiting) {
+        endedText = null;
+        waitingNotice = 'On another call — waiting…';
       }
       if (call!.status == 'accepted') {
         // They were calling us at the same moment — the server joined the two calls.
@@ -172,6 +179,36 @@ class CallManager extends ChangeNotifier {
     }
     _finish('Declined', closeAfter: const Duration(milliseconds: 600));
   }
+
+  /// Call waiting → decline the second call, keep talking.
+  void declineWaiting() {
+    final w = waitingCall;
+    if (w == null) return;
+    waitingCall = null;
+    services.socket.request('call:decline', {'call_id': w.id}).catchError((_) => <String, dynamic>{});
+    notifyListeners();
+  }
+
+  /// Call waiting → end this call and answer the waiting one (the server ends the first call).
+  Future<void> endAndAnswer() async {
+    final w = waitingCall;
+    if (w == null) return;
+    waitingCall = null;
+    _closeTimer?.cancel();
+    _cleanupMedia();
+    _resetState();
+    call = w;
+    peer = w.peer;
+    video = w.video;
+    speaker = w.video;
+    phase = CallPhase.incoming;
+    notifyListeners();
+    _showScreen();
+    await accept();
+  }
+
+  /// Shown on the caller's screen when the other person is on another call.
+  String? waitingNotice;
 
   void hangup() {
     if (phase == CallPhase.ended || phase == CallPhase.idle) return;
@@ -351,7 +388,15 @@ class CallManager extends ChangeNotifier {
     switch (e.name) {
       case 'call:incoming':
         final c = CallInfo.fromJson(Map<String, dynamic>.from(d['call'] as Map));
-        if (active) return; // already on a call on this device
+        if (active) {
+          // already talking on this device: show it as a waiting call (end & answer / decline)
+          if ((phase == CallPhase.connected || phase == CallPhase.connecting || phase == CallPhase.reconnecting) && call?.id != c.id) {
+            waitingCall = c;
+            FlutterRingtonePlayer().playNotification().catchError((_) {});
+            notifyListeners();
+          }
+          return;
+        }
         _ring(c);
         break;
       case 'call:accepted':
@@ -370,6 +415,11 @@ class CallManager extends ChangeNotifier {
         _onSignal(d);
         break;
       case 'call:ended':
+        if (waitingCall != null && '${waitingCall!.id}' == '${d['call_id']}') {
+          waitingCall = null; // the waiting caller gave up
+          notifyListeners();
+          return;
+        }
         if (!_isMine(d['call_id'])) return;
         if (phase == CallPhase.ended || phase == CallPhase.idle) return;
         final status = '${d['status']}';
@@ -665,6 +715,7 @@ class CallManager extends ChangeNotifier {
 
   void _resetState() {
     phase = CallPhase.idle;
+    waitingNotice = null;
     call = null;
     peer = null;
     muted = false;

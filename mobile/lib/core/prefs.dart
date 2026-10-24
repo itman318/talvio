@@ -20,8 +20,9 @@ class AppPrefs extends ChangeNotifier {
   int lockAfterMinutes = 1; // 0 = immediately
   String? _pinHash;
 
-  /// Auto-download photos: 'always' | 'wifi' | 'never'. Videos and files always wait for a tap.
-  String autoPhotos = 'always';
+  /// Auto-download, per network: which kinds ('photos', 'videos', 'files') download by themselves.
+  Set<String> autoWifi = {'photos', 'videos', 'files'};
+  Set<String> autoMobile = {'photos'};
 
   /// Data saver (for slow or costly internet): photos/videos only on tap, smaller uploads,
   /// no link-preview pictures, lower call video quality.
@@ -52,7 +53,19 @@ class AppPrefs extends ChangeNotifier {
     lockEnabled = _pinHash != null && (p.getBool('lock_enabled') ?? false);
     biometric = p.getBool('lock_biometric') ?? false;
     lockAfterMinutes = p.getInt('lock_after') ?? 1;
-    autoPhotos = p.getString('auto_photos') ?? 'always';
+    final w = p.getStringList('auto_wifi');
+    final m = p.getStringList('auto_mobile');
+    if (w != null) autoWifi = w.toSet();
+    if (m != null) autoMobile = m.toSet();
+    if (w == null && m == null) {
+      // older setting: photos 'always' | 'wifi' | 'never'
+      final old = p.getString('auto_photos');
+      if (old == 'wifi') autoMobile = {};
+      if (old == 'never') {
+        autoMobile = {};
+        autoWifi = {'videos', 'files'};
+      }
+    }
     dataSaver = p.getBool('data_saver') ?? false;
     prayerLat = p.getDouble('prayer_lat');
     prayerLng = p.getDouble('prayer_lng');
@@ -78,9 +91,11 @@ class AppPrefs extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setAutoPhotos(String v) {
-    autoPhotos = v;
-    _p?.setString('auto_photos', v);
+  /// [network] 'wifi' | 'mobile'; [kind] 'photos' | 'videos' | 'files'.
+  void setAutoDownload(String network, String kind, bool on) {
+    final set = network == 'wifi' ? autoWifi : autoMobile;
+    on ? set.add(kind) : set.remove(kind);
+    _p?.setStringList(network == 'wifi' ? 'auto_wifi' : 'auto_mobile', set.toList());
     notifyListeners();
   }
 
@@ -137,13 +152,18 @@ class AppPrefs extends ChangeNotifier {
   double get uploadMaxSide => dataSaver ? 1280 : 2560;
 
   /// Should a photo download by itself right now?
-  Future<bool> autoDownloadPhotos() async {
+  Future<bool> autoDownloadPhotos() => autoDownload('photos');
+
+  /// Should media of [kind] ('photos' | 'videos' | 'files') download by itself on the current network?
+  Future<bool> autoDownload(String kind) async {
     if (dataSaver) return false;
-    if (autoPhotos == 'always') return true;
-    if (autoPhotos == 'never') return false;
+    final onWifi = autoWifi.contains(kind), onMobile = autoMobile.contains(kind);
+    if (onWifi && onMobile) return true;
+    if (!onWifi && !onMobile) return false;
     try {
       final r = await Connectivity().checkConnectivity();
-      return r.contains(ConnectivityResult.wifi) || r.contains(ConnectivityResult.ethernet);
+      final wifi = r.contains(ConnectivityResult.wifi) || r.contains(ConnectivityResult.ethernet);
+      return wifi ? onWifi : onMobile;
     } catch (_) {
       return false;
     }

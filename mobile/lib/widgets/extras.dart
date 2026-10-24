@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../theme/brand.dart';
+import '../screens/calls_screen.dart' show callCodeFromLink, openCallLink;
 
 /// Colours that follow light / dark mode for chat surfaces.
 class ChatColors {
@@ -79,7 +80,14 @@ class _MessageTextState extends State<MessageText> {
         spans.add(TextSpan(
           text: token,
           style: style.copyWith(color: accent, decoration: TextDecoration.underline, decorationColor: accent),
-          recognizer: _tap(() => launchUrl(Uri.parse(token), mode: LaunchMode.externalApplication)),
+          recognizer: _tap(() {
+            final call = callCodeFromLink(token);
+            if (call != null) {
+              openCallLink(context, call); // Talvio call link: start the call right here
+            } else {
+              launchUrl(Uri.parse(token), mode: LaunchMode.externalApplication);
+            }
+          }),
         ));
       } else {
         spans.add(TextSpan(text: token, style: style.copyWith(color: accent, fontWeight: FontWeight.w600)));

@@ -77,6 +77,18 @@ function createApp() {
     }
   });
 
+  // Shared call links: https://chat.example.com/call/<code> → opens the app (talvio://call/<code>)
+  app.get('/call/:code', (req, res) => {
+    const code = String(req.params.code).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+    const deep = `talvio://call/${code}`;
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+    res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Talvio call</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif;background:#0f1222;color:#fff;text-align:center}
+.c{padding:32px 24px;max-width:360px}a{display:inline-block;margin-top:20px;padding:14px 28px;border-radius:999px;color:#fff;text-decoration:none;font-weight:700;
+background:linear-gradient(135deg,#ff7a59,#8b5cf6)}p{color:#b8bdd6;line-height:1.5}</style></head><body><div class="c"><h1>📞 Talvio call</h1>
+<p>Someone shared a call link with you. Open it in the Talvio app to start the call.</p><a href="${deep}">Open in Talvio</a></div></body></html>`);
+  });
+
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;

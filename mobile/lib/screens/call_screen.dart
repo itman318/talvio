@@ -125,6 +125,15 @@ class _CallScreenState extends State<CallScreen> {
                   ),
                 ),
 
+              // call waiting: someone else is calling
+              if (c.waitingCall != null)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  top: MediaQuery.of(context).padding.top + (showLocalVideo && c.phase == CallPhase.connected ? 180 : 12),
+                  child: _WaitingBanner(c: c),
+                ),
+
               // controls
               Positioned(
                 left: 0,
@@ -238,5 +247,52 @@ class _RoundButton extends StatelessWidget {
       const SizedBox(height: 6),
       Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
     ]);
+  }
+}
+
+
+class _WaitingBanner extends StatelessWidget {
+  const _WaitingBanner({required this.c});
+  final CallManager c;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = c.waitingCall!;
+    final who = w.peer;
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2440).withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white12),
+          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 18, offset: Offset(0, 6))],
+        ),
+        child: Row(children: [
+          if (who != null) Avatar(id: who.id, name: who.name, url: who.avatarAbsolute, size: 40),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(who?.name ?? 'Someone', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              Text(w.video ? 'Waiting · video call' : 'Waiting · voice call', style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
+            ]),
+          ),
+          IconButton(
+            tooltip: 'Decline',
+            style: IconButton.styleFrom(backgroundColor: const Color(0xFFE5484D)),
+            onPressed: c.declineWaiting,
+            icon: const Icon(Icons.call_end_rounded, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 6),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Brand.accent, padding: const EdgeInsets.symmetric(horizontal: 12)),
+            onPressed: c.endAndAnswer,
+            icon: const Icon(Icons.call_rounded, size: 18),
+            label: const Text('End & answer'),
+          ),
+        ]),
+      ),
+    );
   }
 }

@@ -5,10 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:no_screenshot/no_screenshot.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 
+import '../core/screen_guard.dart';
 import '../core/e2e.dart';
 import '../models/models.dart';
 import '../state/secret_store.dart';
@@ -106,13 +106,13 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
     super.initState();
     _store = context.read<SecretStore>();
     _store.openChat(widget.chatId);
-    NoScreenshot.instance.screenshotOff().catchError((_) => false);
+    ScreenGuard.acquire();
   }
 
   @override
   void dispose() {
     _store.openChat(null);
-    NoScreenshot.instance.screenshotOn().catchError((_) => false);
+    ScreenGuard.release();
     _text.dispose();
     super.dispose();
   }

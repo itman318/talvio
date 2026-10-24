@@ -21,6 +21,9 @@ import 'link_device_screen.dart';
 import 'prayer_screen.dart';
 import 'backup_screen.dart';
 import 'qr_screens.dart';
+import 'calls_screen.dart' show CallLinksScreen;
+import 'story_screens.dart' show MyHighlightsScreen;
+import 'new_chat_screen.dart' show PickUsersScreen;
 import '../core/passkeys.dart';
 import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
@@ -196,6 +199,14 @@ class SettingsScreen extends StatelessWidget {
           SettingsGroup(title: 'Account', children: [
             SettingsTile(icon: Icons.person_rounded, color: Brand.sky, title: 'Edit profile', onTap: () => go(const EditProfileScreen())),
             SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy', onTap: () => go(const PrivacyScreen())),
+            SettingsTile(
+              icon: Icons.auto_awesome_rounded,
+              color: Brand.rose,
+              title: 'Story highlights',
+              subtitle: 'Keep your best stories on your profile',
+              onTap: () => go(const MyHighlightsScreen()),
+            ),
+            SettingsTile(icon: Icons.add_link_rounded, color: Brand.sky, title: 'Call links', subtitle: 'A link anyone can use to call you', onTap: () => go(const CallLinksScreen())),
             SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
             SettingsTile(icon: Icons.fingerprint_rounded, color: Brand.rose, title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
             SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', onTap: () => go(const AppLockSettingsScreen())),
@@ -302,6 +313,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _usernameStatus;
   Timer? _debounce;
   bool _busy = false;
+  Birthday? _birthday;
+  bool _birthdayChanged = false;
 
   @override
   void initState() {
@@ -311,6 +324,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _last = TextEditingController(text: me.lastName);
     _username = TextEditingController(text: me.username ?? '');
     _bio = TextEditingController(text: me.bio);
+    _birthday = me.birthday;
+  }
+
+  Future<void> _pickBirthday() async {
+    final b = _birthday;
+    final now = DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: b != null ? DateTime(b.year ?? 2000, b.month, b.day) : DateTime(now.year - 20, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      helpText: 'Your birthday',
+    );
+    if (d == null) return;
+    setState(() {
+      _birthday = Birthday(d.day, d.month, d.year);
+      _birthdayChanged = true;
+    });
   }
 
   @override
@@ -344,6 +376,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'last_name': _last.text.trim(),
         'username': _username.text.trim().isEmpty ? null : _username.text.trim().replaceFirst('@', ''),
         'bio': _bio.text.trim(),
+        if (_birthdayChanged) 'birthday': _birthday?.api,
       });
       if (!mounted) return;
       context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
@@ -463,6 +496,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             minLines: 2,
             decoration: const InputDecoration(labelText: 'Bio', hintText: 'A few words about you', alignLabelWithHint: true),
           ),
+          label('Birthday'),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: _pickBirthday,
+            child: InputDecorator(
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.cake_rounded),
+                suffixIcon: _birthday == null
+                    ? null
+                    : IconButton(
+                        tooltip: 'Remove',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => setState(() {
+                          _birthday = null;
+                          _birthdayChanged = true;
+                        }),
+                      ),
+                helperText: 'Contacts see the day and month (change who in Privacy). The year stays private.',
+                helperMaxLines: 2,
+              ),
+              child: Text(_birthday?.label ?? 'Add your birthday', style: TextStyle(color: _birthday == null ? Brand.muted : null)),
+            ),
+          ),
           const SizedBox(height: 18),
           AuroraButton(label: 'Save', icon: Icons.check_rounded, busy: _busy, onPressed: _save),
         ],
@@ -472,46 +528,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 }
 
 // ------------------------------------------------------------------ privacy
-class PrivacyScreen extends StatelessWidget {
+class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
 
-  static const _labels = {'everyone': 'Everybody', 'contacts': 'My contacts', 'nobody': 'Nobody'};
-  static const _rows = {
+  static const labels = {'everyone': 'Everybody', 'contacts': 'My contacts', 'nobody': 'Nobody'};
+  static const rows = {
     'last_seen': 'Last seen & online',
     'avatar': 'Profile photo',
     'phone': 'Phone number',
+    'birthday': 'Birthday',
     'group_add': 'Who can add me to groups',
     'calls': 'Who can call me',
   };
-  static const _icons = {
+  static const icons = {
     'last_seen': (Icons.visibility_rounded, Brand.green),
     'avatar': (Icons.account_circle_rounded, Brand.sky),
     'phone': (Icons.phone_rounded, Brand.violet),
+    'birthday': (Icons.cake_rounded, Brand.rose),
     'group_add': (Icons.group_add_rounded, Brand.amber),
     'calls': (Icons.call_rounded, Brand.primary),
   };
 
-  Future<void> _change(BuildContext context, String key, String current) async {
-    final v = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(_rows[key]!),
-        children: _labels.entries
-            .map((e) => RadioListTile<String>(
-                  value: e.key,
-                  groupValue: current,
-                  title: Text(e.value),
-                  onChanged: (v) => Navigator.pop(ctx, v),
-                ))
-            .toList(),
-      ),
-    );
-    if (v == null || v == current || !context.mounted) return;
+  @override
+  State<PrivacyScreen> createState() => _PrivacyScreenState();
+}
+
+class _PrivacyScreenState extends State<PrivacyScreen> {
+  Map<String, dynamic> _exceptions = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExceptions();
+  }
+
+  Future<void> _loadExceptions() async {
+    try {
+      final r = await context.read<AppServices>().api.get('/me/privacy/exceptions');
+      if (mounted) setState(() => _exceptions = Map<String, dynamic>.from(r as Map));
+    } catch (_) {}
+  }
+
+  String _summary(String key, String value) {
+    final e = _exceptions[key];
+    final allow = e is Map ? (e['allow'] as List? ?? const []).length : 0;
+    final deny = e is Map ? (e['deny'] as List? ?? const []).length : 0;
+    final parts = [PrivacyScreen.labels[value] ?? '—', if (deny > 0) '−$deny', if (allow > 0) '+$allow'];
+    return parts.join(' ');
+  }
+
+  Future<void> _setBool(String key, bool v) async {
     try {
       final u = await context.read<AppServices>().api.put('/me/privacy', {key: v});
-      if (context.mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+      if (mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
     } catch (e) {
-      if (context.mounted) showError(context, e);
+      if (mounted) showError(context, e);
     }
   }
 
@@ -524,34 +595,155 @@ class PrivacyScreen extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           SettingsGroup(title: 'Who can see and reach me', children: [
-            for (final r in _rows.entries)
+            for (final r in PrivacyScreen.rows.entries)
               SettingsTile(
-                icon: _icons[r.key]!.$1,
-                color: _icons[r.key]!.$2,
+                icon: PrivacyScreen.icons[r.key]!.$1,
+                color: PrivacyScreen.icons[r.key]!.$2,
                 title: r.value,
-                trailing: _labels[p[r.key]] ?? '—',
-                onTap: () => _change(context, r.key, p[r.key] ?? 'everyone'),
+                trailing: _summary(r.key, p[r.key] ?? (r.key == 'birthday' ? 'contacts' : 'everyone')),
+                onTap: () async {
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => PrivacySettingScreen(setting: r.key)));
+                  _loadExceptions();
+                },
               ),
           ]),
-          SettingsGroup(title: 'Spam protection', children: [
+          SettingsGroup(title: 'Messages', children: [
+            SettingsSwitchTile(
+              icon: Icons.done_all_rounded,
+              color: Brand.sky,
+              title: 'Read receipts',
+              subtitle: 'Turn off and people won’t see when you read their messages — and you won’t see theirs. Groups always show them.',
+              value: p['read_receipts'] != 'off',
+              onChanged: (v) => _setBool('read_receipts', v),
+            ),
             SettingsSwitchTile(
               icon: Icons.mark_email_unread_rounded,
               color: Brand.rose,
               title: 'Message requests',
               subtitle: 'Messages from people who are not in your contacts wait in Requests, without notifications',
               value: p['message_requests'] != 'off',
-              onChanged: (v) async {
-                try {
-                  final u = await context.read<AppServices>().api.put('/me/privacy', {'message_requests': v});
-                  if (context.mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
-                } catch (e) {
-                  if (context.mounted) showError(context, e);
-                }
-              },
+              onChanged: (v) => _setBool('message_requests', v),
             ),
           ]),
         ],
       ),
+    );
+  }
+}
+
+/// One privacy setting: Everybody / My contacts / Nobody, plus "Never share with" and "Always share with".
+class PrivacySettingScreen extends StatefulWidget {
+  const PrivacySettingScreen({super.key, required this.setting});
+  final String setting;
+
+  @override
+  State<PrivacySettingScreen> createState() => _PrivacySettingScreenState();
+}
+
+class _PrivacySettingScreenState extends State<PrivacySettingScreen> {
+  List<AppUser> _allow = [];
+  List<AppUser> _deny = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = Map<String, dynamic>.from(await context.read<AppServices>().api.get('/me/privacy/exceptions') as Map);
+      final e = Map<String, dynamic>.from((r[widget.setting] ?? const {}) as Map);
+      List<AppUser> users(Object? l) => [for (final j in (l as List? ?? const [])) AppUser.fromJson(Map<String, dynamic>.from(j as Map))];
+      if (mounted) {
+        setState(() {
+          _allow = users(e['allow']);
+          _deny = users(e['deny']);
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        showError(context, e);
+      }
+    }
+  }
+
+  Future<void> _setValue(String v) async {
+    try {
+      final u = await context.read<AppServices>().api.put('/me/privacy', {widget.setting: v});
+      if (mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  Future<void> _pick(bool allow) async {
+    final picked = await Navigator.push<List<AppUser>>(
+      context,
+      MaterialPageRoute(builder: (_) => PickUsersScreen(title: allow ? 'Always share with' : 'Never share with', initial: allow ? _allow : _deny)),
+    );
+    if (picked == null || !mounted) return;
+    final allowList = allow ? picked : _allow.where((u) => !picked.any((p) => p.id == u.id)).toList();
+    final denyList = allow ? _deny.where((u) => !picked.any((p) => p.id == u.id)).toList() : picked;
+    try {
+      await context.read<AppServices>().api.put('/me/privacy/exceptions/${widget.setting}', {
+        'allow': allowList.map((u) => u.id).toList(),
+        'deny': denyList.map((u) => u.id).toList(),
+      });
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  String _names(List<AppUser> l) => l.isEmpty ? 'Add people' : (l.length <= 2 ? l.map((u) => u.firstName.isEmpty ? u.name : u.firstName).join(', ') : '${l.length} people');
+
+  @override
+  Widget build(BuildContext context) {
+    final key = widget.setting;
+    final p = context.watch<AuthState>().me?.privacy ?? {};
+    final current = p[key] ?? (key == 'birthday' ? 'contacts' : 'everyone');
+    final icon = PrivacyScreen.icons[key]!;
+    return Scaffold(
+      appBar: AppBar(title: Text(PrivacyScreen.rows[key]!)),
+      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+        SettingsGroup(title: 'Who can see it', children: [
+          for (final e in PrivacyScreen.labels.entries)
+            RadioListTile<String>(value: e.key, groupValue: current, title: Text(e.value), onChanged: (v) => _setValue(v!)),
+        ]),
+        SettingsGroup(title: 'Exceptions', children: [
+          if (current != 'nobody')
+            SettingsTile(
+              icon: Icons.person_remove_rounded,
+              color: Brand.rose,
+              title: 'Never share with',
+              subtitle: _loading ? '…' : _names(_deny),
+              onTap: _loading ? null : () => _pick(false),
+            ),
+          if (current != 'everyone')
+            SettingsTile(
+              icon: Icons.person_add_alt_1_rounded,
+              color: Brand.green,
+              title: 'Always share with',
+              subtitle: _loading ? '…' : _names(_allow),
+              onTap: _loading ? null : () => _pick(true),
+            ),
+        ]),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(children: [
+            Icon(icon.$1, size: 16, color: Brand.muted),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Exceptions win over the choice above. People you block never see anything.',
+                  style: TextStyle(color: Brand.muted, fontSize: 12.5)),
+            ),
+          ]),
+        ),
+      ]),
     );
   }
 }

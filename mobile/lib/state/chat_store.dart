@@ -68,6 +68,9 @@ class ChatStore extends ChangeNotifier {
   List<Announcement> announcements = [];
   final Map<int, Set<int>> _viewsSent = {};
 
+  /// Another device just logged in to this account (to ask "was this you?").
+  void Function(Map<String, dynamic> session)? onNewLogin;
+
   /// Short notices for the chat on screen (e.g. "Sent for approval").
   final notices = StreamController<String>.broadcast();
 
@@ -1024,6 +1027,85 @@ class ChatStore extends ChangeNotifier {
     await api.post('/stories/${s.id}/reply', {'text': text});
   }
 
+  /// Quick emoji reaction: lands in the author's chat as "Reacted to your story".
+  Future<void> reactToStory(StoryItem s, String emoji) async {
+    s.viewed = true;
+    await api.post('/stories/${s.id}/react', {'emoji': emoji});
+  }
+
+  // ------------------------------------------------------------------ highlights
+  Future<List<StoryHighlight>> highlightsOf(int userId) async {
+    final r = Map<String, dynamic>.from(await api.get('/users/$userId/highlights') as Map);
+    return [for (final j in (r['highlights'] as List? ?? const [])) StoryHighlight.fromJson(Map<String, dynamic>.from(j as Map))];
+  }
+
+  /// One highlight with its stories, ready for the story viewer.
+  Future<(StoryGroup, String, bool)> openHighlight(int id) async {
+    final r = Map<String, dynamic>.from(await api.get('/highlights/$id') as Map);
+    final group = StoryGroup(
+      user: AppUser.fromJson(Map<String, dynamic>.from(r['user'] as Map)),
+      stories: [for (final j in (r['stories'] as List? ?? const [])) StoryItem.fromJson(Map<String, dynamic>.from(j as Map))],
+      hasUnseen: false,
+    );
+    return (group, '${r['title'] ?? ''}', r['mine'] == true);
+  }
+
+  Future<List<StoryItem>> storyArchive() async {
+    final r = Map<String, dynamic>.from(await api.get('/me/stories/archive') as Map);
+    return [for (final j in (r['stories'] as List? ?? const [])) StoryItem.fromJson(Map<String, dynamic>.from(j as Map))];
+  }
+
+  Future<void> saveHighlight({int? id, required String title, required List<int> storyIds}) async {
+    final body = {'title': title, 'story_ids': storyIds};
+    if (id == null) {
+      await api.post('/highlights', body);
+    } else {
+      await api.patch('/highlights/$id', body);
+    }
+  }
+
+  Future<List<int>> highlightStoryIds(int id) async {
+    final r = Map<String, dynamic>.from(await api.get('/highlights/$id') as Map);
+    return [for (final j in (r['stories'] as List? ?? const [])) (j as Map)['id'] as int];
+  }
+
+  Future<void> deleteHighlight(int id) => api.delete('/highlights/$id');
+
+  /// Adds one story to a highlight (keeping the ones already in it).
+  Future<void> addToHighlight(int highlightId, String title, int storyId) async {
+    final ids = await highlightStoryIds(highlightId);
+    if (!ids.contains(storyId)) ids.add(storyId);
+    await saveHighlight(id: highlightId, title: title, storyIds: ids);
+  }
+
+  // ------------------------------------------------------------------ birthdays & call links
+  /// Contacts with a birthday today or in the next days: [(user, inDays)].
+  Future<List<(AppUser, int)>> upcomingBirthdays() async {
+    final r = Map<String, dynamic>.from(await api.get('/me/birthdays') as Map);
+    return [
+      for (final j in (r['birthdays'] as List? ?? const []))
+        (AppUser.fromJson(Map<String, dynamic>.from((j as Map)['user'] as Map)), (j['in_days'] as num).toInt()),
+    ];
+  }
+
+  Future<List<Map<String, dynamic>>> callLinks() async {
+    final r = Map<String, dynamic>.from(await api.get('/calls/links') as Map);
+    return [for (final j in (r['links'] as List? ?? const [])) Map<String, dynamic>.from(j as Map)];
+  }
+
+  Future<Map<String, dynamic>> createCallLink({bool video = false}) async {
+    final r = Map<String, dynamic>.from(await api.post('/calls/links', {'video': video}) as Map);
+    return Map<String, dynamic>.from(r['link'] as Map);
+  }
+
+  Future<void> deleteCallLink(String code) => api.delete('/calls/links/$code');
+
+  /// Who a call link calls: (user, video, mine).
+  Future<(AppUser, bool, bool)> resolveCallLink(String code) async {
+    final r = Map<String, dynamic>.from(await api.get('/calls/links/$code') as Map);
+    return (AppUser.fromJson(Map<String, dynamic>.from(r['user'] as Map)), (r['link'] as Map)['video'] == true, r['mine'] == true);
+  }
+
   /// Re-evaluates "unseen" rings after viewing.
   void refreshStoryRings() {
     for (final g in stories) {
@@ -1269,6 +1351,9 @@ class ChatStore extends ChangeNotifier {
         break;
       case 'session:revoked':
         onSessionRevoked?.call();
+        break;
+      case 'session:new':
+        onNewLogin?.call(d);
         break;
     }
   }

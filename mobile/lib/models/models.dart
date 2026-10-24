@@ -25,6 +25,7 @@ class AppUser {
   final bool isPremium;
   final DateTime? premiumUntil; // only for "me"
   final Map<String, dynamic>? limits; // only for "me": {premium, upload_mb, folders, ads}
+  final Birthday? birthday; // when they share it with me
 
   AppUser({
     required this.id,
@@ -47,6 +48,7 @@ class AppUser {
     this.isPremium = false,
     this.premiumUntil,
     this.limits,
+    this.birthday,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
@@ -70,6 +72,7 @@ class AppUser {
         isPremium: j['is_premium'] == true,
         premiumUntil: _date(j['premium_until']),
         limits: j['limits'] == null ? null : Map<String, dynamic>.from(j['limits'] as Map),
+        birthday: j['birthday'] is Map ? Birthday.fromJson(Map<String, dynamic>.from(j['birthday'] as Map)) : null,
       );
 
   String get name {
@@ -80,6 +83,27 @@ class AppUser {
   }
 
   String? get avatarAbsolute => avatarUrl == null ? null : AppConfig.absolute(avatarUrl!);
+}
+
+class Birthday {
+  Birthday(this.day, this.month, [this.year]);
+  final int day;
+  final int month;
+  final int? year; // only on my own profile
+
+  factory Birthday.fromJson(Map<String, dynamic> j) => Birthday(_int(j['day']), _int(j['month']), j['year'] == null ? null : _int(j['year']));
+
+  static const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  String get label => '$day ${months[(month - 1).clamp(0, 11)]}${year != null ? ' $year' : ''}';
+
+  /// "1995-08-21" or "08-21" for the server.
+  String get api => '${year != null ? '$year-' : ''}${'$month'.padLeft(2, '0')}-${'$day'.padLeft(2, '0')}';
+
+  bool get isToday {
+    final n = DateTime.now();
+    return n.month == month && n.day == day;
+  }
 }
 
 class MediaInfo {
@@ -340,6 +364,8 @@ class Message {
   Map<String, dynamic>? get quote => meta?['quote'] is Map ? Map<String, dynamic>.from(meta!['quote'] as Map) : null;
 
   /// In a discussion group: the channel post this message came from ({chat_id, message_id}).
+  /// Reply / reaction to a story: {id, owner_id, kind, media, caption, reaction?}
+  Map<String, dynamic>? get storyRef => meta?['story'] is Map ? Map<String, dynamic>.from(meta!['story'] as Map) : null;
   Map<String, dynamic>? get channelPost => meta?['channel_post'] is Map ? Map<String, dynamic>.from(meta!['channel_post'] as Map) : null;
 
   /// Full-screen effect sent with the message (confetti, hearts, balloons, fireworks).
@@ -420,6 +446,7 @@ class CallInfo {
   final int peerId;
   final int durationSec;
   final DateTime createdAt;
+  final bool waiting; // the other person is on another call (call waiting)
 
   CallInfo({
     required this.id,
@@ -432,6 +459,7 @@ class CallInfo {
     required this.peerId,
     this.durationSec = 0,
     required this.createdAt,
+    this.waiting = false,
   });
 
   factory CallInfo.fromJson(Map<String, dynamic> j) => CallInfo(
@@ -440,6 +468,7 @@ class CallInfo {
         video: j['video'] == true,
         status: (j['status'] ?? 'ended') as String,
         outgoing: j['direction'] == 'outgoing',
+        waiting: j['waiting'] == true,
         endReason: j['end_reason'] as String?,
         peer: j['peer'] == null ? null : AppUser.fromJson(Map<String, dynamic>.from(j['peer'] as Map)),
         peerId: _int(j['peer_id'] ?? (j['peer'] is Map ? j['peer']['id'] : 0)),
@@ -750,6 +779,21 @@ class StoryItem {
         createdAt: _date(j['created_at']) ?? DateTime.now(),
         viewed: j['viewed'] == true,
         viewsCount: _int(j['views_count'] ?? 0),
+      );
+}
+
+class StoryHighlight {
+  StoryHighlight({required this.id, required this.title, required this.count, this.cover});
+  final int id;
+  final String title;
+  final int count;
+  final MediaInfo? cover;
+
+  factory StoryHighlight.fromJson(Map<String, dynamic> j) => StoryHighlight(
+        id: _int(j['id']),
+        title: (j['title'] ?? '') as String,
+        count: _int(j['count']),
+        cover: j['cover'] is Map ? MediaInfo.fromJson(Map<String, dynamic>.from(j['cover'] as Map)) : null,
       );
 }
 

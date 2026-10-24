@@ -14,6 +14,7 @@ import 'chat_screen.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
 import 'shared_media_screen.dart';
+import 'story_screens.dart' show HighlightsRow;
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key, required this.userId});
@@ -121,6 +122,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ],
                   ],
                 ),
+                if (!u.deleted) HighlightsRow(key: ValueKey('hl${u.id}'), userId: u.id, mine: u.id == myId),
                 SettingsGroup(title: 'Info', children: [
                   if (u.phone != null)
                     SettingsTile(
@@ -145,7 +147,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       },
                     ),
                   if (u.bio.isNotEmpty) SettingsTile(icon: Icons.info_rounded, color: Brand.violet, title: u.bio, subtitle: 'Bio'),
-                  if (u.phone == null && u.username == null && u.bio.isEmpty)
+                  if (u.birthday != null)
+                    SettingsTile(
+                      icon: Icons.cake_rounded,
+                      color: Brand.rose,
+                      title: u.birthday!.isToday ? '${u.birthday!.label} 🎉' : u.birthday!.label,
+                      subtitle: u.birthday!.isToday && other ? 'Birthday today — send a wish!' : 'Birthday',
+                      onTap: u.birthday!.isToday && other ? () => _message(u) : null,
+                    ),
+                  if (u.phone == null && u.username == null && u.bio.isEmpty && u.birthday == null)
                     const SettingsTile(icon: Icons.person_rounded, color: Color(0xFF8A93B4), title: 'No public info'),
                 ]),
                 if (chat != null)

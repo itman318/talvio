@@ -12,6 +12,7 @@ import 'poll_view.dart';
 import '../screens/calls_screen.dart';
 import '../screens/thread_screen.dart';
 import '../screens/user_profile_screen.dart';
+import '../screens/story_screens.dart' show StoryThumb;
 import 'bot_widgets.dart';
 import '../theme/brand.dart';
 import 'link_preview.dart';
@@ -198,6 +199,7 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
       if (m.quote != null) _quoteBlock(m.quote!, accent, textColor),
+      if (m.storyRef != null) _storyBlock(m.storyRef!, accent, textColor),
       if (m.type != 'text') _body(context, accent),
       if (m.type != 'text' && hasText) const SizedBox(height: 4),
       if (hasText)
@@ -309,6 +311,41 @@ class MessageBubble extends StatelessWidget {
   }
 
   static final ThemeData _inkTheme = Brand.dark();
+
+  /// "Replied to your story" / "Reacted to your story" with a small preview.
+  Widget _storyBlock(Map<String, dynamic> st, Color accent, Color textColor) {
+    final reaction = st['reaction'] != null;
+    final label = isMine
+        ? (reaction ? 'You reacted to their story' : 'You replied to their story')
+        : (reaction ? 'Reacted to your story' : 'Replied to your story');
+    final caption = '${st['caption'] ?? ''}';
+    final media = st['media'] is Map ? MediaInfo.fromJson(Map<String, dynamic>.from(st['media'] as Map)) : null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(isMine ? 40 : 26),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        ClipRRect(borderRadius: BorderRadius.circular(6), child: SizedBox(width: 36, height: 52, child: StoryThumb(media: media, size: 52))),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(reaction ? Icons.add_reaction_rounded : Icons.amp_stories_rounded, size: 13, color: accent),
+              const SizedBox(width: 4),
+              Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 12))),
+            ]),
+            Text(caption.isNotEmpty ? caption : (st['kind'] == 'video' ? 'Video story' : 'Photo story'),
+                maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: textColor.withAlpha(210))),
+          ]),
+        ),
+        const SizedBox(width: 4),
+      ]),
+    );
+  }
 
   /// "Replying privately" quote of a group message.
   Widget _quoteBlock(Map<String, dynamic> q, Color accent, Color textColor) {

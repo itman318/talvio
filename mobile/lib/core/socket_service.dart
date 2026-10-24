@@ -35,6 +35,8 @@ class SocketService {
     'message:poll',
     'support:updated',
     'session:revoked',
+    'session:new',
+    'draft:updated',
     'call:incoming',
     'call:accepted',
     'call:signal',

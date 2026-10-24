@@ -33,8 +33,11 @@ class _RootShellState extends State<RootShell> {
     // talvio://u/<id> links (profile QR codes scanned with the phone camera)
     try {
       _links = AppLinks().uriLinkStream.listen((uri) {
+        if (!mounted) return;
         final id = profileIdFromLink(uri.toString());
-        if (id != null && mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: id)));
+        if (id != null) Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: id)));
+        final code = callCodeFromLink(uri.toString());
+        if (code != null) openCallLink(context, code);
       }, onError: (_) {});
     } catch (_) {}
   }

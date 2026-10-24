@@ -794,6 +794,12 @@
       const q = m.meta.quote;
       body.push(el('div', { class: 'reply' }, el('b', {}, `↩ ${q.sender_name || ''}${q.chat_title ? ` · ${q.chat_title}` : ''}`), q.text || q.type || ''));
     }
+    if (m.meta && m.meta.story) {
+      const st = m.meta.story;
+      const mine = !!auth.me && m.sender_id === auth.me.id;
+      const label = st.reaction ? (mine ? 'You reacted to their story' : 'Reacted to your story') : (mine ? 'You replied to their story' : 'Replied to your story');
+      body.push(el('div', { class: 'reply' }, el('b', {}, `📖 ${label}`), st.caption || (st.kind === 'video' ? 'Video story' : 'Photo story')));
+    }
     if (album) body.push(albumView(album));
     else body.push(...mediaView(m));
     const text = album ? album.map((x) => x.text).filter(Boolean).join('\n') : ['poll', 'location', 'call', 'sticker', 'contact'].includes(m.type) ? '' : m.text;

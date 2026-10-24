@@ -26,6 +26,7 @@ import '../widgets/message_extras.dart';
 import '../core/message_notifications.dart';
 import '../core/voice_playback.dart';
 import '../core/chat_lock.dart';
+import '../core/screen_guard.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -40,6 +41,7 @@ import 'calls_screen.dart';
 import 'home_screen.dart' show activityIcon;
 import 'premium_screens.dart';
 import 'image_editor_screen.dart';
+import 'video_send_screen.dart';
 import '../widgets/media_widgets.dart' show VoiceWavePainter, resampleBars;
 import '../widgets/album_view.dart';
 import 'thread_screen.dart';
@@ -108,6 +110,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Map<String, dynamic>? _ad; // sponsored message under a channel
   bool _adSeen = false;
+
+  bool _guarded = false;
 
   @override
   void initState() {
@@ -188,6 +192,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    if (_guarded) ScreenGuard.release();
     final draft = _editing == null ? _text.text : '';
     if (draft != (_prefs.draft(chatId) ?? '')) _store.syncDraft(chatId, draft);
     _prefs.setDraft(chatId, draft);
@@ -547,7 +552,16 @@ class _ChatScreenState extends State<ChatScreen> {
           break;
         case 'video':
           final x = await picker.pickVideo(source: ImageSource.gallery);
-          if (x != null) await _sendFile(x.path, type: 'video', name: x.name);
+          if (x != null && mounted) {
+            final chat = _store.chatById(chatId) ?? _chat;
+            final r = await Navigator.push<VideoSendResult>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VideoSendScreen(path: x.path, allowViewOnce: !((chat?.isChannel ?? false) || (chat?.isSavedMessages ?? false))),
+              ),
+            );
+            if (r != null) await _sendFile(r.path, type: 'video', name: r.path == x.path ? x.name : 'video.mp4', duration: r.seconds, viewOnce: r.viewOnce);
+          }
           break;
         case 'file':
           final r = await FilePicker.platform.pickFiles();
@@ -1166,6 +1180,12 @@ class _ChatScreenState extends State<ChatScreen> {
         appBar: AppBar(),
         body: Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator()),
       );
+    }
+    // locked & protected chats: no screenshots
+    final guard = chat.isLocked || chat.protectedContent;
+    if (guard != _guarded) {
+      _guarded = guard;
+      guard ? ScreenGuard.acquire() : ScreenGuard.release();
     }
     if (chat.isLocked && !_unlocked) return _lockGate(chat);
     if (chat.isForum) return TopicsScreen(chat: chat);

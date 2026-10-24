@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
+import '../widgets/birthday_strip.dart';
 import '../widgets/avatar.dart';
 import 'channel_screens.dart';
 import 'secret_screens.dart';
@@ -223,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.only(bottom: 96), // room above the floating button
                       itemCount: 1 + extraRows + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i0) {
-                        if (i0 == 0) return _searchPill();
+                        if (i0 == 0) return Column(mainAxisSize: MainAxisSize.min, children: [_searchPill(), if (q.isEmpty) const BirthdayStrip()]);
                         if (locked.isNotEmpty && i0 == 1) return _lockedRow(locked);
                         if (requests.isNotEmpty && i0 == 1 + (locked.isEmpty ? 0 : 1)) return _requestsRow(requests);
                         final i = i0 - 1 - extraRows;

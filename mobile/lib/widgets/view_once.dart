@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/screen_guard.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import '../state/chat_store.dart';
@@ -130,6 +131,7 @@ class _OnceViewerState extends State<_OnceViewer> {
   @override
   void initState() {
     super.initState();
+    ScreenGuard.acquire(); // no screenshots of view-once media
     if (widget.type == 'video') {
       final c = VideoPlayerController.file(widget.file);
       _video = c;
@@ -149,6 +151,7 @@ class _OnceViewerState extends State<_OnceViewer> {
 
   @override
   void dispose() {
+    ScreenGuard.release();
     _video?.dispose();
     _audio?.dispose();
     super.dispose();
