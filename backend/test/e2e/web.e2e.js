@@ -34,7 +34,7 @@ async function login(phone, first) {
   await call('POST', `/chats/${chat.id}/messages`, { text: 'Web pe aa gaye?' }, friend.token);
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, bypassCSP: true });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
@@ -96,7 +96,7 @@ async function login(phone, first) {
   if (!list.some((m) => m.text === 'Haan, web se likh raha hoon')) throw new Error('message sent from web did not reach the other user');
 
   // second browser: log in with an email code
-  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 }, bypassCSP: true });
   const p2 = await ctx2.newPage();
   p2.on('pageerror', (e) => errors.push(e.message));
   await p2.goto(BASE + '/web/');
