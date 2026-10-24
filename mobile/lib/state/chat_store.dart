@@ -22,7 +22,19 @@ class ChatStore extends ChangeNotifier {
   List<Chat> chats = [];
 
   /// Chats shown in the main list (message requests wait separately).
-  List<Chat> get mainChats => chats.where((c) => !c.isRequest).toList();
+  List<Chat> get mainChats => chats.where((c) => !c.isRequest && !c.isLocked).toList();
+
+  /// Chats hidden behind the fingerprint.
+  List<Chat> get lockedChats => chats.where((c) => c.isLocked && !c.isRequest).toList();
+
+  Future<void> setLocked(int chatId, bool locked) => updateChatSettings(chatId, {'is_locked': locked});
+
+  /// View once: marks it opened on the server (allowed once), then the file can be fetched for a few minutes.
+  Future<void> openOnce(Message m) async {
+    await api.post('/messages/${m.id}/open-once');
+    if (myId != null && !m.openedBy.contains(myId)) m.openedBy.add(myId!);
+    notifyListeners();
+  }
 
   /// Message requests: private chats started by people who aren't in my contacts.
   List<Chat> get requests => chats.where((c) => c.isRequest).toList();
@@ -55,6 +67,9 @@ class ChatStore extends ChangeNotifier {
   List<StoryGroup> stories = [];
   List<Announcement> announcements = [];
   final Map<int, Set<int>> _viewsSent = {};
+
+  /// Message effects to play now: (chatId, effect) — for messages arriving in the chat on screen.
+  final effects = StreamController<(int, String)>.broadcast();
 
   /// Bumped whenever an admin answers a support ticket (screens listen and refresh).
   final supportUpdates = ValueNotifier<int>(0);
@@ -312,7 +327,7 @@ class ChatStore extends ChangeNotifier {
       ? null
       : ReplyInfo(id: r.id, senderId: r.senderId, senderName: r.sender?.name ?? '', type: r.type, text: r.text);
 
-  Future<void> sendText(int chatId, String text, {Message? replyTo, bool silent = false}) async {
+  Future<void> sendText(int chatId, String text, {Message? replyTo, bool silent = false, String? effect}) async {
     final local = Message(
       id: _localId--,
       chatId: chatId,
@@ -323,7 +338,8 @@ class ChatStore extends ChangeNotifier {
       clientId: _newClientId(),
       createdAt: DateTime.now(),
       sendState: SendState.sending,
-      outbox: {'type': 'text', 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id, if (silent) 'silent': true},
+      meta: effect == null ? null : {'effect': effect},
+      outbox: {'type': 'text', 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id, if (silent) 'silent': true, if (effect != null) 'effect': effect},
     );
     _insertLocal(local);
     await _deliver(local);
@@ -415,6 +431,7 @@ class ChatStore extends ChangeNotifier {
     Message? replyTo,
     String? albumId,
     List<int>? waveform,
+    bool viewOnce = false,
   }) async {
     final file = File(path);
     final local = Message(
@@ -430,6 +447,7 @@ class ChatStore extends ChangeNotifier {
       sendState: SendState.sending,
       localFilePath: path,
       meta: waveform == null ? null : {'waveform': waveform},
+      viewOnce: viewOnce,
       uploadKind: type == 'video_note' ? 'video' : type,
       media: MediaInfo(
         id: 0,
@@ -448,6 +466,7 @@ class ChatStore extends ChangeNotifier {
         if (replyTo != null) 'reply_to_id': replyTo.id,
         if (albumId != null) 'album_id': albumId,
         if (waveform != null) 'waveform': waveform,
+        if (viewOnce) 'view_once': true,
       },
     );
     _insertLocal(local);
@@ -1235,6 +1254,10 @@ class ChatStore extends ChangeNotifier {
         _typing[m.chatId]?.remove(m.senderId);
       }
       _sortChats();
+    }
+    if (!mine && m.senderId != myId && activeChatId == m.chatId && appInForeground) {
+      final fx = m.effect ?? (m.type == 'text' ? autoEffectFor(m.text) : null);
+      if (fx != null) effects.add((m.chatId, fx));
     }
     if (!mine && m.senderId != myId) {
       socket.emit('message:delivered', {'chat_id': m.chatId, 'message_id': m.id});

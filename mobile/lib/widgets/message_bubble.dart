@@ -17,6 +17,9 @@ import '../theme/brand.dart';
 import 'link_preview.dart';
 import 'sticker_widgets.dart';
 import 'contact_card.dart';
+import 'view_once.dart';
+import 'package:provider/provider.dart';
+import '../state/chat_store.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -67,13 +70,16 @@ class MessageBubble extends StatelessWidget {
 
   Widget _body(BuildContext context, Color accent) {
     final m = message;
+    if (m.viewOnce) {
+      return ViewOnceBubble(message: m, isMine: isMine, color: isMine ? Colors.white : accent, myId: context.read<ChatStore>().myId);
+    }
     switch (m.type) {
       case 'image':
         return ClipRRect(borderRadius: BorderRadius.circular(10), child: MessageImage(message: m));
       case 'video':
         return MessageVideo(message: m);
       case 'voice':
-        return VoicePlayer(message: m, color: isMine ? Colors.white : accent, isMine: isMine);
+        return VoicePlayer(message: m, color: isMine ? Colors.white : accent, isMine: isMine, title: isMine ? 'You' : (m.sender?.name ?? chat.title));
       case 'video_note':
         return VideoNoteBubble(message: m, size: 200);
       case 'file':

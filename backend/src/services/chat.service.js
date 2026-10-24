@@ -54,7 +54,7 @@ const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
        c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
-       cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread, cm.is_request,
+       cm.role AS my_role, cm.last_read_message_id, cm.muted_until, cm.is_pinned, cm.is_archived, cm.marked_unread, cm.is_request, cm.is_locked,
        (SELECT count(*) FROM message_mentions mm JOIN messages mmsg ON mmsg.id = mm.message_id
           WHERE mm.user_id = $1 AND mm.chat_id = c.id AND mmsg.deleted_at IS NULL
             AND mm.message_id > GREATEST(cm.last_read_message_id, cm.cleared_before_id)) AS unread_mentions,
@@ -146,6 +146,7 @@ async function serializeChats(userId, rows) {
       is_pinned: r.is_pinned,
       is_archived: r.is_archived,
       is_request: !!r.is_request,
+      is_locked: !!r.is_locked,
       last_message: r.last_visible_message_id ? lastMsgs.get(r.last_visible_message_id) || null : null,
       last_message_at: r.last_message_at ? new Date(r.last_message_at).toISOString() : null,
       created_at: new Date(r.created_at).toISOString(),
@@ -547,6 +548,11 @@ async function updateMySettings(userId, chatIdRaw, body) {
   if (body.marked_unread !== undefined) {
     params.push(v.bool(body.marked_unread, 'marked_unread'));
     sets.push(`marked_unread = $${params.length}`);
+  }
+  if (body.is_locked !== undefined) {
+    // locked chats: hidden behind the phone's fingerprint, and notifications don't show who or what
+    params.push(v.bool(body.is_locked, 'is_locked'));
+    sets.push(`is_locked = $${params.length}`);
   }
   if (sets.length) {
     await db.query(`UPDATE chat_members SET ${sets.join(', ')} WHERE chat_id = $1 AND user_id = $2`, params);

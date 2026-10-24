@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -18,8 +19,12 @@ import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
 import '../widgets/premium.dart';
+import '../widgets/voice_mini_player.dart';
+import '../widgets/message_effects.dart';
 import '../widgets/message_extras.dart';
 import '../core/message_notifications.dart';
+import '../core/voice_playback.dart';
+import '../core/chat_lock.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -34,6 +39,7 @@ import 'calls_screen.dart';
 import 'home_screen.dart' show activityIcon;
 import 'premium_screens.dart';
 import 'image_editor_screen.dart';
+import '../widgets/media_widgets.dart' show VoiceWavePainter, resampleBars;
 import '../widgets/album_view.dart';
 import 'thread_screen.dart';
 import '../widgets/bot_widgets.dart';
@@ -68,6 +74,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
+  bool _unlocked = ChatLock.isOpen; // locked chats: fingerprint first
   int _panelTab = 0; // emoji panel: 0 emoji · 1 stickers · 2 GIFs
   String? _tag; // My Notes tag filter
   final _scroll = ScrollController();
@@ -79,6 +86,13 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _recPaused = false;
   int _recSeconds = 0;
   StreamSubscription<Amplitude>? _ampSub;
+  // voice review (listen before sending)
+  String? _reviewPath;
+  int _reviewSeconds = 0;
+  List<int>? _reviewWave;
+  bool _reviewOnce = false;
+  final _preview = AudioPlayer();
+  StreamSubscription<(int, String)>? _fxSub;
   final List<double> _levels = []; // loudness 0..1, ~every 100 ms (live bars + the waveform we send)
   Timer? _recTimer;
 
@@ -101,6 +115,15 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _open();
     MessageNotifications.clearChat(widget.chatId);
+    _fxSub = _store.effects.stream.listen((e) {
+      if (e.$1 == chatId && mounted) playMessageEffect(context, e.$2);
+    });
+    _preview.playerStateStream.listen((st) {
+      if (st.processingState == ProcessingState.completed) {
+        _preview.pause();
+        _preview.seek(Duration.zero);
+      }
+    });
   }
 
   Future<void> _open() async {
@@ -121,6 +144,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _store.closeChat(chatId);
     _recTimer?.cancel();
     _ampSub?.cancel();
+    _fxSub?.cancel();
+    _preview.dispose();
     _recorder.dispose();
     _text.dispose();
     _focus.dispose();
@@ -177,7 +202,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ------------------------------------------------------------------ sending
-  Future<void> _send({bool silent = false}) async {
+  Future<void> _send({bool silent = false, String? effect}) async {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     if (_editing != null) {
@@ -194,7 +219,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final reply = _replyTo;
     setState(() => _replyTo = null);
     _text.clear();
-    await _store.sendText(chatId, text, replyTo: reply, silent: silent);
+    final fx = effect ?? autoEffectFor(text);
+    if (fx != null) playMessageEffect(context, fx);
+    await _store.sendText(chatId, text, replyTo: reply, silent: silent, effect: effect);
   }
 
   /// Long-press on send: send silently or schedule.
@@ -206,9 +233,40 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Wrap(children: [
           ListTile(leading: const Icon(Icons.notifications_off_outlined), title: const Text('Send without sound'), onTap: () => Navigator.pop(ctx, 'silent')),
           ListTile(leading: const Icon(Icons.schedule), title: const Text('Schedule message'), onTap: () => Navigator.pop(ctx, 'schedule')),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('Send with effect', style: TextStyle(fontWeight: FontWeight.w700, color: Brand.muted, fontSize: 13)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Row(children: [
+              for (final (id, emoji, label) in messageEffects)
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => Navigator.pop(ctx, 'fx:$id'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(gradient: Brand.auroraSoft(Theme.of(ctx).brightness == Brightness.dark), shape: BoxShape.circle),
+                          child: Text(emoji, style: const TextStyle(fontSize: 26)),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      ]),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
         ]),
       ),
     );
+    if (a != null && a.startsWith('fx:')) await _send(effect: a.substring(3));
     if (a == 'silent') await _send(silent: true);
     if (a == 'schedule') await _scheduleCurrent();
   }
@@ -289,7 +347,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return true;
   }
 
-  Future<void> _sendFile(String path, {required String type, String? name, int? duration, String? albumId, List<int>? waveform}) async {
+  Future<void> _sendFile(String path, {required String type, String? name, int? duration, String? albumId, List<int>? waveform, bool viewOnce = false}) async {
     if (!_checkSize(path)) return;
     int? w;
     int? h;
@@ -320,6 +378,7 @@ class _ChatScreenState extends State<ChatScreen> {
       albumId: albumId,
       replyTo: reply,
       waveform: waveform,
+      viewOnce: viewOnce,
     );
   }
 
@@ -452,9 +511,11 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Opens the photo editor (crop, rotate, draw, text) before sending one photo.
   Future<void> _editAndSend(String path, String name) async {
     if (!mounted) return;
-    final edited = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => ImageEditorScreen(path: path)));
+    final chat = _store.chatById(chatId) ?? _chat;
+    final once = (chat?.isChannel ?? false) || (chat?.isSavedMessages ?? false) ? null : ValueNotifier(false);
+    final edited = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => ImageEditorScreen(path: path, viewOnce: once)));
     if (edited == null) return;
-    await _sendFile(edited, type: 'image', name: edited == path ? name : 'photo.jpg');
+    await _sendFile(edited, type: 'image', name: edited == path ? name : 'photo.jpg', viewOnce: once?.value ?? false);
   }
 
   // ------------------------------------------------------------------ voice notes
@@ -464,6 +525,9 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) showInfo(context, 'Allow microphone access to record voice messages');
         return;
       }
+      if (!mounted) return;
+      final vp = context.read<VoicePlayback>();
+      if (vp.playing) await vp.pause();
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 44100), path: path);
@@ -531,6 +595,138 @@ class _ChatScreenState extends State<ChatScreen> {
     return out;
   }
 
+  /// Stop and listen before sending (the recording can't be continued after this).
+  Future<void> _stopForReview() async {
+    _recTimer?.cancel();
+    await _ampSub?.cancel();
+    _ampSub = null;
+    final seconds = _recSeconds;
+    final wave = _waveformFromLevels();
+    _store.sendTyping(chatId, action: 'cancel');
+    final path = await _recorder.stop();
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _recPaused = false;
+    });
+    if (path == null || seconds < 1) {
+      showInfo(context, 'Hold on a bit longer — the voice message is too short');
+      return;
+    }
+    try {
+      await _preview.setFilePath(path);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _reviewPath = path;
+      _reviewSeconds = seconds;
+      _reviewWave = wave.length >= 8 ? wave : null;
+      _reviewOnce = false;
+    });
+  }
+
+  Future<void> _finishReview({required bool send}) async {
+    final path = _reviewPath;
+    if (path == null) return;
+    await _preview.stop();
+    final seconds = _reviewSeconds;
+    final wave = _reviewWave;
+    final once = _reviewOnce;
+    setState(() => _reviewPath = null);
+    if (send) {
+      await _sendFile(path, type: 'voice', duration: seconds, name: 'voice.m4a', waveform: wave, viewOnce: once);
+    } else {
+      File(path).delete().catchError((_) => File(path));
+    }
+  }
+
+  Widget _reviewBar(Chat chat) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bars = resampleBars((_reviewWave ?? const <int>[]).map((e) => e / 31).toList(), 40);
+    final canOnce = !chat.isChannel && !chat.isSavedMessages;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 2, 0, 2),
+      child: Row(children: [
+        Expanded(
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.only(right: 6),
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xFF1C2033) : Colors.white,
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: Brand.primary.withValues(alpha: 0.25)),
+            ),
+            child: Row(children: [
+              IconButton(
+                tooltip: 'Delete recording',
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE5484D)),
+                onPressed: () => _finishReview(send: false),
+              ),
+              StreamBuilder<PlayerState>(
+                stream: _preview.playerStateStream,
+                builder: (_, snap) {
+                  final st = snap.data;
+                  final playing = st?.playing == true && st?.processingState != ProcessingState.completed;
+                  return GestureDetector(
+                    onTap: () => playing ? _preview.pause() : _preview.play(),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+                      child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 22),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: StreamBuilder<Duration>(
+                  stream: _preview.positionStream,
+                  builder: (_, snap) {
+                    final total = _preview.duration?.inMilliseconds ?? _reviewSeconds * 1000;
+                    final pos = snap.data ?? Duration.zero;
+                    final f = total > 0 ? (pos.inMilliseconds / total).clamp(0.0, 1.0) : 0.0;
+                    return Row(children: [
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (_, box) => GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapUp: (d) => _preview.seek(Duration(milliseconds: (total * (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)).round())),
+                            child: SizedBox(
+                              height: 28,
+                              child: CustomPaint(
+                                size: Size(box.maxWidth, 28),
+                                painter: VoiceWavePainter(bars, f, played: Brand.primary, rest: Brand.primary.withValues(alpha: 0.28)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(duration(pos > Duration.zero ? pos.inSeconds : _reviewSeconds),
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                    ]);
+                  },
+                ),
+              ),
+              if (canOnce)
+                IconButton(
+                  tooltip: _reviewOnce ? 'View once: on' : 'View once',
+                  onPressed: () {
+                    setState(() => _reviewOnce = !_reviewOnce);
+                    showInfo(context, _reviewOnce ? 'View once: it can be played only one time' : 'View once is off');
+                  },
+                  icon: ViewOnceIcon(on: _reviewOnce, size: 24, color: Brand.muted),
+                ),
+            ]),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _roundAction(icon: Icons.send_rounded, tooltip: 'Send voice message', onTap: () => _finishReview(send: true)),
+      ]),
+    );
+  }
+
   Future<void> _stopRecording({required bool send}) async {
     _recTimer?.cancel();
     await _ampSub?.cancel();
@@ -577,7 +773,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     if (m.isSystem) return;
-    final canEdit = (mine || channelAdmin) && m.forwardedFromName == null && m.type != 'poll' && (m.type == 'text' || m.text.isNotEmpty);
+    final canEdit = (mine || channelAdmin) && m.forwardedFromName == null && m.type != 'poll' && !m.viewOnce && (m.type == 'text' || m.text.isNotEmpty);
     final poll = m.poll;
     final canClosePoll = poll != null && !poll.closed && (mine || chat.isAdmin);
     final a = await showModalBottomSheet<String>(
@@ -610,7 +806,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(children: [
               if (chat.canPost) _quick(ctx, Icons.reply_rounded, 'Reply', 'reply'),
               if (m.text.isNotEmpty) _quick(ctx, Icons.copy_rounded, 'Copy', 'copy'),
-              if (m.type != 'poll' && m.type != 'call') _quick(ctx, Icons.shortcut_rounded, 'Forward', 'forward'),
+              if (m.type != 'poll' && m.type != 'call' && !m.viewOnce) _quick(ctx, Icons.shortcut_rounded, 'Forward', 'forward'),
               _quick(ctx, Icons.alarm_add_rounded, 'Remind', 'remind'),
             ]),
           ),
@@ -724,6 +920,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _chatMenu(String action, Chat chat) async {
     try {
       switch (action) {
+        case 'lock':
+          if (!await ChatLock.unlock(context, reason: chat.isLocked ? 'Unlock this chat' : 'Lock this chat')) return;
+          await _store.setLocked(chat.id, !chat.isLocked);
+          if (mounted) showInfo(context, chat.isLocked ? 'Chat unlocked' : 'Chat locked — it now lives in “Locked chats”');
+          break;
         case 'disappearing':
           final secs = await showModalBottomSheet<int>(
             context: context,
@@ -829,6 +1030,7 @@ class _ChatScreenState extends State<ChatScreen> {
         body: Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator()),
       );
     }
+    if (chat.isLocked && !_unlocked) return _lockGate(chat);
     if (chat.isForum) return TopicsScreen(chat: chat);
     final all = store.messagesOf(chatId);
     // My Notes: #tags to filter notes
@@ -940,6 +1142,7 @@ class _ChatScreenState extends State<ChatScreen> {
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
               _mi('theme', Icons.palette_outlined, 'Theme & wallpaper'),
+              if (!chat.isRequest) _mi('lock', chat.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded, chat.isLocked ? 'Unlock chat' : 'Lock chat'),
               if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
                 _mi('disappearing', Icons.timer_outlined, chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages'),
               if (chat.canPost) _mi('scheduled', Icons.schedule_send_outlined, 'Scheduled messages'),
@@ -975,6 +1178,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ]),
                   ),
           ),
+          VoiceMiniPlayer(onOpen: (id) {
+            if (id != chatId) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)));
+          }),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
           if (tags.isNotEmpty)
             SizedBox(
@@ -1092,6 +1298,37 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _lockGate(Chat chat) {
+    return Scaffold(
+      appBar: AppBar(),
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+            child: const Icon(Icons.lock_rounded, color: Colors.white, size: 44),
+          ),
+          const SizedBox(height: 16),
+          const Text('This chat is locked', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          const Text('Use your fingerprint or screen lock to open it.', style: TextStyle(color: Brand.muted)),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: 200,
+            child: AuroraButton(
+              label: 'Unlock',
+              icon: Icons.fingerprint_rounded,
+              onPressed: () async {
+                if (await ChatLock.unlock(context, reason: 'Open ${chat.title}') && mounted) setState(() => _unlocked = true);
+              },
+            ),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -1248,6 +1485,32 @@ class _ChatScreenState extends State<ChatScreen> {
               maxLength: 4096,
               textCapitalization: TextCapitalization.sentences,
               style: const TextStyle(fontSize: 16.5, height: 1.35),
+              // select text → Bold / Italic / Strike / Code / Spoiler
+              contextMenuBuilder: (ctx, state) {
+                final items = [...state.contextMenuButtonItems];
+                final sel = _text.selection;
+                if (sel.isValid && !sel.isCollapsed) {
+                  void wrap(String mark) {
+                    final t = _text.text;
+                    final inner = sel.textInside(t);
+                    _text.value = TextEditingValue(
+                      text: '${sel.textBefore(t)}$mark$inner$mark${sel.textAfter(t)}',
+                      selection: TextSelection.collapsed(offset: sel.end + mark.length * 2),
+                    );
+                    state.hideToolbar();
+                    setState(() {});
+                  }
+
+                  items.addAll([
+                    ContextMenuButtonItem(label: 'Bold', onPressed: () => wrap('**')),
+                    ContextMenuButtonItem(label: 'Italic', onPressed: () => wrap('_')),
+                    ContextMenuButtonItem(label: 'Strike', onPressed: () => wrap('~')),
+                    ContextMenuButtonItem(label: 'Code', onPressed: () => wrap('`')),
+                    ContextMenuButtonItem(label: 'Spoiler', onPressed: () => wrap('||')),
+                  ]);
+                }
+                return AdaptiveTextSelectionToolbar.buttonItems(anchors: state.contextMenuAnchors, buttonItems: items);
+              },
               onTap: () {
                 if (_emojiOpen) setState(() => _emojiOpen = false);
               },
@@ -1586,7 +1849,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
             ),
-            if (_recording)
+            if (_reviewPath != null)
+              _reviewBar(chat)
+            else if (_recording)
               Padding(
                 padding: const EdgeInsets.fromLTRB(2, 2, 0, 2),
                 child: Row(children: [
@@ -1615,8 +1880,15 @@ class _ChatScreenState extends State<ChatScreen> {
                         Expanded(child: LiveWave(levels: _levels, color: _recPaused ? Brand.muted : Brand.primary)),
                         IconButton(
                           tooltip: _recPaused ? 'Continue recording' : 'Pause',
+                          visualDensity: VisualDensity.compact,
                           icon: Icon(_recPaused ? Icons.mic_rounded : Icons.pause_rounded, color: _recPaused ? Brand.primary : Brand.muted),
                           onPressed: _togglePause,
+                        ),
+                        IconButton(
+                          tooltip: 'Stop and listen',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.stop_circle_outlined, color: Brand.muted),
+                          onPressed: _stopForReview,
                         ),
                       ]),
                     ),
@@ -1671,7 +1943,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
-            if (_emojiOpen && !_recording) _emojiPanel(),
+            if (_emojiOpen && !_recording && _reviewPath == null) _emojiPanel(),
           ],
         ),
       ),

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'config.dart';
+import 'core/chat_lock.dart';
 import 'core/crash_reporter.dart';
 import 'core/prefs.dart';
 import 'core/prayer_reminders.dart';
 import 'core/message_notifications.dart';
 import 'core/services.dart';
+import 'core/voice_playback.dart';
 import 'screens/more_screens.dart';
 import 'screens/auth_screens.dart';
 import 'screens/call_screen.dart';
@@ -66,11 +68,16 @@ Future<void> _start() async {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
   final secrets = SecretStore(services);
+  final voice = VoicePlayback(services)
+    ..messagesOf = chats.messagesOf
+    ..myId = (() => chats.myId);
   auth.onSessionCleared = () {
+    voice.stop();
     calls.endLocal();
     secrets.wipeAll();
   };
   auth.onAccountSwitch = () {
+    voice.stop();
     calls.endLocal();
     secrets.suspend();
   };
@@ -112,6 +119,7 @@ Future<void> _start() async {
         ChangeNotifierProvider<AuthState>.value(value: auth),
         ChangeNotifierProvider<CallManager>.value(value: calls),
         ChangeNotifierProvider<SecretStore>.value(value: secrets),
+        ChangeNotifierProvider<VoicePlayback>.value(value: voice),
       ],
       child: const ChatApp(),
     ),
@@ -151,6 +159,8 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       final pausedAt = _pausedAt;
       _pausedAt = null;
+      // locked chats lock again after the app was in the background for a while
+      if (pausedAt != null && DateTime.now().difference(pausedAt) > const Duration(seconds: 30)) ChatLock.close();
       if (pausedAt != null && prefs.lockEnabled && !_locked && DateTime.now().difference(pausedAt) >= Duration(minutes: prefs.lockAfterMinutes)) {
         setState(() => _locked = true);
       }

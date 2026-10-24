@@ -4,14 +4,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../theme/brand.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/prefs.dart';
 import '../core/services.dart';
+import '../core/voice_playback.dart';
 import '../models/models.dart';
 import '../utils/format.dart';
 
@@ -223,56 +222,22 @@ class _VideoScreenState extends State<VideoScreen> {
   }
 }
 
-/// Voice message player: loudness bars you can tap or drag to seek, 1× / 1.5× / 2× speed,
-/// one voice message plays at a time, and a dot marks voice messages you haven't played yet.
+/// Voice message player: loudness bars you can tap or drag to seek, 1× / 1.5× / 2× speed.
+/// Playback itself lives in [VoicePlayback] (one at a time, auto-plays the next, mini player, earpiece).
 class VoicePlayer extends StatefulWidget {
-  const VoicePlayer({super.key, required this.message, required this.color, this.isMine = false});
+  const VoicePlayer({super.key, required this.message, required this.color, this.isMine = false, this.title = ''});
   final Message message;
   final Color color;
   final bool isMine;
-
-  /// Playback speed shared by all voice messages (like the big messengers remember it).
-  static double speed = 1.0;
+  final String title; // shown in the mini player
 
   @override
   State<VoicePlayer> createState() => _VoicePlayerState();
 }
 
-/// Remembers which voice messages were played (the "new" dot).
-class PlayedVoices {
-  PlayedVoices._();
-  static const _key = 'played_voice_ids';
-  static final Set<int> _ids = {};
-  static bool _loaded = false;
-
-  static Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
-    try {
-      final l = (await SharedPreferences.getInstance()).getStringList(_key) ?? const [];
-      _ids.addAll(l.map(int.tryParse).whereType<int>());
-    } catch (_) {}
-  }
-
-  static bool played(int id) => _ids.contains(id);
-
-  static Future<void> mark(int id) async {
-    if (!_ids.add(id)) return;
-    try {
-      final list = _ids.toList();
-      await (await SharedPreferences.getInstance()).setStringList(_key, list.sublist(list.length > 600 ? list.length - 600 : 0).map((e) => '$e').toList());
-    } catch (_) {}
-  }
-}
-
 class _VoicePlayerState extends State<VoicePlayer> {
-  static _VoicePlayerState? _current; // the one playing now
-  final _player = AudioPlayer();
-  bool _loading = false;
-  bool _ready = false;
   double? _drag; // 0..1 while the finger is on the waveform
-  StreamSubscription<PlayerState>? _stateSub;
-  late final List<double> _bars = _waveform();
+  late final List<double> _bars = voiceBars(widget.message, 42);
 
   @override
   void initState() {
@@ -280,97 +245,38 @@ class _VoicePlayerState extends State<VoicePlayer> {
     PlayedVoices.load().then((_) {
       if (mounted) setState(() {});
     });
-    _stateSub = _player.playerStateStream.listen((s) {
-      if (s.processingState == ProcessingState.completed) {
-        _player.pause();
-        _player.seek(Duration.zero);
-      }
-      if (mounted) setState(() {});
-    });
   }
 
-  @override
-  void dispose() {
-    if (_current == this) _current = null;
-    _stateSub?.cancel();
-    _player.dispose();
-    super.dispose();
-  }
-
-  /// Bars from the recording (meta.waveform), or a calm generated shape for older messages.
-  List<double> _waveform() {
-    final w = widget.message.meta?['waveform'];
-    if (w is List && w.length >= 8) {
-      final raw = w.map((e) => ((e as num?)?.toDouble() ?? 0) / 31).toList();
-      return _resample(raw, 42);
-    }
-    final r = math.Random(widget.message.id.abs() + 7);
-    return List.generate(42, (i) => 0.25 + 0.55 * (0.5 + 0.5 * math.sin(i * 0.55 + r.nextDouble())) * (0.6 + 0.4 * r.nextDouble()));
-  }
-
-  static List<double> _resample(List<double> src, int n) {
-    if (src.length == n) return src;
-    return List.generate(n, (i) {
-      final a = (i * src.length / n).floor();
-      final b = math.max(a + 1, ((i + 1) * src.length / n).floor());
-      var peak = 0.0;
-      for (var k = a; k < b && k < src.length; k++) {
-        peak = math.max(peak, src[k]);
-      }
-      return peak;
-    });
-  }
-
-  Future<bool> _prepare() async {
-    if (_ready) return true;
-    setState(() => _loading = true);
+  Future<void> _toggle(VoicePlayback vp) async {
     try {
-      final f = await resolveMediaFile(context, widget.message);
-      await _player.setFilePath(f.path);
-      _ready = true;
-      return true;
+      await vp.toggle(widget.message, title: widget.title);
     } catch (_) {
       if (mounted) showInfo(context, 'Could not load the voice message');
-      return false;
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _toggle() async {
-    if (_player.playing) return _player.pause();
-    if (!await _prepare()) return;
-    if (_current != null && _current != this) await _current!._player.pause();
-    _current = this;
-    await _player.setSpeed(VoicePlayer.speed);
-    if (!widget.message.isLocal) PlayedVoices.mark(widget.message.id);
-    _player.play();
-  }
-
-  Future<void> _seekTo(double frac) async {
-    if (!await _prepare()) return;
-    final total = _player.duration ?? Duration(seconds: widget.message.media?.duration ?? 0);
-    await _player.seek(Duration(milliseconds: (total.inMilliseconds * frac.clamp(0.0, 1.0)).round()));
-  }
-
-  void _cycleSpeed() {
-    VoicePlayer.speed = VoicePlayer.speed == 1.0 ? 1.5 : (VoicePlayer.speed == 1.5 ? 2.0 : 1.0);
-    _player.setSpeed(VoicePlayer.speed);
-    setState(() {});
+  Future<void> _seek(VoicePlayback vp, double f) async {
+    if (!vp.isCurrent(widget.message)) {
+      await _toggle(vp);
+    }
+    await vp.seekFraction(f);
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = widget.message.media?.duration ?? _player.duration?.inSeconds ?? 0;
+    final vp = context.watch<VoicePlayback>();
+    final mine = vp.isCurrent(widget.message);
+    final playing = mine && vp.playing;
+    final loading = mine && vp.loading;
+    final total = widget.message.media?.duration ?? 0;
     final c = widget.color;
-    final playing = _player.playing;
-    final fresh = !widget.isMine && !widget.message.isLocal && !PlayedVoices.played(widget.message.id);
+    final local = widget.message.isLocal;
+    final fresh = !widget.isMine && !local && !PlayedVoices.played(widget.message.id);
     return SizedBox(
       width: 236,
       child: Row(children: [
-        // play / pause
         GestureDetector(
-          onTap: widget.message.isLocal ? null : _toggle,
+          onTap: local ? null : () => _toggle(vp),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             width: 44,
@@ -381,7 +287,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
               gradient: widget.isMine ? null : Brand.aurora,
               boxShadow: widget.isMine ? null : [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
             ),
-            child: _loading || widget.message.isLocal
+            child: loading || local
                 ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
                 : AnimatedSwitcher(
                     duration: const Duration(milliseconds: 150),
@@ -393,29 +299,30 @@ class _VoicePlayerState extends State<VoicePlayer> {
         const SizedBox(width: 10),
         Expanded(
           child: StreamBuilder<Duration>(
-            stream: _player.positionStream,
+            stream: mine ? vp.player.positionStream : const Stream<Duration>.empty(),
             builder: (ctx, snap) {
-              final pos = snap.data ?? Duration.zero;
-              final frac = _drag ?? (total > 0 ? (pos.inMilliseconds / (total * 1000)).clamp(0.0, 1.0) : 0.0);
-              final started = playing || pos > Duration.zero;
+              final pos = mine ? (snap.data ?? Duration.zero) : Duration.zero;
+              final len = mine && vp.player.duration != null ? vp.player.duration!.inMilliseconds : total * 1000;
+              final frac = _drag ?? (len > 0 ? (pos.inMilliseconds / len).clamp(0.0, 1.0) : 0.0);
+              final started = mine && (playing || pos > Duration.zero);
               return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 LayoutBuilder(
                   builder: (ctx, box) => GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTapUp: widget.message.isLocal ? null : (d) => _seekTo(d.localPosition.dx / box.maxWidth),
-                    onHorizontalDragStart: widget.message.isLocal ? null : (d) => setState(() => _drag = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)),
-                    onHorizontalDragUpdate: widget.message.isLocal ? null : (d) => setState(() => _drag = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)),
-                    onHorizontalDragEnd: widget.message.isLocal
+                    onTapUp: local ? null : (d) => _seek(vp, d.localPosition.dx / box.maxWidth),
+                    onHorizontalDragStart: local ? null : (d) => setState(() => _drag = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)),
+                    onHorizontalDragUpdate: local ? null : (d) => setState(() => _drag = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0)),
+                    onHorizontalDragEnd: local
                         ? null
                         : (_) {
                             final f = _drag ?? 0;
                             setState(() => _drag = null);
-                            _seekTo(f);
+                            _seek(vp, f);
                           },
                     child: SizedBox(
                       height: 30,
                       width: box.maxWidth,
-                      child: CustomPaint(painter: _WavePainter(_bars, frac, played: c, rest: c.withValues(alpha: 0.32))),
+                      child: CustomPaint(painter: VoiceWavePainter(_bars, frac, played: c, rest: c.withValues(alpha: 0.32))),
                     ),
                   ),
                 ),
@@ -429,17 +336,18 @@ class _VoicePlayerState extends State<VoicePlayer> {
                     const SizedBox(width: 5),
                     Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
                   ],
+                  if (mine && vp.earpiece) ...[
+                    const SizedBox(width: 5),
+                    Icon(Icons.hearing_rounded, size: 13, color: c),
+                  ],
                   const Spacer(),
                   if (started)
                     GestureDetector(
-                      onTap: _cycleSpeed,
+                      onTap: vp.cycleSpeed,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
                         decoration: BoxDecoration(color: c.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(10)),
-                        child: Text(
-                          VoicePlayer.speed == 1.0 ? '1×' : (VoicePlayer.speed == 1.5 ? '1.5×' : '2×'),
-                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: c),
-                        ),
+                        child: Text(speedLabel(vp.speed), style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: c)),
                       ),
                     ),
                 ]),
@@ -452,9 +360,36 @@ class _VoicePlayerState extends State<VoicePlayer> {
   }
 }
 
+String speedLabel(double s) => s == 1.0 ? '1×' : (s == 1.5 ? '1.5×' : '2×');
+
+/// Bars for a voice message: the recorded loudness (meta.waveform), or a calm generated shape.
+List<double> voiceBars(Message m, int n) {
+  final w = m.meta?['waveform'];
+  if (w is List && w.length >= 8) {
+    final raw = w.map((e) => ((e as num?)?.toDouble() ?? 0) / 31).toList();
+    return resampleBars(raw, n);
+  }
+  final r = math.Random(m.id.abs() + 7);
+  return List.generate(n, (i) => 0.25 + 0.55 * (0.5 + 0.5 * math.sin(i * 0.55 + r.nextDouble())) * (0.6 + 0.4 * r.nextDouble()));
+}
+
+List<double> resampleBars(List<double> src, int n) {
+  if (src.isEmpty) return List.filled(n, 0.1);
+  if (src.length == n) return src;
+  return List.generate(n, (i) {
+    final a = (i * src.length / n).floor();
+    final b = math.max(a + 1, ((i + 1) * src.length / n).floor());
+    var peak = 0.0;
+    for (var k = a; k < b && k < src.length; k++) {
+      peak = math.max(peak, src[k]);
+    }
+    return peak;
+  });
+}
+
 /// Rounded loudness bars; the played part is drawn in full colour.
-class _WavePainter extends CustomPainter {
-  _WavePainter(this.bars, this.progress, {required this.played, required this.rest});
+class VoiceWavePainter extends CustomPainter {
+  VoiceWavePainter(this.bars, this.progress, {required this.played, required this.rest});
   final List<double> bars;
   final double progress;
   final Color played;
@@ -476,7 +411,7 @@ class _WavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _WavePainter old) => old.progress != progress || old.played != played || old.bars != bars;
+  bool shouldRepaint(covariant VoiceWavePainter old) => old.progress != progress || old.played != played || old.bars != bars;
 }
 
 class MessageFile extends StatefulWidget {

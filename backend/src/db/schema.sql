@@ -823,3 +823,12 @@ DROP TRIGGER IF EXISTS messages_purge_edits ON messages;
 CREATE TRIGGER messages_purge_edits AFTER UPDATE OF deleted_at ON messages
   FOR EACH ROW WHEN (NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL)
   EXECUTE FUNCTION message_edits_purge();
+
+-- ---------------------------------------------------------------- view-once media, chat lock
+CREATE TABLE IF NOT EXISTS message_once_views (
+  message_id BIGINT      NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  opened_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE;

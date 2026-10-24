@@ -62,6 +62,14 @@ class MediaCache {
   }
 
   /// Puts a file we just uploaded into the cache so we don't download it again.
+  /// Deletes one cached file (view-once media after it was opened).
+  Future<void> remove(MediaInfo m) async {
+    try {
+      final f = File('${(await _cacheDir()).path}/${_safeName(m)}');
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+  }
+
   Future<void> putLocal(MediaInfo m, String localPath) async {
     try {
       final target = File('${(await _cacheDir()).path}/${_safeName(m)}');

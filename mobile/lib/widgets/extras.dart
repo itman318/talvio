@@ -41,37 +41,96 @@ class ChatColors {
 
 final _mentionRe = RegExp(r'(@[A-Za-z][A-Za-z0-9_]{3,31})|(https?://\S+)|(#[\p{L}\p{N}_]{2,32})', unicode: true);
 
-/// Message text with highlighted @mentions and tappable links.
-class MessageText extends StatelessWidget {
+/// Message text: formatting, highlighted @mentions / #tags, tappable links, Tali emoji, spoilers.
+class MessageText extends StatefulWidget {
   const MessageText(this.text, {super.key, this.style});
   final String text;
   final TextStyle? style;
 
   @override
-  Widget build(BuildContext context) {
-    final base = style ?? DefaultTextStyle.of(context).style;
-    if (isOnlyTali(text)) {
-      // 1–3 Tali emoji alone: show them big
-      return Text.rich(TextSpan(children: taliSpans(text.trim(), base.copyWith(fontSize: 44), scale: 1.0)));
+  State<MessageText> createState() => _MessageTextState();
+}
+
+class _MessageTextState extends State<MessageText> {
+  final Set<int> _shown = {}; // spoilers revealed (by position)
+  final List<TapGestureRecognizer> _taps = [];
+
+  @override
+  void dispose() {
+    for (final t in _taps) {
+      t.dispose();
     }
-    final accent = Theme.of(context).brightness == Brightness.dark ? Brand.primaryLight : Brand.primaryDeep;
+    super.dispose();
+  }
+
+  TapGestureRecognizer _tap(VoidCallback f) {
+    final r = TapGestureRecognizer()..onTap = f;
+    _taps.add(r);
+    return r;
+  }
+
+  List<InlineSpan> _linked(String text, TextStyle style, Color accent) {
     final spans = <InlineSpan>[];
     var last = 0;
     for (final m in _mentionRe.allMatches(text)) {
-      if (m.start > last) spans.addAll(taliSpans(text.substring(last, m.start), base));
+      if (m.start > last) spans.addAll(taliSpans(text.substring(last, m.start), style));
       final token = m.group(0)!;
       if (m.group(2) != null) {
         spans.add(TextSpan(
           text: token,
-          style: TextStyle(color: accent, decoration: TextDecoration.underline),
-          recognizer: TapGestureRecognizer()..onTap = () => launchUrl(Uri.parse(token), mode: LaunchMode.externalApplication),
+          style: style.copyWith(color: accent, decoration: TextDecoration.underline, decorationColor: accent),
+          recognizer: _tap(() => launchUrl(Uri.parse(token), mode: LaunchMode.externalApplication)),
         ));
       } else {
-        spans.add(TextSpan(text: token, style: TextStyle(color: accent, fontWeight: FontWeight.w600)));
+        spans.add(TextSpan(text: token, style: style.copyWith(color: accent, fontWeight: FontWeight.w600)));
       }
       last = m.end;
     }
-    if (last < text.length) spans.addAll(taliSpans(text.substring(last), base));
+    if (last < text.length) spans.addAll(taliSpans(text.substring(last), style));
+    return spans;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.text;
+    final base = widget.style ?? DefaultTextStyle.of(context).style;
+    if (isOnlyTali(text)) {
+      // 1–3 Tali emoji alone: show them big
+      return Text.rich(TextSpan(children: taliSpans(text.trim(), base.copyWith(fontSize: 44), scale: 1.0)));
+    }
+    for (final t in _taps) {
+      t.dispose();
+    }
+    _taps.clear();
+    final accent = Theme.of(context).brightness == Brightness.dark ? Brand.primaryLight : Brand.primaryDeep;
+    final fg = base.color ?? Theme.of(context).colorScheme.onSurface;
+    final spans = <InlineSpan>[];
+    var last = 0;
+    for (final m in formatRe.allMatches(text)) {
+      if (m.start > last) spans.addAll(_linked(text.substring(last, m.start), base, accent));
+      if (m.group(1) != null) {
+        spans.addAll(_linked(m.group(1)!, base.copyWith(fontWeight: FontWeight.w800), accent));
+      } else if (m.group(2) != null) {
+        spans.addAll(_linked(m.group(2)!, base.copyWith(fontStyle: FontStyle.italic), accent));
+      } else if (m.group(3) != null) {
+        spans.addAll(_linked(m.group(3)!, base.copyWith(decoration: TextDecoration.lineThrough, decorationColor: fg), accent));
+      } else if (m.group(4) != null) {
+        spans.add(TextSpan(
+          text: m.group(4),
+          style: base.copyWith(fontFamily: 'monospace', fontSize: (base.fontSize ?? 15) * 0.92, backgroundColor: fg.withValues(alpha: 0.1)),
+        ));
+      } else {
+        final at = m.start;
+        final shown = _shown.contains(at);
+        spans.add(TextSpan(
+          text: m.group(5),
+          style: shown ? base : base.copyWith(color: Colors.transparent, backgroundColor: fg.withValues(alpha: 0.35)),
+          recognizer: shown ? null : _tap(() => setState(() => _shown.add(at))),
+        ));
+      }
+      last = m.end;
+    }
+    if (last < text.length) spans.addAll(_linked(text.substring(last), base, accent));
     return Text.rich(TextSpan(style: base, children: spans));
   }
 }

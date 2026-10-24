@@ -127,6 +127,7 @@ function previewText(message) {
 }
 
 function previewRaw(message) {
+  if (message.view_once) return message.type === 'voice' ? '🎤 View once voice message' : message.type === 'video' ? '🎬 View once video' : '📷 View once photo';
   switch (message.type) {
     case 'image':
       return message.text ? `📷 ${message.text}` : '📷 Photo';
@@ -149,7 +150,13 @@ function previewRaw(message) {
     case 'contact':
       return `👤 ${(message.meta && message.meta.contact && message.meta.contact.name) || 'Contact'}`;
     default:
-      return String(message.text || '');
+      // **bold** _italic_ ~strike~ `code` → plain; ||spoiler|| stays hidden
+      return String(message.text || '')
+        .replace(/\|\|([^\n]+?)\|\|/g, '▒▒▒▒')
+        .replace(/\*\*([^\n]+?)\*\*/g, '$1')
+        .replace(/`([^`\n]+)`/g, '$1')
+        .replace(/(^|[^\w~])~([^\n~]+?)~(?![\w~])/g, '$1$2')
+        .replace(/(^|[^\w\\])_([^\n_]+?)_(?!\w)/g, '$1$2');
   }
 }
 
@@ -159,12 +166,17 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   if (offline.length === 0) return;
   // muted chats still notify people who were @mentioned / replied to
   const rows = await db.many(
-    `SELECT user_id FROM chat_members
+    `SELECT user_id, is_locked FROM chat_members
      WHERE chat_id = $1 AND user_id = ANY($2::bigint[]) AND NOT is_request
        AND (muted_until IS NULL OR muted_until < now() OR user_id = ANY($3::bigint[]))`,
     [chatId, offline, message.mentions || []],
   );
-  const targets = rows.map((r) => r.user_id);
+  // locked chats: a plain "New message" (no name, no text) — the phone opens the chat after the fingerprint
+  const locked = rows.filter((r) => r.is_locked).map((r) => r.user_id);
+  if (locked.length) {
+    await push.sendToUsers(locked, { title: 'Talvio', body: 'New message' }, { type: 'message', chat_id: chatId, message_id: message.id, locked: 1 });
+  }
+  const targets = rows.filter((r) => !r.is_locked).map((r) => r.user_id);
   if (targets.length === 0) return;
   const chat = await db.one('SELECT type, title FROM chats WHERE id = $1', [chatId]);
   if (chat.type === 'channel') {

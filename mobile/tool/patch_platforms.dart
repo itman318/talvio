@@ -86,6 +86,11 @@ void _android() {
   if (!xml.contains('usesCleartextTraffic')) {
     xml = xml.replaceFirst('<application', '<application\n        android:usesCleartextTraffic="true"');
   }
+  // sticker maker: download the on-device background-removal model with the app
+  if (!xml.contains('com.google.mlkit.vision.DEPENDENCIES')) {
+    xml = xml.replaceFirst('</application>',
+        '    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="subject_segment" />\n    </application>');
+  }
   // Name under the icon on the home screen
   xml = xml.replaceFirst(RegExp(r'android:label="[^"]*"'), 'android:label="Talvio"');
   manifest.writeAsStringSync(xml);
@@ -96,10 +101,10 @@ void _android() {
     if (!f.existsSync()) continue;
     var g = f.readAsStringSync();
     g = g
-        .replaceAll(RegExp(r'minSdk\s*=\s*flutter\.minSdkVersion'), 'minSdk = 23')
-        .replaceAll(RegExp(r'minSdkVersion\s+flutter\.minSdkVersion'), 'minSdkVersion 23');
+        .replaceAll(RegExp(r'minSdk\s*=\s*flutter\.minSdkVersion'), 'minSdk = 24')
+        .replaceAll(RegExp(r'minSdkVersion\s+flutter\.minSdkVersion'), 'minSdkVersion 24');
     f.writeAsStringSync(g);
-    stdout.writeln('✓ $name: minSdk 23');
+    stdout.writeln('✓ $name: minSdk 24'); // ML Kit subject segmentation needs 24
   }
 
   // Fingerprint unlock (local_auth) needs a FlutterFragmentActivity.

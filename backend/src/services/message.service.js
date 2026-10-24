@@ -11,6 +11,7 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
+const EFFECTS = ['confetti', 'hearts', 'balloons', 'fireworks'];
 const SEND_TYPES = ['text', 'image', 'video', 'voice', 'video_note', 'file', 'poll', 'location', 'sticker', 'gif', 'contact'];
 const SLOW_MODE_VALUES = [0, 10, 30, 60, 300, 900, 3600];
 const MENTION_RE = /(^|[^A-Za-z0-9_@])@([A-Za-z][A-Za-z0-9_]{3,31})/g;
@@ -146,6 +147,8 @@ async function serializeRows(viewerId, rows) {
     )
     : [];
   const commentMap = new Map(commentRows.map((c) => [c.thread_id, c.n]));
+  const onceIds = rows.filter((r) => r.meta && r.meta.view_once).map((r) => r.id);
+  const onceRows = onceIds.length ? await db.many('SELECT message_id, user_id FROM message_once_views WHERE message_id = ANY($1::bigint[])', [onceIds]) : [];
 
   return rows.map((m) => {
     const chat = chatMap.get(m.chat_id) || { type: 'private' };
@@ -183,6 +186,8 @@ async function serializeRows(viewerId, rows) {
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
+      view_once: !!(m.meta && m.meta.view_once),
+      opened_by: m.meta && m.meta.view_once ? onceRows.filter((x) => x.message_id === m.id).map((x) => x.user_id).slice(0, 200) : undefined,
       thread_id: m.thread_id || null,
       album_id: m.album_id || null,
       topic_id: m.topic_id || null,
@@ -208,9 +213,9 @@ async function serializeByIds(viewerId, ids) {
 // ------------------------------------------------------------------ reading
 // Shared media tabs (chat info → Media / Files / Links / Voice)
 const FILTERS = {
-  media: "m.type IN ('image', 'video', 'gif')",
+  media: "m.type IN ('image', 'video', 'gif') AND NOT COALESCE((m.meta->>'view_once')::boolean, FALSE)",
   files: "m.type = 'file'",
-  voice: "m.type IN ('voice', 'video_note')",
+  voice: "m.type IN ('voice', 'video_note') AND NOT COALESCE((m.meta->>'view_once')::boolean, FALSE)",
   links: "m.type = 'text' AND (m.link_preview IS NOT NULL OR m.text ~* 'https?://')",
 };
 function filterSql(f) {
@@ -335,6 +340,9 @@ async function prepareMessage(userId, chat, body) {
   const type = v.oneOf(body.type || 'text', SEND_TYPES, 'type');
   const text = cleanText(body.text);
   const out = { type, text, mediaId: null, replyToId: null, poll: null, meta: null };
+  if (body.view_once === true && !['image', 'video', 'voice'].includes(type)) {
+    throw badRequest('invalid_input', 'Only photos, videos and voice messages can be view once');
+  }
   if (type === 'poll') await settings.requireFeature('feature_polls', 'Polls');
   if (type === 'voice' || type === 'video_note') await settings.requireFeature('feature_voice_messages', 'Voice messages');
   if (type === 'location') await settings.requireFeature('feature_location', 'Location sharing');
@@ -342,6 +350,10 @@ async function prepareMessage(userId, chat, body) {
   if (type === 'text') {
     if (!text) throw badRequest('empty_message', 'Message is empty');
     if (text.length > MAX_TEXT) throw badRequest('message_too_long', `Messages can be at most ${MAX_TEXT} characters`);
+    if (body.effect !== undefined && body.effect !== null) {
+      // full-screen animation played when the message arrives
+      out.meta = { effect: v.oneOf(body.effect, EFFECTS, 'effect') };
+    }
   } else if (type === 'poll') {
     if (chat.type === 'private') throw badRequest('invalid_poll', 'Polls can be sent in groups and channels');
     out.poll = parsePoll(body.poll);
@@ -411,6 +423,11 @@ async function prepareMessage(userId, chat, body) {
       // loudness bars recorded on the phone (0–31 each), drawn by the voice player
       const wave = body.waveform.slice(0, 100).map((x) => Math.max(0, Math.min(31, Math.round(Number(x) || 0))));
       if (wave.length >= 8) out.meta = { waveform: wave };
+    }
+    if (body.view_once === true) {
+      // view once: the other side can open it a single time; it can't be forwarded or saved
+      if (chat.type === 'channel') throw badRequest('invalid_input', 'View once is not available in channels');
+      out.meta = { ...(out.meta || {}), view_once: true };
     }
   }
 
@@ -688,6 +705,7 @@ async function forwardMessages(userId, body = {}) {
   const rows = await db.many(
     `SELECT m.* FROM messages m
      WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type NOT IN ('system', 'poll', 'call')
+       AND NOT COALESCE((m.meta->>'view_once')::boolean, FALSE)
        AND ${VISIBLE_SQL.replace(/\$USER/g, '$4')}
      ORDER BY m.id`,
     [from.id, ids, from.cleared_before_id, userId],
@@ -723,6 +741,22 @@ async function forwardMessages(userId, body = {}) {
     }
   }
   return { forwarded: count };
+}
+
+// ------------------------------------------------------------------ view once
+/** Opens a view-once message: allowed one time per person (the file can be fetched for a few minutes). */
+async function openOnce(userId, messageIdRaw) {
+  const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
+  if (!(m.meta && m.meta.view_once)) throw badRequest('invalid_input', 'This is not a view-once message');
+  if (m.sender_id === userId) throw forbidden('own_view_once', 'You can’t open your own view-once message');
+  const r = await db.one(
+    'INSERT INTO message_once_views (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING opened_at',
+    [m.id, userId],
+  );
+  if (!r) throw forbidden('already_opened', 'You already opened this');
+  const [message] = await serializeRows(BROADCAST_VIEWER, [m]);
+  bus.emit('message:edited', { chatId: chat.id, message, memberIds: await chatService.memberIds(chat.id) });
+  return { ok: true, media: message.media };
 }
 
 // ------------------------------------------------------------------ editing / deleting
@@ -1177,6 +1211,7 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  openOnce,
   editHistory,
   mediaCounts,
   updateLiveLocation,

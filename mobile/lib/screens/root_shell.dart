@@ -4,6 +4,9 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/voice_mini_player.dart';
+import 'chat_screen.dart';
+
 import '../state/chat_store.dart';
 import 'calls_screen.dart';
 import 'home_screen.dart';
@@ -44,7 +47,7 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    final unread = context.select<ChatStore, int>((s) => s.chats.where((c) => !c.isMuted && !c.isRequest).fold<int>(0, (a, c) => a + c.unreadCount));
+    final unread = context.select<ChatStore, int>((s) => s.chats.where((c) => !c.isMuted && !c.isRequest && !c.isLocked).fold<int>(0, (a, c) => a + c.unreadCount));
     Widget page(int i) {
       if (!_built.contains(i)) return const SizedBox.shrink();
       return switch (i) { 0 => const HomeScreen(), 1 => const CallsScreen(), _ => const SettingsScreen() };
@@ -57,7 +60,9 @@ class _RootShellState extends State<RootShell> {
       },
       child: Scaffold(
         body: IndexedStack(index: _tab, children: [page(0), page(1), page(2)]),
-        bottomNavigationBar: DecoratedBox(
+        bottomNavigationBar: Column(mainAxisSize: MainAxisSize.min, children: [
+          VoiceMiniPlayer(onOpen: (id) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)))),
+          DecoratedBox(
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6), width: 0.6)),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, -4))],
@@ -79,6 +84,7 @@ class _RootShellState extends State<RootShell> {
           ],
         ),
         ),
+        ]),
       ),
     );
   }

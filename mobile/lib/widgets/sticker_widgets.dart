@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,6 +16,7 @@ import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import 'sticker_maker.dart';
 
 String stickerUrl(Message m) {
   final s = m.meta?['sticker'] as Map?;
@@ -241,6 +239,68 @@ class RecentStickers {
   }
 }
 
+/// Stickers you starred (long-press a sticker → Add to favorites).
+class FavoriteStickers {
+  FavoriteStickers._();
+  static const _key = 'favorite_stickers';
+  static const max = 40;
+
+  static Future<List<Map<String, dynamic>>> load() async {
+    try {
+      final raw = (await SharedPreferences.getInstance()).getString(_key);
+      if (raw == null) return [];
+      return (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<bool> isFavorite(Map<String, dynamic> s) async => (await load()).any((x) => x['id'] == s['id']);
+
+  /// Adds or removes; returns true when it is now a favorite.
+  static Future<bool> toggle(Map<String, dynamic> s) async {
+    final list = await load();
+    final had = list.any((x) => x['id'] == s['id']);
+    final next = had
+        ? list.where((x) => x['id'] != s['id']).toList()
+        : [{'id': s['id'], 'url': s['url'], 'emoji': s['emoji'], 'pack_id': s['pack_id']}, ...list].take(max).toList();
+    try {
+      await (await SharedPreferences.getInstance()).setString(_key, jsonEncode(next));
+    } catch (_) {}
+    return !had;
+  }
+}
+
+/// Photo → sticker (background removal, shape, outline) → added to the user's own pack ("My stickers"
+/// unless [packId] is given). Returns true when a sticker was added.
+Future<bool> makeStickerFromPhoto(BuildContext context, {int? packId}) async {
+  final api = context.read<AppServices>().api;
+  final me = context.read<AuthState>().me?.id;
+  final x = await ImagePicker().pickImage(source: ImageSource.gallery);
+  if (x == null || !context.mounted) return false;
+  final made = await Navigator.push<MadeSticker>(context, MaterialPageRoute(builder: (_) => StickerMakerScreen(path: x.path)));
+  if (made == null || !context.mounted) return false;
+  try {
+    var id = packId;
+    if (id == null) {
+      final packs = (await api.get('/stickers/packs') as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final mine = packs.where((p) => p['owner_id'] == me).toList();
+      final named = mine.where((p) => '${p['title']}' == 'My stickers').toList();
+      final pick = named.isNotEmpty ? named.first : (mine.isNotEmpty ? mine.first : null);
+      id = pick == null
+          ? ((Map<String, dynamic>.from(await api.post('/stickers/packs', {'title': 'My stickers'}) as Map))['id'] as num).toInt()
+          : (pick['id'] as num).toInt();
+    }
+    final up = await api.upload(made.path, kind: 'sticker', mime: 'image/png');
+    await api.post('/stickers/packs/$id/stickers', {'media_id': up['id'], 'emoji': made.emoji});
+    if (context.mounted) showInfo(context, 'Sticker added to your pack');
+    return true;
+  } catch (e) {
+    if (context.mounted) showError(context, e);
+    return false;
+  }
+}
+
 /// Stickers: pack bar on top (Recent first), a grid below. Tap sends, long-press previews.
 class StickerPanel extends StatefulWidget {
   const StickerPanel({super.key, required this.chatId, this.onSent});
@@ -254,7 +314,8 @@ class StickerPanel extends StatefulWidget {
 class _StickerPanelState extends State<StickerPanel> {
   List<Map<String, dynamic>>? _packs;
   List<Map<String, dynamic>> _recent = [];
-  int _sel = 0; // 0 = recent (when there are recents), otherwise pack index offset
+  List<Map<String, dynamic>> _favs = [];
+  int _sel = 0; // -1 = favorites, 0 = recent (when there are recents), otherwise pack index + 1
 
   @override
   void initState() {
@@ -265,6 +326,8 @@ class _StickerPanelState extends State<StickerPanel> {
 
   Future<void> _load() async {
     final recent = await RecentStickers.load();
+    final favs = await FavoriteStickers.load();
+    if (mounted) setState(() => _favs = favs);
     try {
       final r = await context.read<AppServices>().api.get('/stickers/packs') as List;
       if (!mounted) return;
@@ -314,6 +377,19 @@ class _StickerPanelState extends State<StickerPanel> {
           Text('${sticker['emoji'] ?? ''}', style: const TextStyle(fontSize: 30)),
           const SizedBox(height: 14),
           SizedBox(width: 180, child: AuroraButtonLite(label: 'Send sticker', onPressed: () => Navigator.pop(ctx, true))),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            onPressed: () async {
+              final on = await FavoriteStickers.toggle(sticker);
+              final favs = await FavoriteStickers.load();
+              if (mounted) setState(() => _favs = favs);
+              if (ctx.mounted) Navigator.pop(ctx, false);
+              if (mounted) showInfo(context, on ? 'Added to favorites ⭐' : 'Removed from favorites');
+            },
+            icon: Icon(_favs.any((x) => x['id'] == sticker['id']) ? Icons.star_rounded : Icons.star_outline_rounded),
+            label: Text(_favs.any((x) => x['id'] == sticker['id']) ? 'Remove from favorites' : 'Add to favorites'),
+          ),
         ]),
         ),
       ),
@@ -333,7 +409,10 @@ class _StickerPanelState extends State<StickerPanel> {
     final hasRecent = _recent.isNotEmpty;
     final List<Map<String, dynamic>> stickers;
     String title;
-    if (_sel == 0 && hasRecent) {
+    if (_sel == -1 && _favs.isNotEmpty) {
+      stickers = _favs;
+      title = 'Favorites';
+    } else if (_sel == 0 && hasRecent) {
       stickers = _recent;
       title = 'Recently used';
     } else {
@@ -367,6 +446,21 @@ class _StickerPanelState extends State<StickerPanel> {
       SizedBox(
         height: 56,
         child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8), children: [
+          packButton(
+            selected: false,
+            tooltip: 'Make a sticker from a photo',
+            onTap: () async {
+              if (await makeStickerFromPhoto(context) && mounted) _load();
+            },
+            child: const Icon(Icons.auto_fix_high_rounded, color: Brand.primary),
+          ),
+          if (_favs.isNotEmpty)
+            packButton(
+              selected: _sel == -1,
+              tooltip: 'Favorites',
+              onTap: () => setState(() => _sel = -1),
+              child: Icon(Icons.star_rounded, color: _sel == -1 ? Brand.amber : Brand.muted),
+            ),
           if (hasRecent)
             packButton(
               selected: _sel == 0,
@@ -771,41 +865,11 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     }
   }
 
-  /// Picks a picture, makes it a 512×512 PNG sticker and uploads it.
+  /// Photo → sticker maker (background removal, shape, outline) → this pack.
   Future<void> _add() async {
-    final x = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (x == null || !mounted) return;
-    final emoji = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Pick an emoji for it'),
-        children: [
-          Wrap(alignment: WrapAlignment.center, children: [
-            for (final e in const ['😀', '😂', '😍', '😎', '🤔', '😢', '😡', '👍', '🙏', '🎉', '❤️', '🔥', '👋', '😴', '☕', '🌙'])
-              InkWell(onTap: () => Navigator.pop(ctx, e), child: Padding(padding: const EdgeInsets.all(10), child: Text(e, style: const TextStyle(fontSize: 28)))),
-          ]),
-        ],
-      ),
-    );
-    if (emoji == null || !mounted) return;
     setState(() => _busy = true);
-    final api = context.read<AppServices>().api;
     try {
-      final bytes = await File(x.path).readAsBytes();
-      final png = await Future(() {
-        final src = img.decodeImage(bytes);
-        if (src == null) throw Exception('This picture could not be read');
-        final fitted = img.copyResize(src, width: src.width >= src.height ? 512 : null, height: src.height > src.width ? 512 : null, interpolation: img.Interpolation.average);
-        return img.encodePng(fitted, level: 6);
-      });
-      final dir = await getTemporaryDirectory();
-      final f = File('${dir.path}/sticker_${DateTime.now().millisecondsSinceEpoch}.png');
-      await f.writeAsBytes(png);
-      final up = await api.upload(f.path, kind: 'sticker', mime: 'image/png');
-      await api.post('/stickers/packs/${widget.packId}/stickers', {'media_id': up['id'], 'emoji': emoji});
-      await _load();
-    } catch (e) {
-      if (mounted) showError(context, e);
+      if (await makeStickerFromPhoto(context, packId: widget.packId)) await _load();
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -22,6 +22,7 @@ import 'story_screens.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
 import '../widgets/tali_emoji.dart';
+import '../core/chat_lock.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -109,6 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final main = store.mainChats;
     final requests = q.isEmpty && folder == null ? store.requests : const <Chat>[];
+    final locked = q.isEmpty && folder == null ? store.lockedChats : const <Chat>[];
+    final extraRows = (requests.isEmpty ? 0 : 1) + (locked.isEmpty ? 0 : 1);
     var chats = folder == null ? main : main.where(folder.matches).toList();
     if (q.isNotEmpty) chats = chats.where((c) => c.title.toLowerCase().contains(q)).toList();
     final showStories = q.isEmpty && folder == null && auth.feature('stories');
@@ -218,11 +221,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? _searchResults(chats)
                         : ListView.builder(
                       padding: const EdgeInsets.only(bottom: 96), // room above the floating button
-                      itemCount: 1 + (requests.isEmpty ? 0 : 1) + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
+                      itemCount: 1 + extraRows + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i0) {
                         if (i0 == 0) return _searchPill();
-                        if (requests.isNotEmpty && i0 == 1) return _requestsRow(requests);
-                        final i = i0 - 1 - (requests.isEmpty ? 0 : 1);
+                        if (locked.isNotEmpty && i0 == 1) return _lockedRow(locked);
+                        if (requests.isNotEmpty && i0 == 1 + (locked.isEmpty ? 0 : 1)) return _requestsRow(requests);
+                        final i = i0 - 1 - extraRows;
                         if (showStories && i == 0) return const StoryBar();
                         final si = i - (showStories ? 1 : 0);
                         if (si < secrets.length) {
@@ -282,6 +286,26 @@ extension on _HomeScreenState {
     );
   }
 
+  Widget _lockedRow(List<Chat> locked) {
+    final unread = locked.fold<int>(0, (a, c) => a + c.unreadCount);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      leading: Container(
+        width: 54,
+        height: 54,
+        decoration: BoxDecoration(gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark), borderRadius: BorderRadius.circular(18)),
+        child: const Icon(Icons.lock_rounded, color: Brand.violet),
+      ),
+      title: const Text('Locked chats', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+      subtitle: Text(unread > 0 ? 'New messages' : '${locked.length} chat${locked.length == 1 ? '' : 's'} · fingerprint to open', maxLines: 1),
+      trailing: unread > 0 ? Container(width: 10, height: 10, decoration: const BoxDecoration(color: Brand.violet, shape: BoxShape.circle)) : const Icon(Icons.chevron_right_rounded),
+      onTap: () async {
+        if (!await ChatLock.unlock(context)) return;
+        if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const LockedChatsScreen()));
+      },
+    );
+  }
+
   Widget _requestsRow(List<Chat> requests) {
     final unread = requests.fold<int>(0, (a, c) => a + c.unreadCount);
     return ListTile(
@@ -315,7 +339,7 @@ extension on _HomeScreenState {
         ]),
       ),
       if (!_searchingMessages && _found.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('No messages found')),
-      ..._found.map((r) {
+      ..._found.where((r) => !(context.read<ChatStore>().chatById((r.$1['id'] as num).toInt())?.isLocked ?? false)).map((r) {
         final (chatInfo, m) = r;
         final title = '${chatInfo['title'] ?? ''}';
         final avatar = chatInfo['avatar_url'] as String?;
@@ -516,6 +540,7 @@ class ChatTile extends StatelessWidget {
 
 /// Icon + text for a chat-list preview ("Photo", "Voice message"…), without emoji prefixes.
 (IconData?, String) previewParts(Message m) {
+  if (m.viewOnce) return (Icons.looks_one_rounded, m.type == 'voice' ? 'Voice message' : (m.type == 'video' ? 'Video' : 'Photo'));
   switch (m.type) {
     case 'image':
       return (Icons.photo_rounded, m.text.isNotEmpty ? m.text : 'Photo');
@@ -542,6 +567,8 @@ class ChatTile extends StatelessWidget {
       final st = '${c['status'] ?? ''}';
       final missed = st == 'missed' || st == 'busy';
       return (missed ? Icons.call_missed_rounded : (c['video'] == true ? Icons.videocam_rounded : Icons.call_rounded), m.preview.replaceFirst(RegExp(r'^\S+ '), ''));
+    case 'text':
+      return (null, stripFormatting(m.text)); // keeps Tali emoji (drawn as pictures in the list)
     default:
       return (null, m.preview);
   }
@@ -573,6 +600,13 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
           title: Text(chat.isArchived ? 'Unarchive' : 'Archive'),
           onTap: () => Navigator.pop(ctx, 'archive'),
         ),
+        if (!chat.isRequest)
+          ListTile(
+            leading: Icon(chat.isLocked ? Icons.lock_open_rounded : Icons.lock_rounded),
+            title: Text(chat.isLocked ? 'Unlock chat' : 'Lock chat'),
+            subtitle: chat.isLocked ? null : const Text('Hide it behind your fingerprint'),
+            onTap: () => Navigator.pop(ctx, 'lock'),
+          ),
         ListTile(
           leading: const Icon(Icons.delete_outline, color: Colors.red),
           title: Text(chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'), style: const TextStyle(color: Colors.red)),
@@ -595,6 +629,11 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
         break;
       case 'archive':
         await store.updateChatSettings(chat.id, {'is_archived': !chat.isArchived});
+        break;
+      case 'lock':
+        if (!await ChatLock.unlock(context, reason: chat.isLocked ? 'Unlock this chat' : 'Lock this chat')) return;
+        await store.setLocked(chat.id, !chat.isLocked);
+        if (context.mounted) showInfo(context, chat.isLocked ? 'Chat unlocked' : 'Chat locked — find it under “Locked chats” at the top');
         break;
       case 'delete':
         final ok = await confirm(
@@ -701,3 +740,19 @@ IconData? activityIcon(String? action) => switch (action) {
       'choosing_sticker' => Icons.sticky_note_2_rounded,
       _ => null,
     };
+
+/// Chats → Locked chats (after the fingerprint).
+class LockedChatsScreen extends StatelessWidget {
+  const LockedChatsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final list = context.watch<ChatStore>().lockedChats;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Locked chats')),
+      body: list.isEmpty
+          ? const EmptyState(tali: 'cool', title: 'No locked chats', subtitle: 'Long-press a chat → Lock chat to hide it behind your fingerprint.')
+          : ListView(children: [for (final c in list) ChatTile(chat: c)]),
+    );
+  }
+}

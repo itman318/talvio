@@ -115,6 +115,10 @@ async function getAccessible(userId, mediaIdRaw) {
          SELECT 1 FROM messages msg
          JOIN chat_members cm ON cm.chat_id = msg.chat_id AND cm.user_id = $2
          WHERE msg.media_id = m.id AND msg.deleted_at IS NULL AND msg.id > cm.cleared_before_id
+           -- view once: only right after opening it (the sender always can)
+           AND (NOT COALESCE((msg.meta->>'view_once')::boolean, FALSE) OR msg.sender_id = $2 OR EXISTS (
+             SELECT 1 FROM message_once_views ov WHERE ov.message_id = msg.id AND ov.user_id = $2 AND ov.opened_at > now() - interval '3 minutes'
+           ))
        )
        OR EXISTS (SELECT 1 FROM stories s WHERE s.media_id = m.id AND ${storyVisible})
        OR EXISTS (

@@ -264,6 +264,7 @@ router.post('/chats/:id/read', h(async (req, res) => res.json(await messageServi
 router.post('/messages/:id/live', h(async (req, res) => res.json(await messageService.updateLiveLocation(req.userId, req.params.id, req.body))));
 router.patch('/messages/:id', h(async (req, res) => res.json(await messageService.editMessage(req.userId, req.params.id, req.body))));
 router.post('/messages/forward', h(async (req, res) => res.json(await messageService.forwardMessages(req.userId, req.body))));
+router.post('/messages/:id/open-once', h(async (req, res) => res.json(await messageService.openOnce(req.userId, req.params.id))));
 router.get('/messages/:id/edits', h(async (req, res) => res.json(await messageService.editHistory(req.userId, req.params.id))));
 router.put('/messages/:id/reaction', h(async (req, res) => res.json(await messageService.react(req.userId, req.params.id, req.body.emoji))));
 router.post('/messages/:id/vote', h(async (req, res) => res.json(await messageService.vote(req.userId, req.params.id, req.body.options))));

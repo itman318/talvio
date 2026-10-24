@@ -242,6 +242,10 @@ class Message {
   DateTime? editedAt;
   final DateTime createdAt;
 
+  /// View once: the other side can open it a single time.
+  final bool viewOnce;
+  List<int> openedBy;
+
   // local-only (optimistic sending)
   SendState sendState;
   String? localFilePath;
@@ -282,7 +286,10 @@ class Message {
     this.uploadProgress = 0,
     this.outbox,
     this.uploadKind,
-  }) : reactions = reactions ?? [];
+    this.viewOnce = false,
+    List<int>? openedBy,
+  })  : reactions = reactions ?? [],
+        openedBy = openedBy ?? [];
 
   factory Message.fromJson(Map<String, dynamic> j) {
     final s = j['sender'];
@@ -322,10 +329,15 @@ class Message {
       linkPreview: j['link_preview'] == null ? null : Map<String, dynamic>.from(j['link_preview'] as Map),
       editedAt: _date(j['edited_at']),
       createdAt: _date(j['created_at']) ?? DateTime.now(),
+      viewOnce: j['view_once'] == true,
+      openedBy: ((j['opened_by'] as List?) ?? const []).map(_int).toList(),
     );
   }
 
   bool get isSystem => type == 'system';
+
+  /// Full-screen effect sent with the message (confetti, hearts, balloons, fireworks).
+  String? get effect => meta?['effect'] as String?;
 
   /// Rows of inline buttons sent by a bot: each {text, callback_data | url | web_app:{url}}.
   List<List<Map<String, dynamic>>> get inlineKeyboard {
@@ -345,6 +357,7 @@ class Message {
 
   /// Short text used in the chat list and notifications.
   String get preview {
+    if (viewOnce) return type == 'voice' ? '🎤 View once voice message' : (type == 'video' ? '🎬 View once video' : '📷 View once photo');
     switch (type) {
       case 'image':
         return text.isNotEmpty ? '📷 $text' : '📷 Photo';
@@ -376,7 +389,7 @@ class Message {
         final sec = (c['duration_sec'] as num?)?.toInt() ?? 0;
         return sec > 0 ? '$icon Call (${formatCallDuration(sec)})' : '$icon Call';
       default:
-        return text.replaceAll(RegExp('[\uE900-\uE9FF]'), '🦊');
+        return stripFormatting(text).replaceAll(RegExp('[\uE900-\uE9FF]'), '🦊');
     }
   }
 }
@@ -476,6 +489,7 @@ class Chat {
   bool isPinned;
   bool isArchived;
   bool isRequest; // message from someone not in my contacts (waits in Requests)
+  bool isLocked; // behind the fingerprint (Locked chats)
   Message? lastMessage;
   DateTime? lastMessageAt;
   final DateTime createdAt;
@@ -517,6 +531,7 @@ class Chat {
     this.isPinned = false,
     this.isArchived = false,
     this.isRequest = false,
+    this.isLocked = false,
     this.lastMessage,
     this.lastMessageAt,
     required this.createdAt,
@@ -559,6 +574,7 @@ class Chat {
         isPinned: j['is_pinned'] == true,
         isArchived: j['is_archived'] == true,
         isRequest: j['is_request'] == true,
+        isLocked: j['is_locked'] == true,
         lastMessage: j['last_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['last_message'] as Map)),
         lastMessageAt: _date(j['last_message_at']),
         createdAt: _date(j['created_at']) ?? DateTime.now(),
@@ -843,4 +859,23 @@ class Topic {
         messageCount: _int(j['message_count'] ?? 0),
         lastMessage: j['last_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['last_message'] as Map)),
       );
+}
+
+/// **bold**, _italic_, ~strike~, `code`, ||spoiler|| (one line each, not nested).
+final formatRe = RegExp(r'\*\*([^\n]+?)\*\*|(?<![\w\\])_([^\n_]+?)_(?![\w])|(?<![\w~])~([^\n~]+?)~(?![\w~])|`([^`\n]+)`|\|\|([^\n]+?)\|\|');
+
+/// Text without the formatting marks (chat list, notifications, copy).
+String stripFormatting(String s) => s.replaceAllMapped(formatRe, (m) {
+      if (m.group(5) != null) return '▒▒▒▒';
+      return m.group(1) ?? m.group(2) ?? m.group(3) ?? m.group(4) ?? '';
+    });
+
+/// Effect that fits a text by itself ("Happy birthday" → balloons), or null.
+String? autoEffectFor(String text) {
+  final t = text.toLowerCase();
+  if (RegExp(r'happy\s*birthday|\bhbd\b|سالگرہ').hasMatch(t)) return 'balloons';
+  if (RegExp(r'congrat|mubarak|مبارک|well done|🎉|🥳').hasMatch(t)) return 'confetti';
+  if (RegExp(r'happy new year|🎆|🎇').hasMatch(t)) return 'fireworks';
+  if (RegExp(r'^\s*(i love you|love you|❤️+|💕+|😍+)\s*$').hasMatch(t)) return 'hearts';
+  return null;
 }

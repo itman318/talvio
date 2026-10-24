@@ -11,7 +11,10 @@ import '../theme/brand.dart';
 /// Photo editor before sending: crop, rotate, draw, add text. Returns the path of the edited JPEG
 /// (or the original path if nothing was changed), or null when cancelled.
 class ImageEditorScreen extends StatefulWidget {
-  const ImageEditorScreen({super.key, required this.path, this.sendLabel = 'Send'});
+  const ImageEditorScreen({super.key, required this.path, this.sendLabel = 'Send', this.viewOnce});
+
+  /// When given, a "1" button turns the photo into a view-once photo.
+  final ValueNotifier<bool>? viewOnce;
   final String path;
   final String sendLabel;
 
@@ -184,6 +187,20 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
         foregroundColor: Colors.white,
         actions: [
           if (_strokes.isNotEmpty || _texts.isNotEmpty) IconButton(tooltip: 'Undo', icon: const Icon(Icons.undo), onPressed: _undo),
+          if (widget.viewOnce != null)
+            ValueListenableBuilder<bool>(
+              valueListenable: widget.viewOnce!,
+              builder: (_, on, __) => IconButton(
+                tooltip: on ? 'View once: on' : 'View once',
+                onPressed: () {
+                  widget.viewOnce!.value = !on;
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(SnackBar(content: Text(on ? 'View once is off' : 'View once: it can be opened only one time'), duration: const Duration(seconds: 2)));
+                },
+                icon: ViewOnceIcon(on: on),
+              ),
+            ),
           TextButton(
             onPressed: _saving ? null : _done,
             child: _saving
@@ -429,4 +446,25 @@ class _RawImage {
 Uint8List _encodeJpeg(_RawImage r) {
   final im = img.Image.fromBytes(width: r.width, height: r.height, bytes: r.rgba.buffer, numChannels: 4);
   return img.encodeJpg(im, quality: 88);
+}
+
+/// The round "1" icon for view-once media (filled when on).
+class ViewOnceIcon extends StatelessWidget {
+  const ViewOnceIcon({super.key, required this.on, this.size = 26, this.color = Colors.white});
+  final bool on;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: on ? Brand.aurora : null,
+          border: on ? null : Border.all(color: color, width: 1.8, strokeAlign: BorderSide.strokeAlignInside),
+        ),
+        child: Text('1', style: TextStyle(color: on ? Colors.white : color, fontWeight: FontWeight.w800, fontSize: size * 0.5, height: 1)),
+      );
 }
