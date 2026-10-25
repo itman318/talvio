@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
-import '../core/demo_backend.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';

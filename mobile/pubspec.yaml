@@ -85,7 +85,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/demo/
     - assets/emoji/tali/
   fonts:
     - family: Jakarta

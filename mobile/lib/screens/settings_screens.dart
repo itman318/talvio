@@ -48,17 +48,6 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          if (auth.isDemo)
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Brand.amber.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(16)),
-              child: const Row(children: [
-                Icon(Icons.play_circle_outline_rounded),
-                SizedBox(width: 10),
-                Expanded(child: Text('Demo account — sample chats on this phone only. Log out to use a real account.')),
-              ]),
-            ),
           // profile card: the person's own colours, like the cover on their profile
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),

@@ -76,8 +76,6 @@ jobs:
           # build the test app now (before the emulator starts), then free the memory Gradle holds
           flutter build apk --debug --target=integration_test/app_test.dart --dart-define=API_BASE=http://10.0.2.2:4000 2>&1 | tail -5
           cp build/app/outputs/flutter-apk/app-debug.apk ../app-test.apk
-          flutter build apk --debug --target=integration_test/demo_test.dart --dart-define=API_BASE=http://10.0.2.2:4000 2>&1 | tail -5
-          cp build/app/outputs/flutter-apk/app-debug.apk ../demo-test.apk
           (cd android && ./gradlew --stop >/dev/null 2>&1 || true)
           pkill -f KotlinCompileDaemon || true
           free -m

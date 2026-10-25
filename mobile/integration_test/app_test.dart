@@ -128,12 +128,12 @@ void main() {
     t.binding.platformDispatcher.clearPlatformBrightnessTestValue();
     await settle(t, 800);
 
-    // ---- log out, then the offline demo account (no server involved)
+    // ---- log out → back on the login screen
     await t.scrollUntilVisible(find.text('Log out'), 300, scrollable: find.byType(Scrollable).first);
     await t.tap(find.text('Log out'));
     await settle(t, 800);
     await t.tap(find.text('Log out').last);
-    await pumpUntil(t, find.byKey(const ValueKey('demo-button')), what: 'login screen after logout');
+    await pumpUntil(t, find.byKey(const ValueKey('email-field')), what: 'login screen after logout');
     await snap(t, 'logged-out');
   });
 }

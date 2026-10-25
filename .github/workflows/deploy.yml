@@ -23,11 +23,21 @@ jobs:
 
       - name: Check secrets
         env:
-          HOST: ${{ secrets.SERVER_HOST }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
           PASS: ${{ secrets.SERVER_PASSWORD }}
+          AE: ${{ secrets.ADMIN_EMAIL }}
+          AP: ${{ secrets.ADMIN_PASSWORD }}
+          API: ${{ vars.API_BASE }}
         run: |
-          [ -n "$HOST" ] || { echo "Add the SERVER_HOST secret (the server IP)"; exit 1; }
-          [ -n "$PASS" ] || { echo "Add the SERVER_PASSWORD secret (the root password)"; exit 1; }
+          # only which settings exist is reported, never their values
+          {
+            echo "SERVER_HOST: $([ -n "$HOST" ] && echo set || echo MISSING)"
+            echo "SERVER_PASSWORD: $([ -n "$PASS" ] && echo set || echo MISSING)"
+            echo "ADMIN_EMAIL: $([ -n "$AE" ] && echo set || echo missing)"
+            echo "ADMIN_PASSWORD: $([ -n "$AP" ] && echo "set (${#AP} characters)" || echo missing)"
+            echo "API_BASE variable: $([ -n "$API" ] && echo set || echo missing)"
+          } | tee deploy.txt
+          [ -n "$HOST" ] && [ -n "$PASS" ]
 
       - name: Package the backend
         run: |
@@ -38,10 +48,11 @@ jobs:
         id: setup
         env:
           SSHPASS: ${{ secrets.SERVER_PASSWORD }}
-          HOST: ${{ secrets.SERVER_HOST }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           sudo apt-get install -y -qq sshpass >/dev/null
           SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ServerAliveInterval=30 -o LogLevel=ERROR"
           sshpass -e scp $SSH_OPTS talvio-backend.tgz .github/scripts/server-setup.sh root@"$HOST":/root/
@@ -49,23 +60,25 @@ jobs:
           {
             printf 'export ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
             echo 'bash /root/server-setup.sh'
-          } | sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' 2>&1 | tee deploy.txt
+          } | sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' 2>&1 | tee -a deploy.txt
 
       - name: Check from outside
         if: always()
         env:
-          HOST: ${{ secrets.SERVER_HOST }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
         run: |
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           echo "outside health: $(curl -fsS --max-time 15 "http://$HOST/health" || echo FAILED)" | tee -a deploy.txt
 
       - name: Save result to ci-deploy branch
         if: always()
         env:
-          HOST: ${{ secrets.SERVER_HOST }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
         run: |
           mkdir -p out
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           # never publish the address or any secret: mask the IP
-          sed "s/${HOST//./\\.}/<server-ip>/g" deploy.txt > out/deploy.txt 2>/dev/null || true
+          if [ -n "$HOST" ]; then sed "s/${HOST//./\\.}/<server-ip>/g" deploy.txt > out/deploy.txt; else cp deploy.txt out/deploy.txt; fi 2>/dev/null || true
           echo "sha=${{ github.sha }} result=${{ steps.setup.outcome }}" > out/status.txt
           cd out
           git init -q -b ci-deploy
