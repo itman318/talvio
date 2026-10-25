@@ -26,14 +26,18 @@ String? chatLinkOf(Chat chat) {
 /// ('c', username) or ('join', code) for our links: talvio://c/x, https://<our server>/join/x …
 (String, String)? parseChatLink(String raw) {
   final s = raw.trim();
-  final deep = RegExp(r'^talvio://(c|join)/([A-Za-z0-9_\-]{3,64})/?(\?.*)?$').firstMatch(s);
+  final deep = RegExp(r'^talvio://(c|join)/([A-Za-z0-9_\-]{3,64})(/\d+)?/?(\?.*)?$').firstMatch(s);
   if (deep != null) return (deep.group(1)!, deep.group(2)!);
   final uri = Uri.tryParse(s);
   if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return null;
   final ours = Uri.tryParse(AppConfig.serverUrl);
   if (ours == null || uri.host != ours.host) return null;
   final seg = uri.pathSegments.where((x) => x.isNotEmpty).toList();
-  if (seg.length == 2 && (seg[0] == 'c' || seg[0] == 'join') && RegExp(r'^[A-Za-z0-9_\-]{3,64}$').hasMatch(seg[1])) return (seg[0], seg[1]);
+  if ((seg.length == 2 || (seg.length == 3 && seg[0] == 'c' && int.tryParse(seg[2]) != null)) &&
+      (seg[0] == 'c' || seg[0] == 'join') &&
+      RegExp(r'^[A-Za-z0-9_\-]{3,64}$').hasMatch(seg[1])) {
+    return (seg[0], seg[1]); // /c/<name>/<post> opens the channel
+  }
   return null;
 }
 

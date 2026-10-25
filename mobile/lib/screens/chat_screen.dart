@@ -21,6 +21,8 @@ import 'chat_theme_screen.dart';
 import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
+import '../widgets/message_menu.dart';
+import '../config.dart';
 import '../widgets/premium.dart';
 import '../widgets/voice_mini_player.dart';
 import '../widgets/message_effects.dart';
@@ -1014,7 +1016,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ------------------------------------------------------------------ message menu
-  Future<void> _messageMenu(Message m, Chat chat) async {
+  Future<void> _messageMenu(Message m, Chat chat, [BuildContext? anchorCtx]) async {
     final mine = m.senderId == _store.myId && !chat.isChannel;
     final channelAdmin = chat.isChannel && chat.can('post_messages');
     if (m.isLocal) {
@@ -1036,60 +1038,39 @@ class _ChatScreenState extends State<ChatScreen> {
     final canEdit = (mine || channelAdmin) && m.forwardedFromName == null && m.type != 'poll' && !m.viewOnce && (m.type == 'text' || m.text.isNotEmpty);
     final poll = m.poll;
     final canClosePoll = poll != null && !poll.isClosed && (mine || chat.isAdmin);
-    final a = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            child: Wrap(
-              spacing: 2,
-              children: ChatStore.reactionEmojis
-                  .where((e) => chat.allowedReactions == null || chat.allowedReactions!.contains(e))
-                  .map((e) => InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () => Navigator.pop(ctx, 'react:$e'),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: m.myReaction == e ? Brand.primary.withValues(alpha: 0.15) : null,
-                          ),
-                          child: Text(e, style: const TextStyle(fontSize: 24)),
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ),
-          // quick actions
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-            child: Row(children: [
-              if (chat.canPost) _quick(ctx, Icons.reply_rounded, 'Reply', 'reply'),
-              if (m.text.isNotEmpty && !chat.noForwards) _quick(ctx, Icons.copy_rounded, 'Copy', 'copy'),
-              if (m.type != 'poll' && m.type != 'call' && !m.viewOnce && !chat.noForwards) _quick(ctx, Icons.shortcut_rounded, 'Forward', 'forward'),
-              _quick(ctx, Icons.check_circle_outline_rounded, 'Select', 'select'),
-              _quick(ctx, Icons.alarm_add_rounded, 'Remind', 'remind'),
-            ]),
-          ),
-          const Divider(height: 1),
-          if (chat.type == 'private' || chat.can('pin_messages'))
-            ListTile(
-              leading: const Icon(Icons.push_pin_outlined),
-              title: Text(chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
-              onTap: () => Navigator.pop(ctx, chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin'),
-            ),
-          if (mine && !chat.isSavedMessages && !chat.isChannel)
-            ListTile(leading: const Icon(Icons.info_outline_rounded), title: const Text('Message info'), onTap: () => Navigator.pop(ctx, 'info')),
-          if (chat.isGroup && !mine && m.senderId != null && m.sender?.deleted != true && !chat.protectedContent)
-            ListTile(leading: const Icon(Icons.reply_all_rounded), title: const Text('Reply privately'), onTap: () => Navigator.pop(ctx, 'private_reply')),
-          if (canClosePoll) ListTile(leading: const Icon(Icons.stop_circle_outlined), title: const Text('Stop poll'), onTap: () => Navigator.pop(ctx, 'close_poll')),
-          if (canEdit) ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit'), onTap: () => Navigator.pop(ctx, 'edit')),
-          if (m.editedAt != null) ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Edit history'), onTap: () => Navigator.pop(ctx, 'history')),
-          ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Colors.red), title: const Text('Delete', style: TextStyle(color: Colors.red)), onTap: () => Navigator.pop(ctx, 'delete')),
-          if (!mine && !chat.isAdmin) ListTile(leading: const Icon(Icons.flag_outlined), title: const Text('Report'), onTap: () => Navigator.pop(ctx, 'report')),
-        ]),
-      ),
+    final publicLink = (chat.isChannel || chat.isGroup) && (chat.username ?? '').isNotEmpty ? '${AppConfig.serverUrl}/c/${chat.username}/${m.id}' : null;
+    final items = <MessageMenuItem>[
+      if (chat.canPost) const MessageMenuItem('reply', Icons.reply_rounded, 'Reply'),
+      if (m.text.isNotEmpty && !chat.noForwards) const MessageMenuItem('copy', Icons.copy_rounded, 'Copy'),
+      if (publicLink != null && !chat.noForwards) const MessageMenuItem('copy_link', Icons.link_rounded, 'Copy link'),
+      if (m.type != 'poll' && m.type != 'call' && !m.viewOnce && !chat.noForwards) const MessageMenuItem('forward', Icons.shortcut_rounded, 'Forward'),
+      if (chat.type == 'private' || chat.can('pin_messages'))
+        MessageMenuItem(chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin', Icons.push_pin_outlined, chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
+      if (canEdit) const MessageMenuItem('edit', Icons.edit_outlined, 'Edit'),
+      if (chat.isGroup && !mine && m.senderId != null && m.sender?.deleted != true && !chat.protectedContent)
+        const MessageMenuItem('private_reply', Icons.reply_all_rounded, 'Reply privately'),
+      if (canClosePoll) const MessageMenuItem('close_poll', Icons.stop_circle_outlined, 'Stop poll'),
+      const MessageMenuItem('select', Icons.check_circle_outline_rounded, 'Select'),
+      const MessageMenuItem('remind', Icons.alarm_add_rounded, 'Remind me'),
+      if (mine && !chat.isSavedMessages && !chat.isChannel) const MessageMenuItem('info', Icons.info_outline_rounded, 'Message info'),
+      if (m.editedAt != null) const MessageMenuItem('history', Icons.history_rounded, 'Edit history'),
+      if (!mine && !chat.isAdmin) const MessageMenuItem('report', Icons.flag_outlined, 'Report'),
+      const MessageMenuItem('delete', Icons.delete_outline_rounded, 'Delete', danger: true),
+    ];
+    Rect anchor = Rect.fromLTWH(12, MediaQuery.of(context).size.height / 2 - 40, MediaQuery.of(context).size.width - 24, 80);
+    final box = anchorCtx?.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.attached) anchor = box.localToGlobal(Offset.zero) & box.size;
+    final when = m.editedAt ?? m.createdAt;
+    final header = '${m.editedAt != null ? 'edited' : (mine ? 'sent' : 'received')} ${chatListTime(when) == messageTime(when) ? 'today' : chatListTime(when)} at ${messageTime(when)}';
+    if (!mounted) return;
+    final a = await showMessageMenu(
+      context,
+      anchor: anchor,
+      alignRight: mine,
+      reactions: ChatStore.reactionEmojis.where((e) => chat.allowedReactions == null || chat.allowedReactions!.contains(e)).toList(),
+      myReaction: m.myReaction,
+      header: header,
+      items: items,
     );
     if (!mounted || a == null) return;
     if (a.startsWith('react:')) {
@@ -1128,6 +1109,10 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.text));
         if (mounted) showInfo(context, 'Copied');
+        break;
+      case 'copy_link':
+        await Clipboard.setData(ClipboardData(text: '${AppConfig.serverUrl}/c/${chat.username}/${m.id}'));
+        if (mounted) showInfo(context, 'Link copied');
         break;
       case 'edit':
         setState(() {
@@ -1817,7 +1802,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: SwipeReply(
                 onReply: selecting || m.isLocal || !chat.canPost ? null : () => _startReply(m),
                 onDoubleTap: selecting || m.isLocal ? null : () => _quickHeart(m),
-                child: MessageBubble(
+                child: Builder(builder: (bctx) => MessageBubble(
                 key: ValueKey(m.isLocal ? m.clientId : m.id),
                 message: m,
                 chat: chat,
@@ -1826,13 +1811,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 firstInGroup: first,
                 lastInGroup: last,
                 showAvatar: last && chat.isGroup && !mine,
-                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat),
-                onTap: m.sendState == SendState.failed ? () => _messageMenu(m, chat) : null,
+                // one tap (or a long press) opens the message menu; long press while selecting adds to the selection
+                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat, bctx),
+                onTap: selecting ? null : () => _messageMenu(m, chat, bctx),
                 onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
                 onForward: chat.isChannel && !chat.noForwards && !selecting
                     ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
                     : null,
-              ),
+              )),
               ),
               ),
           ],
@@ -2307,26 +2293,6 @@ class _ChatScreenState extends State<ChatScreen> {
       ]),
     );
   }
-
-  Widget _quick(BuildContext ctx, IconData icon, String label, String value) => Expanded(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => Navigator.pop(ctx, value),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(color: Brand.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(15)),
-                child: Icon(icon, color: Brand.primary),
-              ),
-              const SizedBox(height: 5),
-              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            ]),
-          ),
-        ),
-      );
 
   PopupMenuItem<String> _mi(String value, IconData icon, String text, {bool danger = false}) => PopupMenuItem<String>(
         value: value,

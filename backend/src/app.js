@@ -100,7 +100,7 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
     const code = clean(req.params.code);
     landing(res, { emoji: '📞', title: 'Talvio call', text: 'Someone shared a call link with you. Open it in the Talvio app to start the call.', deep: `talvio://call/${code}` });
   });
-  app.get('/c/:username', async (req, res) => {
+  app.get(['/c/:username', '/c/:username/:post'], async (req, res) => {
     const name = clean(req.params.username);
     let title = `@${name}`;
     let text = 'A public group or channel on Talvio.';
