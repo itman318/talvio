@@ -47,6 +47,9 @@ void main() {
     app.main();
     await pumpUntil(t, find.text('Phone number'), seconds: 60, what: 'login screen (phone first)');
     await snap(t, 'login-phone');
+    // the email option shows once the server's settings arrive
+    await pumpUntil(t, find.text('Continue with email'), what: 'email option');
+    await t.ensureVisible(find.text('Continue with email'));
     await t.tap(find.text('Continue with email'));
     await settle(t, 600);
     await pumpUntil(t, find.text('Email address'), what: 'email login');
