@@ -53,6 +53,9 @@ jobs:
           API_BASE: ${{ vars.API_BASE }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          OTP_DEV_MODE: ${{ vars.OTP_DEV_MODE }}
         run: |
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
@@ -86,6 +89,10 @@ jobs:
           echo "upload: ok" | tee -a deploy.txt
           {
             printf 'export ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
+            if [ -n "$BREVO_API_KEY" ]; then
+              printf 'export MAIL_PROVIDER=brevo BREVO_API_KEY=%q MAIL_FROM=%q\n' "$BREVO_API_KEY" "$MAIL_FROM"
+            fi
+            printf 'export OTP_DEV_MODE=%q\n' "$OTP_DEV_MODE"
             echo 'bash /root/server-setup.sh'
           } | sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' 2>&1 | tee -a deploy.txt
 

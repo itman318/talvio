@@ -64,6 +64,21 @@ OTP_DEV_MODE=true
 EOF
   chmod 600 "$ENV_FILE"
 fi
+# optional settings from GitHub secrets (email provider, test mode); empty = keep what's there
+set_env() {
+  local key=$1 val=$2
+  [ -n "$val" ] || return 0
+  grep -v "^${key}=" "$ENV_FILE" > "$ENV_FILE.tmp" || true
+  val=${val//\\/\\\\}; val=${val//\"/\\\"}
+  printf '%s="%s"\n' "$key" "$val" >> "$ENV_FILE.tmp"  # quoted: works for systemd and for bash
+  mv "$ENV_FILE.tmp" "$ENV_FILE" && chmod 600 "$ENV_FILE"
+  echo "setting: $key updated"
+}
+set_env MAIL_PROVIDER "${MAIL_PROVIDER:-}"
+set_env MAIL_FROM "${MAIL_FROM:-}"
+set_env BREVO_API_KEY "${BREVO_API_KEY:-}"
+set_env OTP_DEV_MODE "${OTP_DEV_MODE:-}"
+
 # keep the address current if the server IP changed
 sed -i "s#^PUBLIC_URL=http://[0-9.]*\$#PUBLIC_URL=http://${PUBLIC_IP}#" "$ENV_FILE"
 
