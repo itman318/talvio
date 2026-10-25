@@ -142,6 +142,14 @@ server {
     listen [::]:80 default_server;
     server_name _;
     client_max_body_size 2100m;
+    keepalive_timeout 30s;
+
+    # smaller responses = faster on mobile data
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 512;
+    gzip_proxied any;
+    gzip_types application/json application/javascript text/css text/plain image/svg+xml;
 
     location / {
         proxy_pass http://127.0.0.1:4000;

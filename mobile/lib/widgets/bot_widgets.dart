@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/services.dart';
 import '../models/models.dart';
+import '../theme/brand.dart';
 import '../utils/format.dart';
 
 /// Inline buttons under a bot's message.
@@ -228,4 +229,107 @@ Future<String?> pickBotCommand(BuildContext context, BotInfo bot) {
       ),
     ),
   );
+}
+
+
+/// Telegram-style "Menu" pill next to the message box in bot chats.
+class BotMenuButton extends StatelessWidget {
+  const BotMenuButton({super.key, required this.onTap, this.onLongPress, this.hasApp = false});
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool hasApp;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Ink(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(18)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(hasApp ? Icons.grid_view_rounded : Icons.menu_rounded, color: Colors.white, size: 17),
+            const SizedBox(width: 5),
+            const Text('Menu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// A bot's reply keyboard: rows of large buttons shown under the message box.
+class BotReplyKeyboard extends StatelessWidget {
+  const BotReplyKeyboard({super.key, required this.markup, required this.onPressed});
+  final Map<String, dynamic> markup;
+  final ValueChanged<Map<String, dynamic>> onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final rows = (markup['keyboard'] as List)
+        .whereType<List>()
+        .map((r) => r.map((b) => b is Map ? Map<String, dynamic>.from(b) : <String, dynamic>{'text': '$b'}).toList())
+        .toList();
+    final big = markup['resize_keyboard'] == false;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.36),
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF151929).withValues(alpha: 0.94) : const Color(0xFFEFF1F7).withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final row in rows)
+                Row(children: [
+                  for (final b in row)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: Material(
+                          color: dark ? const Color(0xFF242A42) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          elevation: 0.5,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => onPressed(b),
+                            child: SizedBox(
+                              height: big ? 56 : 44,
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    if (b['request_location'] == true) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.location_on_rounded, size: 16, color: Brand.primary)),
+                                    Flexible(
+                                      child: Text(
+                                        '${b['text']}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: dark ? Colors.white : const Color(0xFF1B1F33)),
+                                      ),
+                                    ),
+                                  ]),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../theme/brand.dart';
+import '../core/chat_links.dart';
 import '../screens/live_map_screen.dart';
 import '../screens/calls_screen.dart' show callCodeFromLink, openCallLink;
 
@@ -31,8 +32,8 @@ class ChatColors {
     // my bubbles take the theme's colour (light text); other people's sit on clean cards
     final d = (look ?? const ChatAppearance()).def;
     return dark
-        ? ChatColors._(d.dark.first, d.mineDark.last, const Color(0xFF191D31), const Color(0xFF131628), Colors.white60)
-        : ChatColors._(d.light.first, d.mine.last, Colors.white, Colors.white, const Color(0xFF7D8399));
+        ? ChatColors._(d.dark.first, d.mineDark.last, const Color(0xFF1B1F34), const Color(0xFF131628), Colors.white70)
+        : ChatColors._(d.light.first, d.mine.last, Colors.white, Colors.white, const Color(0xFF636A82));
   }
 }
 
@@ -80,6 +81,8 @@ class _MessageTextState extends State<MessageText> {
             final call = callCodeFromLink(token);
             if (call != null) {
               openCallLink(context, call); // Talvio call link: start the call right here
+            } else if (parseChatLink(token) != null) {
+              openChatLink(context, token); // Talvio group / channel link: open it in the app
             } else {
               launchUrl(Uri.parse(token), mode: LaunchMode.externalApplication);
             }

@@ -29,7 +29,8 @@ class _PhoneScreenState extends State<PhoneScreen> {
   final _number = TextEditingController();
   final _email = TextEditingController();
   bool _busy = false;
-  bool? _useEmail; // null → default from server settings
+  bool? _useEmail; // null → phone first (email if the server only allows email)
+  bool _smsUnavailable = false;
   List<LocalPasskey> _passkeys = const [];
 
   @override
@@ -82,13 +83,21 @@ class _PhoneScreenState extends State<PhoneScreen> {
         ),
       ));
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (!mounted) return;
+      if (e is ApiException && e.code == 'sms_unavailable') {
+        setState(() => _smsUnavailable = true);
+      } else {
+        showError(context, e);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-
+  void _switchToEmail() => setState(() {
+        _useEmail = true;
+        _smsUnavailable = false;
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +105,21 @@ class _PhoneScreenState extends State<PhoneScreen> {
     final reason = auth.logoutReason;
     final canEmail = auth.emailLoginEnabled;
     final canPhone = auth.phoneLoginEnabled || !canEmail;
-    final email = canEmail && (_useEmail ?? true) || !canPhone;
+    final email = !canPhone || (canEmail && (_useEmail ?? false));
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    InputDecoration deco(String label, {String? hint, Widget? prefix}) => InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: prefix,
+          filled: true,
+          fillColor: dark ? const Color(0xFF161A2E) : Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: dark ? Colors.white12 : const Color(0xFFDDE1EC)),
+          ),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Brand.primary, width: 1.6)),
+        );
     return Scaffold(
       appBar: auth.addingAccount && auth.otherAccounts.isNotEmpty
           ? AppBar(
@@ -106,29 +129,32 @@ class _PhoneScreenState extends State<PhoneScreen> {
           : null,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           children: [
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             SizedBox(
-              height: 150,
+              height: 140,
               child: Stack(alignment: Alignment.center, children: [
                 Container(
-                  width: 150,
-                  height: 150,
+                  width: 140,
+                  height: 140,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(colors: [Color(0x55F0446E), Color(0x308B5CF6), Color(0x00FFFFFF)], stops: [0, 0.55, 1]),
                   ),
                 ),
-                const BrandMark(size: 88),
+                const BrandMark(size: 84),
               ]),
             ),
-            const SizedBox(height: 16),
-            Text(email ? 'Welcome to ${AppConfig.appName}' : 'Your phone number',
+            const SizedBox(height: 14),
+            Text(email ? 'Log in with email' : 'Your phone number',
                 textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
-            Text(email ? 'Enter your email — we will send you a 6-digit login code.' : 'We will send you a verification code by SMS.',
-                textAlign: TextAlign.center),
+            Text(
+              email ? 'We’ll email you a 6-digit code to log in.' : 'Enter your number with country code. We’ll send you a verification code.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4),
+            ),
             if (reason != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -137,18 +163,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 child: Text(reason, textAlign: TextAlign.center),
               ),
             ],
-            const SizedBox(height: 24),
-            if (canEmail && canPhone) ...[
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: true, icon: Icon(Icons.alternate_email_rounded), label: Text('Email')),
-                  ButtonSegment(value: false, icon: Icon(Icons.phone_iphone_rounded), label: Text('Phone')),
-                ],
-                selected: {email},
-                onSelectionChanged: (v) => setState(() => _useEmail = v.first),
-              ),
-              const SizedBox(height: 20),
-            ],
+            const SizedBox(height: 26),
             if (email)
               TextField(
                 key: const ValueKey('email-field'),
@@ -157,36 +172,94 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 keyboardType: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.email],
                 textInputAction: TextInputAction.go,
-                decoration: const InputDecoration(labelText: 'Email address', hintText: 'name@gmail.com', border: OutlineInputBorder()),
+                decoration: deco('Email address', hint: 'name@gmail.com', prefix: const Icon(Icons.alternate_email_rounded)),
                 onSubmitted: (_) => _submit(true),
               )
             else
               Row(
                 children: [
                   SizedBox(
-                    width: 80,
+                    width: 92,
                     child: TextField(
                       controller: _code,
                       keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'Code', border: OutlineInputBorder()),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      decoration: deco('Code'),
+                      onChanged: (_) => setState(() => _smsUnavailable = false),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
                       key: const ValueKey('phone-field'),
                       controller: _number,
                       autofocus: true,
                       keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumberNational],
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]'))],
-                      decoration: const InputDecoration(labelText: 'Phone number', hintText: '300 1234567', border: OutlineInputBorder()),
+                      style: const TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                      decoration: deco('Phone number', hint: '300 1234567'),
                       onSubmitted: (_) => _submit(false),
                     ),
                   ),
                 ],
               ),
-            const SizedBox(height: 24),
-            AuroraButton(label: 'Next', busy: _busy, onPressed: () => _submit(email)),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              child: !email && _smsUnavailable
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: dark ? const Color(0xFF2A2412) : const Color(0xFFFFF6E3),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFF2D49B)),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: const [
+                            Icon(Icons.sms_failed_outlined, color: Color(0xFFB7791F)),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text('SMS isn’t available in your country yet',
+                                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF8A5A0B))),
+                            ),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text('We can’t send verification texts to your number right now. Log in with your email address — it only takes a moment.',
+                              style: TextStyle(color: dark ? Colors.white70 : const Color(0xFF6B5320), height: 1.4)),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _switchToEmail,
+                              icon: const Icon(Icons.alternate_email_rounded),
+                              label: const Text('Continue with email'),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+            const SizedBox(height: 22),
+            AuroraButton(label: email ? 'Send code' : 'Next', icon: Icons.arrow_forward_rounded, busy: _busy, onPressed: () => _submit(email)),
+            if (canEmail && canPhone) ...[
+              const SizedBox(height: 14),
+              Row(children: [
+                const Expanded(child: Divider()),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('or', style: TextStyle(color: Theme.of(context).hintColor))),
+                const Expanded(child: Divider()),
+              ]),
+              const SizedBox(height: 6),
+              TextButton.icon(
+                onPressed: _busy ? null : () => email ? setState(() => _useEmail = false) : _switchToEmail(),
+                icon: Icon(email ? Icons.phone_iphone_rounded : Icons.alternate_email_rounded),
+                label: Text(email ? 'Use phone number instead' : 'Continue with email'),
+              ),
+            ],
             for (final p in _passkeys) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -196,6 +269,9 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 label: Text('Log in as ${p.name} with passkey'),
               ),
             ],
+            const SizedBox(height: 18),
+            Text('By continuing you agree to the Terms and Privacy Policy.',
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
           ],
         ),
       ),

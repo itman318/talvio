@@ -430,7 +430,7 @@ class _NewChannelScreenState extends State<NewChannelScreen> {
             value: false,
             groupValue: _public,
             title: const Text('Private channel'),
-            subtitle: const Text('People join with an invite code'),
+            subtitle: const Text('People join with an invite link'),
             onChanged: (v) => setState(() => _public = v!),
           ),
           RadioListTile<bool>(

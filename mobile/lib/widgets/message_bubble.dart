@@ -131,7 +131,7 @@ class MessageBubble extends StatelessWidget {
         !(showSender && !isMine) &&
         !_asChannel &&
         m.reactions.isEmpty &&
-        m.replyMarkup == null;
+        m.inlineKeyboard.isEmpty;
 
     if ((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) {
       // stickers float without a bubble; a small time chip sits under them
@@ -242,7 +242,7 @@ class MessageBubble extends StatelessWidget {
           MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor)),
       if (m.linkPreview != null && m.type == 'text') LinkPreviewCard(data: m.linkPreview!, accent: accent),
       ReactionChips(message: m),
-      if (m.replyMarkup != null) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
+      if (m.inlineKeyboard.isNotEmpty) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
       if (!mediaOnly) const SizedBox(height: 2),
       if (!mediaOnly)
       Row(

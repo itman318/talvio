@@ -17,8 +17,8 @@ class Brand {
   static const ink = Color(0xFF151A2E); // headers, my bubbles, dark surfaces
   static const inkSoft = Color(0xFF232945);
   /// Secondary text/icons readable on both the light and the dark background.
-  static const muted = Color(0xFF7D8399);
-  static const faint = Color(0xFFA3A8BC);
+  static const muted = Color(0xFF656C84);
+  static const faint = Color(0xFF959AAF);
   static const premium = Color(0xFFC9A45C); // champagne gold (Talvio Plus)
   static const violet = Color(0xFF7C5CFF);
   static const sky = Color(0xFF3C9BEA);

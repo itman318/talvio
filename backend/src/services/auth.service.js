@@ -99,6 +99,10 @@ function findUserByTarget(target, kind) {
 
 async function requestOtp(rawPhone, ip) {
   const phone = v.normalizePhone(rawPhone);
+  // no SMS gateway on a live server: say so clearly, the app then offers email instead
+  if (config.isProd && config.sms.provider === 'console') {
+    throw badRequest('sms_unavailable', 'SMS verification isn’t available in your country yet. Please continue with your email address.');
+  }
   if (await moderation.isPhoneBlocked(phone)) {
     throw forbidden('phone_not_allowed', 'This phone number cannot be used to sign up');
   }

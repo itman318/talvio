@@ -144,6 +144,41 @@ test('create a bot, getMe, user writes → getUpdates, bot replies with buttons,
   assert.ok(Date.now() - t0 < 3000);
 });
 
+test('advanced bot API: reply keyboards, chat actions, locations, pin, members, profile', async () => {
+  rateLimit.reset();
+  const chat = await chats.getOrCreatePrivate(B.id, bot.id);
+  const kb = await bots.callMethod(token, 'messages.send', {
+    chat_id: chat.id,
+    text: 'Choose a city',
+    reply_markup: { keyboard: [['Lahore', 'Karachi'], [{ text: 'Send my location', request_location: true }]], one_time_keyboard: true },
+  });
+  const row = await db.one('SELECT reply_markup FROM messages WHERE id = $1', [kb.message_id]);
+  assert.equal(row.reply_markup.keyboard[0][1].text, 'Karachi');
+  assert.equal(row.reply_markup.keyboard[1][0].request_location, true);
+  assert.equal(row.reply_markup.one_time_keyboard, true);
+  const rm = await bots.callMethod(token, 'messages.send', { chat_id: chat.id, text: 'ok', reply_markup: { remove_keyboard: true } });
+  assert.equal((await db.one('SELECT reply_markup FROM messages WHERE id = $1', [rm.message_id])).reply_markup.remove_keyboard, true);
+  await rejects(bots.callMethod(token, 'messages.send', { chat_id: chat.id, text: 'x', reply_markup: { keyboard: [] } }), 'invalid_markup');
+
+  const typing = [];
+  const on = (e) => e.event === 'typing' && typing.push(e);
+  bus.on('rt:emit', on);
+  assert.equal(await bots.callMethod(token, 'chat.action', { chat_id: chat.id, action: 'uploading_photo' }), true);
+  bus.removeListener('rt:emit', on);
+  assert.equal(typing[0].payload.action, 'uploading_photo');
+  assert.deepEqual(typing[0].userIds, [B.id]);
+
+  const loc = await bots.callMethod(token, 'locations.send', { chat_id: chat.id, latitude: 31.5204, longitude: 74.3587 });
+  assert.equal((await db.one('SELECT type FROM messages WHERE id = $1', [loc.message_id])).type, 'location');
+  assert.equal(await bots.callMethod(token, 'messages.pin', { chat_id: chat.id, message_id: loc.message_id }), true);
+  assert.equal((await bots.callMethod(token, 'chats.member', { chat_id: chat.id, user_id: B.id })).user.id, B.id);
+  assert.equal(await bots.callMethod(token, 'chats.member-count', { chat_id: chat.id }), 2);
+  await bots.callMethod(token, 'me.set', { name: 'Weather Pro', description: 'Forecasts for every city' });
+  const u = await db.one('SELECT u.first_name, b.about FROM users u JOIN bots b ON b.user_id = u.id WHERE u.id = $1', [bot.id]);
+  assert.equal(u.first_name, 'Weather Pro');
+  assert.equal(u.about, 'Forecasts for every city');
+});
+
 test('groups: privacy mode delivers only commands, mentions and replies', async () => {
   const g = (await chats.createGroup(A.id, { title: 'Dev', member_ids: [B.id, bot.id] })).chat;
   await bots.callMethod(token, 'updates', { offset: 1e12 }); // clear

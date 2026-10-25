@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/chat_links.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -290,13 +291,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 icon: Icons.ios_share_rounded,
                 label: 'Share',
                 onTap: () async {
-                  final code = chat.username != null ? '@${chat.username}' : chat.inviteCode;
-                  if (code == null) {
-                    showInfo(context, 'Only admins can share the invite code');
+                  final link = chatLinkOf(chat);
+                  if (link == null) {
+                    showInfo(context, 'Only admins can share the invite link');
                     return;
                   }
-                  await Clipboard.setData(ClipboardData(text: code));
-                  if (context.mounted) showInfo(context, chat.username != null ? 'Link copied' : 'Invite code copied');
+                  await Clipboard.setData(ClipboardData(text: link));
+                  if (context.mounted) showInfo(context, 'Link copied — paste it anywhere to invite people');
                 },
               ),
             ],
@@ -321,14 +322,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               SettingsTile(
                 icon: Icons.alternate_email_rounded,
                 color: Brand.sky,
-                title: chat.username != null ? '@${chat.username}' : 'Make this $what public',
-                subtitle: chat.username != null ? 'Public link — anyone can find and join' : 'Private — joins only with an invite code',
+                title: chat.username != null ? publicChatLink(chat.username!) : 'Make this $what public',
+                subtitle: chat.username != null ? 'Public link · @${chat.username} — anyone can find and join' : 'Private — joins only with an invite link',
+                maxSubtitleLines: 2,
                 trailingWidget: chat.username != null
                     ? IconButton(
+                        tooltip: 'Copy link',
                         icon: const Icon(Icons.copy_rounded, size: 20),
                         onPressed: () async {
-                          await Clipboard.setData(ClipboardData(text: '@${chat.username}'));
-                          if (context.mounted) showInfo(context, 'Copied');
+                          await Clipboard.setData(ClipboardData(text: publicChatLink(chat.username!)));
+                          if (context.mounted) showInfo(context, 'Link copied');
                         },
                       )
                     : null,
@@ -494,21 +497,21 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 SettingsTile(
                   icon: Icons.link_rounded,
                   color: Brand.sky,
-                  title: 'Invite code',
-                  subtitle: chat.inviteCode!,
+                  title: 'Invite link',
+                  subtitle: inviteChatLink(chat.inviteCode!),
                   trailingWidget: PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded),
                     onSelected: (v) async {
                       if (v == 'copy') {
-                        await Clipboard.setData(ClipboardData(text: chat.inviteCode!));
-                        if (context.mounted) showInfo(context, 'Invite code copied');
+                        await Clipboard.setData(ClipboardData(text: inviteChatLink(chat.inviteCode!)));
+                        if (context.mounted) showInfo(context, 'Invite link copied');
                       } else {
-                        await _run(() => _store.regenerateInvite(chat.id), 'New invite code created — the old one no longer works');
+                        await _run(() => _store.regenerateInvite(chat.id), 'New invite link created — the old one no longer works');
                       }
                     },
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'copy', child: Text('Copy')),
-                      PopupMenuItem(value: 'reset', child: Text('Reset code')),
+                      PopupMenuItem(value: 'copy', child: Text('Copy link')),
+                      PopupMenuItem(value: 'reset', child: Text('Reset link')),
                     ],
                   ),
                 ),

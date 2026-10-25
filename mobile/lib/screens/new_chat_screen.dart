@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../core/chat_links.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../widgets/premium.dart';
@@ -199,7 +200,7 @@ class NewChatScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const GradientIcon(Icons.link_rounded, color: Brand.amber),
-            title: const Text('Join with invite code'),
+            title: const Text('Join with invite link'),
             onTap: () => showJoinGroupDialog(context),
           ),
           const Divider(height: 1),
@@ -214,8 +215,8 @@ Future<void> showJoinGroupDialog(BuildContext context) async {
   final code = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Join a group'),
-      content: TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(hintText: 'Paste invite code')),
+      title: const Text('Join a group or channel'),
+      content: TextField(controller: ctrl, autofocus: true, decoration: const InputDecoration(hintText: 'Paste the invite link')),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Next')),
@@ -223,9 +224,20 @@ Future<void> showJoinGroupDialog(BuildContext context) async {
     ),
   );
   if (code == null || code.isEmpty || !context.mounted) return;
+  // a public link (…/c/name) opens that group / channel; anything else is an invite code or link
+  final parsed = parseChatLink(code);
+  if (parsed != null && parsed.$1 == 'c') {
+    await openChatLink(context, code);
+    return;
+  }
+  await openInviteCode(context, parsed?.$2 ?? code.split('/').last);
+}
+
+/// Shows an invite (members, description) and joins after "Join".
+Future<void> openInviteCode(BuildContext context, String code) async {
   final store = context.read<ChatStore>();
   try {
-    final p = await store.invitePreview(code.split('/').last);
+    final p = await store.invitePreview(code);
     if (!context.mounted) return;
     if (p['is_member'] == true) {
       final chat = await store.getChat((p['chat_id'] as num).toInt());
@@ -234,7 +246,7 @@ Future<void> showJoinGroupDialog(BuildContext context) async {
     }
     final ok = await confirm(context, p['title'] as String, '${p['member_count']} members\n\n${p['description'] ?? ''}'.trim(), ok: p['join_approval'] == true ? 'Request to join' : 'Join group');
     if (!ok || !context.mounted) return;
-    final chat = await store.joinByInvite(code.split('/').last);
+    final chat = await store.joinByInvite(code);
     if (!context.mounted) return;
     if (chat == null) {
       showInfo(context, 'Request sent — the admins will review it');
@@ -378,7 +390,7 @@ class _GroupDetailsScreenState extends State<_GroupDetailsScreen> {
           );
       if (!mounted) return;
       if (skipped.isNotEmpty) {
-        showInfo(context, '${skipped.length} people could not be added because of their privacy settings. Share the invite code with them.');
+        showInfo(context, '${skipped.length} people could not be added because of their privacy settings. Share the invite link with them.');
       }
       Navigator.of(context).popUntil((r) => r.isFirst);
       Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));

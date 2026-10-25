@@ -279,8 +279,17 @@ Every call answers `{ "ok": true, "data": … }` or `{ "ok": false, "error": { "
 
 Methods: `me`, `updates`, `webhook.set`, `webhook.delete`, `webhook.info`, `messages.send`, `photos.send`,
 `files.send` (multipart field `photo` / `document`), `messages.edit`, `messages.edit-buttons`, `messages.delete`,
-`buttons.answer`, `commands.set`, `commands.get`, `commands.delete`, `chats.get`. Updates: `message`,
+`buttons.answer`, `commands.set`, `commands.get`, `commands.delete`, `chats.get`,
+`chat.action` (`action`: typing, uploading_photo, recording_voice …), `polls.send` (`question`, `options`,
+`type`=quiz, `correct_option_id`, `open_period`), `locations.send` (`latitude`, `longitude`), `messages.forward`
+(`from_chat_id`, `message_id`), `messages.pin`, `messages.unpin`, `chats.member` (`user_id`),
+`chats.member-count`, `me.set` (`name`, `description`, `menu_url`). Updates: `message`,
 `callback_query`, and `message.web_app_data`. Webhooks get the header `X-Talvio-Webhook-Secret`.
+
+**Keyboards:** `reply_markup` takes `inline_keyboard` (buttons under the message), `keyboard` (big buttons that
+replace the phone keyboard — `resize_keyboard`, `one_time_keyboard`, `input_field_placeholder`,
+`request_location`) or `{"remove_keyboard": true}`. The app shows a **Menu** button in bot chats (mini app or
+commands). **Deep links:** `https://<server>/c/<botname>?start=ref123` opens the bot and sends `/start ref123`.
 
 **Mini apps:** a `web_app` button (or the bot's menu URL) opens the page inside the app with
 `#talvioData=<init data>` and `window.Talvio = { initData, user, close(), sendData(text) }`.

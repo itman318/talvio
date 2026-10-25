@@ -45,13 +45,12 @@ void main() {
 
   testWidgets('login → chats → send message → tabs', (t) async {
     app.main();
-    await pumpUntil(t, find.text('Email address'), seconds: 60, what: 'login screen (email)');
-    await snap(t, 'login');
-    await t.tap(find.text('Phone'));
-    await settle(t, 600);
+    await pumpUntil(t, find.text('Phone number'), seconds: 60, what: 'login screen (phone first)');
     await snap(t, 'login-phone');
-    await t.tap(find.text('Email'));
+    await t.tap(find.text('Continue with email'));
     await settle(t, 600);
+    await pumpUntil(t, find.text('Email address'), what: 'email login');
+    await snap(t, 'login');
 
     await t.enterText(find.widgetWithText(TextField, 'Email address'), email);
     await t.testTextInput.receiveAction(TextInputAction.go); // keyboard "Go" (the button can be under the keyboard)
@@ -133,7 +132,7 @@ void main() {
     await t.tap(find.text('Log out'));
     await settle(t, 800);
     await t.tap(find.text('Log out').last);
-    await pumpUntil(t, find.byKey(const ValueKey('email-field')), what: 'login screen after logout');
+    await pumpUntil(t, find.byKey(const ValueKey('phone-field')), what: 'login screen after logout');
     await snap(t, 'logged-out');
   });
 }

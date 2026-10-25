@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import '../core/chat_links.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/voice_mini_player.dart';
@@ -38,6 +39,7 @@ class _RootShellState extends State<RootShell> {
         if (id != null) Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: id)));
         final code = callCodeFromLink(uri.toString());
         if (code != null) openCallLink(context, code);
+        if (parseChatLink(uri.toString()) != null) openChatLink(context, uri.toString());
       }, onError: (_) {});
     } catch (_) {}
   }

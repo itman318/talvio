@@ -82,16 +82,59 @@ function createApp() {
     }
   });
 
-  // Shared call links: https://chat.example.com/call/<code> → opens the app (talvio://call/<code>)
-  app.get('/call/:code', (req, res) => {
-    const code = String(req.params.code).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
-    const deep = `talvio://call/${code}`;
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+  // Shared links (open the app; like t.me links):
+  //   /call/<code>  → call me     /c/<username> → public group / channel     /join/<code> → invite link
+  const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+  const landing = (res, { emoji, title, text, deep }) => {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:");
     res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Talvio call</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif;background:#0f1222;color:#fff;text-align:center}
-.c{padding:32px 24px;max-width:360px}a{display:inline-block;margin-top:20px;padding:14px 28px;border-radius:999px;color:#fff;text-decoration:none;font-weight:700;
-background:linear-gradient(135deg,#ff7a59,#8b5cf6)}p{color:#b8bdd6;line-height:1.5}</style></head><body><div class="c"><h1>📞 Talvio call</h1>
-<p>Someone shared a call link with you. Open it in the Talvio app to start the call.</p><a href="${deep}">Open in Talvio</a></div></body></html>`);
+<title>${esc(title)} · Talvio</title><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(text)}">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif;background:#0f1222;color:#fff;text-align:center}
+.c{padding:32px 24px;max-width:380px}.e{font-size:54px}h1{margin:10px 0 6px;font-size:24px}a{display:inline-block;margin-top:22px;padding:14px 30px;border-radius:999px;color:#fff;text-decoration:none;font-weight:700;
+background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;line-height:1.5}small{display:block;margin-top:18px;color:#6d7393}</style></head>
+<body><div class="c"><div class="e">${emoji}</div><h1>${esc(title)}</h1><p>${esc(text)}</p><a href="${esc(deep)}">Open in Talvio</a>
+<small>Don’t have Talvio yet? Install the app, then open this link again.</small></div></body></html>`);
+  };
+  const clean = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+  app.get('/call/:code', (req, res) => {
+    const code = clean(req.params.code);
+    landing(res, { emoji: '📞', title: 'Talvio call', text: 'Someone shared a call link with you. Open it in the Talvio app to start the call.', deep: `talvio://call/${code}` });
+  });
+  app.get('/c/:username', async (req, res) => {
+    const name = clean(req.params.username);
+    let title = `@${name}`;
+    let text = 'A public group or channel on Talvio.';
+    try {
+      // eslint-disable-next-line global-require
+      const db = require('./db');
+      const c = await db.one(
+        `SELECT title, type, description, (SELECT count(*) FROM chat_members m WHERE m.chat_id = c.id) AS n
+         FROM chats c WHERE lower(username) = lower($1) AND is_public AND NOT is_suspended`,
+        [name],
+      );
+      if (c) {
+        title = c.title;
+        text = `${c.n} ${c.type === 'channel' ? 'subscribers' : 'members'}${c.description ? ` · ${String(c.description).slice(0, 140)}` : ''}`;
+      }
+      if (!c) {
+        const b = await db.one(
+          `SELECT u.first_name, b.about FROM users u JOIN bots b ON b.user_id = u.id WHERE lower(u.username) = lower($1) AND b.status = 'active'`,
+          [name],
+        );
+        if (b) {
+          title = b.first_name;
+          text = `Bot · ${String(b.about || 'Open it in Talvio to start.').slice(0, 160)}`;
+        }
+      }
+    } catch (_) {
+      /* the page still works without the details */
+    }
+    const start = /^[A-Za-z0-9_-]{1,64}$/.test(String(req.query.start || '')) ? `?start=${req.query.start}` : '';
+    landing(res, { emoji: '👥', title, text, deep: `talvio://c/${name}${start}` });
+  });
+  app.get('/join/:code', (req, res) => {
+    const code = clean(req.params.code);
+    landing(res, { emoji: '✉️', title: 'You’re invited', text: 'You have an invite to a private group or channel on Talvio.', deep: `talvio://join/${code}` });
   });
 
   app.use(notFoundHandler);

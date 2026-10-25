@@ -906,6 +906,17 @@ class ChatStore extends ChangeNotifier {
     return data.map((j) => Map<String, dynamic>.from(j as Map)).toList();
   }
 
+  /// The id of the bot with exactly this @username, or null.
+  Future<int?> botByUsername(String username) async {
+    final r = await api.get('/users/search', query: {'q': username});
+    final list = (r is Map ? r['users'] : r) as List? ?? const [];
+    for (final j in list) {
+      final u = Map<String, dynamic>.from(j as Map);
+      if ('${u['username']}'.toLowerCase() == username.toLowerCase() && u['is_bot'] == true) return (u['id'] as num).toInt();
+    }
+    return null;
+  }
+
   Future<Map<String, dynamic>> publicPreview(String username) async =>
       Map<String, dynamic>.from(await api.get('/chats/public/${Uri.encodeComponent(username)}') as Map);
 

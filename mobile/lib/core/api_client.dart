@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 
@@ -36,7 +37,20 @@ class ApiClient {
   ApiClient();
 
   static const _storage = FlutterSecureStorage();
-  final http.Client _http = http.Client();
+  http.Client _http = _newClient();
+
+  /// Short idle / connect limits: mobile networks silently drop idle connections, and
+  /// re-using such a dead connection is what made requests hang until the timeout.
+  static http.Client _newClient() => IOClient(HttpClient()
+    ..connectionTimeout = const Duration(seconds: 10)
+    ..idleTimeout = const Duration(seconds: 8));
+
+  /// After a timeout: throw away pooled connections so the next request opens a fresh one.
+  void _resetConnections() {
+    final old = _http;
+    _http = _newClient();
+    old.close();
+  }
 
   String? accessToken;
   String? refreshToken;
@@ -119,7 +133,15 @@ class ApiClient {
     if (auth) req.headers.addAll(authHeaders);
     if (body != null) req.body = jsonEncode(body);
 
-    final res = await _execute(() => _http.send(req));
+    http.Response res;
+    try {
+      res = await _execute(() => _http.send(req), timeout: Duration(seconds: method == 'GET' ? 15 : 30));
+    } on ApiException catch (e) {
+      // a stuck connection: one more try on a fresh connection (reads only — never sends twice)
+      if (e.code != 'network' || method != 'GET' || !retry) rethrow;
+      final again = http.Request(method, req.url)..headers.addAll(req.headers);
+      res = await _execute(() => _http.send(again), timeout: const Duration(seconds: 20));
+    }
     if (res.statusCode == 401 && auth && retry && refreshToken != null) {
       await refreshTokens();
       return _send(method, path, body: body, query: query, auth: auth, retry: false);
@@ -131,9 +153,11 @@ class ApiClient {
     try {
       return await http.Response.fromStream(await send().timeout(timeout));
     } on SocketException {
+      _resetConnections();
       throw ApiException(0, 'network', 'No internet connection');
     } on TimeoutException {
-      throw ApiException(0, 'network', 'The server is taking too long to respond');
+      _resetConnections();
+      throw ApiException(0, 'network', 'The connection is slow — please try again');
     } on http.ClientException {
       throw ApiException(0, 'network', 'Could not reach the server');
     }

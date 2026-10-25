@@ -121,7 +121,7 @@ class SettingsGroup extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
       rows.add(children[i]);
-      if (i < children.length - 1) rows.add(Divider(height: 1, indent: 62, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)));
+      if (i < children.length - 1) rows.add(Divider(height: 1, indent: 64, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
@@ -177,13 +177,14 @@ class SettingsTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(11),
+              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: 8, offset: const Offset(0, 3))],
               gradient: LinearGradient(
                 colors: [Color.lerp(color, Colors.white, 0.18)!, color],
                 begin: Alignment.topLeft,
@@ -195,7 +196,7 @@ class SettingsTile extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: danger ? Colors.red : scheme.onSurface)),
+              Text(title, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, letterSpacing: -0.1, color: danger ? const Color(0xFFE5484D) : scheme.onSurface)),
               if (subtitle != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 1),

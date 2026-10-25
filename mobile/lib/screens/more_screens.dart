@@ -3,6 +3,7 @@ import 'chat_theme_screen.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../core/chat_links.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:local_auth/local_auth.dart';
@@ -111,12 +112,12 @@ class _InviteLinksScreenState extends State<InviteLinksScreen> {
           : ListView(children: [
               ListTile(
                 leading: const Icon(Icons.link),
-                title: Text('${d['primary']}'),
-                subtitle: const Text('Main invite code — never expires'),
+                title: Text(inviteChatLink('${d['primary']}')),
+                subtitle: const Text('Main invite link — never expires'),
                 trailing: IconButton(
                   icon: const Icon(Icons.copy),
                   onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: '${d['primary']}'));
+                    await Clipboard.setData(ClipboardData(text: inviteChatLink('${d['primary']}')));
                     if (context.mounted) showInfo(context, 'Copied');
                   },
                 ),
@@ -138,7 +139,7 @@ class _InviteLinksScreenState extends State<InviteLinksScreen> {
                       : PopupMenuButton<String>(
                           onSelected: (v) async {
                             if (v == 'copy') {
-                              await Clipboard.setData(ClipboardData(text: '${l['code']}'));
+                              await Clipboard.setData(ClipboardData(text: inviteChatLink('${l['code']}')));
                               if (context.mounted) showInfo(context, 'Copied');
                             } else {
                               try {
@@ -150,7 +151,7 @@ class _InviteLinksScreenState extends State<InviteLinksScreen> {
                             }
                           },
                           itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'copy', child: Text('Copy code')),
+                            PopupMenuItem(value: 'copy', child: Text('Copy link')),
                             PopupMenuItem(value: 'revoke', child: Text('Revoke')),
                           ],
                         ),

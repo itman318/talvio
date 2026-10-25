@@ -392,6 +392,20 @@ class _ChatScreenState extends State<ChatScreen> {
     if (a == 'schedule') await _scheduleCurrent();
   }
 
+  bool _kbHidden = false;
+
+  /// The newest bot message that set or removed a reply keyboard → its keyboard (or null).
+  Message? _botKeyboard(Chat chat) {
+    if (!chat.isBot && !chat.isGroup) return null;
+    final msgs = _store.messagesOf(chatId);
+    for (var i = 0; i < msgs.length && i < 60; i++) {
+      final m = msgs[i]; // newest first
+      if (m.removesKeyboard) return null;
+      if (m.replyKeyboard != null) return m;
+    }
+    return null;
+  }
+
   Future<void> _shareLocation() async {
     try {
       var perm = await Geolocator.checkPermission();
@@ -1978,7 +1992,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _inputPill(Chat chat) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final iconColor = dark ? Colors.white70 : Brand.muted;
-    final empty = _text.text.trim().isEmpty;
     return GlassPanel(
       radius: 27,
       opacity: dark ? 0.82 : 0.9,
@@ -1987,7 +2000,10 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         IconButton(
           tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
-          icon: Icon(_emojiOpen ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined, color: iconColor, size: 26),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.only(left: 6),
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 50),
+          icon: Icon(_emojiOpen ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined, color: iconColor, size: 25),
           onPressed: _toggleEmoji,
         ),
         Expanded(
@@ -2050,18 +2066,12 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         if (_editing == null)
           IconButton(
-            tooltip: 'Attach',
-            icon: Transform.rotate(angle: -0.6, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 25)),
+            tooltip: 'Attach: gallery, camera, files…',
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.only(right: 6),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 50),
+            icon: Transform.rotate(angle: -0.6, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 24)),
             onPressed: () => _attach(),
-          ),
-        if (_editing == null && empty)
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              tooltip: 'Camera',
-              icon: Icon(Icons.photo_camera_outlined, color: iconColor, size: 25),
-              onPressed: () => _attach('camera'),
-            ),
           ),
       ]),
       ),
@@ -2448,26 +2458,46 @@ class _ChatScreenState extends State<ChatScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (_editing == null && chat.isBot && chat.bot?.menuUrl != null)
-                    IconButton(
-                      tooltip: 'Open app',
-                      icon: const Icon(Icons.apps),
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => MiniAppScreen(botId: chat.peer!.id, url: chat.bot!.menuUrl!, title: chat.title)),
+                  if (_editing == null && chat.isBot && (chat.bot?.menuUrl != null || (chat.bot?.commands.isNotEmpty ?? false)))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6, bottom: 8),
+                      child: BotMenuButton(
+                        hasApp: chat.bot?.menuUrl != null,
+                        onTap: () async {
+                          if (chat.bot?.menuUrl != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => MiniAppScreen(botId: chat.peer!.id, url: chat.bot!.menuUrl!, title: chat.title)),
+                            );
+                            return;
+                          }
+                          final c = await pickBotCommand(context, chat.bot!);
+                          if (c != null) _store.sendText(chatId, c);
+                        },
+                        onLongPress: (chat.bot?.commands.isNotEmpty ?? false)
+                            ? () async {
+                                final c = await pickBotCommand(context, chat.bot!);
+                                if (c != null) _store.sendText(chatId, c);
+                              }
+                            : null,
                       ),
-                    ),
-                  if (_editing == null && chat.isBot && (chat.bot?.commands.isNotEmpty ?? false))
-                    IconButton(
-                      tooltip: 'Commands',
-                      icon: const Icon(Icons.terminal),
-                      onPressed: () async {
-                        final c = await pickBotCommand(context, chat.bot!);
-                        if (c != null) _store.sendText(chatId, c);
-                      },
                     ),
                   if (_editing != null) const SizedBox(width: 4),
                   Expanded(child: _inputPill(chat)),
+                  if (_editing == null && _botKeyboard(chat) != null) ...[
+                    const SizedBox(width: 4),
+                    _roundAction(
+                      icon: _kbHidden ? Icons.keyboard_alt_outlined : Icons.keyboard_hide_rounded,
+                      tooltip: _kbHidden ? 'Show bot keyboard' : 'Hide bot keyboard',
+                      onTap: () => setState(() {
+                        _kbHidden = !_kbHidden;
+                        if (!_kbHidden) {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          _emojiOpen = false;
+                        }
+                      }),
+                    ),
+                  ],
                   const SizedBox(width: 6),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
@@ -2491,6 +2521,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             if (_emojiOpen && !_recording && _reviewPath == null) _emojiPanel(),
+            if (!_emojiOpen && !_kbHidden && !_recording && _reviewPath == null && _editing == null && _botKeyboard(chat) != null)
+              BotReplyKeyboard(
+                markup: _botKeyboard(chat)!.replyKeyboard!,
+                onPressed: (b) async {
+                  final one = _botKeyboard(chat)!.replyKeyboard!['one_time_keyboard'] == true;
+                  if (b['request_location'] == true) {
+                    await _shareLocation();
+                  } else {
+                    _store.sendText(chatId, '${b['text']}');
+                  }
+                  if (one && mounted) setState(() => _kbHidden = true);
+                },
+              ),
           ],
         ),
       ),

@@ -349,7 +349,9 @@ function parseReplyMarkup(raw) {
       throw badRequest('invalid_markup', 'reply_markup must be JSON');
     }
   }
-  if (!m || !Array.isArray(m.inline_keyboard)) throw badRequest('invalid_markup', 'Only inline_keyboard reply markup is supported');
+  if (m && m.remove_keyboard === true) return { remove_keyboard: true };
+  if (m && Array.isArray(m.keyboard)) return parseReplyKeyboard(m);
+  if (!m || !Array.isArray(m.inline_keyboard)) throw badRequest('invalid_markup', 'reply_markup needs inline_keyboard, keyboard or remove_keyboard');
   if (m.inline_keyboard.length > 10) throw badRequest('invalid_markup', 'At most 10 rows of buttons');
   const rows = m.inline_keyboard.map((row) => {
     if (!Array.isArray(row) || row.length === 0 || row.length > 8) throw badRequest('invalid_markup', 'Each row needs 1–8 buttons');
@@ -375,6 +377,109 @@ function parseReplyMarkup(raw) {
     });
   });
   return { inline_keyboard: rows };
+}
+
+/** Reply keyboard: big text buttons that replace the phone keyboard (like Telegram's ReplyKeyboardMarkup). */
+function parseReplyKeyboard(m) {
+  if (m.keyboard.length === 0 || m.keyboard.length > 12) throw badRequest('invalid_markup', 'A keyboard needs 1–12 rows');
+  const rows = m.keyboard.map((row) => {
+    if (!Array.isArray(row) || row.length === 0 || row.length > 8) throw badRequest('invalid_markup', 'Each row needs 1–8 buttons');
+    return row.map((btn) => {
+      const raw = typeof btn === 'string' ? { text: btn } : btn || {};
+      const text = v.str(String(raw.text || ''), { field: 'button text', min: 1, max: 64 });
+      const out = { text };
+      if (raw.request_contact === true) out.request_contact = true;
+      else if (raw.request_location === true) out.request_location = true;
+      return out;
+    });
+  });
+  const out = { keyboard: rows, resize_keyboard: m.resize_keyboard !== false, one_time_keyboard: m.one_time_keyboard === true };
+  if (m.input_field_placeholder) out.input_field_placeholder = v.str(String(m.input_field_placeholder), { field: 'input_field_placeholder', max: 64 });
+  if (m.is_persistent === true) out.is_persistent = true;
+  return out;
+}
+
+const CHAT_ACTIONS = ['typing', 'uploading_photo', 'uploading_video', 'uploading_file', 'recording_voice', 'choosing_sticker'];
+
+async function sendChatAction(bot, p) {
+  const chat = await botChat(bot, p.chat_id);
+  const action = CHAT_ACTIONS.includes(p.action) ? p.action : 'typing';
+  if (!rateLimit.hit(`botaction:${bot.user_id}:${chat.id}`, 1, 2000).allowed) return true;
+  const ids = (await chatService.memberIds(chat.id)).filter((id) => id !== bot.user_id);
+  bus.emit('rt:emit', { event: 'typing', payload: { chat_id: chat.id, user_id: bot.user_id, action }, userIds: ids });
+  return true;
+}
+
+function bool(x) {
+  return x === true || x === 'true';
+}
+
+async function sendPoll(bot, p) {
+  const messageService = require('./message.service');
+  const chat = await botChat(bot, p.chat_id);
+  let options = p.options;
+  if (typeof options === 'string') options = JSON.parse(options);
+  const poll = {
+    question: p.question,
+    options,
+    anonymous: p.is_anonymous === undefined ? true : bool(p.is_anonymous),
+    multiple: bool(p.allows_multiple_answers),
+    quiz: p.type === 'quiz',
+    correct_option: p.correct_option_id === undefined ? undefined : Number(p.correct_option_id),
+    explanation: p.explanation,
+  };
+  if (p.open_period) poll.close_in_sec = Number(p.open_period);
+  const msg = await messageService.sendMessage(bot.user_id, chat.id, { type: 'poll', poll }, { replyMarkup: parseReplyMarkup(p.reply_markup) });
+  return toBotMessage(await db.one('SELECT * FROM messages WHERE id = $1', [msg.id]), chat);
+}
+
+async function sendLocation(bot, p) {
+  const messageService = require('./message.service');
+  const chat = await botChat(bot, p.chat_id);
+  const body = { type: 'location', location: { lat: Number(p.latitude), lng: Number(p.longitude), title: p.title || '' } };
+  if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
+  const msg = await messageService.sendMessage(bot.user_id, chat.id, body, { replyMarkup: parseReplyMarkup(p.reply_markup) });
+  return toBotMessage(await db.one('SELECT * FROM messages WHERE id = $1', [msg.id]), chat);
+}
+
+async function forwardMessage(bot, p) {
+  const messageService = require('./message.service');
+  await botChat(bot, p.from_chat_id);
+  const to = await botChat(bot, p.chat_id);
+  await messageService.forwardMessages(bot.user_id, { from_chat_id: p.from_chat_id, message_ids: [p.message_id], to_chat_ids: [to.id] });
+  const row = await db.one('SELECT * FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [to.id, bot.user_id]);
+  return toBotMessage(row, to);
+}
+
+async function getChatMember(bot, p) {
+  const chat = await botChat(bot, p.chat_id);
+  const row = await db.one(
+    `SELECT u.*, cm.role FROM chat_members cm JOIN users u ON u.id = cm.user_id WHERE cm.chat_id = $1 AND cm.user_id = $2`,
+    [chat.id, v.id(p.user_id, 'user_id')],
+  );
+  if (!row) return { status: 'left' };
+  const status = row.role === 'owner' ? 'creator' : row.role === 'admin' ? 'administrator' : 'member';
+  return { status, user: botUser(row) };
+}
+
+async function setProfile(bot, p) {
+  const sets = [];
+  const vals = [bot.user_id];
+  if (p.description !== undefined) {
+    vals.push(v.str(String(p.description), { field: 'description', max: 512 }) || '');
+    sets.push(`about = $${vals.length}`);
+  }
+  if (p.menu_url !== undefined) {
+    vals.push(p.menu_url ? parseHttpsUrl(p.menu_url, 'menu_url') : null);
+    sets.push(`menu_url = $${vals.length}`);
+  }
+  if (sets.length) await db.query(`UPDATE bots SET ${sets.join(', ')} WHERE user_id = $1`, vals);
+  if (p.name !== undefined) {
+    const name = v.str(String(p.name), { field: 'name', min: 1, max: 64 });
+    await db.query('UPDATE users SET first_name = $2 WHERE id = $1', [bot.user_id, name]);
+  }
+  bus.emit('user:updated', { userId: bot.user_id });
+  return true;
 }
 
 // ------------------------------------------------------------------ Bot API methods
@@ -526,6 +631,32 @@ async function callMethod(token, method, params = {}, file = null) {
     case 'commands.delete':
       await db.query(`UPDATE bots SET commands = '[]' WHERE user_id = $1`, [bot.user_id]);
       return true;
+    case 'chat.action':
+      return sendChatAction(bot, params);
+    case 'polls.send':
+      return sendPoll(bot, params);
+    case 'locations.send':
+      return sendLocation(bot, params);
+    case 'messages.forward':
+      return forwardMessage(bot, params);
+    case 'messages.pin': {
+      const chat = await botChat(bot, params.chat_id);
+      await require('./message.service').pinMessage(bot.user_id, chat.id, params.message_id);
+      return true;
+    }
+    case 'messages.unpin': {
+      const chat = await botChat(bot, params.chat_id);
+      await require('./message.service').unpinMessage(bot.user_id, chat.id, params.message_id);
+      return true;
+    }
+    case 'chats.member':
+      return getChatMember(bot, params);
+    case 'chats.member-count': {
+      const chat = await botChat(bot, params.chat_id);
+      return (await db.one('SELECT count(*)::int AS n FROM chat_members WHERE chat_id = $1', [chat.id])).n;
+    }
+    case 'me.set':
+      return setProfile(bot, params);
     case 'chats.get': {
       const chat = await botChat(bot, params.chat_id);
       return { id: chat.id, type: chat.type, title: chat.title || undefined, description: chat.description || undefined };

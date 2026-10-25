@@ -385,6 +385,10 @@ class Message {
     return rows.whereType<List>().map((r) => r.whereType<Map>().map((b) => Map<String, dynamic>.from(b)).toList()).toList();
   }
 
+  /// Bot reply keyboard (big buttons replacing the phone keyboard), if this message carries one.
+  Map<String, dynamic>? get replyKeyboard => replyMarkup != null && replyMarkup!['keyboard'] is List ? replyMarkup : null;
+  bool get removesKeyboard => replyMarkup?['remove_keyboard'] == true;
+
   /// {lat, lng, title} for location messages.
   Map<String, dynamic>? get location =>
       meta != null && meta!['location'] is Map ? Map<String, dynamic>.from(meta!['location'] as Map) : null;

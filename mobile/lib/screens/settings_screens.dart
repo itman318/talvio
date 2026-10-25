@@ -75,8 +75,12 @@ class SettingsScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(16),
                         child: Row(children: [
                           Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(70 * 0.34)),
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(67 * 0.34),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))],
+                            ),
                             child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 62),
                           ),
                           const SizedBox(width: 14),
@@ -138,8 +142,8 @@ class SettingsScreen extends StatelessWidget {
               Expanded(child: QuickTile(icon: Icons.devices_rounded, label: 'Devices', color: Brand.green, onTap: () => go(const SessionsScreen()))),
             ]),
           ),
-          if (auth.otherAccounts.isNotEmpty || auth.accounts.list.length < auth.maxAccounts)
-            SettingsGroup(children: [
+          if (auth.otherAccounts.isNotEmpty)
+            SettingsGroup(title: 'Switch account', children: [
               ...auth.otherAccounts.map((a) => ListTile(
                     leading: Avatar(id: a.id, name: a.name, url: a.avatarUrl == null ? null : AppConfig.absolute(a.avatarUrl!), size: 36),
                     title: Text(a.name),
@@ -150,20 +154,6 @@ class SettingsScreen extends StatelessWidget {
                       auth.switchTo(a.id);
                     },
                   )),
-              if (auth.accounts.list.length < auth.maxAccounts)
-                SettingsTile(
-                  icon: Icons.person_add_alt_1_rounded,
-                  color: Brand.primary,
-                  title: 'Add account',
-                  onTap: () async {
-                    Navigator.of(context).popUntil((r) => r.isFirst);
-                    try {
-                      await auth.addAccount();
-                    } catch (e) {
-                      if (context.mounted) showError(context, e);
-                    }
-                  },
-                ),
             ]),
           if (auth.feature('premium'))
             Padding(
@@ -202,8 +192,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           SettingsGroup(title: 'Account', children: [
-            SettingsTile(icon: Icons.person_rounded, color: Brand.sky, title: 'Edit profile', onTap: () => go(const EditProfileScreen())),
-            SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy', onTap: () => go(const PrivacyScreen())),
+            SettingsTile(icon: Icons.person_rounded, color: Brand.sky, title: 'Edit profile', subtitle: 'Name, photo, username, bio, birthday', onTap: () => go(const EditProfileScreen())),
             SettingsTile(
               icon: Icons.auto_awesome_rounded,
               color: Brand.rose,
@@ -211,11 +200,28 @@ class SettingsScreen extends StatelessWidget {
               subtitle: 'Keep your best stories on your profile',
               onTap: () => go(const MyHighlightsScreen()),
             ),
-            SettingsTile(icon: Icons.add_link_rounded, color: Brand.sky, title: 'Call links', subtitle: 'A link anyone can use to call you', onTap: () => go(const CallLinksScreen())),
+            SettingsTile(icon: Icons.add_link_rounded, color: const Color(0xFF3C83DE), title: 'Call links', subtitle: 'A link anyone can use to call you', onTap: () => go(const CallLinksScreen())),
+            if (auth.accounts.list.length < auth.maxAccounts)
+              SettingsTile(
+                icon: Icons.person_add_alt_1_rounded,
+                color: Brand.primary,
+                title: 'Add another account',
+                subtitle: 'Switch between accounts in one tap',
+                onTap: () async {
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  try {
+                    await auth.addAccount();
+                  } catch (e) {
+                    if (context.mounted) showError(context, e);
+                  }
+                },
+              ),
+          ]),
+          SettingsGroup(title: 'Privacy & security', children: [
+            SettingsTile(icon: Icons.visibility_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Last seen, photo, calls, read receipts', onTap: () => go(const PrivacyScreen())),
             SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
-            SettingsTile(icon: Icons.fingerprint_rounded, color: Brand.rose, title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
-            SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', onTap: () => go(const AppLockSettingsScreen())),
-            SettingsTile(icon: Icons.devices_rounded, color: const Color(0xFF5E6B8C), title: 'Devices', onTap: () => go(const SessionsScreen())),
+            SettingsTile(icon: Icons.fingerprint_rounded, color: const Color(0xFFC8366E), title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
+            SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', subtitle: 'PIN or fingerprint to open Talvio', onTap: () => go(const AppLockSettingsScreen())),
             SettingsTile(icon: Icons.block_rounded, color: const Color(0xFFE5484D), title: 'Blocked users', onTap: () => go(const BlockedUsersScreen())),
           ]),
           SettingsGroup(title: 'Chats', children: [
@@ -250,7 +256,7 @@ class SettingsScreen extends StatelessWidget {
               color: const Color(0xFF5E6B8C),
               title: 'Log out',
               onTap: () async {
-                if (await confirm(context, 'Log out?', 'You can log back in with your phone number.', ok: 'Log out')) {
+                if (await confirm(context, 'Log out?', 'You can log back in any time with your email.', ok: 'Log out')) {
                   if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
                   await auth.logout();
                 }
