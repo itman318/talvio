@@ -1,3 +1,5 @@
+import '../core/proxy.dart';
+import 'proxy_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -132,8 +134,20 @@ class _HomeScreenState extends State<HomeScreen> {
             : Row(children: [
                 const BrandMark(size: 30),
                 const SizedBox(width: 10),
-                Text(store.connected || !store.chatsLoaded ? AppConfig.appName : 'Connecting…',
-                    style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+                Flexible(
+                  child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(
+                        store.connected || !store.chatsLoaded
+                            ? AppConfig.appName
+                            : (context.watch<ProxyManager>().enabled ? 'Connecting to proxy…' : 'Connecting…'),
+                        style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+                    if (!store.connected && store.chatsLoaded)
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProxySettingsScreen())),
+                        child: const Text('Set up proxy ›', style: TextStyle(fontSize: 13, color: Brand.primary, fontWeight: FontWeight.w600)),
+                      ),
+                  ]),
+                ),
               ]),
         actions: [
           if (_searching)

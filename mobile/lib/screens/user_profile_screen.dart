@@ -97,6 +97,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   name: u.name,
                   avatarUrl: u.avatarAbsolute,
                   online: u.online,
+                  glow: u.isPremium,
                   topPadding: MediaQuery.of(context).padding.top + 44,
                   status: u.isBot ? 'bot' : lastSeenText(u),
                   statusColor: u.online ? Brand.accent : null,

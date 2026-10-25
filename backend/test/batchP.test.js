@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Privacy & security plus, group protection and BotFather.
+ * Privacy & security plus, group protection and BotForge.
  * WARNING: the test database is wiped first.
  */
 const test = require('node:test');
@@ -19,7 +19,7 @@ const users = require('../src/services/user.service');
 const chats = require('../src/services/chat.service');
 const messages = require('../src/services/message.service');
 const bots = require('../src/services/bot.service');
-const botfather = require('../src/services/botfather.service');
+const botfather = require('../src/services/botforge.service');
 const settings = require('../src/services/settings.service');
 
 async function rejects(promise, code) {
@@ -139,7 +139,7 @@ test('group protection: human check, permissions, links, banned words, flood, qu
   assert.equal((await db.one(`SELECT count(*)::int AS n FROM messages WHERE chat_id = $1 AND meta->>'event' = 'member_joined'`, [g.id])).n, 0);
 });
 
-test('BotFather creates and manages bots from a chat', async () => {
+test('BotForge creates and manages bots from a chat', async () => {
   const bfId = await botfather.ensure();
   assert.equal(await botfather.ensure(), bfId);
   const chat = await chats.getOrCreatePrivate(B.id, bfId);
@@ -150,7 +150,7 @@ test('BotFather creates and manages bots from a chat', async () => {
     await flush();
     return last();
   };
-  assert.match((await send('/start')).text, /create and manage/);
+  assert.match((await send('/start')).text, /build and manage/);
   assert.match((await send('/newbot')).text, /choose a name/);
   assert.match((await send('Price Alert')).text, /username/);
   assert.match((await send('not valid')).text, /⚠️/);
@@ -184,4 +184,29 @@ test('BotFather creates and manages bots from a chat', async () => {
   await flush();
   await rejects(bots.callMethod(token, 'me'), 'invalid_token');
   assert.match((await send('/cancel')).text, /Stopped|Nothing/);
+});
+
+test('Plus: prices in the buyer currency, perks enforced', async () => {
+  const pay = require('../src/services/payment.service');
+  const pk = await pay.premiumInfo(B.id); // +92 phone → PKR
+  assert.equal(pk.currency, 'PKR');
+  assert.match(pk.plans[0].price_text, /^Rs /);
+  await db.query(`UPDATE users SET phone = '+15550001111' WHERE id = $1`, [B.id]);
+  const us = await pay.premiumInfo(B.id);
+  assert.equal(us.currency, 'USD');
+  assert.equal(us.plans[0].price_text, '$3.99');
+  assert.equal(us.methods.length, 0);
+  assert.ok(us.payments_note);
+  await db.query(`UPDATE users SET phone = NULL WHERE id = $1`, [B.id]);
+  assert.equal((await pay.premiumInfo(B.id, { locale: 'en-GB,en;q=0.9' })).currency, 'GBP');
+  assert.equal((await pay.premiumInfo(B.id, { country: 'de' })).plans[0].price_text, '€3.79');
+  await rejects(pay.checkout(B.id, { plan_id: us.plans[0].id, provider: 'manual', country: 'US' }), 'provider_unavailable');
+
+  const long = 'x'.repeat(200);
+  await rejects(users.updateProfile(B.id, { bio: long }), 'invalid_input');
+  await db.query(`UPDATE users SET premium_until = now() + interval '30 days' WHERE id = $1`, [B.id]);
+  await users.updateProfile(B.id, { bio: long });
+  const lim = await pay.limitsFor(B.id);
+  assert.equal(lim.pinned_chats, 15);
+  assert.equal(lim.exclusive_stickers, true);
 });

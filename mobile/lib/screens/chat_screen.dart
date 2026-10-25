@@ -793,7 +793,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(children: [
         Expanded(
           child: Container(
-            height: 52,
+            height: 46,
             padding: const EdgeInsets.only(right: 6),
             decoration: BoxDecoration(
               color: dark ? const Color(0xFF1C2033) : Colors.white,
@@ -1993,22 +1993,24 @@ class _ChatScreenState extends State<ChatScreen> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final iconColor = dark ? Colors.white70 : Brand.muted;
     return GlassPanel(
-      radius: 27,
+      radius: 23,
       opacity: dark ? 0.82 : 0.9,
       child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 52),
+      constraints: const BoxConstraints(minHeight: 46),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        IconButton(
-          tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.only(left: 6),
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 50),
-          icon: Icon(_emojiOpen ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined, color: iconColor, size: 25),
-          onPressed: _toggleEmoji,
+        SizedBox(
+          width: 42,
+          height: 46,
+          child: IconButton(
+            tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
+            padding: const EdgeInsets.only(left: 4),
+            icon: Icon(_emojiOpen ? Icons.keyboard_rounded : Icons.sentiment_satisfied_alt_rounded, color: iconColor, size: 23),
+            onPressed: _toggleEmoji,
+          ),
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
+            padding: EdgeInsets.zero,
             child: TextField(
               controller: _text,
               focusNode: _focus,
@@ -2016,7 +2018,7 @@ class _ChatScreenState extends State<ChatScreen> {
               maxLines: 6,
               maxLength: 4096,
               textCapitalization: TextCapitalization.sentences,
-              style: const TextStyle(fontSize: 16.5, height: 1.35),
+              style: const TextStyle(fontSize: 16, height: 1.3),
               // select text → Bold / Italic / Strike / Code / Spoiler
               contextMenuBuilder: (ctx, state) {
                 final items = [...state.contextMenuButtonItems];
@@ -2048,10 +2050,10 @@ class _ChatScreenState extends State<ChatScreen> {
               },
               decoration: InputDecoration(
                 hintText: chat.slowModeSec > 0 && !chat.isAdmin ? 'Message (slow mode: ${chat.slowModeSec}s)' : 'Message',
-                hintStyle: TextStyle(color: iconColor, fontSize: 16.5),
+                hintStyle: TextStyle(color: iconColor, fontSize: 16),
                 filled: false,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                contentPadding: const EdgeInsets.fromLTRB(2, 12.5, 2, 12.5),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -2065,13 +2067,15 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         if (_editing == null)
-          IconButton(
-            tooltip: 'Attach: gallery, camera, files…',
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.only(right: 6),
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 50),
-            icon: Transform.rotate(angle: -0.6, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 24)),
-            onPressed: () => _attach(),
+          SizedBox(
+            width: 42,
+            height: 46,
+            child: IconButton(
+              tooltip: 'Attach: gallery, camera, files…',
+              padding: const EdgeInsets.only(right: 4),
+              icon: Transform.rotate(angle: 0.78, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 22)),
+              onPressed: () => _attach(),
+            ),
           ),
       ]),
       ),
@@ -2084,16 +2088,16 @@ class _ChatScreenState extends State<ChatScreen> {
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
           child: Ink(
-            width: 52,
-            height: 52,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: Brand.aurora,
-              boxShadow: [BoxShadow(color: Brand.rose.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
+              boxShadow: [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
             ),
             child: InkWell(
               onTap: onTap,
-              child: Icon(icon, color: Colors.white, size: 24),
+              child: Icon(icon, color: Colors.white, size: 22),
             ),
           ),
         ),
@@ -2444,7 +2448,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(children: [
                   Expanded(
                     child: Container(
-                      height: 52,
+                      height: 46,
                       padding: const EdgeInsets.only(left: 2, right: 4),
                       decoration: BoxDecoration(
                         color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1C2033) : Colors.white,
@@ -2490,7 +2494,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   if (_editing == null && chat.isBot && (chat.bot?.menuUrl != null || (chat.bot?.commands.isNotEmpty ?? false)))
                     Padding(
-                      padding: const EdgeInsets.only(right: 6, bottom: 8),
+                      padding: const EdgeInsets.only(right: 6, bottom: 3),
                       child: BotMenuButton(
                         hasApp: chat.bot?.menuUrl != null,
                         onTap: () async {

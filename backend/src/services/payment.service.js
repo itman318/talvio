@@ -19,9 +19,14 @@ const easypaisa = require('./payments/easypaisa');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
+const money = require('../utils/currency');
 
 const FREE_FOLDERS = 10;
 const PREMIUM_FOLDERS = 30;
+const FREE_PINS = 5;
+const PREMIUM_PINS = 15;
+const FREE_BIO = 140;
+const PREMIUM_BIO = 300;
 
 function iso(d) {
   return d ? new Date(d).toISOString() : null;
@@ -43,6 +48,11 @@ async function limitsFor(userId) {
     premium,
     upload_mb: Math.min(premium ? Math.max(s.premium_upload_mb, s.max_upload_mb) : s.max_upload_mb, config.uploadHardLimitMb),
     folders: premium ? PREMIUM_FOLDERS : FREE_FOLDERS,
+    pinned_chats: premium ? PREMIUM_PINS : FREE_PINS,
+    bio_length: premium ? PREMIUM_BIO : FREE_BIO,
+    extra_accounts: premium ? 3 : 0,
+    exclusive_stickers: premium,
+    exclusive_themes: premium,
     ads: !premium,
   };
 }
@@ -54,11 +64,36 @@ async function perks() {
     { key: 'uploads', title: `Upload files up to ${s.premium_upload_mb} MB`, text: `Instead of ${s.max_upload_mb} MB` },
     { key: 'folders', title: `${PREMIUM_FOLDERS} chat folders`, text: `Instead of ${FREE_FOLDERS}` },
     { key: 'no_ads', title: 'No sponsored messages', text: 'No ads in channels' },
+    { key: 'stickers', title: 'Animated Tavi stickers', text: 'An exclusive pack of our animated mascot' },
+    { key: 'themes', title: 'Exclusive chat themes', text: 'Aurora Gold, Midnight Neon and more' },
+    { key: 'pins', title: `Pin ${PREMIUM_PINS} chats`, text: `Instead of ${FREE_PINS}` },
+    { key: 'accounts', title: 'Up to 3 more accounts', text: 'On the same phone' },
+    { key: 'bio', title: `Longer bio — ${PREMIUM_BIO} characters`, text: `Instead of ${FREE_BIO}, with links` },
+    { key: 'ring', title: 'Glowing profile ring', text: 'Your photo shines in chats and stories' },
   ];
 }
 
-function serializePlan(p) {
-  return { id: p.id, name: p.name, months: p.months, price_pkr: p.price_pkr, per_month_pkr: Math.round(p.price_pkr / p.months), is_active: p.is_active };
+function serializePlan(p, currency = 'PKR') {
+  const out = { id: p.id, name: p.name, months: p.months, price_pkr: p.price_pkr, per_month_pkr: Math.round(p.price_pkr / p.months), is_active: p.is_active };
+  const local = currency === 'PKR' ? p.price_pkr : Number((p.prices || {})[currency] ?? (p.prices || {}).USD);
+  const cur = currency === 'PKR' || (p.prices || {})[currency] !== undefined ? currency : 'USD';
+  if (Number.isFinite(local)) {
+    out.currency = cur;
+    out.price = local;
+    out.price_text = money.format(local, cur);
+    out.per_month_text = money.format(Math.round((local / p.months) * 100) / 100, cur);
+  }
+  out.prices = p.prices || {};
+  return out;
+}
+
+/** The buyer's country: phone number first, then what the app sends (X-Country / Accept-Language). */
+async function buyerCurrency(userId, hint = {}) {
+  const u = await db.one('SELECT phone FROM users WHERE id = $1', [userId]);
+  const country = money.countryFromPhone(u && u.phone)
+    || (/^[A-Za-z]{2}$/.test(String(hint.country || '')) ? String(hint.country).toUpperCase() : null)
+    || money.countryFromLocale(hint.locale);
+  return { country: country || null, currency: money.currencyFor(country) };
 }
 
 function providers() {
@@ -68,20 +103,28 @@ function providers() {
   ].filter(Boolean);
 }
 
-async function premiumInfo(userId) {
+async function premiumInfo(userId, hint = {}) {
   await settings.requireFeature('feature_premium', 'Talvio Plus');
   const u = await db.one('SELECT premium_until FROM users WHERE id = $1', [userId]);
   const plans = await db.many('SELECT * FROM premium_plans WHERE is_active ORDER BY sort, months');
   const s = await settings.getAll();
-  const methods = providers();
-  if (s.payment_manual_enabled) methods.push({ id: 'manual', name: 'Bank / wallet transfer (manual)' });
+  const { country, currency } = await buyerCurrency(userId, hint);
+  const local = currency === 'PKR';
+  // JazzCash / Easypaisa only work in Pakistan; elsewhere a manual international transfer (if set up)
+  const methods = local ? providers() : [];
+  if (local && s.payment_manual_enabled) methods.push({ id: 'manual', name: 'Bank / wallet transfer (manual)' });
+  const intl = String(s.payment_intl_instructions || '').trim();
+  if (!local && intl) methods.push({ id: 'manual', name: 'International transfer (Wise, card, PayPal…)' });
   return {
     is_premium: isPremiumRow(u),
     premium_until: iso(u && u.premium_until),
-    plans: plans.map(serializePlan),
+    country,
+    currency,
+    plans: plans.map((p) => serializePlan(p, currency)),
     perks: await perks(),
     methods,
-    manual_instructions: s.payment_manual_enabled ? s.payment_manual_instructions : null,
+    manual_instructions: local ? (s.payment_manual_enabled ? s.payment_manual_instructions : null) : intl || null,
+    payments_note: !local && !intl ? 'Payments from your country are coming soon. Prices are shown in your currency.' : null,
   };
 }
 
@@ -92,6 +135,9 @@ function serializeOrder(o) {
     plan_id: o.plan_id,
     months: o.months,
     amount_pkr: o.amount_pkr,
+    currency: o.currency || 'PKR',
+    amount: o.amount === null || o.amount === undefined ? o.amount_pkr : Number(o.amount),
+    amount_text: money.format(o.amount === null || o.amount === undefined ? o.amount_pkr : Number(o.amount), o.currency || 'PKR'),
     provider: o.provider,
     status: o.status,
     txn_ref: o.txn_ref,
@@ -122,17 +168,22 @@ async function checkout(userId, body = {}) {
   const plan = await db.one('SELECT * FROM premium_plans WHERE id = $1 AND is_active', [v.id(body.plan_id, 'plan_id')]);
   if (!plan) throw notFound('plan_not_found', 'This plan is not available');
   const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual'], 'provider');
-  if (provider === 'manual' && !(await settings.get('payment_manual_enabled'))) throw forbidden('provider_unavailable', 'Manual payments are turned off');
+  const { currency } = await buyerCurrency(userId, { country: body.country, locale: body.locale });
+  const local = currency === 'PKR';
+  const intl = String((await settings.get('payment_intl_instructions')) || '').trim();
+  if (!local && (provider !== 'manual' || !intl)) throw forbidden('provider_unavailable', 'Payments from your country are coming soon');
+  if (local && provider === 'manual' && !(await settings.get('payment_manual_enabled'))) throw forbidden('provider_unavailable', 'Manual payments are turned off');
   if (provider !== 'manual' && !providers().some((p) => p.id === provider)) throw forbidden('provider_unavailable', 'This payment method is not available');
   rateLimit.enforce(`checkout:${userId}`, 10, 60 * 60 * 1000, 'Too many payment attempts. Try again later.');
   const open = await db.one(`SELECT count(*)::int AS n FROM payment_orders WHERE user_id = $1 AND status IN ('pending', 'review')`, [userId]);
   if (open.n >= 5) throw forbidden('too_many_orders', 'You have several unfinished payments. Finish or cancel them first.');
+  const sp = serializePlan(plan, currency);
   const o = await db.one(
-    `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, txn_ref) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [userId, plan.id, plan.months, plan.price_pkr, provider, newTxnRef()],
+    `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, txn_ref, currency, amount) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [userId, plan.id, plan.months, plan.price_pkr, provider, newTxnRef(), sp.currency || 'PKR', sp.price ?? plan.price_pkr],
   );
   const out = { order: serializeOrder(o) };
-  if (provider === 'manual') out.instructions = await settings.get('payment_manual_instructions');
+  if (provider === 'manual') out.instructions = local ? await settings.get('payment_manual_instructions') : intl;
   else out.pay_url = `${config.publicUrl}/pay/${o.id}?t=${payToken(o.id)}`;
   return out;
 }
@@ -363,7 +414,7 @@ async function adminRevoke(userIdRaw) {
 }
 
 async function adminPlans() {
-  return (await db.many('SELECT * FROM premium_plans ORDER BY sort, months')).map(serializePlan);
+  return (await db.many('SELECT * FROM premium_plans ORDER BY sort, months')).map((p) => serializePlan(p));
 }
 
 async function adminSavePlan(idRaw, body = {}) {
@@ -374,11 +425,25 @@ async function adminSavePlan(idRaw, body = {}) {
   if (!Number.isInteger(price) || price < 0 || price > 10000000) throw badRequest('invalid_input', 'Invalid price');
   const active = body.is_active === undefined ? true : v.bool(body.is_active, 'is_active');
   const sort = parseInt(body.sort, 10) || 0;
+  // other currencies: { "USD": 3.99, "EUR": 3.79, … }
+  let prices = null;
+  if (body.prices !== undefined) {
+    if (!body.prices || typeof body.prices !== 'object' || Array.isArray(body.prices)) throw badRequest('invalid_input', 'prices must be an object like {"USD": 3.99}');
+    prices = {};
+    for (const [k, val] of Object.entries(body.prices)) {
+      const cur = String(k).toUpperCase();
+      const n = Number(val);
+      if (!/^[A-Z]{3}$/.test(cur) || !Number.isFinite(n) || n < 0 || n > 1e7) throw badRequest('invalid_input', `Invalid price for ${k}`);
+      if (cur !== 'PKR') prices[cur] = Math.round(n * 100) / 100;
+    }
+  }
   const r = idRaw
-    ? await db.one('UPDATE premium_plans SET name = $2, months = $3, price_pkr = $4, is_active = $5, sort = $6 WHERE id = $1 RETURNING *', [
-      v.id(idRaw, 'plan_id'), name, months, price, active, sort,
+    ? await db.one('UPDATE premium_plans SET name = $2, months = $3, price_pkr = $4, is_active = $5, sort = $6, prices = COALESCE($7::jsonb, prices) WHERE id = $1 RETURNING *', [
+      v.id(idRaw, 'plan_id'), name, months, price, active, sort, prices ? JSON.stringify(prices) : null,
     ])
-    : await db.one('INSERT INTO premium_plans (name, months, price_pkr, is_active, sort) VALUES ($1, $2, $3, $4, $5) RETURNING *', [name, months, price, active, sort]);
+    : await db.one('INSERT INTO premium_plans (name, months, price_pkr, is_active, sort, prices) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [
+      name, months, price, active, sort, JSON.stringify(prices || {}),
+    ]);
   if (!r) throw notFound('plan_not_found', 'Plan not found');
   return serializePlan(r);
 }

@@ -1,3 +1,4 @@
+import 'proxy_screen.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -269,7 +270,13 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 label: Text('Log in as ${p.name} with passkey'),
               ),
             ],
-            const SizedBox(height: 18),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProxySettingsScreen())),
+              icon: const Icon(Icons.vpn_lock_rounded, size: 18),
+              label: const Text('Connection problems? Use a proxy'),
+            ),
+            const SizedBox(height: 6),
             Text('By continuing you agree to the Terms and Privacy Policy.',
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
           ],

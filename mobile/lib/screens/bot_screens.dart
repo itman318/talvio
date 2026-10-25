@@ -69,15 +69,15 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
     }
   }
 
-  Future<void> _openBotFather() async {
+  Future<void> _openBotForge() async {
     final store = context.read<ChatStore>();
     try {
-      final id = await store.botByUsername('BotFather');
+      final id = await store.botByUsername('BotForge');
       if (id == null) throw Exception();
       final chat = await store.openPrivateWith(id);
       if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
     } catch (_) {
-      if (mounted) showInfo(context, 'BotFather isn’t available on this server yet');
+      if (mounted) showInfo(context, 'BotForge isn’t available on this server yet');
     }
   }
 
@@ -87,7 +87,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(22),
-            onTap: _openBotFather,
+            onTap: _openBotForge,
             child: Ink(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(22)),
@@ -101,7 +101,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                 const SizedBox(width: 14),
                 const Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('BotFather', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                    Text('BotForge', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
                     SizedBox(height: 3),
                     Text('Create and manage bots right in a chat: /newbot, /mybots, /setcommands…',
                         style: TextStyle(color: Colors.white, fontSize: 13)),
@@ -126,7 +126,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                   _botFatherCard(),
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('Bots are programs that chat with people. Create one here or with BotFather, then use its token with the Bot API on your server.', textAlign: TextAlign.center),
+                    child: Text('Bots are programs that chat with people. Create one here or with BotForge, then use its token with the Bot API on your server.', textAlign: TextAlign.center),
                   ),
                 ])
               : ListView(

@@ -912,7 +912,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS account_ttl_days INT NOT NULL DEFAULT
 ALTER TABLE users ADD COLUMN IF NOT EXISTS session_ttl_days INT NOT NULL DEFAULT 180;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS hide_from_search BOOLEAN NOT NULL DEFAULT FALSE;
 
--- ---------------------------------------------------------------- BotFather conversations
+-- ---------------------------------------------------------------- BotForge conversations
 CREATE TABLE IF NOT EXISTS botfather_state (
   user_id    BIGINT      PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   step       VARCHAR(32) NOT NULL,
@@ -929,3 +929,13 @@ ALTER TABLE chats ADD COLUMN IF NOT EXISTS banned_words JSONB NOT NULL DEFAULT '
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS member_perms JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS captcha_until TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS chat_members_captcha_idx ON chat_members (captcha_until) WHERE captcha_until IS NOT NULL;
+
+-- ---------------------------------------------------------------- Plus: prices in the buyer's currency
+ALTER TABLE premium_plans ADD COLUMN IF NOT EXISTS prices JSONB NOT NULL DEFAULT '{}';
+UPDATE premium_plans SET prices = '{"USD": 3.99, "EUR": 3.79, "GBP": 3.29, "AED": 14.99, "SAR": 14.99, "INR": 249, "BDT": 399, "CAD": 5.49, "AUD": 5.99, "TRY": 129, "MYR": 17.9}'
+  WHERE prices = '{}' AND months = 1;
+UPDATE premium_plans SET prices = '{"USD": 35.99, "EUR": 33.99, "GBP": 29.99, "AED": 129.99, "SAR": 134.99, "INR": 2199, "BDT": 3499, "CAD": 48.99, "AUD": 53.99, "TRY": 1149, "MYR": 159}'
+  WHERE prices = '{}' AND months = 12;
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'PKR';
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2);
+ALTER TABLE users ALTER COLUMN bio TYPE VARCHAR(300);

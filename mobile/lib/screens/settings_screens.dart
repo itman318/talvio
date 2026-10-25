@@ -1,3 +1,5 @@
+import '../core/proxy.dart';
+import 'proxy_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -234,6 +236,13 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.archive_rounded, color: const Color(0xFF8A93B4), title: 'Archived chats', onTap: () => go(const ArchivedChatsScreen())),
             SettingsTile(icon: Icons.cloud_upload_rounded, color: Brand.violet, title: 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', onTap: () => go(const BackupScreen())),
             SettingsTile(icon: Icons.data_usage_rounded, color: Brand.green, title: 'Data & storage', onTap: () => go(const StorageScreen())),
+            SettingsTile(
+              icon: Icons.vpn_lock_rounded,
+              color: const Color(0xFF3C83DE),
+              title: 'Proxy',
+              trailing: context.watch<ProxyManager>().enabled ? 'On' : 'Off',
+              onTap: () => go(const ProxySettingsScreen()),
+            ),
           ]),
           SettingsGroup(title: 'Extras', children: [
             SettingsTile(icon: Icons.mosque_rounded, color: const Color(0xFF13A07E), title: 'Prayer times', subtitle: 'Qibla, Suhoor & Iftar reminders', onTap: () => go(const PrayerScreen())),

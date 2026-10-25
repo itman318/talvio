@@ -23,7 +23,7 @@ push.init();
 require('./services/sticker.service').ensureOfficialPacks().catch((err) => console.error('sticker packs:', err.message)); // eslint-disable-line no-console
 
 server.listen(config.port, () => {
-  require('./services/botfather.service').ensure().catch((err) => console.error('botfather setup error', err)); // eslint-disable-line no-console
+  require('./services/botforge.service').ensure().catch((err) => console.error('botfather setup error', err)); // eslint-disable-line no-console
   // eslint-disable-next-line no-console
   console.log(`Talvio API listening on http://localhost:${config.port}  (admin panel: /admin)`);
   if (config.otp.devMode) console.log('OTP dev mode is ON — codes are returned in the API response'); // eslint-disable-line no-console

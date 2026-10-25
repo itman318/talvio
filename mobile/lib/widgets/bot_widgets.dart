@@ -232,7 +232,7 @@ Future<String?> pickBotCommand(BuildContext context, BotInfo bot) {
 }
 
 
-/// Telegram-style "Menu" pill next to the message box in bot chats.
+/// Compact "menu" button next to the message box in bot chats (commands or the mini app).
 class BotMenuButton extends StatelessWidget {
   const BotMenuButton({super.key, required this.onTap, this.onLongPress, this.hasApp = false});
   final VoidCallback onTap;
@@ -241,21 +241,21 @@ class BotMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Ink(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(18)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(hasApp ? Icons.grid_view_rounded : Icons.menu_rounded, color: Colors.white, size: 17),
-            const SizedBox(width: 5),
-            const Text('Menu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5)),
-          ]),
+    return Tooltip(
+      message: hasApp ? 'Open app (hold for commands)' : 'Bot commands',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Ink(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+            child: Icon(hasApp ? Icons.grid_view_rounded : Icons.menu_rounded, color: Colors.white, size: 20),
+          ),
         ),
       ),
     );

@@ -289,8 +289,10 @@ class ProfileHero extends StatelessWidget {
     this.onAvatarTap,
     this.avatarBadge,
     this.topPadding = 0,
+    this.glow = false,
   });
   final int id;
+  final bool glow; // Talvio Plus: glowing gradient ring
   final String name;
   final String? avatarUrl;
   final String? status;
@@ -357,11 +359,15 @@ class ProfileHero extends StatelessWidget {
                 onTap: onAvatarTap ?? (url == null ? null : () => showPhotoViewer(context, url, tag: 'avatar-$id')),
                 child: Stack(clipBehavior: Clip.none, children: [
                   Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(glow ? 3.5 : 4),
                     decoration: BoxDecoration(
-                      color: bg,
+                      color: glow ? null : bg,
+                      gradient: glow ? const SweepGradient(colors: [Color(0xFFFFC94D), Color(0xFFFF5E8A), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFFFFC94D)]) : null,
                       borderRadius: BorderRadius.circular((avatarSize + 8) * 0.34),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.45 : 0.16), blurRadius: 22, offset: const Offset(0, 10))],
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.45 : 0.16), blurRadius: 22, offset: const Offset(0, 10)),
+                        if (glow) BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.55), blurRadius: 26, spreadRadius: 1),
+                      ],
                     ),
                     child: Hero(tag: 'avatar-$id', child: Avatar(id: id, name: name, url: url, size: avatarSize)),
                   ),

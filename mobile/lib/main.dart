@@ -7,6 +7,7 @@ import 'core/chat_lock.dart';
 import 'core/chat_passcode.dart';
 import 'core/crash_reporter.dart';
 import 'core/prefs.dart';
+import 'core/proxy.dart';
 import 'core/prayer_reminders.dart';
 import 'core/message_notifications.dart';
 import 'core/services.dart';
@@ -58,7 +59,15 @@ Future<void> _start() async {
   } catch (e) {
     debugPrint('Prefs not loaded: $e');
   }
+  // proxy first, so even the first request goes through it
+  try {
+    await ProxyManager.instance.load().timeout(const Duration(seconds: 10));
+  } catch (_) {}
   final services = AppServices();
+  ProxyManager.instance.onChanged = () {
+    services.api.resetConnections();
+    if (services.socket.wanted) services.socket.connect();
+  };
   CrashReporter.tokenProvider = () => services.api.accessToken;
   final chats = ChatStore(services);
   final auth = AuthState(services, chats)..prefs = prefs;
@@ -157,6 +166,7 @@ Future<void> _start() async {
       providers: [
         Provider<AppServices>.value(value: services),
         ChangeNotifierProvider<AppPrefs>.value(value: prefs),
+        ChangeNotifierProvider<ProxyManager>.value(value: ProxyManager.instance),
         ChangeNotifierProvider<ChatStore>.value(value: chats),
         ChangeNotifierProvider<AuthState>.value(value: auth),
         ChangeNotifierProvider<CallManager>.value(value: calls),

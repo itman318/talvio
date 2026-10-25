@@ -44,7 +44,7 @@ class AuthState extends ChangeNotifier {
   bool addingAccount = false;
   bool _setupDone = false;
 
-  int get maxAccounts => (appConfig['max_accounts'] as num?)?.toInt() ?? 3;
+  int get maxAccounts => ((appConfig['max_accounts'] as num?)?.toInt() ?? 3) + ((me?.limits?['extra_accounts'] as num?)?.toInt() ?? 0);
   List<StoredAccount> get otherAccounts => accounts.others(me?.id);
 
   ApiClient get api => services.api;

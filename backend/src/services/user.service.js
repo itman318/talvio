@@ -177,7 +177,10 @@ async function updateProfile(userId, body) {
   };
   if (body.first_name !== undefined) add('first_name', v.str(body.first_name, { field: 'first_name', min: 1, max: 64 }));
   if (body.last_name !== undefined) add('last_name', v.str(body.last_name, { field: 'last_name', max: 64 }));
-  if (body.bio !== undefined) add('bio', v.str(body.bio, { field: 'bio', max: 140 }));
+  if (body.bio !== undefined) {
+    const max = (await require('./payment.service').limitsFor(userId)).bio_length || 140; // eslint-disable-line global-require
+    add('bio', v.str(body.bio, { field: 'bio', max }));
+  }
   if (body.birthday !== undefined) add('birthday', parseBirthday(body.birthday));
   if (body.username !== undefined) {
     const raw = typeof body.username === 'string' ? body.username.trim().replace(/^@/, '') : body.username;

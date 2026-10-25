@@ -297,9 +297,9 @@ async function onNewMessage({ chatId, message, memberIds, senderId }) {
   if (sender && sender.is_bot) return; // bots don't see each other's messages
   const row = await db.one('SELECT * FROM messages WHERE id = $1', [message.id]);
   const text = String(row.text || '');
-  const botfather = require('./botfather.service'); // eslint-disable-line global-require
+  const botfather = require('./botforge.service'); // eslint-disable-line global-require
   for (const b of bots) {
-    if (botfather.isBotFather(b.id)) {
+    if (botfather.isBotForge(b.id)) {
       if (chat.type === 'private' && senderId) await botfather.onMessage(senderId, chat.id, row);
       continue;
     }
@@ -684,8 +684,8 @@ async function pressButton(userId, messageIdRaw, body = {}) {
   if (!bot) throw badRequest('bot_unavailable', 'This bot is not available');
   rateLimit.enforce(`botbtn:${userId}`, 30, 60 * 1000, 'Slow down');
   const id = crypto.randomBytes(12).toString('hex');
-  const botfather = require('./botfather.service'); // eslint-disable-line global-require
-  if (botfather.isBotFather(bot.user_id)) {
+  const botfather = require('./botforge.service'); // eslint-disable-line global-require
+  if (botfather.isBotForge(bot.user_id)) {
     setImmediate(() => botfather.onCallback(userId, m.chat_id, m.id, data).catch((err) => console.error('botfather error', err))); // eslint-disable-line no-console
     // the app starts listening for the answer once this request returns
     setTimeout(() => bus.emit('rt:emit', { event: 'bot:callback_answer', payload: { callback_query_id: id, message_id: m.id, text: '' }, userIds: [userId] }), 400).unref();

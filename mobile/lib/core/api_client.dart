@@ -46,6 +46,18 @@ class ApiClient {
     ..idleTimeout = const Duration(seconds: 8));
 
   /// After a timeout: throw away pooled connections so the next request opens a fresh one.
+  /// "US" from the phone's region setting (en_US), used for local prices.
+  static final String? _deviceCountry = () {
+    try {
+      final m = RegExp(r'[_-]([A-Za-z]{2})').firstMatch(Platform.localeName);
+      return m?.group(1)?.toUpperCase();
+    } catch (_) {
+      return null;
+    }
+  }();
+
+  void resetConnections() => _resetConnections();
+
   void _resetConnections() {
     final old = _http;
     _http = _newClient();
@@ -130,6 +142,8 @@ class ApiClient {
     final req = http.Request(method, uri(path, query));
     req.headers['Content-Type'] = 'application/json';
     req.headers['Accept'] = 'application/json';
+    final country = _deviceCountry;
+    if (country != null) req.headers['X-Country'] = country; // prices in the user's currency
     if (auth) req.headers.addAll(authHeaders);
     if (body != null) req.body = jsonEncode(body);
 

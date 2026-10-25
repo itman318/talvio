@@ -56,6 +56,7 @@ const DEFINITIONS = {
 
   // ---- Batch D1
   feature_bots: { type: 'boolean', default: true },
+  payment_intl_instructions: { type: 'string', default: '', max: 2000 },
   max_bots_per_user: { type: 'integer', default: 20, min: 0, max: 1000 },
   feature_channel_comments: { type: 'boolean', default: true },
   feature_topics: { type: 'boolean', default: true },

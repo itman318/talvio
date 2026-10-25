@@ -909,6 +909,7 @@
     premium_upload_mb: ['Talvio Plus upload limit (MB)', 'Free users get “Max upload size”.'],
     payment_manual_enabled: ['Accept manual payments', 'User sends money to your account and uploads a screenshot; you approve it under Payments.'],
     payment_manual_instructions: ['Manual payment instructions', 'Shown to the user: account number, title, what to write in the note.'],
+    payment_intl_instructions: ['International payment instructions', 'For people outside Pakistan (Wise, Payoneer, PayPal, card link…). Empty = “coming soon”.'],
     feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Talvio Plus users).'],
     ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
     feature_secret_chats: ['Vault chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
@@ -918,7 +919,7 @@
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
-    ['Talvio Plus & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions']],
+    ['Talvio Plus & payments', ['feature_premium', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
@@ -1450,13 +1451,20 @@
       const months = el('input', { type: 'number', min: 1, max: 60, value: p ? p.months : 1 });
       const price = el('input', { type: 'number', min: 0, value: p ? p.price_pkr : 299 });
       const active = el('input', { type: 'checkbox', checked: p ? p.is_active : true, id: 'plan-active' });
+      const CURS = ['USD', 'EUR', 'GBP', 'AED', 'SAR', 'INR', 'BDT', 'CAD', 'AUD', 'TRY', 'MYR'];
+      const cur = Object.fromEntries(CURS.map((c) => [c, el('input', { type: 'number', min: 0, step: '0.01', value: p && p.prices && p.prices[c] !== undefined ? p.prices[c] : '', placeholder: '—' })]));
       modal(p ? 'Edit plan' : 'New plan', [
         el('div', { class: 'field' }, el('label', {}, 'Name'), name),
         el('div', { class: 'field' }, el('label', {}, 'Months'), months),
         el('div', { class: 'field' }, el('label', {}, 'Price (Rs)'), price),
+        el('div', { class: 'field' }, el('label', {}, 'Prices in other countries'),
+          el('div', { class: 'cur-grid' }, CURS.map((c) => el('label', { class: 'cur' }, el('span', {}, c), cur[c])))),
+        el('p', { class: 'muted' }, 'People see the price in their own currency (from their phone number or phone settings). Empty = shown in USD.'),
         el('label', { class: 'check', for: 'plan-active' }, active, 'Available to buy'),
       ], 'Save', async () => {
-        const body = { name: name.value.trim(), months: Number(months.value), price_pkr: Number(price.value), is_active: active.checked, sort: Number(months.value) };
+        const prices = {};
+        for (const c of CURS) if (cur[c].value !== '') prices[c] = Number(cur[c].value);
+        const body = { name: name.value.trim(), months: Number(months.value), price_pkr: Number(price.value), is_active: active.checked, sort: Number(months.value), prices };
         const r = await action(() => api(p ? 'PUT' : 'POST', p ? `/plans/${p.id}` : '/plans', body), 'Plan saved');
         if (r) pagePlans();
         return !!r;
@@ -1464,11 +1472,12 @@
     };
     const rows = plans.map((p) => el('tr', {},
       el('td', {}, p.name), el('td', { class: 'num' }, p.months), el('td', { class: 'num' }, rs(p.price_pkr)), el('td', { class: 'num' }, rs(p.per_month_pkr)),
+      el('td', {}, p.prices && p.prices.USD !== undefined ? `$${p.prices.USD}` : '—'),
       el('td', {}, el('span', { class: `chip ${p.is_active ? 'ok' : ''}` }, p.is_active ? 'On sale' : 'Hidden')),
       el('td', {}, el('button', { class: 'btn small', onclick: () => edit(p) }, 'Edit'))));
     main.replaceChildren(head('Talvio Plus plans', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New plan')),
-      el('p', { class: 'muted' }, 'Talvio Plus gives: ⭐ badge, bigger uploads (Settings → Talvio Plus & payments), 30 chat folders, no sponsored messages.'),
-      table(['Plan', 'Months', 'Price', 'Per month', 'Status', ''], rows, 'No plans'));
+      el('p', { class: 'muted' }, 'Talvio Plus gives: ⭐ badge, bigger uploads, 30 chat folders, no sponsored messages, animated Tavi stickers, exclusive themes, 15 pinned chats, 3 more accounts, a 300-character bio and a glowing profile ring.'),
+      table(['Plan', 'Months', 'Price', 'Per month', 'USD', 'Status', ''], rows, 'No plans'));
   }
 
   // ------------------------------------------------------------------ sponsored messages

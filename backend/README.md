@@ -297,7 +297,7 @@ Verify init data on your server: `secret = HMAC_SHA256(key="TalvioMiniApp", msg=
 `hash = HEX(HMAC_SHA256(key=secret, msg=data_check_string))` where data_check_string is every field except
 `hash`, sorted, as `key=value` lines joined by `\n`.
 
-**BotFather:** a built-in bot (@BotFather, created on start) makes and manages bots from a chat:
+**BotForge:** a built-in bot (@BotForge, created on start) makes and manages bots from a chat:
 `/newbot`, `/mybots` (buttons: token, edit name/description/commands/photo, mini app, group privacy, revoke,
 delete), `/setcommands`, `/setuserpic`, `/setmenu`, `/setprivacy`, `/deletebot`, `/cancel`.
 

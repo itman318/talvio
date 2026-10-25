@@ -789,7 +789,8 @@ async function updateMySettings(userId, chatIdRaw, body) {
         'SELECT count(*) AS n FROM chat_members WHERE user_id = $1 AND is_pinned AND chat_id <> $2',
         [userId, chat.id],
       );
-      if (n.n >= MAX_PINNED) throw badRequest('too_many_pinned', `You can pin up to ${MAX_PINNED} chats`);
+      const maxPins = (await require('./payment.service').limitsFor(userId)).pinned_chats || MAX_PINNED; // eslint-disable-line global-require
+      if (n.n >= maxPins) throw badRequest('too_many_pinned', `You can pin up to ${maxPins} chats${maxPins === MAX_PINNED ? ' — Talvio Plus lets you pin more' : ''}`);
     }
     params.push(pin);
     sets.push(`is_pinned = $${params.length}`);
@@ -1015,7 +1016,8 @@ async function transferOwnershipByOwner(userId, chatIdRaw, toUserIdRaw) {
 /** Throws if the username is on the admin "reserved" list (admins can still assign it). */
 async function assertNotReserved(name) {
   const reserved = await settings.get('reserved_usernames');
-  if ((reserved || []).includes(String(name).toLowerCase())) {
+  const builtIn = ['botforge', 'botfather', 'talvio', 'talvioteam', 'support', 'admin'];
+  if ([...(reserved || []), ...builtIn].includes(String(name).toLowerCase())) {
     throw conflict('username_reserved', 'This username is reserved');
   }
 }

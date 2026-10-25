@@ -1,3 +1,5 @@
+import '../core/proxy.dart';
+import 'proxy_screen.dart';
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
@@ -40,6 +42,8 @@ class _RootShellState extends State<RootShell> {
         final code = callCodeFromLink(uri.toString());
         if (code != null) openCallLink(context, code);
         if (parseChatLink(uri.toString()) != null) openChatLink(context, uri.toString());
+        final proxy = ProxyServer.fromLink(uri.toString());
+        if (proxy != null) confirmAddProxy(context, proxy);
       }, onError: (_) {});
     } catch (_) {}
   }

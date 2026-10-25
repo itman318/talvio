@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * BotFather — the built-in bot that creates and manages other bots from a chat, like Telegram's.
- * Lives inside the server: messages to @BotFather are answered here (no token, no webhook).
+ * BotForge — Talvio's built-in bot that creates and manages other bots from a chat.
+ * Lives inside the server: messages to @BotForge are answered here (no token, no webhook).
  *
  *   /newbot      create a bot (name → username → token)
  *   /mybots      buttons for every bot you own: token, edit name/description/about/commands/photo,
@@ -16,7 +16,7 @@ const bus = require('../bus');
 const config = require('../config');
 const { sha256 } = require('../utils/crypto');
 
-const USERNAME = 'BotFather';
+const USERNAME = 'BotForge';
 let cachedId = null;
 
 const lazy = {
@@ -24,15 +24,22 @@ const lazy = {
   messages: () => require('./message.service'), // eslint-disable-line global-require
 };
 
-/** Creates the BotFather account once; returns its user id. */
+/** Creates the BotForge account once; returns its user id. */
 async function ensure() {
   if (cachedId) return cachedId;
-  let u = await db.one(`SELECT id FROM users WHERE lower(username) = lower($1) AND is_bot`, [USERNAME]);
+  // the system bot owns itself (also finds it under an older name and renames it)
+  let u = await db.one(`SELECT u.id FROM bots b JOIN users u ON u.id = b.user_id WHERE b.owner_id = b.user_id AND u.is_bot ORDER BY u.id LIMIT 1`);
+  if (u) {
+    await db.query(
+      `UPDATE users SET username = $2, first_name = 'BotForge', is_verified = TRUE WHERE id = $1 AND (username IS DISTINCT FROM $2 OR first_name <> 'BotForge')`,
+      [u.id, USERNAME],
+    ).catch(() => {});
+  }
   if (!u) {
     u = await db.tx(async (c) => {
       const row = (await c.query(
         `INSERT INTO users (phone, first_name, username, is_bot, is_verified, privacy_phone, privacy_group_add, privacy_calls, bio)
-         VALUES (NULL, 'BotFather', $1, TRUE, TRUE, 'nobody', 'nobody', 'nobody', 'I can help you create and manage Talvio bots.')
+         VALUES (NULL, 'BotForge', $1, TRUE, TRUE, 'nobody', 'nobody', 'nobody', 'I can help you create and manage Talvio bots.')
          ON CONFLICT DO NOTHING RETURNING id`,
         [USERNAME],
       )).rows[0];
@@ -41,7 +48,7 @@ async function ensure() {
         `INSERT INTO bots (user_id, owner_id, token_hash, about, commands) VALUES ($1, $1, $2, $3, $4) ON CONFLICT DO NOTHING`,
         [
           row.id,
-          sha256(crypto.randomBytes(32).toString('hex')), // nobody gets a token for BotFather
+          sha256(crypto.randomBytes(32).toString('hex')), // nobody gets a token for BotForge
           'I can help you create and manage Talvio bots. Send /newbot to start.',
           JSON.stringify(COMMANDS),
         ],
@@ -108,7 +115,7 @@ const btn = (text, data) => ({ text, callback_data: data });
 const link = (username) => `${config.publicUrl}/c/${username}`;
 
 const HELP = [
-  'I can help you create and manage Talvio bots.',
+  'Hi, I’m BotForge 🛠 — I build and manage Talvio bots for you.',
   '',
   'You can control me with these commands:',
   '',
@@ -390,7 +397,7 @@ async function onMessage(userId, chatId, row) {
   }
 }
 
-/** Inline button pressed in a BotFather message. */
+/** Inline button pressed in a BotForge message. */
 async function onCallback(userId, chatId, messageId, data) {
   const [action, id] = String(data).split(':');
   try {
@@ -408,8 +415,8 @@ async function onCallback(userId, chatId, messageId, data) {
   }
 }
 
-function isBotFather(id) {
+function isBotForge(id) {
   return cachedId !== null && Number(id) === cachedId;
 }
 
-module.exports = { ensure, onMessage, onCallback, isBotFather, USERNAME };
+module.exports = { ensure, onMessage, onCallback, isBotForge, USERNAME };

@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 import '../core/prefs.dart';
 import '../theme/brand.dart';
 import '../theme/chat_theme.dart';
+import '../state/auth_state.dart';
 import '../utils/format.dart';
+import 'premium_screens.dart';
 
 /// Theme & wallpaper for one chat ([chatId]) or for all chats (null).
 class ChatThemeScreen extends StatefulWidget {
@@ -80,7 +82,15 @@ class _ChatThemeScreenState extends State<ChatThemeScreen> {
             children: [
               for (final t in chatThemes)
                 GestureDetector(
-                  onTap: () => _set(_look.copyWith(themeId: t.id, clearPhoto: true)),
+                  onTap: () {
+                    final plus = context.read<AuthState>().me?.limits?['exclusive_themes'] == true;
+                    if (plusThemes.contains(t.id) && !plus) {
+                      showInfo(context, '${t.name} is a Talvio Plus theme ⭐');
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
+                      return;
+                    }
+                    _set(_look.copyWith(themeId: t.id, clearPhoto: true));
+                  },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Column(children: [
@@ -100,7 +110,7 @@ class _ChatThemeScreenState extends State<ChatThemeScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(t.name, style: const TextStyle(fontSize: 12)),
+                      Text(plusThemes.contains(t.id) ? '⭐ ${t.name}' : t.name, style: const TextStyle(fontSize: 12)),
                     ]),
                   ),
                 ),

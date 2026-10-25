@@ -240,3 +240,9 @@ tr.clickable:hover td { background: #f8f9fd; }
 
 /* elements marked hidden stay hidden even when a class sets display */
 [hidden] { display: none !important; }
+
+/* plan prices per currency */
+.cur-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.cur-grid .cur { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.cur-grid .cur span { width: 34px; font-weight: 600; color: var(--muted, #6b7189); }
+.cur-grid .cur input { width: 100%; min-width: 0; }

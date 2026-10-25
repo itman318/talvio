@@ -41,7 +41,17 @@ const chatThemes = <ChatThemeDef>[
       Color(0xFF2E2512), [Color(0xFFA9822F), Color(0xFFCCA957)], [Color(0xFF9C7A33), Color(0xFFC29E52)]),
   ChatThemeDef('midnight', 'Midnight', [Color(0xFFE4E6EE), Color(0xFFD5D9E5)], [Color(0xFF000000), Color(0xFF07080F)], Color(0xFFCDD1DE),
       Color(0xFF10121C), [Color(0xFF0E1122), Color(0xFF232945)], [Color(0xFF1C2140), Color(0xFF2B3360)]),
+  // Talvio Plus themes
+  ChatThemeDef('aurora_gold', 'Aurora Gold', [Color(0xFFFFF4E0), Color(0xFFFFE3EC)], [Color(0xFF1A1208), Color(0xFF241226)], Color(0xFFF9DFC2),
+      Color(0xFF2E1D20), [Color(0xFFF09819), Color(0xFFE8407A)], [Color(0xFFD9861A), Color(0xFFCC3A70)]),
+  ChatThemeDef('neon', 'Midnight Neon', [Color(0xFFE6F7FF), Color(0xFFF1E6FF)], [Color(0xFF05040F), Color(0xFF0E0628)], Color(0xFFD3EEFA),
+      Color(0xFF1A1240), [Color(0xFF00B4DB), Color(0xFF8E2DE2)], [Color(0xFF0098C2), Color(0xFF7A26CC)]),
+  ChatThemeDef('rose_quartz', 'Rose Quartz', [Color(0xFFFFEEF3), Color(0xFFF3E9FF)], [Color(0xFF1C0D15), Color(0xFF1B1028)], Color(0xFFF7DCE6),
+      Color(0xFF2E1A2A), [Color(0xFFE96FA4), Color(0xFFA77BF3)], [Color(0xFFD35B90), Color(0xFF9167DE)]),
 ];
+
+/// Themes only Talvio Plus members can pick.
+const plusThemes = {'aurora_gold', 'neon', 'rose_quartz'};
 
 ChatThemeDef chatThemeById(String id) => chatThemes.firstWhere((t) => t.id == id, orElse: () => chatThemes.first);
 

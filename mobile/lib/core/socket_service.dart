@@ -55,6 +55,8 @@ class SocketService {
     'payment:updated',
   ];
 
+  bool get wanted => _wantConnected;
+
   void connect() {
     _wantConnected = true;
     final token = api.accessToken;

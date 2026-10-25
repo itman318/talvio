@@ -85,6 +85,12 @@ jobs:
           set -o pipefail
           flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee ../ci-report/analyze.txt
 
+      - name: Render mascot previews
+        continue-on-error: true
+        run: |
+          mkdir -p ../ci-report/mascot
+          MASCOT_OUT=$PWD/../ci-report/mascot flutter test test/mascot_preview_test.dart 2>&1 | tail -40 | tee ../ci-report/mascot.txt
+
       - name: Build APK
         id: build
         if: steps.analyze.outcome == 'success' && !inputs.analyze_only
