@@ -21,6 +21,7 @@ import 'link_device_screen.dart';
 import 'prayer_screen.dart';
 import 'backup_screen.dart';
 import 'qr_screens.dart';
+import 'user_profile_screen.dart' show UserProfileScreen;
 import 'calls_screen.dart' show CallLinksScreen;
 import 'story_screens.dart' show MyHighlightsScreen;
 import 'new_chat_screen.dart' show PickUsersScreen;
@@ -58,50 +59,65 @@ class SettingsScreen extends StatelessWidget {
                 Expanded(child: Text('Demo account — sample chats on this phone only. Log out to use a real account.')),
               ]),
             ),
-          // profile card
+          // profile card: the person's own colours, like the cover on their profile
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () => go(const EditProfileScreen()),
+                borderRadius: BorderRadius.circular(26),
+                onTap: () => go(UserProfileScreen(userId: me.id)),
                 child: Ink(
-                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    gradient: Brand.auroraSoft(dark),
-                    border: Border.all(color: dark ? Colors.white.withValues(alpha: 0.06) : Colors.white),
+                    borderRadius: BorderRadius.circular(26),
+                    gradient: LinearGradient(
+                      colors: [gradientForId(me.id)[0], gradientForId(me.id)[1], Color.lerp(gradientForId(me.id)[1], Brand.ink, 0.5)!],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [BoxShadow(color: gradientForId(me.id)[1].withValues(alpha: dark ? 0.25 : 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                   ),
-                  child: Row(children: [
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, shape: BoxShape.circle),
-                        child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 62)),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Row(children: [
-                          Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4))),
-                          if (plus) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 20)),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: Stack(children: [
+                      Positioned(right: -30, top: -40, child: Container(width: 140, height: 140, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.12)))),
+                      Positioned(left: 90, bottom: -50, child: Container(width: 110, height: 110, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.08)))),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(70 * 0.34)),
+                            child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 62),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(children: [
+                                Flexible(
+                                  child: Text(me.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4, color: Colors.white)),
+                                ),
+                                if (plus) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFE3A3), size: 20)),
+                              ]),
+                              const SizedBox(height: 2),
+                              for (final line in [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty))
+                                Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withValues(alpha: 0.82), fontSize: 13.5)),
+                              const SizedBox(height: 6),
+                              Text('View profile ›', style: TextStyle(color: Colors.white.withValues(alpha: 0.95), fontWeight: FontWeight.w700, fontSize: 12.5)),
+                            ]),
+                          ),
+                          Column(mainAxisSize: MainAxisSize.min, children: [
+                            _glassIcon(Icons.qr_code_2_rounded, 'My QR code', () => go(const MyQrScreen())),
+                            const SizedBox(height: 8),
+                            _glassIcon(Icons.edit_rounded, 'Edit profile', () => go(const EditProfileScreen())),
+                          ]),
                         ]),
-                        const SizedBox(height: 2),
-                        for (final line in [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty))
-                          Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13.5)),
-                      ]),
-                    ),
-                    IconButton.filledTonal(
-                      tooltip: 'My QR code',
-                      style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.surface),
-                      icon: const Icon(Icons.qr_code_2_rounded),
-                      onPressed: () => go(const MyQrScreen()),
-                    ),
-                  ]),
+                      ),
+                    ]),
+                  ),
                 ),
               ),
             ),
@@ -296,6 +312,16 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 }
+
+/// Small frosted round button on the coloured profile card.
+Widget _glassIcon(IconData icon, String tooltip, VoidCallback onTap) => Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.2),
+        shape: const CircleBorder(),
+        child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: Padding(padding: const EdgeInsets.all(9), child: Icon(icon, color: Colors.white, size: 21))),
+      ),
+    );
 
 // ------------------------------------------------------------------ edit profile
 class EditProfileScreen extends StatefulWidget {

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'avatar.dart';
 
@@ -305,80 +306,112 @@ class ProfileHero extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final bg = Theme.of(context).scaffoldBackgroundColor;
     final url = avatarUrl;
-    return Stack(children: [
-      // backdrop
-      Positioned.fill(
-        child: url == null
-            ? DecoratedBox(decoration: BoxDecoration(gradient: Brand.auroraSoft(dark)))
-            : ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36, tileMode: TileMode.decal),
-                child: Opacity(opacity: dark ? 0.55 : 0.45, child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
-              ),
-      ),
-      // fade into the page
-      Positioned.fill(
-        child: DecoratedBox(
+    const avatarSize = 108.0;
+    final bannerH = topPadding + 150;
+    final tones = gradientForId(id);
+    // Cover banner: the person's own colours (or their photo, blurred), soft light blobs, rounded base.
+    final banner = ClipRRect(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
+      child: Stack(fit: StackFit.expand, children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [tones[0], tones[1], Color.lerp(tones[1], const Color(0xFF151A2E), 0.45)!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        if (url != null)
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30, tileMode: TileMode.decal),
+            child: Opacity(opacity: 0.85, child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
+          ),
+        Positioned(right: -40, top: -30, child: _blob(170, 0.16)),
+        Positioned(left: -50, bottom: -60, child: _blob(190, 0.10)),
+        Positioned(right: 70, bottom: 18, child: _blob(46, 0.12)),
+        // darker base so the white avatar ring and buttons read well
+        DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [bg.withValues(alpha: 0), bg.withValues(alpha: 0.35), bg],
-              stops: const [0, 0.6, 1],
+              colors: [Colors.black.withValues(alpha: 0.18), Colors.transparent, Colors.black.withValues(alpha: dark ? 0.35 : 0.18)],
             ),
           ),
         ),
+      ]),
+    );
+    return Column(children: [
+      SizedBox(
+        height: bannerH + avatarSize / 2,
+        child: Stack(clipBehavior: Clip.none, children: [
+          Positioned(left: 0, right: 0, top: 0, height: bannerH, child: banner),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: onAvatarTap ?? (url == null ? null : () => showPhotoViewer(context, url, tag: 'avatar-$id')),
+                child: Stack(clipBehavior: Clip.none, children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular((avatarSize + 8) * 0.34),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.45 : 0.16), blurRadius: 22, offset: const Offset(0, 10))],
+                    ),
+                    child: Hero(tag: 'avatar-$id', child: Avatar(id: id, name: name, url: url, size: avatarSize)),
+                  ),
+                  if (online)
+                    Positioned(
+                      right: 2,
+                      bottom: 2,
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(color: Brand.accent, shape: BoxShape.circle, border: Border.all(color: bg, width: 4)),
+                      ),
+                    ),
+                  if (avatarBadge != null) Positioned(right: -4, bottom: -4, child: avatarBadge!),
+                ]),
+              ),
+            ),
+          ),
+        ]),
       ),
       Padding(
-        padding: EdgeInsets.fromLTRB(16, topPadding + 8, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
         child: Column(children: [
-          GestureDetector(
-            onTap: onAvatarTap ?? (url == null ? null : () => showPhotoViewer(context, url, tag: 'avatar-$id')),
-            child: Stack(clipBehavior: Clip.none, children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  gradient: Brand.aurora,
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 28, offset: const Offset(0, 10))],
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-                  child: Hero(tag: 'avatar-$id', child: ClipOval(child: Avatar(id: id, name: name, url: url, size: 108))),
-                ),
-              ),
-              if (online)
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(color: Brand.accent, shape: BoxShape.circle, border: Border.all(color: bg, width: 3)),
-                  ),
-                ),
-              if (avatarBadge != null) Positioned(right: 0, bottom: 0, child: avatarBadge!),
-            ]),
-          ),
-          const SizedBox(height: 14),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Flexible(
               child: Text(name,
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800, letterSpacing: -0.6, height: 1.15)),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.6, height: 1.15)),
             ),
             ...badges.map((b) => Padding(padding: const EdgeInsets.only(left: 6), child: b)),
           ]),
           if (status != null) ...[
-            const SizedBox(height: 5),
-            Text(status!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: statusColor ?? Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 7),
+            online
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(color: Brand.accent.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Container(width: 7, height: 7, decoration: const BoxDecoration(color: Brand.accent, shape: BoxShape.circle)),
+                      const SizedBox(width: 6),
+                      Text(status!, style: const TextStyle(color: Brand.accent, fontWeight: FontWeight.w700, fontSize: 13)),
+                    ]),
+                  )
+                : Text(status!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: statusColor ?? Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 13.5)),
           ],
           if (actions.isNotEmpty) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             Row(children: [
               for (var i = 0; i < actions.length; i++) ...[
                 if (i > 0) const SizedBox(width: 8),
@@ -390,6 +423,12 @@ class ProfileHero extends StatelessWidget {
       ),
     ]);
   }
+
+  static Widget _blob(double size, double alpha) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: alpha)),
+      );
 }
 
 /// One of the round-cornered action buttons under a profile header.
@@ -409,7 +448,7 @@ class ProfileAction extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Ink(
-          height: 66,
+          height: 72,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             gradient: highlight ? Brand.aurora : null,
@@ -424,8 +463,16 @@ class ProfileAction extends StatelessWidget {
             ],
           ),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, color: highlight ? Colors.white : Brand.primary, size: 23),
-            const SizedBox(height: 4),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: highlight ? Colors.white.withValues(alpha: 0.2) : Brand.primary.withValues(alpha: dark ? 0.16 : 0.1),
+              ),
+              child: Icon(icon, color: highlight ? Colors.white : Brand.primary, size: 19),
+            ),
+            const SizedBox(height: 5),
             Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -683,4 +730,85 @@ class _LiveWavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LiveWavePainter old) => old.levels.length != levels.length || old.color != color;
+}
+
+/// Talvio "glass": a frosted, slightly tinted panel with a faint aurora hairline around it.
+/// Used for the floating chat header, the message bar and the pinned card.
+class GlassPanel extends StatelessWidget {
+  const GlassPanel({super.key, required this.child, this.radius = 24, this.padding = EdgeInsets.zero, this.ring = true, this.opacity});
+  final Widget child;
+  final double radius;
+  final EdgeInsetsGeometry padding;
+  final bool ring;
+  final double? opacity; // 0..1 tint strength
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final tint = (opacity ?? (dark ? 0.72 : 0.78)).clamp(0.0, 1.0);
+    final inner = ClipRRect(
+      borderRadius: BorderRadius.circular(radius - (ring ? 1 : 0)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: (dark ? const Color(0xFF151A2E) : Colors.white).withValues(alpha: tint),
+            borderRadius: BorderRadius.circular(radius - (ring ? 1 : 0)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.35 : 0.08), blurRadius: 18, offset: const Offset(0, 6))],
+      ),
+      child: ring
+          ? Container(
+              padding: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(radius),
+                gradient: LinearGradient(
+                  colors: dark
+                      ? [Colors.white.withValues(alpha: 0.16), const Color(0xFF8B5CF6).withValues(alpha: 0.22), Colors.white.withValues(alpha: 0.06)]
+                      : [Colors.white, const Color(0xFFF0446E).withValues(alpha: 0.18), Colors.white.withValues(alpha: 0.7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: inner,
+            )
+          : inner,
+    );
+  }
+}
+
+/// Reports its child's height whenever it changes (for overlays that content scrolls under).
+class MeasureHeight extends SingleChildRenderObjectWidget {
+  const MeasureHeight({super.key, required this.onHeight, required super.child});
+  final ValueChanged<double> onHeight;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderMeasure(onHeight);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderMeasure renderObject) => renderObject.onHeight = onHeight;
+}
+
+class _RenderMeasure extends RenderProxyBox {
+  _RenderMeasure(this.onHeight);
+  ValueChanged<double> onHeight;
+  double? _last;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final h = size.height;
+    if (h != _last) {
+      _last = h;
+      WidgetsBinding.instance.addPostFrameCallback((_) => onHeight(h));
+    }
+  }
 }

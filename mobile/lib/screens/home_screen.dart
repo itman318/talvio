@@ -291,10 +291,13 @@ extension on _HomeScreenState {
   Widget _lockedRow(List<Chat> locked) {
     final unread = locked.fold<int>(0, (a, c) => a + c.unreadCount);
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+      minVerticalPadding: 7,
+      horizontalTitleGap: 12,
+      visualDensity: const VisualDensity(vertical: -1),
       leading: Container(
-        width: 54,
-        height: 54,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark), borderRadius: BorderRadius.circular(18)),
         child: const Icon(Icons.lock_rounded, color: Brand.violet),
       ),
@@ -311,10 +314,13 @@ extension on _HomeScreenState {
   Widget _requestsRow(List<Chat> requests) {
     final unread = requests.fold<int>(0, (a, c) => a + c.unreadCount);
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+      minVerticalPadding: 7,
+      horizontalTitleGap: 12,
+      visualDensity: const VisualDensity(vertical: -1),
       leading: Container(
-        width: 54,
-        height: 54,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark), borderRadius: BorderRadius.circular(18)),
         child: const Icon(Icons.mark_email_unread_rounded, color: Brand.rose),
       ),
@@ -426,13 +432,17 @@ class ChatTile extends StatelessWidget {
     final online = chat.peer?.online == true && !chat.isSavedMessages && !chat.isBot;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final tile = ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      // compact rows: more chats fit on screen, still easy to tap
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+      minVerticalPadding: 7,
+      horizontalTitleGap: 12,
+      visualDensity: const VisualDensity(vertical: -1),
       leading: Stack(clipBehavior: Clip.none, children: [
         Avatar(
           id: chat.id,
           name: chat.title,
           url: chat.avatarAbsolute,
-          size: 54,
+          size: 48,
           icon: chat.isSavedMessages ? Icons.bookmark : null,
         ),
         if (online)
@@ -440,12 +450,12 @@ class ChatTile extends StatelessWidget {
             right: -1,
             bottom: -1,
             child: Container(
-              width: 16,
-              height: 16,
+              width: 14,
+              height: 14,
               decoration: BoxDecoration(
                 color: Brand.accent,
                 shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2.5),
+                border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2.2),
               ),
             ),
           ),
@@ -461,7 +471,7 @@ class ChatTile extends StatelessWidget {
                 child: Text(chat.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w600, fontSize: 16, letterSpacing: -0.2)),
+                    style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w600, fontSize: 15.5, letterSpacing: -0.2)),
               ),
               if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
               if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off_rounded, size: 15, color: Brand.faint)),
@@ -510,6 +520,7 @@ class ChatTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                          fontSize: 14,
                           color: unread && !chat.isMuted ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85) : null,
                           fontWeight: unread && !chat.isMuted ? FontWeight.w500 : null,
                         ),

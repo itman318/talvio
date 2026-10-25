@@ -116,6 +116,43 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _guarded = false;
 
+  // floating glass header & message bar: their heights pad the message list
+  static const double _headerH = 66;
+  double _topH = 0;
+  double _bottomH = 72;
+
+  /// Header: one frosted capsule — back, avatar + name, actions.
+  PreferredSizeWidget _glassHeader({required Widget title, required List<Widget> actions}) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(_headerH),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+          child: GlassPanel(
+            radius: 26,
+            child: SizedBox(
+              height: 54,
+              child: IconTheme.merge(
+                data: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+                child: Row(children: [
+                  IconButton(
+                    tooltip: 'Back',
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                    onPressed: () => Navigator.maybePop(context),
+                  ),
+                  Expanded(child: DefaultTextStyle.merge(style: TextStyle(color: Theme.of(context).colorScheme.onSurface), child: title)),
+                  ...actions,
+                  const SizedBox(width: 2),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // "jump to the newest message" button, with how many came in while scrolled up
   bool _showDown = false;
   int _newBelow = 0;
@@ -1245,9 +1282,8 @@ class _ChatScreenState extends State<ChatScreen> {
       appearance: look,
       child: Scaffold(
       backgroundColor: ChatColors.of(context).background,
-      appBar: _selected.isNotEmpty ? _selectionBar(chat) : AppBar(
-        titleSpacing: 0,
-        shape: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7), width: 0.6)),
+      extendBodyBehindAppBar: true,
+      appBar: _selected.isNotEmpty ? _selectionBar(chat) : _glassHeader(
         title: InkWell(
           onTap: () => _openInfo(chat),
           child: Row(
@@ -1347,8 +1383,19 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: ChatBackground(
         appearance: look,
-        child: Column(
-        children: [
+        // the message list runs under the floating header and message bar (they're frosted glass)
+        child: Stack(children: [
+          Positioned.fill(child: _messageList(chat, messages, store)),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: MeasureHeight(
+              onHeight: (h) {
+                if (mounted && (h - _topH).abs() > 0.5) setState(() => _topH = h);
+              },
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(height: MediaQuery.paddingOf(context).top + _headerH),
           AnimatedSize(
             duration: const Duration(milliseconds: 200),
             child: store.connected
@@ -1370,7 +1417,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (chat.pinnedMessage != null) _pinnedBar(chat),
           if (chat.isChannel && chat.isAdmin && chat.queueCount > 0)
             Material(
-              color: Brand.amber.withValues(alpha: 0.14),
+              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2A2412) : const Color(0xFFFFF4DC),
               child: InkWell(
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PostQueueScreen(chat: chat))),
                 child: Padding(
@@ -1406,15 +1453,22 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
-          Expanded(
-            child: Stack(children: [
-              Positioned.fill(child: _messageList(chat, messages, store)),
-              Positioned(right: 12, bottom: 10, child: _downButton(messages)),
-            ]),
+              ]),
+            ),
           ),
-          _bottomBar(chat),
-        ],
-      ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: MeasureHeight(
+              onHeight: (h) {
+                if (mounted && (h - _bottomH).abs() > 0.5) setState(() => _bottomH = h);
+              },
+              child: _bottomBar(chat),
+            ),
+          ),
+          Positioned(right: 12, bottom: _bottomH + 10, child: _downButton(messages)),
+        ]),
       ),
     ),
     ),
@@ -1544,13 +1598,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _messageList(Chat chat, List<Message> messages, ChatStore store) {
-    if (_loading && messages.isEmpty) return const Center(child: CircularProgressIndicator());
+    final top = (_topH > 0 ? _topH : MediaQuery.paddingOf(context).top + _headerH) + 6;
+    final bottom = _bottomH + 6;
+    Widget padded(Widget w) => Padding(padding: EdgeInsets.only(top: top, bottom: bottom), child: w);
+    if (_loading && messages.isEmpty) return padded(const Center(child: CircularProgressIndicator()));
     if (messages.isEmpty && chat.isBot) {
-      return BotIntro(chat: chat, onStart: () => _store.sendText(chatId, '/start'));
+      return padded(BotIntro(chat: chat, onStart: () => _store.sendText(chatId, '/start')));
     }
     if (messages.isEmpty) {
-      if (_error != null) return Center(child: SystemBubble(text: _error!));
-      return Center(child: _emptyChat(chat));
+      if (_error != null) return padded(Center(child: SystemBubble(text: _error!)));
+      return padded(Center(child: SingleChildScrollView(child: _emptyChat(chat))));
     }
     final hasMore = store.hasMore(chatId);
     if (chat.isChannel) {
@@ -1560,7 +1617,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return ListView.builder(
       controller: _scroll,
       reverse: true,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.only(top: top, bottom: bottom),
       itemCount: messages.length + (hasMore ? 1 : 0) + (_ad != null ? 1 : 0),
       itemBuilder: (ctx, idx) {
         if (_ad != null && idx == 0) return _adCard();
@@ -1830,13 +1887,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _pinnedBar(Chat chat) {
     final p = chat.pinnedMessage!;
-    return Material(
-      color: ChatColors.of(context).bar,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
+      child: GlassPanel(
+      radius: 18,
+      ring: false,
+      child: Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: () => _showPins(chat),
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 7, 4, 7),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)))),
           child: Row(children: [
             Container(width: 3, height: 34, decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(2))),
             const SizedBox(width: 10),
@@ -1857,6 +1918,8 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
           ]),
         ),
+      ),
+      ),
       ),
     );
   }
@@ -1914,14 +1977,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final iconColor = dark ? Colors.white70 : Brand.muted;
     final empty = _text.text.trim().isEmpty;
-    return Container(
+    return GlassPanel(
+      radius: 27,
+      opacity: dark ? 0.82 : 0.9,
+      child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 52),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF1C2033) : Colors.white,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: dark ? Colors.white10 : const Color(0xFFE3E6EF)),
-        boxShadow: dark ? null : [BoxShadow(color: Brand.ink.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2))],
-      ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         IconButton(
           tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
@@ -2002,6 +2062,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
       ]),
+      ),
     );
   }
 
@@ -2251,7 +2312,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       top: false,
       child: Container(
-        color: ChatColors.of(context).bar,
         padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2259,7 +2319,10 @@ class _ChatScreenState extends State<ChatScreen> {
             if (quote != null && banner == null)
               Container(
                 margin: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-                decoration: BoxDecoration(color: Brand.violet.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1F35).withValues(alpha: 0.96) : Colors.white.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 clipBehavior: Clip.antiAlias,
                 child: IntrinsicHeight(
                   child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -2289,8 +2352,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       margin: const EdgeInsets.fromLTRB(4, 0, 4, 6),
                       padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.06) : Brand.primary.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(14),
+                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1F35).withValues(alpha: 0.96) : Colors.white.withValues(alpha: 0.96),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 3))],
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: IntrinsicHeight(

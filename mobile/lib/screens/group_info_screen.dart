@@ -251,6 +251,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white, // over the cover banner
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         actions: [
           if (chat.can('change_info')) IconButton(icon: const Icon(Icons.edit_rounded), tooltip: 'Edit name', onPressed: () => _editText(chat, title: true)),
         ],

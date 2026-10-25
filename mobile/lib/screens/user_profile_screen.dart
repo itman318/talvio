@@ -81,7 +81,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final chat = u == null ? null : store.chats.where((c) => c.peer?.id == u.id).firstOrNull;
     final other = u != null && !u.deleted && u.id != myId;
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white, // over the cover banner
+        systemOverlayStyle: SystemUiOverlayStyle.light,
+      ),
       extendBodyBehindAppBar: true,
       body: u == null
           ? Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator())
