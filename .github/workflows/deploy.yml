@@ -40,6 +40,13 @@ jobs:
           } | tee deploy.txt
           [ -n "$HOST" ] && [ -n "$PASS" ]
 
+      - name: Check the code loads (never deploy a broken server)
+        run: |
+          bad=0
+          for f in $(find backend/src -name '*.js'); do node --check "$f" || bad=1; done
+          if [ $bad = 1 ]; then echo "code check: FAILED — nothing was deployed" | tee -a deploy.txt; exit 1; fi
+          echo "code check: ok" | tee -a deploy.txt
+
       - name: Package the backend
         run: |
           tar -czf talvio-backend.tgz -C backend --exclude=node_modules --exclude=uploads --exclude=test --exclude=.env .
