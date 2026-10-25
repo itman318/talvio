@@ -48,8 +48,10 @@ void main() {
     await pumpUntil(t, find.text('Phone number'), seconds: 60, what: 'login screen (phone first)');
     await snap(t, 'login-phone');
     // the email option shows once the server's settings arrive
-    await pumpUntil(t, find.text('Continue with email'), what: 'email option');
-    await t.ensureVisible(find.text('Continue with email'));
+    // below "Next" (the list builds it once scrolled into view, e.g. with the keyboard open)
+    FocusManager.instance.primaryFocus?.unfocus();
+    await settle(t, 800);
+    await t.scrollUntilVisible(find.text('Continue with email'), 150, scrollable: find.byType(Scrollable).first);
     await t.tap(find.text('Continue with email'));
     await settle(t, 600);
     await pumpUntil(t, find.text('Email address'), what: 'email login');
