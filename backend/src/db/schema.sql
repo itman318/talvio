@@ -907,3 +907,5 @@ CREATE TABLE IF NOT EXISTS story_highlight_items (
 );
 CREATE INDEX IF NOT EXISTS story_highlight_items_story_idx ON story_highlight_items (story_id);
 CREATE TABLE IF NOT EXISTS job_runs (name VARCHAR(32) NOT NULL, day DATE NOT NULL, PRIMARY KEY (name, day));
+ALTER TABLE polls ADD COLUMN IF NOT EXISTS close_at TIMESTAMPTZ;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS mentions BIGINT[] NOT NULL DEFAULT '{}';

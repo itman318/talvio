@@ -41,6 +41,7 @@ function shutdown(signal) {
 const scheduler = setInterval(() => {
   messageService.runDueScheduled().catch((err) => console.error('scheduler error', err)); // eslint-disable-line no-console
   callService.sweep().catch((err) => console.error('call sweep error', err)); // eslint-disable-line no-console
+  messageService.sweepPolls().catch(() => {});
   secretSweepTick = (secretSweepTick + 1) % 240; // about once an hour
   if (secretSweepTick % 4 === 0) messageService.sweepExpired().catch((err) => console.error('disappearing sweep error', err)); // eslint-disable-line no-console
   require('./services/payment.service').sweep().catch(() => {});

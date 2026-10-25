@@ -14,6 +14,8 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../theme/brand.dart';
+import 'new_chat_screen.dart' show PickUsersScreen;
+import 'user_profile_screen.dart' show UserProfileScreen;
 
 /// Horizontal row of story avatars at the top of the chat list.
 class StoryBar extends StatelessWidget {
@@ -127,12 +129,13 @@ Future<void> addStory(BuildContext context) async {
 
   final caption = TextEditingController();
   String privacy = 'contacts';
+  var tagged = <AppUser>[];
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) => AlertDialog(
         title: const Text('Share story'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (choice != 'video') ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(x.path), height: 180, fit: BoxFit.cover)),
           TextField(controller: caption, maxLength: 500, decoration: const InputDecoration(hintText: 'Add a caption…')),
           DropdownButton<String>(
@@ -144,8 +147,22 @@ Future<void> addStory(BuildContext context) async {
             ],
             onChanged: (v) => setState(() => privacy = v!),
           ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.alternate_email_rounded),
+            title: Text(tagged.isEmpty ? 'Mention people' : tagged.map((u) => u.firstName.isEmpty ? u.name : u.firstName).join(', '),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: tagged.isEmpty ? const Text('They get a message about it', style: TextStyle(fontSize: 12)) : null,
+            onTap: () async {
+              final picked = await Navigator.push<List<AppUser>>(
+                ctx,
+                MaterialPageRoute(builder: (_) => PickUsersScreen(title: 'Mention people', initial: tagged)),
+              );
+              if (picked != null) setState(() => tagged = picked.take(10).toList());
+            },
+          ),
           const Text('Disappears after 24 hours', style: TextStyle(fontSize: 12, color: Brand.muted)),
-        ]),
+        ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Share')),
@@ -162,6 +179,7 @@ Future<void> addStory(BuildContext context) async {
           caption: caption.text.trim(),
           privacy: privacy,
           mime: lookupMimeType(x.path),
+          mentions: tagged.map((u) => u.id).toList(),
         );
     if (context.mounted) showInfo(context, 'Story shared');
   } catch (e) {
@@ -526,6 +544,26 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Text(story.caption, style: const TextStyle(color: Colors.white, fontSize: 15), textAlign: TextAlign.center),
+                  ),
+                if (story.mentions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Wrap(alignment: WrapAlignment.center, spacing: 6, runSpacing: 6, children: [
+                      for (final u in story.mentions)
+                        GestureDetector(
+                          onTap: () {
+                            _progress.stop();
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: u.id))).then((_) {
+                              if (mounted) _progress.forward();
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(color: Colors.white.withAlpha(40), borderRadius: BorderRadius.circular(14)),
+                            child: Text('@${u.username ?? u.firstName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                          ),
+                        ),
+                    ]),
                   ),
                 if (_highlight)
                   const SizedBox.shrink()

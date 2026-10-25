@@ -274,6 +274,7 @@ router.delete('/scheduled/:id', h(async (req, res) => res.json(await messageServ
 
 // --- messages
 router.get('/chats/:id/media-counts', h(async (req, res) => res.json(await messageService.mediaCounts(req.userId, req.params.id))));
+router.get('/chats/:id/live-locations', h(async (req, res) => res.json(await messageService.liveLocations(req.userId, req.params.id))));
 router.get('/chats/:id/messages', h(async (req, res) => res.json(await messageService.listMessages(req.userId, req.params.id, req.query))));
 router.post('/chats/:id/messages', h(async (req, res) => res.json(await messageService.sendMessage(req.userId, req.params.id, req.body))));
 router.post('/chats/:id/messages/delete', h(async (req, res) => res.json(await messageService.deleteMessages(req.userId, req.params.id, req.body))));

@@ -27,6 +27,7 @@ import '../core/message_notifications.dart';
 import '../core/voice_playback.dart';
 import '../core/chat_lock.dart';
 import '../core/screen_guard.dart';
+import '../core/chat_passcode.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -42,6 +43,8 @@ import 'home_screen.dart' show activityIcon;
 import 'premium_screens.dart';
 import 'image_editor_screen.dart';
 import 'video_send_screen.dart';
+import 'live_map_screen.dart';
+import '../widgets/swipe_reply.dart';
 import '../widgets/media_widgets.dart' show VoiceWavePainter, resampleBars;
 import '../widgets/album_view.dart';
 import 'thread_screen.dart';
@@ -157,7 +160,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _open() async {
     try {
       _chat = await _store.getChat(chatId);
+      final unread = _chat!.unreadCount;
       await _store.openChat(chatId);
+      _placeUnreadMarker(unread);
       if (_chat!.isGroup) _store.loadMembers(chatId).catchError((_) => <GroupMember>[]);
       if (_chat!.isChannel && _chat!.isPublic && mounted) _loadAd();
       if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowRules());
@@ -862,7 +867,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (m.isSystem) return;
     final canEdit = (mine || channelAdmin) && m.forwardedFromName == null && m.type != 'poll' && !m.viewOnce && (m.type == 'text' || m.text.isNotEmpty);
     final poll = m.poll;
-    final canClosePoll = poll != null && !poll.closed && (mine || chat.isAdmin);
+    final canClosePoll = poll != null && !poll.isClosed && (mine || chat.isAdmin);
     final a = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -950,10 +955,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         break;
       case 'reply':
-        setState(() {
-          _replyTo = m;
-          _editing = null;
-        });
+        _startReply(m);
         break;
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.text));
@@ -1083,6 +1085,12 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _chatMenu(String action, Chat chat) async {
     try {
       switch (action) {
+        case 'passcode':
+          await _passcodeMenu(chat);
+          break;
+        case 'live':
+          Navigator.push(context, MaterialPageRoute(builder: (_) => LiveMapScreen(chat: chat)));
+          break;
         case 'lock':
           if (!await ChatLock.unlock(context, reason: chat.isLocked ? 'Unlock this chat' : 'Lock this chat')) return;
           await _store.setLocked(chat.id, !chat.isLocked);
@@ -1194,12 +1202,13 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     // locked & protected chats: no screenshots
-    final guard = chat.isLocked || chat.protectedContent;
+    final guard = chat.isLocked || chat.protectedContent || ChatPasscode.has(chat.id);
     if (guard != _guarded) {
       _guarded = guard;
       guard ? ScreenGuard.acquire() : ScreenGuard.release();
     }
     if (chat.isLocked && !_unlocked) return _lockGate(chat);
+    if (ChatPasscode.needsCode(chat.id)) return _passcodeGate(chat);
     if (chat.isForum) return TopicsScreen(chat: chat);
     final all = store.messagesOf(chatId);
     // My Notes: #tags to filter notes
@@ -1316,8 +1325,10 @@ class _ChatScreenState extends State<ChatScreen> {
             itemBuilder: (_) => [
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
+              if (!chat.isChannel && !chat.isSavedMessages) _mi('live', Icons.share_location_rounded, 'Live locations'),
               _mi('theme', Icons.palette_outlined, 'Theme & wallpaper'),
               if (!chat.isRequest) _mi('lock', chat.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded, chat.isLocked ? 'Unlock chat' : 'Lock chat'),
+              _mi('passcode', Icons.pin_outlined, ChatPasscode.has(chat.id) ? 'Passcode' : 'Set a passcode'),
               if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
                 _mi('disappearing', Icons.timer_outlined, chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages'),
               if (chat.canPost) _mi('scheduled', Icons.schedule_send_outlined, 'Scheduled messages'),
@@ -1408,6 +1419,82 @@ class _ChatScreenState extends State<ChatScreen> {
     ),
     ),
     );
+  }
+
+  /// "N unread messages" line above the first message I haven't read; the chat opens there.
+  int? _unreadMarkerId;
+  int _unreadAtOpen = 0;
+  final _unreadKey = GlobalKey();
+
+  void _placeUnreadMarker(int unread) {
+    if (unread <= 0) return;
+    final msgs = _store.messagesOf(chatId);
+    final myId = _store.myId;
+    var n = 0;
+    for (final m in msgs) {
+      if (m.isLocal || m.senderId == myId) continue;
+      n++;
+      if (n == unread) {
+        _unreadMarkerId = m.id;
+        break;
+      }
+    }
+    // more unread than loaded: mark the oldest one we have
+    if (_unreadMarkerId == null && n > 0) _unreadMarkerId = msgs.lastWhere((m) => !m.isLocal && m.senderId != myId).id;
+    _unreadAtOpen = unread;
+    if (unread < 6 || _unreadMarkerId == null) return; // a few new ones fit on screen anyway
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToUnread());
+  }
+
+  Future<void> _scrollToUnread() async {
+    for (var k = 0; k < 30 && mounted; k++) {
+      final ctx = _unreadKey.currentContext;
+      if (ctx != null) {
+        await Scrollable.ensureVisible(ctx, alignment: 0.85, duration: const Duration(milliseconds: 250));
+        return;
+      }
+      if (!_scroll.hasClients) return;
+      final max = _scroll.position.maxScrollExtent;
+      if (_scroll.offset >= max) return;
+      _scroll.jumpTo((_scroll.offset + 500).clamp(0.0, max));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  Widget _unreadDivider() {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      key: _unreadKey,
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      color: (dark ? Colors.white : Brand.ink).withAlpha(dark ? 16 : 12),
+      alignment: Alignment.center,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.keyboard_double_arrow_down_rounded, size: 16, color: Brand.primary),
+        const SizedBox(width: 6),
+        Text(_unreadAtOpen > 99 ? '99+ unread messages' : '$_unreadAtOpen unread message${_unreadAtOpen == 1 ? '' : 's'}',
+            style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w700, fontSize: 12.5)),
+      ]),
+    );
+  }
+
+  void _startReply(Message m) {
+    setState(() {
+      _replyTo = m;
+      _editing = null;
+    });
+    _focus.requestFocus();
+  }
+
+  /// Double-tap: ❤️ (only adds — never removes another reaction by accident).
+  Future<void> _quickHeart(Message m) async {
+    if (m.myReaction == '❤️') return;
+    try {
+      await _store.react(m, '❤️');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
   }
 
   Widget _downButton(List<Message> messages) {
@@ -1527,6 +1614,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return Column(
           children: [
             if (newDay) DateChip(date: m.createdAt),
+            if (m.id == _unreadMarkerId) _unreadDivider(),
             if (m.isSystem)
               SystemBubble(text: systemText(m, store))
             else
@@ -1534,6 +1622,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 selecting: selecting && !m.isLocal,
                 picked: picked,
                 onTap: () => setState(() => picked ? _selected.remove(m.id) : _selected.add(m.id)),
+                child: SwipeReply(
+                onReply: selecting || m.isLocal || !chat.canPost ? null : () => _startReply(m),
+                onDoubleTap: selecting || m.isLocal ? null : () => _quickHeart(m),
                 child: MessageBubble(
                 key: ValueKey(m.isLocal ? m.clientId : m.id),
                 message: m,
@@ -1546,6 +1637,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat),
                 onTap: m.sendState == SendState.failed ? () => _messageMenu(m, chat) : null,
                 onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
+              ),
               ),
               ),
           ],
@@ -1583,6 +1675,83 @@ class _ChatScreenState extends State<ChatScreen> {
         ]),
       ),
     );
+  }
+
+  bool _askedCode = false;
+
+  Future<void> _enterCode(Chat chat) async {
+    final code = await ChatPasscode.askCode(context, title: 'Enter passcode', subtitle: chat.title, verify: (c) => ChatPasscode.check(chat.id, c));
+    if (code != null && mounted) setState(() {});
+  }
+
+  Widget _passcodeGate(Chat chat) {
+    if (!_askedCode) {
+      _askedCode = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enterCode(chat);
+      });
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(chat.title)),
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
+            child: const Icon(Icons.pin_rounded, color: Colors.white, size: 44),
+          ),
+          const SizedBox(height: 16),
+          const Text('This chat has a passcode', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 20),
+          SizedBox(width: 220, child: AuroraButton(label: 'Enter passcode', icon: Icons.dialpad_rounded, onPressed: () => _enterCode(chat))),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () async {
+              if (await ChatPasscode.resetWithDevice(context, chat.id) && mounted) {
+                setState(() {});
+                showInfo(context, 'Passcode removed');
+              }
+            },
+            child: const Text('Forgot passcode?'),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Chat menu → Passcode: set, change or remove (removing asks for the current one).
+  Future<void> _passcodeMenu(Chat chat) async {
+    if (!ChatPasscode.has(chat.id)) {
+      final code = await ChatPasscode.askNew(context);
+      if (code == null) return;
+      await ChatPasscode.set(chat.id, code);
+      if (mounted) showInfo(context, 'Passcode set — this chat now asks for it when opened');
+      setState(() {});
+      return;
+    }
+    final a = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(leading: const Icon(Icons.password_rounded), title: const Text('Change passcode'), onTap: () => Navigator.pop(ctx, 'change')),
+          ListTile(leading: const Icon(Icons.no_encryption_gmailerrorred_rounded), title: const Text('Remove passcode'), onTap: () => Navigator.pop(ctx, 'remove')),
+        ]),
+      ),
+    );
+    if (a == null || !mounted) return;
+    final current = await ChatPasscode.askCode(context, title: 'Current passcode', verify: (c) => ChatPasscode.check(chat.id, c));
+    if (current == null || !mounted) return;
+    if (a == 'remove') {
+      await ChatPasscode.remove(chat.id);
+      if (mounted) showInfo(context, 'Passcode removed');
+    } else {
+      final code = await ChatPasscode.askNew(context);
+      if (code == null) return;
+      await ChatPasscode.set(chat.id, code);
+      if (mounted) showInfo(context, 'Passcode changed');
+    }
+    if (mounted) setState(() {});
   }
 
   void _openChat(int id) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id, initial: _store.chatById(id))));

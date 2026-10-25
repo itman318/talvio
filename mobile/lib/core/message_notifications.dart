@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'chat_passcode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -88,6 +89,11 @@ class MessageNotifications {
     if (data['type'] != 'message' || data['title'] == null) return;
     await init();
     final chatId = int.tryParse('${data['chat_id']}') ?? 0;
+    // chats with a passcode: no message text on the lock screen
+    try {
+      await ChatPasscode.load();
+      if (ChatPasscode.has(chatId)) data = {...data, 'body': '🔒 New message'};
+    } catch (_) {}
     final canReply = data['reply_token'] != null;
     await plugin.show(
       idFor(chatId),

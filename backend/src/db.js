@@ -5,6 +5,8 @@ const config = require('./config');
 
 // Return BIGINT/COUNT(*) values as JS numbers (ids stay far below 2^53).
 types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));
+// BIGINT[] columns → arrays of numbers
+types.setTypeParser(1016, (v) => (v === null ? null : v.replace(/[{}]/g, '').split(',').filter(Boolean).map((x) => parseInt(x, 10))));
 // DATE columns stay 'YYYY-MM-DD' strings (no timezone shifts).
 types.setTypeParser(1082, (v) => v);
 

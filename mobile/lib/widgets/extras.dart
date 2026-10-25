@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../theme/brand.dart';
+import '../screens/live_map_screen.dart';
 import '../screens/calls_screen.dart' show callCodeFromLink, openCallLink;
 
 /// Colours that follow light / dark mode for chat surfaces.
@@ -219,7 +220,15 @@ class _LocationViewState extends State<LocationView> {
           ),
         const SizedBox(height: 6),
         InkWell(
-          onTap: () => launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'), mode: LaunchMode.externalApplication),
+          onTap: () {
+            final chat = store.chatById(m.chatId);
+            if (live && chat != null) {
+              // live: everyone sharing in this chat, on one map
+              Navigator.push(context, MaterialPageRoute(builder: (_) => LiveMapScreen(chat: chat)));
+            } else {
+              launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'), mode: LaunchMode.externalApplication);
+            }
+          },
           child: Row(children: [
             Icon(live ? Icons.share_location_rounded : Icons.location_on_outlined, color: live ? Brand.primary : widget.accent, size: 20),
             const SizedBox(width: 6),

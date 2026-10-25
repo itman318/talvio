@@ -36,8 +36,9 @@ function highlightVisibleSql(p) {
     )))`;
 }
 
-function serialize(s, media, { owner = false } = {}) {
+function serialize(s, media, { owner = false, users = null } = {}) {
   return {
+    mentions: (s.mentions || []).map((id) => (users && users.get(id)) || null).filter(Boolean),
     id: s.id,
     user_id: s.user_id,
     media: mediaService.serialize(media),
@@ -58,12 +59,46 @@ async function create(userId, body = {}) {
   if (!['image', 'video'].includes(media.kind)) throw badRequest('invalid_media', 'Stories can be photos or videos');
   const caption = v.str(body.caption, { field: 'caption', max: 500 }) || '';
   const privacy = v.oneOf(body.privacy || 'contacts', ['everyone', 'contacts'], 'privacy');
-  const s = await db.one(
+  const wanted = v.idList(body.mentions || [], 'mentions', 10).filter((id) => id !== userId);
+  let s = await db.one(
     `INSERT INTO stories (user_id, media_id, caption, privacy, expires_at)
      VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5)) RETURNING *`,
     [userId, media.id, caption, privacy, STORY_HOURS],
   );
-  return serialize(s, media, { owner: true });
+  if (wanted.length) s = await mentionPeople(userId, s, wanted);
+  return serialize(s, media, { owner: true, users: await mentionUsers(userId, [s]) });
+}
+
+/**
+ * Story mentions: only people who can actually see this story are tagged; each gets a
+ * "Mentioned you in their story" message with a preview.
+ */
+async function mentionPeople(userId, s, wanted) {
+  const ok = [];
+  for (const id of wanted) {
+    const visible = await db.one(`SELECT 1 AS x FROM stories s WHERE s.id = $2 AND ${visibleSql('$1')}`, [id, s.id]);
+    if (visible) ok.push(id);
+  }
+  if (!ok.length) return s;
+  const row = await db.one('UPDATE stories SET mentions = $2 WHERE id = $1 RETURNING *', [s.id, ok]);
+  const chatService = require('./chat.service'); // lazy to avoid circular imports
+  const messageService = require('./message.service');
+  const ref = { ...(await storyRef(row, null)), mention: true };
+  for (const id of ok) {
+    try {
+      const chat = await chatService.getOrCreatePrivate(userId, id);
+      await messageService.sendMessage(userId, chat.id, { type: 'text', text: 'Mentioned you in their story' }, { meta: { story: ref }, skipRateLimit: true });
+    } catch (_) {
+      // their privacy settings may not allow a message: the tag on the story still shows
+    }
+  }
+  return row;
+}
+
+/** Users tagged in these stories (as the viewer is allowed to see them). */
+async function mentionUsers(viewerId, rows) {
+  const ids = [...new Set(rows.flatMap((r) => r.mentions || []))];
+  return ids.length ? userService.getUsersMap(viewerId, ids) : new Map();
 }
 
 /** Stories grouped by author: me first, then authors with unseen stories, newest first. */
@@ -78,10 +113,11 @@ async function feed(userId) {
   const medias = await db.many('SELECT * FROM media WHERE id = ANY($1::bigint[])', [rows.map((r) => r.media_id)]);
   const mediaMap = new Map(medias.map((m) => [m.id, m]));
   const users = await userService.getUsersMap(userId, [...new Set(rows.map((r) => r.user_id))]);
+  const tagged = await mentionUsers(userId, rows);
   const groups = new Map();
   for (const s of rows) {
     if (!groups.has(s.user_id)) groups.set(s.user_id, []);
-    groups.get(s.user_id).push(serialize(s, mediaMap.get(s.media_id), { owner: s.user_id === userId }));
+    groups.get(s.user_id).push(serialize(s, mediaMap.get(s.media_id), { owner: s.user_id === userId, users: tagged }));
   }
   const out = [...groups.entries()]
     .filter(([uid]) => users.has(uid))

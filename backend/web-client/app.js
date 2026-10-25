@@ -797,7 +797,8 @@
     if (m.meta && m.meta.story) {
       const st = m.meta.story;
       const mine = !!auth.me && m.sender_id === auth.me.id;
-      const label = st.reaction ? (mine ? 'You reacted to their story' : 'Reacted to your story') : (mine ? 'You replied to their story' : 'Replied to your story');
+      const label = st.mention ? (mine ? 'You mentioned them in your story' : 'Mentioned you in their story')
+        : st.reaction ? (mine ? 'You reacted to their story' : 'Reacted to your story') : (mine ? 'You replied to their story' : 'Replied to your story');
       body.push(el('div', { class: 'reply' }, el('b', {}, `📖 ${label}`), st.caption || (st.kind === 'video' ? 'Video story' : 'Photo story')));
     }
     if (album) body.push(albumView(album));
@@ -991,7 +992,7 @@
     const voted = p.my_votes && p.my_votes.length > 0;
     return el('div', { class: 'poll' },
       el('b', {}, p.question),
-      el('div', { class: 'muted', style: 'font-size:12px' }, `${p.quiz ? 'Quiz' : p.anonymous ? 'Anonymous poll' : 'Poll'} · ${p.total_voters} votes${p.closed ? ' · closed' : ''}`),
+      el('div', { class: 'muted', style: 'font-size:12px' }, `${p.quiz ? 'Quiz' : p.anonymous ? 'Anonymous poll' : 'Poll'} · ${p.total_voters} votes${p.closed ? ' · closed' : p.close_at ? ` · ends ${new Date(p.close_at).toLocaleString()}` : ''}`),
       p.options.map((o, idx) => {
         const pct = total ? Math.round((Number(o.votes) / total) * 100) : 0;
         return el('div', { class: 'opt', onclick: async () => {

@@ -180,6 +180,7 @@ class PollInfo {
   List<int> myVotes;
   int? correctOption;
   String? explanation;
+  DateTime? closeAt; // closes by itself at this time
 
   PollInfo({
     required this.id,
@@ -193,6 +194,7 @@ class PollInfo {
     required this.myVotes,
     this.correctOption,
     this.explanation,
+    this.closeAt,
   });
 
   factory PollInfo.fromJson(Map<String, dynamic> j) => PollInfo(
@@ -209,10 +211,14 @@ class PollInfo {
         myVotes: ((j['my_votes'] as List?) ?? []).map(_int).toList(),
         correctOption: _intOrNull(j['correct_option']),
         explanation: j['explanation'] as String?,
+        closeAt: _date(j['close_at']),
       );
 
+  /// Closed by hand, or its deadline passed (the server closes it within seconds).
+  bool get isClosed => closed || (closeAt != null && DateTime.now().isAfter(closeAt!));
+
   bool get voted => myVotes.isNotEmpty;
-  bool get showResults => voted || closed;
+  bool get showResults => voted || isClosed;
 
   /// Applies counts from a realtime update without losing this user's own votes.
   void mergeCounts(PollInfo other) {
@@ -221,6 +227,7 @@ class PollInfo {
     }
     totalVoters = other.totalVoters;
     closed = other.closed;
+    closeAt = other.closeAt;
     if (other.correctOption != null) correctOption = other.correctOption;
     if (other.explanation != null) explanation = other.explanation;
   }
@@ -758,6 +765,7 @@ class StoryItem {
   final DateTime createdAt;
   bool viewed;
   final int viewsCount;
+  final List<AppUser> mentions; // people tagged in this story
 
   StoryItem({
     required this.id,
@@ -768,6 +776,7 @@ class StoryItem {
     required this.createdAt,
     required this.viewed,
     required this.viewsCount,
+    this.mentions = const [],
   });
 
   factory StoryItem.fromJson(Map<String, dynamic> j) => StoryItem(
@@ -779,6 +788,7 @@ class StoryItem {
         createdAt: _date(j['created_at']) ?? DateTime.now(),
         viewed: j['viewed'] == true,
         viewsCount: _int(j['views_count'] ?? 0),
+        mentions: [for (final u in (j['mentions'] as List? ?? const [])) AppUser.fromJson(Map<String, dynamic>.from(u as Map))],
       );
 }
 

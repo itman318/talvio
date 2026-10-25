@@ -222,3 +222,47 @@ test('story reactions go to the chat; highlights keep expired stories on the pro
   await stories.deleteHighlight(a, h.id);
   assert.equal((await stories.listHighlights(b, a)).highlights.length, 0);
 });
+
+test('poll deadline: closes by itself; story mentions; live locations of a chat', async () => {
+  const a = await user();
+  const b = await user();
+  const c = await user();
+  const g = (await chats.createGroup(a, { title: 'Trip', member_ids: [b, c] })).chat;
+  await assert.rejects(messages.sendMessage(a, g.id, { type: 'poll', poll: { question: 'When?', options: ['Sat', 'Sun'], close_in_sec: 10 } }));
+  const p = await messages.sendMessage(a, g.id, { type: 'poll', poll: { question: 'When?', options: ['Sat', 'Sun'], close_in_sec: 3600 } });
+  assert.ok(p.poll.close_at);
+  assert.equal(p.poll.closed, false);
+  await messages.vote(b, p.id, [0]);
+  await db.query("UPDATE polls SET close_at = now() - interval '1 second'");
+  await assert.rejects(messages.vote(c, p.id, [1]), (e) => e.code === 'poll_closed');
+  assert.equal(await messages.sweepPolls(), 1);
+  assert.equal(await messages.sweepPolls(), 0);
+  const listed = await messages.listMessages(b, g.id, {});
+  assert.equal(listed.messages.find((m) => m.id === p.id).poll.closed, true);
+
+  // story mentions: only people who can see the story get tagged and a message
+  await contact(a, b);
+  await contact(b, a);
+  const stranger = await user();
+  const s = await (async () => {
+    const m = await db.one(
+      `INSERT INTO media (uploader_id, kind, mime, size_bytes, storage_path, original_name) VALUES ($1, 'image', 'image/jpeg', 100, $2, 'x') RETURNING id`,
+      [a, `t/${Math.random()}`],
+    );
+    return stories.create(a, { media_id: m.id, mentions: [b, stranger, a] });
+  })();
+  assert.deepEqual(s.mentions.map((u) => u.id), [b]);
+  const dm = await chats.getOrCreatePrivate(a, b);
+  const msgs = (await messages.listMessages(b, dm.id, {})).messages;
+  assert.equal(msgs[0].meta.story.mention, true);
+  const feed = await stories.feed(b);
+  assert.equal(feed.find((x) => x.user.id === a).stories[0].mentions[0].id, b);
+
+  // live locations
+  const live = await messages.sendMessage(b, g.id, { type: 'location', location: { lat: 31.5, lng: 74.3, live_minutes: 15 } });
+  assert.ok(live.meta.live);
+  await messages.sendMessage(c, g.id, { type: 'location', location: { lat: 24.8, lng: 67.0 } });
+  const locs = await messages.liveLocations(a, g.id);
+  assert.deepEqual(locs.locations.map((m) => m.id), [live.id]);
+  await assert.rejects(messages.liveLocations(stranger, g.id));
+});

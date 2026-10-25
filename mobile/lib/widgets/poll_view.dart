@@ -73,10 +73,11 @@ class _PollViewState extends State<PollView> {
         children: [
           Text(p.question, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15.5)),
           const SizedBox(height: 2),
-          Text(p.closed ? 'Final results · $kind' : kind, style: const TextStyle(fontSize: 12, color: Brand.muted)),
+          Text(p.isClosed ? 'Final results · $kind' : (p.closeAt != null ? '$kind · ${_endsIn(p.closeAt!)}' : kind),
+              style: const TextStyle(fontSize: 12, color: Brand.muted)),
           const SizedBox(height: 8),
           for (var i = 0; i < p.options.length; i++) _option(p, i, results, total, accent),
-          if (p.multiple && !results && !p.closed)
+          if (p.multiple && !results && !p.isClosed)
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -94,7 +95,7 @@ class _PollViewState extends State<PollView> {
             children: [
               Text('${p.totalVoters} ${p.totalVoters == 1 ? 'vote' : 'votes'}', style: const TextStyle(fontSize: 12, color: Brand.muted)),
               const Spacer(),
-              if (p.voted && !p.quiz && !p.closed)
+              if (p.voted && !p.quiz && !p.isClosed)
                 GestureDetector(
                   onTap: _busy ? null : () => _vote([]),
                   child: Text('Retract vote', style: TextStyle(fontSize: 12, color: accent)),
@@ -114,7 +115,7 @@ class _PollViewState extends State<PollView> {
     final wrongPick = p.quiz && mine && p.correctOption != null && p.correctOption != i;
     final barColor = p.quiz && results ? (correct ? Brand.accent : (wrongPick ? Colors.red : accent)) : accent;
 
-    if (!results && !p.closed) {
+    if (!results && !p.isClosed) {
       return InkWell(
         onTap: _busy
             ? null
@@ -224,4 +225,14 @@ class _ReactionChip extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// "ends in 2h 15m" / "ends in 3 days".
+String _endsIn(DateTime at) {
+  final d = at.difference(DateTime.now());
+  if (d.isNegative) return 'closing…';
+  if (d.inDays >= 2) return 'ends in ${d.inDays} days';
+  if (d.inHours >= 1) return 'ends in ${d.inHours}h ${d.inMinutes % 60}m';
+  return 'ends in ${d.inMinutes.clamp(1, 59)} min';
 }

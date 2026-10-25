@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../core/chat_passcode.dart';
 import '../core/prefs.dart';
 import '../models/models.dart';
 import '../state/auth_state.dart';
@@ -401,6 +402,12 @@ class ChatTile extends StatelessWidget {
       } else {
         prefix = mine && !chat.isChannel ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
         (kindIcon, preview) = previewParts(last);
+        if (ChatPasscode.has(chat.id)) {
+          // passcode chats don't show their messages in the list
+          prefix = '';
+          kindIcon = Icons.lock_rounded;
+          preview = 'Protected with a passcode';
+        }
       }
     }
 

@@ -29,6 +29,16 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
   bool _multiple = false;
   bool _quiz = false;
   int? _correct;
+  int? _closeIn; // seconds; null = stays open until closed by hand
+
+  static const _durations = [
+    (null, 'No limit'),
+    (3600, '1 hour'),
+    (6 * 3600, '6 hours'),
+    (86400, '1 day'),
+    (3 * 86400, '3 days'),
+    (7 * 86400, '1 week'),
+  ];
 
   void _done() {
     final q = _question.text.trim();
@@ -53,6 +63,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
       'quiz': _quiz,
       if (_quiz) 'correct_option': correct,
       if (_quiz && _explanation.text.trim().isNotEmpty) 'explanation': _explanation.text.trim(),
+      if (_closeIn != null) 'close_in_sec': _closeIn,
     });
   }
 
@@ -116,6 +127,18 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
             subtitle: const Text('One correct answer, shown after voting'),
             value: _quiz,
             onChanged: (v) => setState(() => _quiz = v),
+          ),
+          ListTile(
+            leading: const Icon(Icons.timer_outlined),
+            title: const Text('Close automatically'),
+            subtitle: const Text('Voting stops and everyone sees the final result'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(spacing: 8, runSpacing: 4, children: [
+              for (final (secs, label) in _durations)
+                ChoiceChip(label: Text(label), selected: _closeIn == secs, onSelected: (_) => setState(() => _closeIn = secs)),
+            ]),
           ),
           if (_quiz)
             TextField(

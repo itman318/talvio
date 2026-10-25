@@ -73,7 +73,7 @@ async function loadPolls(viewerId, messageIds) {
     : [];
   for (const p of polls) {
     const myVotes = mine.filter((x) => x.poll_id === p.id).map((x) => x.option_idx);
-    const closed = !!p.closed_at;
+    const closed = !!p.closed_at || (p.close_at && new Date(p.close_at) <= new Date());
     const reveal = p.is_quiz && (closed || myVotes.length > 0);
     map.set(p.message_id, {
       id: p.id,
@@ -85,7 +85,8 @@ async function loadPolls(viewerId, messageIds) {
       anonymous: p.is_anonymous,
       multiple: p.multiple,
       quiz: p.is_quiz,
-      closed,
+      closed: !!closed,
+      close_at: p.close_at && !p.closed_at ? new Date(p.close_at).toISOString() : null,
       my_votes: myVotes,
       correct_option: reveal ? p.correct_option : null,
       explanation: reveal ? p.explanation : null,
@@ -323,7 +324,14 @@ function parsePoll(raw) {
     quiz,
     correct_option: null,
     explanation: '',
+    close_in_sec: null,
   };
+  // optional deadline: the poll closes by itself (5 minutes … 30 days)
+  if (raw.close_in_sec !== undefined && raw.close_in_sec !== null) {
+    const secs = Number(raw.close_in_sec);
+    if (!Number.isInteger(secs) || secs < 300 || secs > 30 * 24 * 3600) throw badRequest('invalid_poll', 'A poll can run from 5 minutes to 30 days');
+    poll.close_in_sec = secs;
+  }
   if (quiz) {
     const c = Number(raw.correct_option);
     if (!Number.isInteger(c) || c < 0 || c >= options.length) {
@@ -534,9 +542,9 @@ async function insertMessage({
       }
       if (poll) {
         const p = await c.query(
-          `INSERT INTO polls (message_id, question, is_anonymous, multiple, is_quiz, correct_option, explanation)
-           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-          [m.id, poll.question, poll.anonymous, poll.multiple, poll.quiz, poll.correct_option, poll.explanation],
+          `INSERT INTO polls (message_id, question, is_anonymous, multiple, is_quiz, correct_option, explanation, close_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::int IS NULL THEN NULL ELSE now() + make_interval(secs => $8::int) END) RETURNING id`,
+          [m.id, poll.question, poll.anonymous, poll.multiple, poll.quiz, poll.correct_option, poll.explanation, poll.close_in_sec],
         );
         for (let i = 0; i < poll.options.length; i += 1) {
           await c.query('INSERT INTO poll_options (poll_id, idx, text) VALUES ($1, $2, $3)', [p.rows[0].id, i, poll.options[i]]);
@@ -602,6 +610,20 @@ async function sweepExpired() {
     bus.emit('message:deleted', { chatId, messageIds: ids, userIds: await chatService.memberIds(chatId) });
   }
   return rows.length;
+}
+
+/** Everyone sharing a live location in this chat right now (newest per person) — for the group map. */
+async function liveLocations(userId, chatIdRaw) {
+  const chat = await chatService.requireMember(chatIdRaw, userId);
+  const rows = await db.many(
+    `SELECT DISTINCT ON (m.sender_id) m.* FROM messages m
+     WHERE m.chat_id = $1 AND m.type = 'location' AND m.deleted_at IS NULL AND m.id > $2
+       AND m.meta ? 'live' AND COALESCE((m.meta->'live'->>'stopped')::boolean, FALSE) = FALSE
+       AND (m.meta->'live'->>'until')::timestamptz > now()
+     ORDER BY m.sender_id, m.id DESC`,
+    [chat.id, chat.cleared_before_id || 0],
+  );
+  return { locations: await serializeRows(userId, rows) };
 }
 
 /** Live location: the sender's phone posts new coordinates (or stop) until the time runs out. */
@@ -1107,7 +1129,7 @@ async function emitPoll(chat, messageId) {
 
 async function vote(userId, messageIdRaw, optionsRaw) {
   const { m, chat, poll } = await pollFor(userId, messageIdRaw);
-  if (poll.closed_at) throw forbidden('poll_closed', 'This poll is closed');
+  if (poll.closed_at || (poll.close_at && new Date(poll.close_at) <= new Date())) throw forbidden('poll_closed', 'This poll is closed');
   if (!Array.isArray(optionsRaw)) throw badRequest('invalid_input', 'options must be a list');
   const n = (await db.one('SELECT count(*) AS n FROM poll_options WHERE poll_id = $1', [poll.id])).n;
   const options = [...new Set(optionsRaw.map(Number))];
@@ -1137,6 +1159,19 @@ async function closePoll(userId, messageIdRaw) {
     await emitPoll(chat, m.id);
   }
   return (await loadPolls(userId, [m.id])).get(m.id);
+}
+
+/** Scheduler: polls whose deadline passed get closed and everyone sees the final result. */
+async function sweepPolls() {
+  const rows = await db.many(
+    `UPDATE polls SET closed_at = close_at WHERE closed_at IS NULL AND close_at IS NOT NULL AND close_at <= now()
+     RETURNING message_id`,
+  );
+  for (const r of rows) {
+    const m = await db.one('SELECT chat_id FROM messages WHERE id = $1', [r.message_id]);
+    if (m) await emitPoll({ id: m.chat_id }, r.message_id).catch(() => {});
+  }
+  return rows.length;
 }
 
 async function pollVoters(userId, messageIdRaw, optionRaw) {
@@ -1390,6 +1425,8 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  liveLocations,
+  sweepPolls,
   openOnce,
   messageInfo,
   listQueue,

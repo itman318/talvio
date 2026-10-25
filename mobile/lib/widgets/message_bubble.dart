@@ -357,9 +357,12 @@ class MessageBubble extends StatelessWidget {
   /// "Replied to your story" / "Reacted to your story" with a small preview.
   Widget _storyBlock(Map<String, dynamic> st, Color accent, Color textColor) {
     final reaction = st['reaction'] != null;
-    final label = isMine
-        ? (reaction ? 'You reacted to their story' : 'You replied to their story')
-        : (reaction ? 'Reacted to your story' : 'Replied to your story');
+    final mention = st['mention'] == true;
+    final label = mention
+        ? (isMine ? 'You mentioned them in your story' : 'Mentioned you in their story')
+        : isMine
+            ? (reaction ? 'You reacted to their story' : 'You replied to their story')
+            : (reaction ? 'Reacted to your story' : 'Replied to your story');
     final caption = '${st['caption'] ?? ''}';
     final media = st['media'] is Map ? MediaInfo.fromJson(Map<String, dynamic>.from(st['media'] as Map)) : null;
     return Container(
@@ -376,7 +379,7 @@ class MessageBubble extends StatelessWidget {
         Flexible(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(reaction ? Icons.add_reaction_rounded : Icons.amp_stories_rounded, size: 13, color: accent),
+              Icon(mention ? Icons.alternate_email_rounded : (reaction ? Icons.add_reaction_rounded : Icons.amp_stories_rounded), size: 13, color: accent),
               const SizedBox(width: 4),
               Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 12))),
             ]),

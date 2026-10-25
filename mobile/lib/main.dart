@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'config.dart';
 import 'core/chat_lock.dart';
+import 'core/chat_passcode.dart';
 import 'core/crash_reporter.dart';
 import 'core/prefs.dart';
 import 'core/prayer_reminders.dart';
@@ -53,6 +54,7 @@ Future<void> _start() async {
   final prefs = AppPrefs();
   try {
     await prefs.load().timeout(const Duration(seconds: 5));
+    await ChatPasscode.load();
   } catch (e) {
     debugPrint('Prefs not loaded: $e');
   }
@@ -200,7 +202,10 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       final pausedAt = _pausedAt;
       _pausedAt = null;
       // locked chats lock again after the app was in the background for a while
-      if (pausedAt != null && DateTime.now().difference(pausedAt) > const Duration(seconds: 30)) ChatLock.close();
+      if (pausedAt != null && DateTime.now().difference(pausedAt) > const Duration(seconds: 30)) {
+        ChatLock.close();
+        ChatPasscode.closeAll();
+      }
       if (pausedAt != null && prefs.lockEnabled && !_locked && DateTime.now().difference(pausedAt) >= Duration(minutes: prefs.lockAfterMinutes)) {
         setState(() => _locked = true);
       }

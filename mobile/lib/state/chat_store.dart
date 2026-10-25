@@ -1000,9 +1000,9 @@ class ChatStore extends ChangeNotifier {
   }
 
   /// type: image | video. privacy: contacts | everyone
-  Future<void> postStory(String path, {required String type, String caption = '', String privacy = 'contacts', String? mime}) async {
+  Future<void> postStory(String path, {required String type, String caption = '', String privacy = 'contacts', String? mime, List<int> mentions = const []}) async {
     final m = await api.upload(path, kind: type, mime: mime);
-    await api.post('/stories', {'media_id': m['id'], 'caption': caption, 'privacy': privacy});
+    await api.post('/stories', {'media_id': m['id'], 'caption': caption, 'privacy': privacy, if (mentions.isNotEmpty) 'mentions': mentions});
     await loadStories();
   }
 
