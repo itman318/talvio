@@ -1,3 +1,4 @@
+import 'dart:io' as dartio;
 import 'dart:async';
 
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -72,6 +73,9 @@ class SocketService {
       AppConfig.serverUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
+          // a fresh HttpClient per connection, so a proxy switched on/off in Settings applies right away
+          // ignore: deprecated_member_use
+          .setHttpClientAdapter(_FreshClientAdapter())
           .setAuth({'token': token})
           .disableAutoConnect()
           .enableReconnection()
@@ -150,4 +154,16 @@ class SocketEvent {
   final String name;
   final Map<String, dynamic> data;
   SocketEvent(this.name, this.data);
+}
+
+
+/// dart:io caches one HttpClient for all WebSockets (made at the first connection), which would keep using the
+/// old proxy setting. This opens each connection with a new client, so the current proxy is used.
+class _FreshClientAdapter implements io.HttpClientAdapter {
+  @override
+  Future<dynamic> connect(String uri, {Map<String, dynamic>? headers}) => dartio.WebSocket.connect(
+        uri,
+        headers: headers,
+        customClient: dartio.HttpClient()..connectionTimeout = const Duration(seconds: 15),
+      );
 }

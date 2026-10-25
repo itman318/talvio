@@ -84,6 +84,27 @@ void main() {
     await settle(t, 2500);
     await snap(t, 'chat-sent');
 
+    // one tap on a message → reactions + compact action menu
+    await t.tap(find.text('Hello from the app ✅').last);
+    await pumpUntil(t, find.text('Remind me'), what: 'message menu');
+    await snap(t, 'message-menu');
+    await t.tap(find.text('Reply'));
+    await settle(t, 600);
+    await snap(t, 'reply');
+    // attach sheet and emoji panel (visual check)
+    await t.tap(find.byTooltip('Attach: gallery, camera, files…'));
+    await pumpUntil(t, find.text('Gallery'), what: 'attach sheet');
+    await snap(t, 'attach');
+    await t.tapAt(const Offset(20, 120));
+    await settle(t, 800);
+    await t.tap(find.byTooltip('Emoji, stickers & GIFs'));
+    await settle(t, 2000);
+    await snap(t, 'emoji');
+    await t.tap(find.byTooltip('Keyboard'));
+    await settle(t, 600);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await settle(t, 600);
+
     await t.pageBack();
     await settle(t);
     await t.tap(find.text('Dev Team'));

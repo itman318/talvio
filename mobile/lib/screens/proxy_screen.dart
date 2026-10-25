@@ -76,7 +76,7 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
           child: Text(
             'A proxy helps when Talvio is slow or blocked on your network. All your messages, calls signalling, photos '
             'and files go through it. Only use proxies you trust — the owner can see when and how much you connect '
-            '(not what you write in secret chats).',
+            '(not what you write in secret chats). If some photos don’t load right after switching, reopen the app.',
             style: TextStyle(color: Brand.muted, fontSize: 12.5),
           ),
         ),

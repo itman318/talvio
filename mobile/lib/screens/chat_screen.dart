@@ -23,6 +23,7 @@ import 'chat_theme_screen.dart';
 import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
+import '../widgets/emoji_bar.dart';
 import '../widgets/message_menu.dart';
 import 'global_search_screen.dart';
 import '../config.dart';
@@ -774,31 +775,32 @@ class _ChatScreenState extends State<ChatScreen> {
           showDragHandle: true,
           builder: (ctx) => SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
               child: GridView.count(
-                crossAxisCount: 4,
+                crossAxisCount: 5,
                 shrinkWrap: true,
-                mainAxisSpacing: 18,
-                childAspectRatio: 0.82,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 2,
+                childAspectRatio: 0.92,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
                   for (final (key, icon, label, colors) in items)
                     InkWell(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       onTap: () => Navigator.pop(ctx, key),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
                         Container(
-                          width: 58,
-                          height: 58,
+                          width: 46,
+                          height: 46,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+                            borderRadius: BorderRadius.circular(15),
                             gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                            boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                            boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.28), blurRadius: 8, offset: const Offset(0, 3))],
                           ),
-                          child: Icon(icon, color: Colors.white, size: 27),
+                          child: Icon(icon, color: Colors.white, size: 22),
                         ),
-                        const SizedBox(height: 8),
-                        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 6),
+                        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
                       ]),
                     ),
                 ],
@@ -1135,7 +1137,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ------------------------------------------------------------------ message menu
-  Future<void> _messageMenu(Message m, Chat chat, [BuildContext? anchorCtx]) async {
+  Future<void> _messageMenu(Message m, Chat chat, [BuildContext? anchorCtx, Widget? preview]) async {
     final mine = m.senderId == _store.myId && !chat.isChannel;
     final channelAdmin = chat.isChannel && chat.can('post_messages');
     if (m.isLocal) {
@@ -1193,6 +1195,7 @@ class _ChatScreenState extends State<ChatScreen> {
       myReaction: m.myReaction,
       header: header,
       items: items,
+      preview: preview,
     );
     if (!mounted || a == null) return;
     if (a.startsWith('react:')) {
@@ -1800,16 +1803,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _focus.requestFocus();
   }
 
-  /// Double-tap: ❤️ (only adds — never removes another reaction by accident).
-  Future<void> _quickHeart(Message m) async {
-    if (m.myReaction == '❤️') return;
-    try {
-      await _store.react(m, '❤️');
-    } catch (e) {
-      if (mounted) showError(context, e);
-    }
-  }
-
   Widget _downButton(List<Message> messages) {
     final newest = messages.isEmpty ? null : messages.first.id;
     if (newest != null && _newestSeen != null && newest > _newestSeen! && _showDown && messages.first.senderId != _store.myId) {
@@ -1940,7 +1933,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () => setState(() => picked ? _selected.remove(m.id) : _selected.add(m.id)),
                 child: SwipeReply(
                 onReply: selecting || m.isLocal || !chat.canPost ? null : () => _startReply(m),
-                onDoubleTap: selecting || m.isLocal ? null : () => _quickHeart(m),
+                onDoubleTap: null, // one tap opens the menu right away (❤️ is the first reaction there)
                 child: Builder(builder: (bctx) => MessageBubble(
                 key: ValueKey(m.isLocal ? m.clientId : m.id),
                 message: m,
@@ -1951,8 +1944,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 lastInGroup: last,
                 showAvatar: last && chat.isGroup && !mine,
                 // one tap (or a long press) opens the message menu; long press while selecting adds to the selection
-                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat, bctx),
-                onTap: selecting ? null : () => _messageMenu(m, chat, bctx),
+                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat, bctx, _bubblePreview(m, chat, mine, showSender)),
+                onTap: selecting ? null : () => _messageMenu(m, chat, bctx, _bubblePreview(m, chat, mine, showSender)),
                 onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
                 onForward: chat.isChannel && !chat.noForwards && !selecting
                     ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
@@ -1965,6 +1958,13 @@ class _ChatScreenState extends State<ChatScreen> {
       },
     );
   }
+
+  /// The tapped message, drawn again above the blur while its menu is open.
+  Widget _bubblePreview(Message m, Chat chat, bool mine, bool showSender) => MediaQuery.removePadding(
+        context: context,
+        removeTop: true,
+        child: MessageBubble(message: m, chat: chat, isMine: mine, showSender: showSender, showAvatar: chat.isGroup && !mine),
+      );
 
   Widget _lockGate(Chat chat) {
     return Scaffold(
@@ -2408,8 +2408,14 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       default:
         body = Column(mainAxisSize: MainAxisSize.min, children: [
-          TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
-          Divider(height: 1, color: dark ? Colors.white10 : const Color(0xFFE9ECF3)),
+          Container(
+            margin: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+            decoration: BoxDecoration(
+              gradient: Brand.auroraSoft(dark),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
+          ),
           SizedBox(
             height: pickerH,
             child: EmojiPicker(
@@ -2422,9 +2428,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 emojiViewConfig: EmojiViewConfig(
                   backgroundColor: bg,
                   columns: 8,
-                  emojiSizeMax: 28,
+                  emojiSizeMax: 30,
+                  verticalSpacing: 2,
                   recentsLimit: 32,
-                  gridPadding: const EdgeInsets.symmetric(horizontal: 6),
+                  gridPadding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   noRecents: const Text('No recent emoji', style: TextStyle(fontSize: 15, color: Brand.muted)),
                 ),
                 categoryViewConfig: CategoryViewConfig(
@@ -2435,6 +2442,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   dividerColor: Colors.transparent,
                   extraTab: CategoryExtraTab.BACKSPACE,
                   backspaceColor: Brand.muted,
+                  customCategoryView: (config, state, tab, page) => PremiumEmojiCategoryBar(config, state, tab, page),
                 ),
                 skinToneConfig: SkinToneConfig(dialogBackgroundColor: bg, indicatorColor: Brand.muted),
                 bottomActionBarConfig: BottomActionBarConfig(

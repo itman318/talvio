@@ -24,6 +24,7 @@ Future<String?> showMessageMenu(
   String? myReaction,
   String? header,
   required List<MessageMenuItem> items,
+  Widget? preview,
 }) {
   HapticFeedback.lightImpact();
   return showGeneralDialog<String>(
@@ -39,6 +40,7 @@ Future<String?> showMessageMenu(
       myReaction: myReaction,
       header: header,
       items: items,
+      preview: preview,
       animation: a,
     ),
   );
@@ -53,7 +55,9 @@ class _MessageMenu extends StatelessWidget {
     required this.header,
     required this.items,
     required this.animation,
+    this.preview,
   });
+  final Widget? preview;
   final Rect anchor;
   final bool alignRight;
   final List<String> reactions;
@@ -62,8 +66,8 @@ class _MessageMenu extends StatelessWidget {
   final List<MessageMenuItem> items;
   final Animation<double> animation;
 
-  static const _cardWidth = 236.0;
-  static const _rowH = 46.0;
+  static const _cardWidth = 214.0;
+  static const _rowH = 40.0;
 
   @override
   Widget build(BuildContext context) {
@@ -75,17 +79,23 @@ class _MessageMenu extends StatelessWidget {
     final topLimit = mq.padding.top + 12;
     final bottomLimit = size.height - mq.padding.bottom - 12;
 
-    final reactH = reactions.isEmpty ? 0.0 : 58.0;
-    final headerH = header == null ? 0.0 : 40.0;
-    final menuH = headerH + items.length * _rowH + 12;
-    final total = reactH + 8 + menuH;
+    final reactH = reactions.isEmpty ? 0.0 : 50.0;
+    final headerH = header == null ? 0.0 : 34.0;
+    final menuH = headerH + items.length * _rowH + 10;
+    const gap = 6.0;
 
-    // reactions sit just above the message, the actions just below it; slide the whole block into view if needed
-    var top = anchor.top - reactH - 8;
+    // Telegram-like focus: the message itself stays sharp above the blur, reactions over it, actions under it.
+    // A long post is shown cut to what fits.
+    final room = bottomLimit - topLimit - reactH - menuH - gap * 2;
+    final previewH = preview == null ? 0.0 : anchor.height.clamp(0.0, room.clamp(60.0, size.height * 0.45));
+    final total = reactH + gap + previewH + gap + menuH;
+    var top = (preview == null ? anchor.top : anchor.top) - reactH - gap;
     if (top + total > bottomLimit) top = bottomLimit - total;
     if (top < topLimit) top = topLimit;
+    final previewTop = top + reactH + gap;
+    final menuTop = previewTop + (preview == null ? 0 : previewH + gap);
     final maxW = size.width - 24;
-    final reactW = (reactions.length * 46.0 + 16).clamp(0.0, maxW);
+    final reactW = (reactions.length * 42.0 + 12).clamp(0.0, maxW);
     double left(double w) => alignRight ? (anchor.right - w).clamp(12.0, size.width - w - 12) : anchor.left.clamp(12.0, size.width - w - 12);
 
     final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
@@ -104,6 +114,26 @@ class _MessageMenu extends StatelessWidget {
           ),
         ),
       ),
+      if (preview != null)
+        Positioned(
+          top: previewTop,
+          left: 0,
+          right: 0,
+          height: previewH,
+          child: IgnorePointer(
+            child: FadeTransition(
+              opacity: curved,
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.topCenter,
+                  minHeight: 0,
+                  maxHeight: double.infinity,
+                  child: SizedBox(width: size.width, child: preview),
+                ),
+              ),
+            ),
+          ),
+        ),
       if (reactions.isNotEmpty)
         Positioned(
           top: top,
@@ -118,12 +148,12 @@ class _MessageMenu extends StatelessWidget {
                 color: card,
                 elevation: 10,
                 shadowColor: Colors.black.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(29),
+                borderRadius: BorderRadius.circular(25),
                 child: SizedBox(
                   height: reactH,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
                     children: [
                       for (var i = 0; i < reactions.length; i++)
                         _Reaction(emoji: reactions[i], selected: reactions[i] == myReaction, delay: i, animation: animation),
@@ -135,7 +165,7 @@ class _MessageMenu extends StatelessWidget {
           ),
         ),
       Positioned(
-        top: top + reactH + 8,
+        top: menuTop,
         left: left(_cardWidth),
         width: _cardWidth,
         child: ScaleTransition(
@@ -147,24 +177,24 @@ class _MessageMenu extends StatelessWidget {
               color: card,
               elevation: 12,
               shadowColor: Colors.black.withValues(alpha: 0.28),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               clipBehavior: Clip.antiAlias,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   if (header != null) ...[
                     SizedBox(
                       height: headerH - 6,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Row(children: [
-                          const Icon(Icons.schedule_rounded, size: 16, color: Brand.muted),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(header!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Brand.muted))),
+                          const Icon(Icons.schedule_rounded, size: 14, color: Brand.muted),
+                          const SizedBox(width: 7),
+                          Expanded(child: Text(header!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Brand.muted))),
                         ]),
                       ),
                     ),
-                    Divider(height: 6, thickness: 6, color: dark ? Colors.black.withValues(alpha: 0.25) : const Color(0xFFF2F3F8)),
+                    Divider(height: 4, thickness: 4, color: dark ? Colors.black.withValues(alpha: 0.25) : const Color(0xFFF2F3F8)),
                   ],
                   for (final it in items)
                     InkWell(
@@ -172,13 +202,15 @@ class _MessageMenu extends StatelessWidget {
                       child: SizedBox(
                         height: _rowH,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: Row(children: [
-                            Icon(it.icon, size: 21, color: it.danger ? const Color(0xFFE5484D) : fg.withValues(alpha: 0.8)),
-                            const SizedBox(width: 16),
+                            Icon(it.icon, size: 19, color: it.danger ? const Color(0xFFE5484D) : fg.withValues(alpha: 0.75)),
+                            const SizedBox(width: 13),
                             Expanded(
                               child: Text(it.label,
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: it.danger ? const Color(0xFFE5484D) : fg)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: it.danger ? const Color(0xFFE5484D) : fg)),
                             ),
                           ]),
                         ),
@@ -209,16 +241,16 @@ class _Reaction extends StatelessWidget {
     return ScaleTransition(
       scale: a,
       child: InkWell(
-        borderRadius: BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(21),
         onTap: () => Navigator.pop(context, 'react:$emoji'),
         child: Container(
-          width: 46,
+          width: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: selected ? Brand.primary.withValues(alpha: 0.16) : null,
           ),
-          child: Text(emoji, style: const TextStyle(fontSize: 27)),
+          child: Text(emoji, style: const TextStyle(fontSize: 24)),
         ),
       ),
     );
