@@ -936,3 +936,7 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
     );
   }
 }
+
+/// Network image for stickers and pack covers.
+Widget netImage(String url, {BoxFit? fit, ImageErrorWidgetBuilder? errorBuilder}) =>
+    Image.network(url, fit: fit, errorBuilder: errorBuilder, gaplessPlayback: true);
