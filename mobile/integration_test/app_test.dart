@@ -105,13 +105,17 @@ void main() {
     await t.tap(find.byTooltip('Emoji, stickers & GIFs'));
     await settle(t, 2000);
     await snap(t, 'emoji');
+    debugPrint('STEP keyboard');
     await t.tap(find.byTooltip('Keyboard'));
     await settle(t, 600);
+    debugPrint('STEP unfocus');
     FocusManager.instance.primaryFocus?.unfocus();
     await settle(t, 600);
 
+    debugPrint('STEP back');
     await t.pageBack();
     await settle(t);
+    debugPrint('STEP group');
     await t.tap(find.text('Dev Team'));
     await pumpUntil(t, find.text('When should we launch?'), what: 'poll in group');
     await snap(t, 'group-poll');
