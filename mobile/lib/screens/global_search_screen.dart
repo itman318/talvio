@@ -19,9 +19,12 @@ import 'user_profile_screen.dart';
 /// One search for everything: my chats, people, bots, public groups, channels and messages.
 /// With an empty box it shows recent searches and popular channels, groups and bots.
 class GlobalSearchScreen extends StatefulWidget {
-  const GlobalSearchScreen({super.key, this.initialFilter = 'all', this.initialQuery = ''});
+  const GlobalSearchScreen({super.key, this.initialFilter = 'all', this.initialQuery = '', this.chatId});
   final String initialFilter;
   final String initialQuery;
+
+  /// Search only the messages of this chat.
+  final int? chatId;
 
   @override
   State<GlobalSearchScreen> createState() => _GlobalSearchScreenState();
@@ -40,7 +43,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
   late final _q = TextEditingController(text: widget.initialQuery);
   Timer? _debounce;
-  late String _filter = widget.initialFilter;
+  late String _filter = widget.chatId != null ? 'messages' : widget.initialFilter;
   Map<String, dynamic>? _data;
   List<Map<String, dynamic>> _messages = [];
   List<String> _recent = [];
@@ -101,7 +104,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       final wantMessages = q.length >= 2 && (_filter == 'all' || _filter == 'messages');
       final futures = <Future<dynamic>>[
         _filter == 'messages' && q.length >= 2 ? Future.value(null) : api.get('/search', query: {'q': q, if (_filter != 'all' && _filter != 'messages') 'type': _filter}),
-        wantMessages ? api.get('/search/messages', query: {'q': q, 'limit': _filter == 'messages' ? '40' : '6'}) : Future.value(null),
+        wantMessages
+            ? api.get('/search/messages', query: {'q': q, 'limit': _filter == 'messages' ? '40' : '6', if (widget.chatId != null) 'chat_id': '${widget.chatId}'})
+            : Future.value(null),
       ];
       final r = await Future.wait(futures);
       if (!mounted || seq != _seq) return;
@@ -126,6 +131,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   // ------------------------------------------------------------------ opening results
   Future<void> _openChat(Chat c) async {
     _remember(_q.text);
+    if (widget.chatId == c.id) {
+      Navigator.pop(context);
+      return;
+    }
     await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: c.id, initial: c)));
   }
 
@@ -181,7 +190,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             },
             style: const TextStyle(fontSize: 15.5),
             decoration: InputDecoration(
-              hintText: 'Search people, groups, channels, bots…',
+              hintText: widget.chatId != null ? 'Search in this chat' : 'Search people, groups, channels, bots…',
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
@@ -201,7 +210,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             ),
           ),
         ),
-        bottom: PreferredSize(
+        bottom: widget.chatId != null ? null : PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: SizedBox(
             height: 50,
@@ -224,7 +233,13 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           duration: const Duration(milliseconds: 150),
           child: _loading ? const LinearProgressIndicator(minHeight: 2) : const SizedBox(height: 2),
         ),
-        Expanded(child: q.length < 2 ? _discover() : _results(q)),
+        Expanded(
+          child: q.length < 2
+              ? (widget.chatId != null
+                  ? const TaviEmptyState(pose: TaviPose.search, title: 'Search this chat', text: 'Type a word to find messages.')
+                  : _discover())
+              : _results(q),
+        ),
       ]),
     );
   }

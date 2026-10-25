@@ -22,6 +22,7 @@ import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
 import '../widgets/tali_emoji.dart';
 import '../widgets/message_menu.dart';
+import 'global_search_screen.dart';
 import '../config.dart';
 import '../widgets/premium.dart';
 import '../widgets/voice_mini_player.dart';
@@ -1061,7 +1062,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final box = anchorCtx?.findRenderObject();
     if (box is RenderBox && box.hasSize && box.attached) anchor = box.localToGlobal(Offset.zero) & box.size;
     final when = m.editedAt ?? m.createdAt;
-    final header = '${m.editedAt != null ? 'edited' : (mine ? 'sent' : 'received')} ${chatListTime(when) == messageTime(when) ? 'today' : chatListTime(when)} at ${messageTime(when)}';
+    final header = '${m.editedAt != null ? 'edited' : (chat.isChannel ? 'posted' : (mine ? 'sent' : 'received'))} ${chatListTime(when) == messageTime(when) ? 'today' : chatListTime(when)} at ${messageTime(when)}';
     if (!mounted) return;
     final a = await showMessageMenu(
       context,
@@ -1238,6 +1239,12 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _chatMenu(String action, Chat chat) async {
     try {
       switch (action) {
+        case 'video':
+          if (chat.peer != null) startCall(context, chat.peer!, video: true);
+          break;
+        case 'search':
+          Navigator.push(context, MaterialPageRoute(builder: (_) => GlobalSearchScreen(chatId: chat.id)));
+          break;
         case 'passcode':
           await _passcodeMenu(chat);
           break;
@@ -1462,13 +1469,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('calls')) ...[
-            if (auth.feature('video_calls'))
-              IconButton(
-                tooltip: 'Video call',
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.videocam_outlined),
-                onPressed: () => startCall(context, chat.peer!, video: true),
-              ),
             IconButton(
               tooltip: 'Call',
               visualDensity: VisualDensity.compact,
@@ -1479,6 +1479,9 @@ class _ChatScreenState extends State<ChatScreen> {
           PopupMenuButton<String>(
             onSelected: (a) => _chatMenu(a, chat),
             itemBuilder: (_) => [
+              if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('calls') && auth.feature('video_calls'))
+                _mi('video', Icons.videocam_outlined, 'Video call'),
+              _mi('search', Icons.search_rounded, 'Search messages'),
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
               if (!chat.isChannel && !chat.isSavedMessages) _mi('live', Icons.share_location_rounded, 'Live locations'),

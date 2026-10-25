@@ -272,10 +272,13 @@ class _PhoneScreenState extends State<PhoneScreen> {
               ),
             ],
             const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProxySettingsScreen())),
-              icon: const Icon(Icons.vpn_lock_rounded, size: 18),
-              label: const Text('Connection problems? Use a proxy'),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProxySettingsScreen())),
+                style: TextButton.styleFrom(foregroundColor: Brand.muted, visualDensity: VisualDensity.compact),
+                icon: const Icon(Icons.vpn_lock_rounded, size: 16),
+                label: const Text('Proxy settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
             ),
             const SizedBox(height: 6),
             Text('By continuing you agree to the Terms and Privacy Policy.',
@@ -384,7 +387,7 @@ class _OtpScreenState extends State<OtpScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Center(child: TaviMascot(pose: TaviPose.mail, size: 140)),
+          const Center(child: TaviMascot(pose: TaviPose.mail, size: 112)),
           const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
