@@ -1449,7 +1449,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _scrollToUnread() async {
     for (var k = 0; k < 30 && mounted; k++) {
       final ctx = _unreadKey.currentContext;
-      if (ctx != null) {
+      if (ctx != null && ctx.mounted) {
         await Scrollable.ensureVisible(ctx, alignment: 0.85, duration: const Duration(milliseconds: 250));
         return;
       }
