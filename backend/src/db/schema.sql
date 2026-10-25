@@ -940,3 +940,58 @@ ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2);
 ALTER TABLE users ALTER COLUMN bio TYPE VARCHAR(300);
 ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS member_tag VARCHAR(16);
+
+-- ---------------------------------------------------------------- voice / round video "listened"
+CREATE TABLE IF NOT EXISTS message_plays (
+  message_id BIGINT      NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  played_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+-- ---------------------------------------------------------------- read later (bookmarks, on all my devices)
+CREATE TABLE IF NOT EXISTS bookmarks (
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id BIGINT      NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS bookmarks_user_idx ON bookmarks (user_id, created_at DESC);
+
+-- ---------------------------------------------------------------- login activity (Settings → Login activity)
+CREATE TABLE IF NOT EXISTS login_events (
+  id          BIGSERIAL    PRIMARY KEY,
+  user_id     BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind        VARCHAR(24)  NOT NULL,  -- login | wrong_password | password_needed
+  session_id  BIGINT,
+  ip          VARCHAR(64),
+  device_name VARCHAR(120),
+  platform    VARCHAR(40),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_events_user_idx ON login_events (user_id, created_at DESC);
+
+-- ---------------------------------------------------------------- bot inline mode ("@bot query" in any chat)
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS inline_placeholder VARCHAR(64);
+
+-- ---------------------------------------------------------------- live voice chats in groups & channels
+CREATE TABLE IF NOT EXISTS voice_chats (
+  id          BIGSERIAL    PRIMARY KEY,
+  chat_id     BIGINT       NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  started_by  BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  title       VARCHAR(64)  NOT NULL DEFAULT '',
+  started_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  ended_at    TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS voice_chats_active_idx ON voice_chats (chat_id) WHERE ended_at IS NULL;
+CREATE TABLE IF NOT EXISTS voice_chat_participants (
+  voice_chat_id BIGINT      NOT NULL REFERENCES voice_chats(id) ON DELETE CASCADE,
+  user_id       BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id    BIGINT,
+  joined_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  left_at       TIMESTAMPTZ,
+  muted         BOOLEAN     NOT NULL DEFAULT TRUE,
+  can_speak     BOOLEAN     NOT NULL DEFAULT TRUE,
+  hand_raised   BOOLEAN     NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (voice_chat_id, user_id)
+);

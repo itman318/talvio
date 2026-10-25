@@ -71,7 +71,7 @@ Future<void> showMessageInfo(BuildContext context, Message m) async {
           if (snap.hasError) return Center(child: Text(friendlyError(snap.error!)));
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           List<AppUser> users(String k) => ((snap.data![k] as List?) ?? const []).map((e) => AppUser.fromJson(Map<String, dynamic>.from(e as Map))).toList();
-          final read = users('read'), delivered = users('delivered'), waiting = users('waiting');
+          final read = users('read'), delivered = users('delivered'), waiting = users('waiting'), played = users('played');
           Widget section(String title, IconData icon, Color color, List<AppUser> list) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
@@ -93,6 +93,7 @@ Future<void> showMessageInfo(BuildContext context, Message m) async {
             const Text('Message info', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text('Sent ${fmt.format(m.createdAt)}', style: const TextStyle(color: Brand.muted)),
+            if (played.isNotEmpty) section(m.type == 'video_note' ? 'Watched' : 'Listened', Icons.mic_rounded, const Color(0xFF12A150), played),
             if (read.isNotEmpty) section('Read', Icons.done_all_rounded, Brand.accent, read),
             if (delivered.isNotEmpty) section('Delivered', Icons.done_all_rounded, Brand.muted, delivered),
             if (waiting.isNotEmpty) section('Not delivered yet', Icons.done_rounded, Brand.faint, waiting),

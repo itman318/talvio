@@ -54,6 +54,10 @@ class VoicePlayback extends ChangeNotifier {
       }
     });
     PlayedVoices.load();
+    SharedPreferences.getInstance().then((p) {
+      final v = p.getDouble('voice.speed');
+      if (v != null && const [1.0, 1.5, 2.0].contains(v)) speed = v;
+    }).catchError((_) {});
   }
 
   final AppServices services;
@@ -104,7 +108,14 @@ class VoicePlayback extends ChangeNotifier {
       await player.setSpeed(speed);
       loading = false;
       notifyListeners();
-      if (!m.isLocal) PlayedVoices.mark(m.id);
+      if (!m.isLocal) {
+        final firstTime = !PlayedVoices.played(m.id);
+        PlayedVoices.mark(m.id);
+        // tell the sender it was listened to (their mic turns blue)
+        if (firstTime && m.senderId != null && m.senderId != myId?.call()) {
+          unawaited(services.api.post('/messages/${m.id}/played').catchError((_) => null));
+        }
+      }
       _startProximity();
       unawaited(player.play());
     } catch (e) {
@@ -131,6 +142,8 @@ class VoicePlayback extends ChangeNotifier {
     speed = speed == 1.0 ? 1.5 : (speed == 1.5 ? 2.0 : 1.0);
     player.setSpeed(speed);
     notifyListeners();
+    // remembered for the next voice messages too
+    SharedPreferences.getInstance().then((p) => p.setDouble('voice.speed', speed)).catchError((_) => false);
   }
 
   /// Stops and hides the mini player.

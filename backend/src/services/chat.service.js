@@ -101,6 +101,9 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
        c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
        c.welcome_text, c.rules, c.new_member_limits, c.protected_content, c.allowed_reactions, c.category, c.linked_chat_id,
        cm.admin_rights AS my_rights, cm.admin_title AS my_title, cm.restricted_until AS my_restricted_until, cm.draft, cm.draft_at,
+       (SELECT json_build_object('id', vc.id, 'title', vc.title, 'count',
+          (SELECT count(*) FROM voice_chat_participants vp WHERE vp.voice_chat_id = vc.id AND vp.left_at IS NULL))
+          FROM voice_chats vc WHERE vc.chat_id = c.id AND vc.ended_at IS NULL LIMIT 1) AS voice_chat,
        c.join_captcha, c.anti_flood, c.anti_links, c.hide_service, c.banned_words, c.member_perms, cm.captcha_until AS my_captcha_until,
        (SELECT l.title FROM chats l WHERE l.id = c.linked_chat_id) AS linked_title,
        (SELECT ch.id FROM chats ch WHERE ch.linked_chat_id = c.id LIMIT 1) AS linked_channel_id,
@@ -191,6 +194,7 @@ async function serializeChats(userId, rows) {
       banned_words: ADMIN_ROLES.includes(r.my_role) ? r.banned_words || [] : [],
       member_perms: { media: true, links: true, polls: true, stickers: true, voice: true, ...(r.member_perms || {}) },
       needs_captcha: !!r.my_captcha_until,
+      voice_chat: r.voice_chat || null,
       protected_content: !!r.protected_content,
       allowed_reactions: r.allowed_reactions || null,
       category: r.category || null,

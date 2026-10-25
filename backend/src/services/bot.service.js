@@ -49,6 +49,7 @@ function serializeBot(u, b, { pending = 0 } = {}) {
     about: b.about,
     commands: b.commands || [],
     menu_url: b.menu_url,
+    inline_placeholder: b.inline_placeholder || null,
     group_privacy: b.group_privacy,
     status: b.status,
     disabled_reason: b.disabled_reason,
@@ -146,6 +147,11 @@ async function updateBot(ownerId, botIdRaw, body = {}) {
   const commands = body.commands === undefined ? null : JSON.stringify(parseCommands(body.commands));
   const menu = body.menu_url === undefined ? undefined : parseHttpsUrl(body.menu_url, 'menu_url');
   const privacy = body.group_privacy === undefined ? null : v.bool(body.group_privacy, 'group_privacy');
+  if (body.inline_placeholder !== undefined) {
+    // null / '' = inline mode off
+    const ph = body.inline_placeholder === null ? null : v.str(String(body.inline_placeholder), { field: 'inline_placeholder', max: 64 }) || null;
+    await db.query('UPDATE bots SET inline_placeholder = $2 WHERE user_id = $1', [bot.user_id, ph]);
+  }
   await db.query(
     `UPDATE bots SET about = COALESCE($2, about), commands = COALESCE($3::jsonb, commands),
        menu_url = CASE WHEN $4 THEN $5 ELSE menu_url END, group_privacy = COALESCE($6, group_privacy) WHERE user_id = $1`,
@@ -599,7 +605,7 @@ async function callMethod(token, method, params = {}, file = null) {
   rateLimit.enforce(`botapi:${bot.user_id}`, 120, 10 * 1000, 'Too many requests — slow down');
   switch (method) {
     case 'me':
-      return { ...botUser(bot), can_join_groups: true, can_read_all_group_messages: !bot.group_privacy, supports_inline_queries: false };
+      return { ...botUser(bot), can_join_groups: true, can_read_all_group_messages: !bot.group_privacy, supports_inline_queries: !!bot.inline_placeholder };
     case 'updates':
       return getUpdates(bot, params);
     case 'webhook.set':
@@ -640,6 +646,8 @@ async function callMethod(token, method, params = {}, file = null) {
     case 'commands.delete':
       await db.query(`UPDATE bots SET commands = '[]' WHERE user_id = $1`, [bot.user_id]);
       return true;
+    case 'inline.answer':
+      return answerInlineQuery(bot, params);
     case 'chat.action':
       return sendChatAction(bot, params);
     case 'polls.send':
@@ -673,6 +681,89 @@ async function callMethod(token, method, params = {}, file = null) {
     default:
       throw new AppError(404, 'method_not_found', `Unknown method "${method}" — see the Talvio Bot API docs`);
   }
+}
+
+// ------------------------------------------------------------------ inline mode
+const inlineQueries = new Map(); // id → { botId, userId, results, at }
+const inlineWaiters = new EventEmitter();
+inlineWaiters.setMaxListeners(0);
+
+function parseInlineResults(raw) {
+  let list = raw;
+  if (typeof list === 'string') list = JSON.parse(list);
+  if (!Array.isArray(list) || list.length > 50) throw badRequest('invalid_results', 'results must be a list of up to 50 items');
+  return list.map((r, i) => {
+    const text = v.str(String((r && (r.text || r.message_text)) || ''), { field: 'text', min: 1, max: 4096 });
+    const out = {
+      id: String((r && r.id) || i).slice(0, 64),
+      title: v.str(String((r && r.title) || text.slice(0, 64)), { field: 'title', min: 1, max: 128 }),
+      description: v.str(String((r && r.description) || ''), { field: 'description', max: 256 }) || '',
+      text,
+    };
+    if (r && r.thumb_url) out.thumb_url = parseHttpsUrl(r.thumb_url, 'thumb_url');
+    if (r && r.reply_markup) {
+      const mk = parseReplyMarkup(r.reply_markup);
+      if (mk && mk.inline_keyboard) out.reply_markup = mk;
+    }
+    return out;
+  });
+}
+
+/** Bot API inline.answer: the bot's results for an inline query. */
+async function answerInlineQuery(bot, p) {
+  const id = String(p.inline_query_id || '');
+  const q = inlineQueries.get(id);
+  if (!q || q.botId !== bot.user_id) throw badRequest('query_not_found', 'query is too old or invalid');
+  q.results = parseInlineResults(p.results);
+  inlineWaiters.emit(id);
+  return true;
+}
+
+/** A user typed "@bot query" in a chat: ask the bot and wait (briefly) for its results. */
+async function inlineQuery(userId, query = {}) {
+  await settings.requireFeature('feature_bots', 'Bots');
+  const username = String(query.username || '').replace(/^@/, '');
+  const bot = await db.one(
+    `SELECT b.user_id, b.inline_placeholder, u.username FROM bots b JOIN users u ON u.id = b.user_id
+     WHERE lower(u.username) = lower($1) AND b.status = 'active' AND u.status = 'active' AND b.inline_placeholder IS NOT NULL`,
+    [username],
+  );
+  if (!bot) return { bot: null, results: [] };
+  rateLimit.enforce(`inline:${userId}`, 40, 60 * 1000, 'Slow down');
+  const id = crypto.randomBytes(10).toString('hex');
+  inlineQueries.set(id, { botId: bot.user_id, userId, results: null, at: Date.now() });
+  for (const [k, q] of inlineQueries) if (Date.now() - q.at > 5 * 60 * 1000) inlineQueries.delete(k);
+  const from = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
+  const text = v.str(String(query.q || ''), { field: 'q', max: 256 }) || '';
+  await enqueue(bot.user_id, { inline_query: { id, from: botUser(from), query: text, offset: '' } });
+  await new Promise((resolve) => {
+    const t = setTimeout(done, Math.min(10000, Number(query.timeout_ms) || 8000));
+    function done() {
+      clearTimeout(t);
+      inlineWaiters.removeListener(id, done);
+      resolve();
+    }
+    inlineWaiters.once(id, done);
+  });
+  const q = inlineQueries.get(id);
+  return {
+    bot: { id: bot.user_id, username: bot.username, placeholder: bot.inline_placeholder },
+    query_id: id,
+    results: (q && q.results) || [],
+  };
+}
+
+/** The user picked one of the results: it is sent from them "via @bot". */
+async function sendInlineResult(userId, body = {}) {
+  const q = inlineQueries.get(String(body.query_id || ''));
+  if (!q || q.userId !== userId || !q.results) throw badRequest('query_not_found', 'These results expired. Type the query again.');
+  const r = q.results.find((x) => x.id === String(body.result_id));
+  if (!r) throw badRequest('result_not_found', 'Result not found');
+  const messageService = require('./message.service'); // eslint-disable-line global-require
+  return messageService.sendMessage(userId, body.chat_id, { text: r.text, reply_to_id: body.reply_to_id }, {
+    viaBotId: q.botId,
+    replyMarkup: r.reply_markup || null,
+  });
 }
 
 // ------------------------------------------------------------------ user side: buttons & mini apps
@@ -805,6 +896,8 @@ async function adminSetStatus(botIdRaw, active, reason) {
 }
 
 module.exports = {
+  inlineQuery,
+  sendInlineResult,
   createBot,
   listMyBots,
   updateBot,

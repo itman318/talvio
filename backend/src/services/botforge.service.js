@@ -73,6 +73,7 @@ const COMMANDS = [
   { command: 'setuserpic', description: 'Change a bot’s profile photo' },
   { command: 'setmenu', description: 'Set the mini app opened by the Menu button' },
   { command: 'setprivacy', description: 'Group privacy mode' },
+  { command: 'setinline', description: 'Inline mode (@bot query in any chat)' },
   { command: 'deletebot', description: 'Delete a bot' },
   { command: 'help', description: 'What I can do' },
   { command: 'cancel', description: 'Stop the current step' },
@@ -129,6 +130,7 @@ const HELP = [
   '/setuserpic — change the bot’s profile photo',
   '/setmenu — the mini app for the Menu button',
   '/setprivacy — group privacy mode',
+  '/setinline — inline mode (@bot query in any chat)',
   '/token — get the API token',
   '/revoke — make a new token',
   '/deletebot — delete a bot',
@@ -138,7 +140,7 @@ const HELP = [
 
 async function myBots(ownerId) {
   return db.many(
-    `SELECT u.id, u.first_name, u.username, b.about, b.commands, b.menu_url, b.group_privacy, b.status, b.webhook_url,
+    `SELECT u.id, u.first_name, u.username, b.about, b.commands, b.menu_url, b.group_privacy, b.status, b.webhook_url, b.inline_placeholder,
             (SELECT count(*)::int FROM chat_members cm WHERE cm.user_id = u.id) AS chats
      FROM bots b JOIN users u ON u.id = b.user_id
      WHERE b.owner_id = $1 AND u.status <> 'deleted' AND u.id <> b.owner_id ORDER BY b.created_at DESC`,
@@ -169,6 +171,7 @@ function botCard(b) {
     `⌨️ ${cmds} command${cmds === 1 ? '' : 's'} · 💬 ${b.chats} chat${b.chats === 1 ? '' : 's'}`,
     `🔒 Group privacy: ${b.group_privacy ? 'on (only commands, mentions and replies)' : 'off (sees every message)'}`,
     `🔌 Updates: ${b.webhook_url ? 'webhook' : 'long polling (updates)'}`,
+    `🔎 Inline mode: ${b.inline_placeholder ? `on (“${b.inline_placeholder}”)` : 'off'}`,
     b.menu_url ? `📱 Mini app: ${b.menu_url}` : null,
     b.status !== 'active' ? '⛔ Disabled by the moderators' : null,
     '',
@@ -182,6 +185,7 @@ function botCard(b) {
     markup: kb([
       [btn('🔑 API token', `tok:${id}`), btn('✏️ Edit bot', `edit:${id}`)],
       [btn(b.group_privacy ? '👥 Privacy: ON' : '👥 Privacy: OFF', `priv:${id}`), btn('📱 Mini app', `menu:${id}`)],
+      [btn(b.inline_placeholder ? '🔎 Inline: ON' : '🔎 Inline: OFF', `inl:${id}`)],
       [btn('🔄 Revoke token', `rev:${id}`), btn('🗑 Delete bot', `del:${id}`)],
       [btn('« Back to bot list', 'list')],
     ]),
@@ -258,6 +262,9 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
     case 'menu':
       await setState(userId, 'set_menu', { bot: b.id });
       return say(chatId, `Send the https:// address of the mini app for @${b.username}'s Menu button.\nSend /empty to remove it, or /cancel to stop.`);
+    case 'inl':
+      await setState(userId, 'set_inline', { bot: b.id });
+      return say(chatId, `Inline mode lets people type @${b.username} and a query in any chat. Your bot gets an "inline_query" update and answers with inline.answer.\n\nSend the placeholder shown in the message box (e.g. “Search gold prices…”), or /empty to turn inline mode off.`);
     case 'ename':
       await setState(userId, 'set_name', { bot: b.id });
       return say(chatId, `OK. Send the new name for @${b.username}.`);
@@ -293,6 +300,7 @@ const COMMAND_ACTIONS = {
   setuserpic: 'epic',
   setmenu: 'menu',
   setprivacy: 'priv',
+  setinline: 'inl',
   deletebot: 'del',
 };
 
@@ -374,6 +382,10 @@ async function onMessage(userId, chatId, row) {
         await clearState(userId);
         return say(chatId, `Success! ${list.length ? `${list.length} command${list.length === 1 ? '' : 's'} saved.` : 'Commands removed.'}`, kb([[btn('« Back to bot', `bot:${data.bot}`)]]));
       }
+      case 'set_inline':
+        await bots.updateBot(userId, data.bot, { inline_placeholder: text === '/empty' ? null : text });
+        await clearState(userId);
+        return say(chatId, text === '/empty' ? 'Inline mode is off.' : 'Success! Inline mode is on.', kb([[btn('« Back to bot', `bot:${data.bot}`)]]));
       case 'set_menu':
         await bots.updateBot(userId, data.bot, { menu_url: text === '/empty' ? null : text });
         await clearState(userId);
@@ -409,7 +421,7 @@ async function onCallback(userId, chatId, messageId, data) {
       await setState(userId, 'new_name');
       return say(chatId, 'Alright, a new bot. How are we going to call it? Please choose a name for your bot.');
     }
-    return runAction(userId, chatId, action, id, ['tok', 'revyes', 'menu', 'ename', 'edesc', 'ecmd', 'epic'].includes(action) ? null : messageId);
+    return runAction(userId, chatId, action, id, ['tok', 'revyes', 'menu', 'inl', 'ename', 'edesc', 'ecmd', 'epic'].includes(action) ? null : messageId);
   } catch (err) {
     return say(chatId, `⚠️ ${err.message || 'Something went wrong'}`);
   }

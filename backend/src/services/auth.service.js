@@ -140,7 +140,25 @@ async function createSession(userId, device, ip) {
     [userId, sha256(refresh), d.name, d.platform, d.appVersion, ip || null, config.refreshTokenTtlDays],
   );
   alertNewLogin(userId, s.id, d).catch(() => {});
+  recordLoginEvent(userId, 'login', device, ip, s.id).catch(() => {});
   return issueTokens(userId, s.id, refresh);
+}
+
+/** Login activity: every login, wrong two-step password and "code was right but the password stopped them". */
+async function recordLoginEvent(userId, kind, device, ip, sessionId = null) {
+  const d = parseDevice(device);
+  await db.query(
+    'INSERT INTO login_events (user_id, kind, session_id, ip, device_name, platform) VALUES ($1, $2, $3, $4, $5, $6)',
+    [userId, kind, sessionId, ip ? String(ip).slice(0, 64) : null, d.name || null, d.platform || null],
+  );
+  if (kind === 'login') return;
+  // someone has the login code (or is guessing the password): warn the owner on their devices
+  const device2 = [d.name, d.platform].filter(Boolean).join(' · ') || 'an unknown device';
+  const body = kind === 'wrong_password'
+    ? `A wrong two-step password was entered on ${device2}. If this wasn't you, change your password.`
+    : `Someone on ${device2} entered your login code. Your two-step password stopped them — if it wasn't you, keep your codes private.`;
+  await require('./push.service').sendToUsers([userId], { title: 'Security alert', body }, { type: 'security_alert' }, { tag: `sec-${userId}` }).catch(() => {});
+  bus.emit('rt:emit', { event: 'security:alert', payload: { kind, device: device2, at: new Date().toISOString() }, userIds: [userId] });
 }
 
 /** "New login on <device>": tells the account's other devices, so a stranger's login can be logged out at once. */
@@ -210,7 +228,10 @@ async function loginWithTarget(target, kind, device, ip) {
 
   // two-step verification: ask for the password before creating a session
   const challenge = await require('./password.service').loginChallenge(user, device);
-  if (challenge) return challenge;
+  if (challenge) {
+    recordLoginEvent(user.id, 'password_needed', device, ip).catch(() => {});
+    return challenge;
+  }
 
   const tokens = await createSession(user.id, device, ip);
   return {
@@ -282,4 +303,4 @@ async function logout(userId, sessionId) {
   return { ok: true };
 }
 
-module.exports = { requestOtp, verifyOtp, requestEmailCode, verifyEmailCode, refresh, authenticate, logout, createSession };
+module.exports = { requestOtp, verifyOtp, requestEmailCode, verifyEmailCode, refresh, authenticate, logout, createSession, recordLoginEvent };

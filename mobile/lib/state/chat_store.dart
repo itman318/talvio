@@ -71,6 +71,9 @@ class ChatStore extends ChangeNotifier {
   /// Another device just logged in to this account (to ask "was this you?").
   void Function(Map<String, dynamic> session)? onNewLogin;
 
+  /// A blocked login attempt (wrong two-step password / code used elsewhere).
+  void Function(Map<String, dynamic> alert)? onSecurityAlert;
+
   /// Short notices for the chat on screen (e.g. "Sent for approval").
   final notices = StreamController<String>.broadcast();
 
@@ -109,6 +112,7 @@ class ChatStore extends ChangeNotifier {
 
   void stop() {
     _session++;
+    bookmarked.clear();
     _eventSub?.cancel();
     _connSub?.cancel();
     _typingTimer?.cancel();
@@ -158,8 +162,10 @@ class ChatStore extends ChangeNotifier {
       if (c.peer != null) userCache[c.peer!.id] = c.peer!;
     }
     _sortChats();
+    final firstLoad = !chatsLoaded;
     chatsLoaded = true;
     notifyListeners();
+    if (firstLoad) unawaited(loadBookmarks().then((_) {}).catchError((_) {}));
   }
 
   Future<List<Chat>> loadArchived() async {
@@ -722,6 +728,31 @@ class ChatStore extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> similarChannels(int chatId) async {
     final r = await api.get('/chats/$chatId/similar') as Map;
     return (r['channels'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // ------------------------------------------------------------------ read later
+  final Set<int> bookmarked = {};
+
+  Future<List<Map<String, dynamic>>> loadBookmarks() async {
+    final r = await api.get('/bookmarks') as Map;
+    final items = (r['items'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    bookmarked
+      ..clear()
+      ..addAll(items.map((i) => _int((i['message'] as Map)['id'])));
+    notifyListeners();
+    return items;
+  }
+
+  Future<void> setBookmark(Message m, bool on) async {
+    if (on) {
+      bookmarked.add(m.id);
+      notifyListeners();
+      await api.post('/messages/${m.id}/bookmark');
+    } else {
+      bookmarked.remove(m.id);
+      notifyListeners();
+      await api.delete('/messages/${m.id}/bookmark');
+    }
   }
 
   Future<List<GroupMember>> loadMembers(int chatId) async {
@@ -1312,6 +1343,35 @@ class ChatStore extends ChangeNotifier {
         break;
       case 'message:edited':
         _replaceMessage(Message.fromJson(Map<String, dynamic>.from(d['message'] as Map)));
+        break;
+      case 'security:alert':
+        onSecurityAlert?.call(Map<String, dynamic>.from(d));
+        break;
+      case 'vc:update':
+        final vcChat = chatById(_int(d['chat_id']));
+        if (vcChat != null) {
+          final vc = d['voice_chat'];
+          vcChat.extra['voice_chat'] = vc is Map ? {'id': vc['id'], 'title': vc['title'], 'count': (vc['participants'] as List?)?.length ?? 0} : null;
+          notifyListeners();
+        }
+        break;
+      case 'bookmarks:changed':
+        final bid = _int(d['message_id']);
+        if (d['saved'] == true) {
+          bookmarked.add(bid);
+        } else {
+          bookmarked.remove(bid);
+        }
+        notifyListeners();
+        break;
+      case 'message:played':
+        for (final m in messagesOf(_int(d['chat_id']))) {
+          if (m.id == _int(d['message_id'])) {
+            m.played = true;
+            notifyListeners();
+            break;
+          }
+        }
         break;
       case 'message:deleted':
         _removeMessages(_int(d['chat_id']), (d['message_ids'] as List).map(_int).toList());

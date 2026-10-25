@@ -1,3 +1,4 @@
+import 'read_later_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -114,6 +115,7 @@ class MyProfileScreen extends StatelessWidget {
               }
             },
           ),
+          SettingsTile(icon: Icons.bookmarks_rounded, color: const Color(0xFF3C83DE), title: 'Read later', subtitle: 'Saved messages to come back to', onTap: () => go(const ReadLaterScreen())),
           SettingsTile(icon: Icons.auto_awesome_rounded, color: Brand.amber, title: 'Story highlights', onTap: () => go(const MyHighlightsScreen())),
           SettingsTile(
             icon: Icons.star_rounded,

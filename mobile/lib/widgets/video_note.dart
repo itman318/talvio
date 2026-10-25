@@ -1,3 +1,7 @@
+import '../state/chat_store.dart';
+import '../core/voice_playback.dart';
+import '../core/services.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -60,6 +64,12 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble> {
       });
       _c = ctrl;
       await ctrl.play();
+      if (!widget.message.isLocal && !PlayedVoices.played(widget.message.id)) {
+        PlayedVoices.mark(widget.message.id);
+        if (mounted && widget.message.senderId != context.read<ChatStore>().myId) {
+          unawaited(context.read<AppServices>().api.post('/messages/${widget.message.id}/played').catchError((_) => null));
+        }
+      }
     } catch (_) {
       _failed = true;
     } finally {

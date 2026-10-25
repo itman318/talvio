@@ -97,6 +97,12 @@ String systemText(Message m, ChatStore store) {
       return '$actor removed ${who(meta['user_id'])}';
     case 'member_left':
       return '${who(meta['user_id'])} left the group';
+    case 'voice_chat_started':
+      final t = '${meta['title'] ?? ''}'.trim();
+      return '$actor started a voice chat${t.isEmpty ? '' : ' “$t”'}';
+    case 'voice_chat_ended':
+      final secs = (meta['duration_sec'] as num?)?.toInt() ?? 0;
+      return 'Voice chat ended (${secs >= 3600 ? '${secs ~/ 3600} h ${(secs % 3600) ~/ 60} min' : (secs >= 60 ? '${secs ~/ 60} min' : '$secs s')})';
     case 'captcha':
       return '${who(meta['user_id'])} joined — waiting for the “I’m not a robot” check';
     case 'member_joined':

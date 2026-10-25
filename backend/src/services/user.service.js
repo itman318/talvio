@@ -434,6 +434,38 @@ async function listSessions(userId, currentSessionId) {
   return rows.map((s) => ({ ...s, current: s.id === currentSessionId }));
 }
 
+/** Settings → Login activity: the last 60 days of logins and blocked attempts. */
+async function loginActivity(userId, currentSessionId) {
+  const rows = await db.many(
+    `SELECT e.*, s.revoked_at, s.last_active_at, s.expires_at FROM login_events e
+     LEFT JOIN sessions s ON s.id = e.session_id
+     WHERE e.user_id = $1 AND e.created_at > now() - interval '60 days'
+     ORDER BY e.created_at DESC LIMIT 100`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    device_name: r.device_name,
+    platform: r.platform,
+    ip: r.ip,
+    at: new Date(r.created_at).toISOString(),
+    session_id: r.session_id,
+    current: !!r.session_id && r.session_id === currentSessionId,
+    active: !!r.session_id && !r.revoked_at && new Date(r.expires_at) > new Date(),
+    last_active_at: r.last_active_at ? new Date(r.last_active_at).toISOString() : null,
+  }));
+}
+
+/** "This wasn't me": log that device out at once. */
+async function notMe(userId, currentSessionId, sessionIdRaw) {
+  const id = v.id(sessionIdRaw, 'session_id');
+  if (id === currentSessionId) throw badRequest('invalid_input', 'That is this device');
+  await db.query('UPDATE sessions SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL', [id, userId]);
+  bus.emit('sessions:revoked', { userId, sessionIds: [id], reason: 'terminated' });
+  return { ok: true };
+}
+
 async function revokeSession(userId, sessionId) {
   const row = await db.one(
     'UPDATE sessions SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING id',
@@ -632,6 +664,8 @@ async function sweepInactive() {
 }
 
 module.exports = {
+  loginActivity,
+  notMe,
   sweepInactive,
   EXCEPTION_SETTINGS,
   sendBirthdayReminders,

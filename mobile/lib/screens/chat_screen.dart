@@ -1,3 +1,5 @@
+import 'voice_chat_screen.dart';
+import '../state/voice_chat_manager.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -167,6 +169,120 @@ class _ChatScreenState extends State<ChatScreen> {
   int? _online; // groups: members online now
   bool _formatOpen = false; // the B / I / S / code / spoiler bar above the message box
 
+  // ---- bot inline mode: "@goldprice_bot 24k" → the bot's results above the message box
+  static final _inlineRe = RegExp(r'^@([A-Za-z][A-Za-z0-9_]{1,30}bot) (.*)$', caseSensitive: false, dotAll: true);
+  Timer? _inlineDebounce;
+  String? _inlineKey; // "<bot>|<query>" of the last request
+  Map<String, dynamic>? _inline; // {bot, query_id, results}
+  bool _inlineLoading = false;
+
+  void _onInlineText() {
+    final m = _inlineRe.firstMatch(_text.text);
+    if (m == null || _editing != null) {
+      if (_inline != null || _inlineLoading) setState(() {
+        _inline = null;
+        _inlineLoading = false;
+        _inlineKey = null;
+      });
+      return;
+    }
+    final key = '${m.group(1)!.toLowerCase()}|${m.group(2)!.trim()}';
+    if (key == _inlineKey) return;
+    _inlineDebounce?.cancel();
+    _inlineDebounce = Timer(const Duration(milliseconds: 450), () async {
+      _inlineKey = key;
+      if (mounted) setState(() => _inlineLoading = true);
+      try {
+        final r = Map<String, dynamic>.from(await context.read<AppServices>().api.get('/bots/inline', query: {'username': m.group(1)!, 'q': m.group(2)!.trim()}) as Map);
+        if (!mounted || _inlineKey != key) return;
+        setState(() {
+          _inline = r['bot'] == null ? null : r;
+          _inlineLoading = false;
+        });
+      } catch (_) {
+        if (mounted && _inlineKey == key) setState(() => _inlineLoading = false);
+      }
+    });
+  }
+
+  Future<void> _sendInline(Map<String, dynamic> result) async {
+    final inline = _inline;
+    if (inline == null) return;
+    final reply = _replyTo;
+    setState(() {
+      _inline = null;
+      _inlineKey = null;
+      _replyTo = null;
+      _text.clear();
+    });
+    try {
+      await context.read<AppServices>().api.post('/bots/inline/send', {
+        'query_id': inline['query_id'],
+        'result_id': result['id'],
+        'chat_id': chatId,
+        if (reply != null) 'reply_to_id': reply.id,
+      });
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  Widget _inlinePanel() {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final inline = _inline;
+    final results = ((inline?['results'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    final bot = inline?['bot'] as Map?;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+      constraints: const BoxConstraints(maxHeight: 280),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1A1F35).withValues(alpha: 0.98) : Colors.white.withValues(alpha: 0.98),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 14, offset: const Offset(0, 4))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+          child: Row(children: [
+            const Icon(Icons.smart_toy_rounded, size: 16, color: Brand.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                bot == null ? 'Asking the bot…' : '@${bot['username']}${(bot['placeholder'] ?? '').toString().isNotEmpty ? ' · ${bot['placeholder']}' : ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Brand.muted),
+              ),
+            ),
+            if (_inlineLoading) const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+          ]),
+        ),
+        if (!_inlineLoading && results.isEmpty)
+          const Padding(padding: EdgeInsets.fromLTRB(14, 4, 14, 14), child: Text('No results', style: TextStyle(color: Brand.muted))),
+        Flexible(
+          child: ListView(shrinkWrap: true, padding: const EdgeInsets.only(bottom: 6), children: [
+            for (final r in results)
+              ListTile(
+                dense: true,
+                leading: r['thumb_url'] != null
+                    ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network('${r['thumb_url']}', width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.article_outlined)))
+                    : Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.article_rounded, color: Colors.white, size: 20),
+                      ),
+                title: Text('${r['title']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                subtitle: '${r['description'] ?? ''}'.isEmpty ? null : Text('${r['description']}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                onTap: () => _sendInline(r),
+              ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
   /// Puts [mark] around the selected text (or removes it when it's already there).
   void _wrapSelection(String mark) {
     final sel = _text.selection;
@@ -282,6 +398,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _prefs = context.read<AppPrefs>();
     _chat = widget.initial;
     _text.text = _prefs.draft(widget.chatId) ?? '';
+    _text.addListener(_onInlineText);
     _text.addListener(() {
       if (_formatOpen && (!_text.selection.isValid || _text.selection.isCollapsed) && mounted) setState(() => _formatOpen = false);
     });
@@ -366,6 +483,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _inlineDebounce?.cancel();
     if (_guarded) ScreenGuard.release();
     final draft = _editing == null ? _text.text : '';
     if (draft != (_prefs.draft(chatId) ?? '')) _store.syncDraft(chatId, draft);
@@ -738,6 +856,9 @@ class _ChatScreenState extends State<ChatScreen> {
           final x = await picker.pickImage(source: ImageSource.camera, imageQuality: _prefs.uploadQuality, maxWidth: _prefs.uploadMaxSide, maxHeight: _prefs.uploadMaxSide);
           if (x != null) await _editAndSend(x.path, x.name);
           break;
+        case 'voice_chat':
+          await openVoiceChat(context, chat, start: chat.voiceChat == null);
+          break;
         case 'video':
           final x = await picker.pickVideo(source: ImageSource.gallery);
           if (x != null && mounted) {
@@ -1053,6 +1174,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (canClosePoll) const MessageMenuItem('close_poll', Icons.stop_circle_outlined, 'Stop poll'),
       const MessageMenuItem('select', Icons.check_circle_outline_rounded, 'Select'),
       const MessageMenuItem('remind', Icons.alarm_add_rounded, 'Remind me'),
+      _store.bookmarked.contains(m.id)
+          ? const MessageMenuItem('unbookmark', Icons.bookmark_remove_outlined, 'Remove from Read later')
+          : const MessageMenuItem('bookmark', Icons.bookmark_add_outlined, 'Read later'),
       if (mine && !chat.isSavedMessages && !chat.isChannel) const MessageMenuItem('info', Icons.info_outline_rounded, 'Message info'),
       if (m.editedAt != null) const MessageMenuItem('history', Icons.history_rounded, 'Edit history'),
       if (!mine && !chat.isAdmin) const MessageMenuItem('report', Icons.flag_outlined, 'Report'),
@@ -1110,6 +1234,15 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.text));
         if (mounted) showInfo(context, 'Copied');
+        break;
+      case 'bookmark':
+      case 'unbookmark':
+        try {
+          await _store.setBookmark(m, a == 'bookmark');
+          if (mounted) showInfo(context, a == 'bookmark' ? 'Saved to Read later' : 'Removed from Read later');
+        } catch (e) {
+          if (mounted) showError(context, e);
+        }
         break;
       case 'copy_link':
         await Clipboard.setData(ClipboardData(text: '${AppConfig.serverUrl}/c/${chat.username}/${m.id}'));
@@ -1482,6 +1615,8 @@ class _ChatScreenState extends State<ChatScreen> {
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('calls') && auth.feature('video_calls'))
                 _mi('video', Icons.videocam_outlined, 'Video call'),
               _mi('search', Icons.search_rounded, 'Search messages'),
+              if (chat.isMulti && (chat.voiceChat != null || chat.isAdmin))
+                _mi('voice_chat', Icons.graphic_eq_rounded, chat.voiceChat != null ? 'Join voice chat' : 'Start voice chat'),
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
               if (!chat.isChannel && !chat.isSavedMessages) _mi('live', Icons.share_location_rounded, 'Live locations'),
@@ -1537,6 +1672,7 @@ class _ChatScreenState extends State<ChatScreen> {
           VoiceMiniPlayer(onOpen: (id) {
             if (id != chatId) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)));
           }),
+          if (chat.voiceChat != null && context.watch<VoiceChatManager>().chatId != chat.id) _voiceChatBar(chat),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
           if (chat.isChannel && chat.isAdmin && chat.queueCount > 0)
             Material(
@@ -2008,6 +2144,42 @@ class _ChatScreenState extends State<ChatScreen> {
             ]),
           ],
         ]),
+      ),
+    );
+  }
+
+  /// "Voice chat · 4 participants   [Join]" under the header while a voice chat is live here.
+  Widget _voiceChatBar(Chat chat) {
+    final vc = chat.voiceChat!;
+    final n = (vc['count'] as num?)?.toInt() ?? 0;
+    final title = '${vc['title'] ?? ''}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => openVoiceChat(context, chat),
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+            decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(18)),
+            child: Row(children: [
+              const Icon(Icons.graphic_eq_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title.isEmpty ? 'Voice chat' : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+                  Text('$n ${n == 1 ? 'participant' : 'participants'} · live now', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                ]),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                child: const Text('Join', style: TextStyle(color: Brand.primary, fontWeight: FontWeight.w800)),
+              ),
+            ]),
+          ),
+        ),
       ),
     );
   }
@@ -2519,6 +2691,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
             ),
+            if ((_inline != null || _inlineLoading) && !_recording && _reviewPath == null) _inlinePanel(),
             if (_formatOpen && _text.selection.isValid && !_text.selection.isCollapsed && !_recording && _reviewPath == null) _formatBar(),
             if (_reviewPath != null)
               _reviewBar(chat)

@@ -135,7 +135,7 @@ async function serializeRows(viewerId, rows) {
   const medias = mediaIds.length ? await db.many('SELECT * FROM media WHERE id = ANY($1::bigint[])', [mediaIds]) : [];
   const mediaMap = new Map(medias.map((m) => [m.id, m]));
 
-  const userIds = [...rows.map((r) => r.sender_id), ...replies.map((r) => r.sender_id)].filter(Boolean);
+  const userIds = [...rows.map((r) => r.sender_id), ...replies.map((r) => r.sender_id), ...rows.map((r) => r.via_bot_id)].filter(Boolean);
   const users = await userService.getUsersMap(viewerId, userIds);
   const polls = await loadPolls(viewerId, rows.filter((r) => r.type === 'poll').map((r) => r.id));
   const reactions = await loadReactions(viewerId, ids);
@@ -165,6 +165,11 @@ async function serializeRows(viewerId, rows) {
     if (b.role === 'admin') return { kind: 'admin', text: b.admin_title || 'admin' };
     return b.member_tag ? { kind: 'tag', text: b.member_tag } : null;
   };
+  const voiceIds = rows.filter((r) => r.type === 'voice' || r.type === 'video_note').map((r) => r.id);
+  const playRows = voiceIds.length
+    ? await db.many('SELECT message_id, count(*)::int AS n FROM message_plays WHERE message_id = ANY($1::bigint[]) GROUP BY message_id', [voiceIds])
+    : [];
+  const playMap = new Map(playRows.map((p) => [p.message_id, p.n]));
   const onceIds = rows.filter((r) => r.meta && r.meta.view_once).map((r) => r.id);
   const onceRows = onceIds.length ? await db.many('SELECT message_id, user_id FROM message_once_views WHERE message_id = ANY($1::bigint[])', [onceIds]) : [];
 
@@ -184,6 +189,7 @@ async function serializeRows(viewerId, rows) {
       sender: isChannel ? null : minimalUser(sender),
       author_signature: isChannel && chat.signatures && m.type !== 'system' ? nameOf(sender) : null,
       sender_badge: chat.type === 'group' ? badgeOf(m) : null,
+      via_bot: m.via_bot_id && users.get(m.via_bot_id) ? { id: m.via_bot_id, username: users.get(m.via_bot_id).username } : null,
       type: m.type,
       text: m.text,
       media: m.media_id ? mediaService.serialize(mediaMap.get(m.media_id)) : null,
@@ -202,6 +208,7 @@ async function serializeRows(viewerId, rows) {
       reactions: react ? react.list : [],
       my_reaction: react ? react.mine : null,
       views: m.views_count || 0,
+      played: m.type === 'voice' || m.type === 'video_note' ? (playMap.get(m.id) || 0) > 0 : undefined,
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
@@ -836,6 +843,7 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     topicId: prepared.topicId,
     albumId: prepared.albumId,
     replyMarkup: internal.replyMarkup || null,
+    viaBotId: internal.viaBotId || null,
   });
   moderation.afterSend(sender, message, flags).catch((err) => console.error('moderation error', err)); // eslint-disable-line no-console
   if (chat.type === 'channel' && chat.linked_chat_id && !message.thread_id) {
@@ -952,9 +960,13 @@ async function messageInfo(userId, messageIdRaw) {
       }
     }
   }
-  const users = await userService.getUsersMap(userId, rows.map((r) => r.user_id));
+  const plays = m.type === 'voice' || m.type === 'video_note'
+    ? await db.many('SELECT user_id, played_at FROM message_plays WHERE message_id = $1 ORDER BY played_at', [m.id])
+    : [];
+  const users = await userService.getUsersMap(userId, [...rows.map((r) => r.user_id), ...plays.map((p) => p.user_id)]);
   const pick = (f) => rows.filter(f).map((r) => users.get(r.user_id)).filter(Boolean);
   return {
+    played: plays.map((p) => ({ ...users.get(p.user_id), played_at: iso(p.played_at) })).filter((u) => u.id),
     read: pick((r) => r.read),
     delivered: pick((r) => !r.read && r.delivered),
     waiting: pick((r) => !r.read && !r.delivered),
@@ -1015,6 +1027,56 @@ async function deleteQueued(userId, chatIdRaw, queueIdRaw) {
 
 // ------------------------------------------------------------------ view once
 /** Opens a view-once message: allowed one time per person (the file can be fetched for a few minutes). */
+// ------------------------------------------------------------------ read later
+async function addBookmark(userId, messageIdRaw) {
+  const { m } = await getVisibleMessage(userId, messageIdRaw);
+  const n = await db.one('SELECT count(*)::int AS n FROM bookmarks WHERE user_id = $1', [userId]);
+  if (n.n >= 1000) throw badRequest('too_many_bookmarks', 'You can keep up to 1000 messages for later');
+  await db.query('INSERT INTO bookmarks (user_id, message_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, m.id]);
+  bus.emit('rt:emit', { event: 'bookmarks:changed', payload: { message_id: m.id, saved: true }, userIds: [userId] });
+  return { ok: true, saved: true };
+}
+
+async function removeBookmark(userId, messageIdRaw) {
+  const id = v.id(messageIdRaw, 'message_id');
+  await db.query('DELETE FROM bookmarks WHERE user_id = $1 AND message_id = $2', [userId, id]);
+  bus.emit('rt:emit', { event: 'bookmarks:changed', payload: { message_id: id, saved: false }, userIds: [userId] });
+  return { ok: true, saved: false };
+}
+
+/** Messages I saved to read later (newest first), with their chat. Gone / hidden ones drop out. */
+async function listBookmarks(userId) {
+  const rows = await db.many(
+    `SELECT m.*, b.created_at AS saved_at FROM bookmarks b
+     JOIN messages m ON m.id = b.message_id AND m.deleted_at IS NULL
+     JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1 AND m.id > cm.cleared_before_id
+     WHERE b.user_id = $1 ORDER BY b.created_at DESC LIMIT 300`,
+    [userId],
+  );
+  const messages = await serializeRows(userId, rows);
+  const chats = await chatService.getChatsByIds(userId, [...new Set(rows.map((r) => r.chat_id))]);
+  const chatMap = new Map(chats.map((c) => [c.id, { id: c.id, type: c.type, title: c.title, avatar_url: c.avatar_url }]));
+  return {
+    items: messages.map((m, i) => ({ chat: chatMap.get(m.chat_id), message: m, saved_at: iso(rows[i].saved_at) })).filter((x) => x.chat),
+  };
+}
+
+/** Someone listened to a voice message / watched a round video: the sender's mic turns blue. */
+async function markPlayed(userId, messageIdRaw) {
+  const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
+  if (!['voice', 'video_note'].includes(m.type) || m.sender_id === userId || !m.sender_id) return { ok: true };
+  // private chats follow the read-receipts setting of both people
+  if (chat.type === 'private' && !(await receiptsOn([userId, m.sender_id]))) return { ok: true };
+  const r = await db.one(
+    'INSERT INTO message_plays (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING played_at',
+    [m.id, userId],
+  );
+  if (r && chat.type !== 'channel') {
+    bus.emit('rt:emit', { event: 'message:played', payload: { chat_id: chat.id, message_id: m.id, user_id: userId }, userIds: [m.sender_id] });
+  }
+  return { ok: true };
+}
+
 async function openOnce(userId, messageIdRaw) {
   const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
   if (!(m.meta && m.meta.view_once)) throw badRequest('invalid_input', 'This is not a view-once message');
@@ -1512,6 +1574,10 @@ async function markAllDelivered(userId) {
 }
 
 module.exports = {
+  markPlayed,
+  addBookmark,
+  removeBookmark,
+  listBookmarks,
   liveLocations,
   sweepPolls,
   openOnce,

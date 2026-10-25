@@ -263,6 +263,7 @@ class Message {
   final String? forwardedFromName;
   final String? authorSignature;
   final Map<String, dynamic>? senderBadge; // groups: {kind: owner|admin|tag, text}
+  final String? viaBot; // sent with a bot's inline mode: its @username
   final PollInfo? poll;
   List<ReactionCount> reactions;
   String? myReaction;
@@ -282,6 +283,7 @@ class Message {
 
   /// View once: the other side can open it a single time.
   final bool viewOnce;
+  bool played; // voice / round video: someone listened (shown to the sender)
   List<int> openedBy;
 
   // local-only (optimistic sending)
@@ -304,6 +306,7 @@ class Message {
     this.forwardedFromName,
     this.authorSignature,
     this.senderBadge,
+    this.viaBot,
     this.poll,
     List<ReactionCount>? reactions,
     this.myReaction,
@@ -326,6 +329,7 @@ class Message {
     this.outbox,
     this.uploadKind,
     this.viewOnce = false,
+    this.played = false,
     List<int>? openedBy,
   })  : reactions = reactions ?? [],
         openedBy = openedBy ?? [];
@@ -353,6 +357,7 @@ class Message {
       forwardedFromName: j['forwarded_from'] == null ? null : (j['forwarded_from']['name'] as String?),
       authorSignature: j['author_signature'] as String?,
       senderBadge: j['sender_badge'] is Map ? Map<String, dynamic>.from(j['sender_badge'] as Map) : null,
+      viaBot: j['via_bot'] is Map ? (j['via_bot'] as Map)['username'] as String? : null,
       poll: j['poll'] == null ? null : PollInfo.fromJson(Map<String, dynamic>.from(j['poll'] as Map)),
       reactions: ReactionCount.listFrom(j['reactions']),
       myReaction: j['my_reaction'] as String?,
@@ -370,6 +375,7 @@ class Message {
       editedAt: _date(j['edited_at']),
       createdAt: _date(j['created_at']) ?? DateTime.now(),
       viewOnce: j['view_once'] == true,
+      played: j['played'] == true,
       openedBy: ((j['opened_by'] as List?) ?? const []).map(_int).toList(),
     );
   }
@@ -665,6 +671,9 @@ class Chat {
   bool get antiLinks => extra['anti_links'] == true;
   bool get hideService => extra['hide_service'] == true;
   bool get needsCaptcha => extra['needs_captcha'] == true;
+
+  /// Live voice chat going on here: {id, title, count}, or null.
+  Map<String, dynamic>? get voiceChat => extra['voice_chat'] is Map ? Map<String, dynamic>.from(extra['voice_chat'] as Map) : null;
   List<String> get bannedWords => extra['banned_words'] is List ? (extra['banned_words'] as List).map((e) => '$e').toList() : const [];
 
   /// What ordinary members may send: media, links, polls, stickers, voice.

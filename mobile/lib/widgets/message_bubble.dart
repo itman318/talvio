@@ -192,6 +192,11 @@ class MessageBubble extends StatelessWidget {
             ],
           ]),
         ),
+      if (m.viaBot != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 3),
+          child: Text('via @${m.viaBot}', style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 12.5)),
+        ),
       if (m.forwardedFromName != null)
         Padding(
           padding: const EdgeInsets.only(bottom: 4),

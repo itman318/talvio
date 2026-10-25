@@ -64,6 +64,7 @@ async function verifyLogin(token, password, device, ip) {
   if (!u.password_hash) {
     // removed meanwhile (reset finished): just log in
   } else if (!verifyPassword(String(password || ''), u.password_hash)) {
+    require('./auth.service').recordLoginEvent(u.id, 'wrong_password', device || p.dev, ip).catch(() => {}); // eslint-disable-line global-require
     throw badRequest('password_invalid', 'Wrong password');
   }
   if (u.password_reset_after) await db.query('UPDATE users SET password_reset_after = NULL WHERE id = $1', [u.id]);

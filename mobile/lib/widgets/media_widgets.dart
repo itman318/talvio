@@ -375,12 +375,19 @@ class _VoicePlayerState extends State<VoicePlayer> {
                     const SizedBox(width: 5),
                     Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
                   ],
+                  if (widget.isMine && !local) ...[
+                    const SizedBox(width: 5),
+                    Tooltip(
+                      message: widget.message.played ? 'Listened' : 'Not listened yet',
+                      child: Icon(Icons.mic_rounded, size: 14, color: widget.message.played ? const Color(0xFF7DF3DB) : c.withValues(alpha: 0.45)),
+                    ),
+                  ],
                   if (mine && vp.earpiece) ...[
                     const SizedBox(width: 5),
                     Icon(Icons.hearing_rounded, size: 13, color: c),
                   ],
                   const Spacer(),
-                  if (started)
+                  if (!local)
                     GestureDetector(
                       onTap: vp.cycleSpeed,
                       child: Container(

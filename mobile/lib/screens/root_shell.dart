@@ -1,3 +1,4 @@
+import 'voice_chat_screen.dart';
 import '../theme/brand.dart';
 import '../widgets/avatar.dart';
 import '../state/auth_state.dart';
@@ -74,6 +75,7 @@ class _RootShellState extends State<RootShell> {
       child: Scaffold(
         body: IndexedStack(index: _tab, children: [page(0), page(1), page(2), page(3)]),
         bottomNavigationBar: Column(mainAxisSize: MainAxisSize.min, children: [
+          const VoiceChatMiniBar(),
           VoiceMiniPlayer(onOpen: (id) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)))),
           DecoratedBox(
           decoration: BoxDecoration(

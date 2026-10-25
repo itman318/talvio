@@ -368,6 +368,14 @@ function init(httpServer) {
     socket.on('call:hangup', handler((p) => callService.hangup(uid, p.call_id, p.reason)));
     socket.on('call:signal', callLimit(handler((p) => callService.relaySignal(uid, sid, p))));
 
+    // live voice chats
+    const vcs = require('../services/voicechat.service'); // eslint-disable-line global-require
+    socket.on('vc:join', handler((p) => vcs.join(uid, p.chat_id, p, sid)));
+    socket.on('vc:start', handler((p) => vcs.start(uid, p.chat_id, { ...p, session_id: sid })));
+    socket.on('vc:leave', handler((p) => vcs.leave(uid, p.chat_id)));
+    socket.on('vc:signal', callLimit(handler((p) => vcs.relay(uid, p))));
+    socket.on('vc:speaking', handler((p) => vcs.speaking(uid, p)));
+
     socket.on('secret:create', handler((p) => secretService.create(uid, sid, p)));
     socket.on('secret:accept', handler((p) => secretService.accept(uid, sid, p.secret_chat_id, p)));
     socket.on('secret:close', handler((p) => secretService.close(uid, sid, p.secret_chat_id)));
@@ -385,7 +393,10 @@ function init(httpServer) {
         try {
           if (!io) return;
           const still = await io.in(sessionRoom(sid)).fetchSockets();
-          if (still.length === 0) await callService.endBySession(sid);
+          if (still.length === 0) {
+            await callService.endBySession(sid);
+            await require('../services/voicechat.service').leaveBySession(sid); // eslint-disable-line global-require
+          }
         } catch (_) {
           /* ignore */
         }

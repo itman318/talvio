@@ -1,3 +1,4 @@
+import 'screens/login_activity_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -23,6 +24,7 @@ import 'state/auth_state.dart';
 import 'state/call_manager.dart';
 import 'state/chat_store.dart';
 import 'state/secret_store.dart';
+import 'state/voice_chat_manager.dart';
 import 'theme/brand.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -80,6 +82,7 @@ Future<void> _start() async {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
   final secrets = SecretStore(services);
+  final voiceChats = VoiceChatManager(services)..myId = (() => chats.myId);
   // drafts follow me to my other devices
   chats.onDraftSynced = (chatId, text, live) {
     final local = prefs.draft(chatId) ?? '';
@@ -89,6 +92,7 @@ Future<void> _start() async {
     ..messagesOf = chats.messagesOf
     ..myId = (() => chats.myId);
   auth.onSessionCleared = () {
+    voiceChats.leave();
     voice.stop();
     calls.endLocal();
     secrets.wipeAll();
@@ -124,6 +128,32 @@ Future<void> _start() async {
   services.push.onOpenDevices = () {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SessionsScreen()));
+  };
+  // blocked login attempt → explain and offer the activity list
+  chats.onSecurityAlert = (a) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null || auth.status != AuthStatus.loggedIn) return;
+    final wrong = a['kind'] == 'wrong_password';
+    showDialog<void>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        icon: Icon(Icons.gpp_maybe_rounded, color: wrong ? const Color(0xFFE5484D) : Brand.amber, size: 38),
+        title: const Text('Security alert'),
+        content: Text(wrong
+            ? 'Someone on ${a['device'] ?? 'another device'} entered a wrong two-step password for your account.'
+            : 'Someone on ${a['device'] ?? 'another device'} entered your login code, but your two-step password stopped them. Never share your codes.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('OK')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(d);
+              navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const LoginActivityScreen()));
+            },
+            child: const Text('Review'),
+          ),
+        ],
+      ),
+    );
   };
   // "New login — was this you?" on my other devices
   chats.onNewLogin = (s) {
@@ -171,6 +201,7 @@ Future<void> _start() async {
         ChangeNotifierProvider<AuthState>.value(value: auth),
         ChangeNotifierProvider<CallManager>.value(value: calls),
         ChangeNotifierProvider<SecretStore>.value(value: secrets),
+        ChangeNotifierProvider<VoiceChatManager>.value(value: voiceChats),
         ChangeNotifierProvider<VoicePlayback>.value(value: voice),
       ],
       child: const ChatApp(),

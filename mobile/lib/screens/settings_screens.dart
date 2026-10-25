@@ -1,3 +1,5 @@
+import 'read_later_screen.dart';
+import 'login_activity_screen.dart';
 import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
@@ -225,6 +227,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.health_and_safety_rounded, color: const Color(0xFF12A150), title: 'Security checkup', subtitle: 'Your protection score and quick fixes', onTap: () => go(const SecurityCheckupScreen())),
             SettingsTile(icon: Icons.visibility_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Who can see, message, call and find you', onTap: () => go(const PrivacyScreen())),
             SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
+            SettingsTile(icon: Icons.manage_history_rounded, color: const Color(0xFF3C83DE), title: 'Login activity', subtitle: 'Every login and blocked attempt', onTap: () => go(const LoginActivityScreen())),
             SettingsTile(icon: Icons.fingerprint_rounded, color: const Color(0xFFC8366E), title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
             SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', subtitle: 'PIN or fingerprint to open Talvio', onTap: () => go(const AppLockSettingsScreen())),
             SettingsTile(icon: Icons.block_rounded, color: const Color(0xFFE5484D), title: 'Blocked users', onTap: () => go(const BlockedUsersScreen())),
@@ -233,6 +236,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.palette_rounded, color: Brand.rose, title: 'Appearance', subtitle: 'Dark mode, chat theme, text size', onTap: () => go(const AppearanceScreen())),
             SettingsTile(icon: Icons.emoji_emotions_rounded, color: Brand.primary, title: 'Stickers & emoji', onTap: () => go(const StickerPacksScreen())),
             SettingsTile(icon: Icons.folder_rounded, color: Brand.sky, title: 'Chat folders', onTap: () => go(const FoldersScreen())),
+            SettingsTile(icon: Icons.bookmarks_rounded, color: Brand.violet, title: 'Read later', subtitle: 'Messages you saved — on all your devices', onTap: () => go(const ReadLaterScreen())),
             SettingsTile(icon: Icons.alarm_rounded, color: Brand.amber, title: 'Reminders', subtitle: 'Messages you asked to be reminded about', onTap: () => go(const RemindersScreen())),
             SettingsTile(icon: Icons.archive_rounded, color: const Color(0xFF8A93B4), title: 'Archived chats', onTap: () => go(const ArchivedChatsScreen())),
             SettingsTile(icon: Icons.cloud_upload_rounded, color: Brand.violet, title: 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', onTap: () => go(const BackupScreen())),

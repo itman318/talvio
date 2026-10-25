@@ -283,8 +283,9 @@ Methods: `me`, `updates`, `webhook.set`, `webhook.delete`, `webhook.info`, `mess
 `chat.action` (`action`: typing, uploading_photo, recording_voice …), `polls.send` (`question`, `options`,
 `type`=quiz, `correct_option_id`, `open_period`), `locations.send` (`latitude`, `longitude`), `messages.forward`
 (`from_chat_id`, `message_id`), `messages.pin`, `messages.unpin`, `chats.member` (`user_id`),
-`chats.member-count`, `me.set` (`name`, `description`, `menu_url`). Updates: `message`,
-`callback_query`, and `message.web_app_data`. Webhooks get the header `X-Talvio-Webhook-Secret`.
+`chats.member-count`, `me.set` (`name`, `description`, `menu_url`), `inline.answer` (`inline_query_id`,
+`results`: [{`id`, `title`, `description`, `text`, `thumb_url`, `reply_markup`}]). Updates: `message`,
+`callback_query`, `inline_query` (when inline mode is on — BotForge → /setinline), and `message.web_app_data`. Webhooks get the header `X-Talvio-Webhook-Secret`.
 
 **Keyboards:** `reply_markup` takes `inline_keyboard` (buttons under the message), `keyboard` (big buttons that
 replace the phone keyboard — `resize_keyboard`, `one_time_keyboard`, `input_field_placeholder`,
@@ -300,6 +301,15 @@ Verify init data on your server: `secret = HMAC_SHA256(key="TalvioMiniApp", msg=
 **BotForge:** a built-in bot (@BotForge, created on start) makes and manages bots from a chat:
 `/newbot`, `/mybots` (buttons: token, edit name/description/commands/photo, mini app, group privacy, revoke,
 delete), `/setcommands`, `/setuserpic`, `/setmenu`, `/setprivacy`, `/deletebot`, `/cancel`.
+
+## Voice chats, read later, login activity
+
+- **Voice chats** in groups and channels: admins start one (chat ⋮ → Start voice chat); members join from the
+  banner. Groups: everyone talks. Channels: subscribers listen and raise a hand, admins let them speak.
+  Audio is peer-to-peer (WebRTC mesh, up to 30 people, coturn as fallback); the server relays signalling.
+- **Listened**: the sender's mic icon turns green when a voice message / round video is played (follows read receipts).
+- **Read later** bookmarks sync across devices; **Login activity** lists logins and blocked attempts
+  (wrong two-step password, or the code used without the password) and alerts the owner.
 
 ## Privacy, security & group protection
 
