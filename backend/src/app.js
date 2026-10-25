@@ -34,6 +34,11 @@ function createApp() {
   app.use('/api/admin', adminRoutes.router);
   app.use('/api', userRoutes.router);
 
+  // pages always load fresh (their css / js links carry a ?v= version, so those can be cached)
+  const noCacheHtml = (res, file) => {
+    if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  };
+
   // Web / desktop app (installable PWA) at /web
   const webDir = path.join(__dirname, '..', 'web-client');
   app.use(
@@ -47,7 +52,7 @@ function createApp() {
       res.setHeader('Service-Worker-Allowed', '/web/');
       next();
     },
-    express.static(webDir, { index: 'index.html', maxAge: config.isProd ? '10m' : 0 }),
+    express.static(webDir, { index: 'index.html', maxAge: config.isProd ? '10m' : 0, setHeaders: noCacheHtml }),
   );
 
   // Admin panel (static single-page app)
@@ -61,7 +66,7 @@ function createApp() {
       );
       next();
     },
-    express.static(adminDir, { index: 'index.html', maxAge: config.isProd ? '1h' : 0 }),
+    express.static(adminDir, { index: 'index.html', maxAge: config.isProd ? '1h' : 0, setHeaders: noCacheHtml }),
   );
   app.get('/', (req, res) => res.redirect('/admin/'));
   // Public legal pages, e.g. https://chat.example.com/p/privacy (for Play Store / App Store listings)

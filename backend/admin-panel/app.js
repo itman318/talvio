@@ -8,25 +8,63 @@
     support: ['dashboard', 'users.view', 'reports.view', 'groups.view', 'support', 'calls.view'],
   };
   const NAV = [
-    { id: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
-    { id: 'users', label: 'Users', perm: 'users.view' },
-    { id: 'reports', label: 'Reports', perm: 'reports.view' },
-    { id: 'appeals', label: 'Ban appeals', perm: 'users.view' },
-    { id: 'groups', label: 'Groups & channels', perm: 'groups.view' },
-    { id: 'calls', label: 'Calls', perm: 'calls.view' },
-    { id: 'bots', label: 'Bots', perm: 'users.view' },
-    { id: 'revenue', label: 'Revenue', perm: 'payments' },
-    { id: 'payments', label: 'Payments', perm: 'payments' },
-    { id: 'plans', label: 'Talvio Plus plans', perm: 'payments' },
-    { id: 'ads', label: 'Sponsored messages', perm: 'payments' },
-    { id: 'support', label: 'Support', perm: 'support' },
-    { id: 'broadcast', label: 'Broadcast', perm: 'broadcast' },
-    { id: 'settings', label: 'Settings', perm: 'settings' },
-    { id: 'pages', label: 'Pages & FAQ', perm: 'settings' },
-    { id: 'admins', label: 'Admin team', perm: 'admins' },
-    { id: 'crashes', label: 'App crashes', perm: 'logs.view' },
-    { id: 'logs', label: 'Activity log', perm: 'logs.view' },
+    { id: 'dashboard', label: 'Dashboard', perm: 'dashboard', icon: 'dashboard', section: 'Overview' },
+    { id: 'users', label: 'Users', perm: 'users.view', icon: 'users', section: 'Moderation' },
+    { id: 'reports', label: 'Reports', perm: 'reports.view', icon: 'flag', section: 'Moderation' },
+    { id: 'appeals', label: 'Ban appeals', perm: 'users.view', icon: 'shield', section: 'Moderation' },
+    { id: 'groups', label: 'Groups & channels', perm: 'groups.view', icon: 'chat', section: 'Moderation' },
+    { id: 'calls', label: 'Calls', perm: 'calls.view', icon: 'phone', section: 'Moderation' },
+    { id: 'bots', label: 'Bots', perm: 'users.view', icon: 'bot', section: 'Moderation' },
+    { id: 'revenue', label: 'Revenue', perm: 'payments', icon: 'trend', section: 'Business' },
+    { id: 'payments', label: 'Payments', perm: 'payments', icon: 'card', section: 'Business' },
+    { id: 'plans', label: 'Talvio Plus plans', perm: 'payments', icon: 'star', section: 'Business' },
+    { id: 'ads', label: 'Sponsored messages', perm: 'payments', icon: 'megaphone', section: 'Business' },
+    { id: 'support', label: 'Support', perm: 'support', icon: 'buoy', section: 'Communication' },
+    { id: 'broadcast', label: 'Broadcast', perm: 'broadcast', icon: 'send', section: 'Communication' },
+    { id: 'settings', label: 'Settings', perm: 'settings', icon: 'sliders', section: 'System' },
+    { id: 'pages', label: 'Pages & FAQ', perm: 'settings', icon: 'file', section: 'System' },
+    { id: 'admins', label: 'Admin team', perm: 'admins', icon: 'shieldCheck', section: 'System' },
+    { id: 'crashes', label: 'App crashes', perm: 'logs.view', icon: 'alert', section: 'System' },
+    { id: 'logs', label: 'Activity log', perm: 'logs.view', icon: 'activity', section: 'System' },
   ];
+  const LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FF7A59'/%3E%3Cstop offset='.55' stop-color='%23F0446E'/%3E%3Cstop offset='1' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='19' fill='url(%23g)'/%3E%3Crect x='23' y='12.8' width='28.2' height='23' rx='11.5' fill='%23ffffff' fill-opacity='.55'/%3E%3Crect x='11.5' y='24.3' width='30.7' height='24.3' rx='12' fill='%23fff'/%3E%3C/svg%3E";
+
+  // Small line icons (24×24, stroke = currentColor)
+  const ICONS = {
+    dashboard: [['rect', { x: 3, y: 3, width: 7, height: 9, rx: 1.5 }], ['rect', { x: 14, y: 3, width: 7, height: 5, rx: 1.5 }], ['rect', { x: 14, y: 12, width: 7, height: 9, rx: 1.5 }], ['rect', { x: 3, y: 16, width: 7, height: 5, rx: 1.5 }]],
+    users: [['path', { d: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2' }], ['circle', { cx: 9, cy: 7, r: 4 }], ['path', { d: 'M22 21v-2a4 4 0 0 0-3-3.87' }], ['path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }]],
+    flag: [['path', { d: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z' }], ['path', { d: 'M4 22v-7' }]],
+    shield: [['path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' }]],
+    shieldCheck: [['path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' }], ['path', { d: 'M9 12l2 2 4-4' }]],
+    chat: [['path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }]],
+    phone: [['path', { d: 'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z' }]],
+    bot: [['rect', { x: 3, y: 11, width: 18, height: 10, rx: 2 }], ['circle', { cx: 12, cy: 5, r: 2 }], ['path', { d: 'M12 7v4M8 16h.01M16 16h.01' }]],
+    trend: [['path', { d: 'M23 6l-9.5 9.5-5-5L1 18' }], ['path', { d: 'M17 6h6v6' }]],
+    card: [['rect', { x: 2, y: 5, width: 20, height: 14, rx: 2 }], ['path', { d: 'M2 10h20' }]],
+    star: [['path', { d: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z' }]],
+    megaphone: [['path', { d: 'M3 11l18-5v12L3 14v-3z' }], ['path', { d: 'M11.6 16.8a3 3 0 1 1-5.8-1.6' }]],
+    buoy: [['circle', { cx: 12, cy: 12, r: 10 }], ['circle', { cx: 12, cy: 12, r: 4 }], ['path', { d: 'M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24' }]],
+    send: [['path', { d: 'M22 2L11 13' }], ['path', { d: 'M22 2l-7 20-4-9-9-4 20-7z' }]],
+    sliders: [['path', { d: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6' }]],
+    file: [['path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }], ['path', { d: 'M14 2v6h6M16 13H8M16 17H8M10 9H8' }]],
+    alert: [['path', { d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' }], ['path', { d: 'M12 9v4M12 17h.01' }]],
+    activity: [['path', { d: 'M22 12h-4l-3 9L9 3l-3 9H2' }]],
+    lock: [['rect', { x: 3, y: 11, width: 18, height: 11, rx: 2 }], ['path', { d: 'M7 11V7a5 5 0 0 1 10 0v4' }]],
+    key: [['circle', { cx: 7.5, cy: 15.5, r: 4.5 }], ['path', { d: 'M10.7 12.3L21 2M16 7l3 3M18 5l2 2' }]],
+    logout: [['path', { d: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }], ['path', { d: 'M16 17l5-5-5-5M21 12H9' }]],
+    menu: [['path', { d: 'M3 6h18M3 12h18M3 18h18' }]],
+    refresh: [['path', { d: 'M23 4v6h-6M1 20v-6h6' }], ['path', { d: 'M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15' }]],
+    online: [['circle', { cx: 12, cy: 12, r: 3 }], ['path', { d: 'M5.6 5.6a9 9 0 0 0 0 12.8M18.4 18.4a9 9 0 0 0 0-12.8M8.5 8.5a5 5 0 0 0 0 7M15.5 15.5a5 5 0 0 0 0-7' }]],
+    userPlus: [['path', { d: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }], ['circle', { cx: 8.5, cy: 7, r: 4 }], ['path', { d: 'M20 8v6M23 11h-6' }]],
+    message: [['path', { d: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z' }]],
+    database: [['ellipse', { cx: 12, cy: 5, rx: 9, ry: 3 }], ['path', { d: 'M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5' }]],
+    ban: [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M4.93 4.93l14.14 14.14' }]],
+    image: [['rect', { x: 3, y: 3, width: 18, height: 18, rx: 2 }], ['circle', { cx: 8.5, cy: 8.5, r: 1.5 }], ['path', { d: 'M21 15l-5-5L5 21' }]],
+  };
+  function icon(name) {
+    const parts = ICONS[name] || ICONS.dashboard;
+    return svg('svg', { class: 'i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, parts.map(([t, a]) => svg(t, a)));
+  }
   const REASONS = { spam: 'Spam', abuse: 'Abuse / harassment', scam: 'Scam / fraud', violence: 'Violence', sexual: 'Sexual content', illegal: 'Illegal', other: 'Other' };
 
   const state = {
@@ -228,11 +266,13 @@
     const codeField = el('div', { class: 'field', hidden: true }, el('label', {}, 'Authentication code'), code);
     const submit = el('button', { class: 'btn primary', type: 'submit' }, 'Log in');
     const form = el('form', { class: 'login' },
-      el('h1', {}, 'Admin Panel'), el('p', {}, 'Sign in to manage users, reports and settings.'),
+      el('img', { class: 'mark', src: LOGO, alt: '' }),
+      el('h1', {}, 'Talvio Admin'), el('p', {}, 'Sign in to manage users, reports and settings.'),
       el('div', { class: 'field' }, el('label', {}, 'Email'), email),
       el('div', { class: 'field' }, el('label', {}, 'Password'), password),
       codeField,
-      submit);
+      submit,
+      el('div', { class: 'foot' }, 'Protected area · every action is logged'));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       submit.disabled = true;
@@ -331,19 +371,47 @@
   function renderLayout() {
     const allowed = NAV.filter((n) => can(n.perm));
     if (!allowed.some((n) => n.id === state.page)) state.page = allowed[0] ? allowed[0].id : 'dashboard';
-    const side = el('nav', { class: 'side' },
-      el('div', { class: 'brand' }, 'Talvio Admin'),
-      allowed.map((n) => el('button', {
-        class: n.id === state.page ? 'active' : '',
+    const current = allowed.find((n) => n.id === state.page) || allowed[0] || NAV[0];
+    const navItems = [];
+    let section = null;
+    for (const n of allowed) {
+      if (n.section !== section) {
+        section = n.section;
+        navItems.push(el('div', { class: 'section' }, section));
+      }
+      navItems.push(el('button', {
+        class: `item${n.id === state.page ? ' active' : ''}`,
         onclick: () => { state.page = n.id; location.hash = n.id; renderLayout(); },
-      }, n.label, n.id === 'reports' && state.openReports ? el('span', { class: 'badge' }, state.openReports) : null)),
-      el('div', { class: 'spacer' }),
-      el('button', { onclick: () => securityModal(false) }, state.admin.two_factor ? 'Security (2FA on)' : 'Turn on 2FA'),
-      el('button', { onclick: changePassword }, 'Change password'),
-      el('button', { onclick: logout }, 'Log out'),
-      el('div', { class: 'who' }, state.admin.name || state.admin.email, el('br'), state.admin.role.replace('_', ' ')));
+      }, icon(n.icon), el('span', { class: 'grow' }, n.label),
+      n.id === 'reports' && state.openReports ? el('span', { class: 'badge' }, state.openReports) : null));
+    }
+    const name = state.admin.name || state.admin.email;
+    const initials = String(name).trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'A';
+    const side = el('nav', { class: 'side' },
+      el('div', { class: 'brand' }, el('img', { src: LOGO, alt: '' }), el('div', {}, el('b', {}, 'Talvio Admin'), el('small', {}, 'Control center'))),
+      el('div', { class: 'nav' }, navItems),
+      el('div', { class: 'account' },
+        el('div', { class: 'me' }, el('div', { class: 'ini' }, initials), el('div', {}, el('b', {}, name), el('small', {}, state.admin.role.replace('_', ' ')))),
+        el('div', { class: 'acts' },
+          el('button', { title: state.admin.two_factor ? 'Security (2FA on)' : 'Turn on 2FA', onclick: () => securityModal(false) }, icon(state.admin.two_factor ? 'shieldCheck' : 'lock'), '2FA'),
+          el('button', { title: 'Change password', onclick: changePassword }, icon('key'), 'Password'),
+          el('button', { class: 'out', title: 'Log out', onclick: logout }, icon('logout'), 'Log out'))));
+    let scrim = null;
+    const closeMenu = () => { side.classList.remove('open'); if (scrim) { scrim.remove(); scrim = null; } };
+    const openMenu = () => {
+      side.classList.add('open');
+      scrim = el('div', { class: 'scrim', onclick: closeMenu });
+      document.body.append(scrim);
+    };
+    side.addEventListener('click', (e) => { if (e.target.closest('.item')) closeMenu(); });
+    const topbar = el('header', { class: 'topbar' },
+      el('button', { class: 'btn small menu', title: 'Menu', onclick: openMenu }, icon('menu')),
+      el('div', { class: 'crumb' }, current.section, ' / ', el('b', {}, current.label)),
+      el('div', { class: 'grow' }),
+      el('div', { class: 'who' }, el('i', { class: 'dot' }), el('span', {}, name)));
     main = el('main', {});
-    root.replaceChildren(el('div', { class: 'layout' }, side, main));
+    document.querySelectorAll('.scrim').forEach((x) => x.remove());
+    root.replaceChildren(el('div', { class: 'layout' }, side, topbar, main));
     PAGES[state.page]();
   }
 
@@ -377,26 +445,31 @@
   }
 
   async function pageDashboard() {
-    main.replaceChildren(head('Dashboard', el('button', { class: 'btn', onclick: pageDashboard }, 'Refresh')), el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Dashboard', el('button', { class: 'btn', onclick: pageDashboard }, icon('refresh'), 'Refresh')), el('div', { class: 'muted' }, 'Loading…'));
     const d = await action(() => api('GET', '/dashboard'));
     if (!d) return;
     state.openReports = d.reports_open;
-    const stat = (label, value) => el('div', { class: 'card stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+    let tone = 0;
+    const stat = (label, value, ic = 'activity') => el('div', { class: `card stat t${tone++ % 6}` },
+      el('div', { class: 'ic' }, icon(ic)), el('div', {}, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value)));
     main.replaceChildren(
-      head('Dashboard', el('button', { class: 'btn', onclick: pageDashboard }, 'Refresh')),
+      head('Dashboard', el('button', { class: 'btn', onclick: pageDashboard }, icon('refresh'), 'Refresh')),
+      el('div', { class: 'stats hero' },
+        stat('Total users', fmtNum(d.users_total), 'users'),
+        stat('Online now', fmtNum(d.online_now), 'online'),
+        stat('Messages today', fmtNum(d.messages_today), 'message'),
+        stat('Revenue this month', `Rs ${fmtNum(d.revenue_month_pkr)}`, 'trend')),
+      el('div', { class: 'charts' }, barChart('New signups — last 30 days', d.signups_30d), barChart('Messages — last 14 days', d.messages_14d)),
+      el('div', { class: 'group-title' }, 'More numbers'),
       el('div', { class: 'stats' },
-        stat('Total users', fmtNum(d.users_total)),
-        stat('Online now', fmtNum(d.online_now)),
         stat('Active (24h)', fmtNum(d.users_active_24h)),
         stat('Active (30d)', fmtNum(d.users_active_30d)),
         stat('Signups today', fmtNum(d.users_new_today)),
         stat('Signups (7 days)', fmtNum(d.users_new_7d)),
-        stat('Messages today', fmtNum(d.messages_today)),
         stat('Calls today', fmtNum(d.calls_today)),
         stat('Calls right now', fmtNum(d.calls_active)),
         stat('Vault chats', fmtNum(d.secret_chats_active)),
         stat('Talvio Plus users', fmtNum(d.premium_users)),
-        stat('Revenue this month', `Rs ${fmtNum(d.revenue_month_pkr)}`),
         stat('Payments to review', fmtNum(d.payments_to_review)),
         stat('Bots', fmtNum(d.bots_total)),
         stat('Secret messages today', fmtNum(d.secret_messages_today)),
@@ -410,8 +483,7 @@
         stat('Private chats', fmtNum(d.private_chats_total)),
         stat('Open reports', fmtNum(d.reports_open)),
         stat('Banned users', fmtNum(d.users_banned)),
-        stat('Storage used', fmtBytes(d.storage_bytes))),
-      el('div', { class: 'charts' }, barChart('New signups — last 30 days', d.signups_30d), barChart('Messages — last 14 days', d.messages_14d)));
+        stat('Storage used', fmtBytes(d.storage_bytes), 'database')));
   }
 
   // ------------------------------------------------------------------ users
