@@ -94,7 +94,9 @@ jobs:
           api-level: 30
           target: google_apis
           arch: x86_64
-          ram-size: 3072M
+          ram-size: 4096M
+          heap-size: 512M
+          cores: 4
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/app-e2e.sh

@@ -5,6 +5,9 @@ set -o pipefail
 mkdir -p ci-app
 run() { # $1 = test file, $2 = prebuilt apk, $3 = log name
   adb logcat -c || true
+  # stream the log while the test runs: if the emulator itself dies we still keep what happened
+  adb logcat -v time > ci-app/logcat-live-$3.txt 2>&1 &
+  local lc=$!
   (cd mobile && timeout 1200 flutter drive \
     --driver=test_driver/integration_test.dart \
     --target=integration_test/$1 \
@@ -12,6 +15,7 @@ run() { # $1 = test file, $2 = prebuilt apk, $3 = log name
     --dart-define=API_BASE=http://10.0.2.2:4000 \
     -d emulator-5554 2>&1) | tee ci-app/$3.txt
   local rc=$?
+  kill $lc 2>/dev/null || true
   adb logcat -d > ci-app/logcat-$3.txt 2>&1 || true
   return $rc
 }
