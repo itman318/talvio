@@ -61,6 +61,8 @@ jobs:
             printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=upload\nkeyPassword=%s\n' "$KEY_PASS" "$KEY_PASS" > android/key.properties
             echo "SIGNED=release" >> $GITHUB_ENV
           else
+            # one fixed test key (instead of a new random one per build), so updates install over the old app
+            mkdir -p ~/.android && cp signing/test-debug.keystore ~/.android/debug.keystore
             echo "SIGNED=debug" >> $GITHUB_ENV
           fi
           # push notifications: Firebase config from the GOOGLE_SERVICES_JSON secret (optional)
