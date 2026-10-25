@@ -89,11 +89,11 @@ class _MessageMenu extends StatelessWidget {
     final room = bottomLimit - topLimit - reactH - menuH - gap * 2;
     final previewH = preview == null ? 0.0 : anchor.height.clamp(0.0, room.clamp(60.0, size.height * 0.45));
     final total = reactH + gap + previewH + gap + menuH;
-    var top = (preview == null ? anchor.top : anchor.top) - reactH - gap;
+    var top = anchor.top - reactH - gap;
     if (top + total > bottomLimit) top = bottomLimit - total;
     if (top < topLimit) top = topLimit;
     final previewTop = top + reactH + gap;
-    final menuTop = previewTop + (preview == null ? 0 : previewH + gap);
+    final double menuTop = previewTop + (preview == null ? 0.0 : previewH + gap);
     final maxW = size.width - 24;
     final reactW = (reactions.length * 42.0 + 12).clamp(0.0, maxW);
     double left(double w) => alignRight ? (anchor.right - w).clamp(12.0, size.width - w - 12) : anchor.left.clamp(12.0, size.width - w - 12);
