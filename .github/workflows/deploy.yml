@@ -58,8 +58,14 @@ jobs:
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
           sudo apt-get install -y -qq sshpass >/dev/null
           SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ServerAliveInterval=30 -o LogLevel=ERROR"
-          sshpass -e scp $SSH_OPTS talvio-backend.tgz .github/scripts/server-setup.sh root@"$HOST":/root/
           set -o pipefail
+          echo "port 22 (ssh): $(timeout 10 bash -c "</dev/tcp/$HOST/22" 2>/dev/null && echo open || echo CLOSED)" | tee -a deploy.txt
+          if ! sshpass -e scp $SSH_OPTS talvio-backend.tgz .github/scripts/server-setup.sh root@"$HOST":/root/ 2>scp.err; then
+            echo "upload failed: $(head -c 400 scp.err | tr '\n' ' ')" | tee -a deploy.txt
+            grep -qi "permission denied" scp.err && echo "→ the root password was not accepted (check SERVER_PASSWORD)" | tee -a deploy.txt
+            exit 1
+          fi
+          echo "upload: ok" | tee -a deploy.txt
           {
             printf 'export ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
             echo 'bash /root/server-setup.sh'
