@@ -229,9 +229,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS chats_username_lower_uq ON chats (lower(userna
 CREATE INDEX IF NOT EXISTS chat_members_joined_idx ON chat_members (chat_id, joined_at);
 
 -- polls & views on messages
-ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_type_check
-  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll'));
+-- (message types: the full list is set once, further down)
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS views_count INT NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS messages_sender_created_idx ON messages (sender_id, created_at DESC);
 
@@ -385,9 +383,7 @@ ALTER TABLE admins ADD COLUMN IF NOT EXISTS backup_codes JSONB;
 -- Batch A — pins, mentions, unread marks, silent & location messages, message search,
 --           slow mode, join requests, invite links, appeals, notes, content pages
 -- =====================================================================
-ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_type_check
-  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll', 'location'));
+-- (message types: the full list is set once, further down)
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS silent BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS messages_fts_idx ON messages USING GIN (to_tsvector('simple', text));
 
@@ -473,9 +469,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_calls VARCHAR(10) NOT NULL DE
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_privacy_calls_check;
 ALTER TABLE users ADD CONSTRAINT users_privacy_calls_check CHECK (privacy_calls IN ('everyone', 'contacts', 'nobody'));
 
-ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_type_check
-  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll', 'location', 'call'));
+-- (message types: the full list is set once, further down)
 
 CREATE TABLE IF NOT EXISTS calls (
   id                BIGSERIAL PRIMARY KEY,
@@ -768,9 +762,7 @@ CREATE TABLE IF NOT EXISTS user_sticker_packs (
 );
 ALTER TABLE media DROP CONSTRAINT IF EXISTS media_kind_check;
 ALTER TABLE media ADD CONSTRAINT media_kind_check CHECK (kind IN ('image', 'video', 'voice', 'file', 'avatar', 'sticker'));
-ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_type_check
-  CHECK (type IN ('text', 'image', 'video', 'voice', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact'));
+-- (message types: the full list is set once, further down)
 
 -- ---------------------------------------------------------------- disappearing messages
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS disappear_after_sec INT NOT NULL DEFAULT 0;
