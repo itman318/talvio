@@ -78,7 +78,10 @@ jobs:
           mkdir -p out
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           # never publish the address or any secret: mask the IP
-          if [ -n "$HOST" ]; then sed "s/${HOST//./\\.}/<server-ip>/g" deploy.txt > out/deploy.txt; else cp deploy.txt out/deploy.txt; fi 2>/dev/null || true
+          report="$(cat deploy.txt 2>/dev/null || echo 'no report')"
+          if [ -n "$HOST" ]; then report="${report//"$HOST"/<server-ip>}"; fi
+          printf '%s\n' "$report" > out/deploy.txt
+          echo "host looks like an IPv4 address: $(echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' && echo yes || echo no)" >> out/deploy.txt
           echo "sha=${{ github.sha }} result=${{ steps.setup.outcome }}" > out/status.txt
           cd out
           git init -q -b ci-deploy
