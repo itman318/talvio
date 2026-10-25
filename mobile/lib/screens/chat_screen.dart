@@ -776,12 +776,10 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (ctx) => SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
-              child: GridView.count(
-                crossAxisCount: 5,
+              child: GridView(
+                // fixed row height: narrow phones and bigger font sizes no longer overflow the tile
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, mainAxisSpacing: 6, crossAxisSpacing: 2, mainAxisExtent: 84),
                 shrinkWrap: true,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 2,
-                childAspectRatio: 0.92,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
                   for (final (key, icon, label, colors) in items)
@@ -800,7 +798,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Icon(icon, color: Colors.white, size: 22),
                         ),
                         const SizedBox(height: 6),
-                        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.2), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
                       ]),
                     ),
                 ],
