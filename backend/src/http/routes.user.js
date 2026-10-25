@@ -227,7 +227,7 @@ router.post('/calls/:id/decline', h(async (req, res) => res.json(await callServi
 router.post('/calls/:id/hangup', h(async (req, res) => res.json(await callService.hangup(req.userId, req.params.id, req.body.reason))));
 router.post('/calls/:id/rate', h(async (req, res) => res.json(await callService.rateCall(req.userId, req.params.id, req.body))));
 // ---- premium & payments
-router.get('/premium', h(async (req, res) => res.json(await paymentService.premiumInfo(req.userId, { country: req.get('x-country') || req.query.country, locale: req.get('accept-language') })))));
+router.get('/premium', h(async (req, res) => res.json(await paymentService.premiumInfo(req.userId, { country: req.get('x-country') || req.query.country, locale: req.get('accept-language') }))));
 router.post('/payments/checkout', h(async (req, res) => res.json(await paymentService.checkout(req.userId, { ...req.body, country: req.body.country || req.get('x-country'), locale: req.get('accept-language') }))));
 router.get('/payments/orders', h(async (req, res) => res.json(await paymentService.listMyOrders(req.userId))));
 router.get('/payments/orders/:id', h(async (req, res) => res.json(await paymentService.getOrder(req.userId, req.params.id))));
