@@ -404,13 +404,32 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     onTap: () => editChatText(context, chat, field: 'welcome_text', title: 'Welcome message', hint: 'Glad to have you! Please read the rules.', max: 500, current: chat.welcomeText),
                   ),
                 if (chat.isGroup)
-                  SettingsSwitchTile(
-                    icon: Icons.shield_rounded,
-                    color: Brand.green,
-                    title: 'Limit new members',
-                    subtitle: 'No links, photos or files in their first 24 hours',
-                    value: chat.newMemberLimits,
-                    onChanged: (v) => _run(() => _store.updateChat(chat.id, {'new_member_limits': v})),
+                  SettingsTile(
+                    icon: Icons.security_rounded,
+                    color: const Color(0xFF12A150),
+                    title: 'Group protection',
+                    subtitle: () {
+                      final on = [
+                        if (chat.joinCaptcha) 'Human check',
+                        if (chat.antiFlood) 'Anti-flood',
+                        if (chat.antiLinks) 'No links',
+                        if (chat.bannedWords.isNotEmpty) '${chat.bannedWords.length} blocked words',
+                      ];
+                      return on.isEmpty ? 'Human check, spam filter, blocked words' : on.join(' · ');
+                    }(),
+                    maxSubtitleLines: 1,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GroupProtectionScreen(chatId: chat.id))),
+                  ),
+                if (chat.isGroup)
+                  SettingsTile(
+                    icon: Icons.tune_rounded,
+                    color: Brand.violet,
+                    title: 'Member permissions',
+                    subtitle: () {
+                      final off = chat.memberPerms.entries.where((e) => !e.value).length;
+                      return off == 0 ? 'Members can send everything' : '$off kind${off == 1 ? '' : 's'} of messages turned off';
+                    }(),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberPermissionsScreen(chatId: chat.id))),
                   ),
                 SettingsSwitchTile(
                   icon: Icons.no_encryption_gmailerrorred_rounded,

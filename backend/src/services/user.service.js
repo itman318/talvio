@@ -99,7 +99,7 @@ function serialize(u, viewerId, rel) {
     first_name: u.first_name,
     last_name: u.last_name,
     username: u.username,
-    bio: u.bio,
+    bio: can('bio', u.privacy_bio || 'everyone') ? u.bio : '',
     is_verified: u.is_verified,
     is_bot: !!u.is_bot,
     is_premium: !!(u.premium_until && new Date(u.premium_until) > new Date()),
@@ -120,6 +120,16 @@ function serialize(u, viewerId, rel) {
       message_requests: u.message_requests !== false ? 'on' : 'off',
       birthday: u.privacy_birthday || 'contacts',
       read_receipts: u.read_receipts !== false ? 'on' : 'off',
+      bio: u.privacy_bio || 'everyone',
+      forwards: u.privacy_forwards || 'everyone',
+      messages: u.privacy_messages || 'everyone',
+      phone_search: u.privacy_phone_search || 'everyone',
+    };
+    out.security = {
+      default_disappear_sec: u.default_disappear_sec || 0,
+      account_ttl_days: u.account_ttl_days || 365,
+      session_ttl_days: u.session_ttl_days || 180,
+      hide_from_search: !!u.hide_from_search,
     };
     out.email = u.email || null;
     out.has_password = !!u.password_hash;
@@ -227,7 +237,7 @@ function parseBirthday(raw) {
   return d.toISOString().slice(0, 10);
 }
 
-const EXCEPTION_SETTINGS = ['last_seen', 'avatar', 'phone', 'group_add', 'calls', 'birthday'];
+const EXCEPTION_SETTINGS = ['last_seen', 'avatar', 'phone', 'group_add', 'calls', 'birthday', 'bio', 'forwards', 'messages'];
 
 /** { setting: { allow: [users], deny: [users] } } */
 async function getPrivacyExceptions(userId) {
@@ -330,6 +340,8 @@ async function updatePrivacy(userId, body) {
     group_add: 'privacy_group_add',
     calls: 'privacy_calls',
     birthday: 'privacy_birthday',
+    bio: 'privacy_bio',
+    forwards: 'privacy_forwards',
   };
   const sets = [];
   const params = [userId];
@@ -338,6 +350,27 @@ async function updatePrivacy(userId, body) {
       params.push(v.oneOf(body[key], PRIVACY_VALUES, key));
       sets.push(`${col} = $${params.length}`);
     }
+  }
+  // only two choices for these (like Telegram): everybody or my contacts
+  for (const [key, col] of [['messages', 'privacy_messages'], ['phone_search', 'privacy_phone_search']]) {
+    if (body[key] !== undefined) {
+      params.push(v.oneOf(body[key], ['everyone', 'contacts'], key));
+      sets.push(`${col} = $${params.length}`);
+    }
+  }
+  const pick = (key, col, allowed) => {
+    if (body[key] === undefined) return;
+    const n = Number(body[key]);
+    if (!allowed.includes(n)) throw badRequest('invalid_input', `${key} must be one of ${allowed.join(', ')}`);
+    params.push(n);
+    sets.push(`${col} = $${params.length}`);
+  };
+  pick('default_disappear_sec', 'default_disappear_sec', [0, 86400, 7 * 86400, 30 * 86400]);
+  pick('account_ttl_days', 'account_ttl_days', [30, 90, 180, 365, 730]);
+  pick('session_ttl_days', 'session_ttl_days', [7, 30, 90, 180, 365]);
+  if (body.hide_from_search !== undefined) {
+    params.push(v.bool(body.hide_from_search, 'hide_from_search'));
+    sets.push(`hide_from_search = $${params.length}`);
   }
   if (body.message_requests !== undefined) {
     params.push(v.bool(body.message_requests, 'message_requests'));
@@ -363,7 +396,8 @@ async function searchUsers(viewerId, rawQuery) {
   let rows;
   if (phone) {
     rows = await db.many(
-      `SELECT id FROM users WHERE phone = $1 AND status = 'active' AND id <> $2 AND privacy_phone <> 'nobody'`,
+      `SELECT id FROM users WHERE phone = $1 AND status = 'active' AND id <> $2 AND privacy_phone <> 'nobody'
+         AND (privacy_phone_search = 'everyone' OR EXISTS (SELECT 1 FROM contacts c WHERE c.owner_id = users.id AND c.contact_id = $2))`,
       [phone, viewerId],
     );
   } else {
@@ -372,7 +406,8 @@ async function searchUsers(viewerId, rawQuery) {
     rows = await db.many(
       `SELECT id FROM users
        WHERE status = 'active' AND id <> $1 AND (
-         lower(username) LIKE lower($2) || '%'
+         (lower(username) LIKE lower($2) || '%'
+           AND (NOT hide_from_search OR lower(username) = lower($2) OR EXISTS (SELECT 1 FROM contacts c WHERE c.owner_id = users.id AND c.contact_id = $1)))
          OR (id IN (SELECT contact_id FROM contacts WHERE owner_id = $1)
              AND (first_name || ' ' || last_name) ILIKE '%' || $2 || '%')
        )
@@ -429,7 +464,8 @@ async function syncContacts(userId, phones) {
   const normalized = [...new Set(phones.map((p) => v.tryNormalizePhone(String(p))).filter(Boolean))];
   if (normalized.length === 0) return [];
   const found = await db.many(
-    `SELECT id FROM users WHERE phone = ANY($1::text[]) AND status = 'active' AND id <> $2`,
+    `SELECT id FROM users WHERE phone = ANY($1::text[]) AND status = 'active' AND id <> $2
+       AND (privacy_phone_search = 'everyone' OR EXISTS (SELECT 1 FROM contacts c WHERE c.owner_id = users.id AND c.contact_id = $2))`,
     [normalized, userId],
   );
   const ids = found.map((r) => r.id);
@@ -568,7 +604,33 @@ function assertActive(u) {
   if (isBanned(u)) throw forbidden('user_unavailable', 'This user is unavailable');
 }
 
+/**
+ * Scheduler (hourly): logs out devices nobody used for the owner's chosen time, and deletes accounts
+ * that were away longer than their "delete my account if away for" setting.
+ */
+async function sweepInactive() {
+  const revoked = await db.many(
+    `UPDATE sessions s SET revoked_at = now() FROM users u
+     WHERE s.user_id = u.id AND s.revoked_at IS NULL AND s.last_active_at < now() - make_interval(days => u.session_ttl_days)
+     RETURNING s.id, s.user_id`,
+  );
+  const byUser = new Map();
+  for (const r of revoked) byUser.set(r.user_id, [...(byUser.get(r.user_id) || []), r.id]);
+  for (const [userId, sessionIds] of byUser) bus.emit('sessions:revoked', { userId, sessionIds, reason: 'inactive' });
+  const gone = await db.many(
+    `SELECT u.id FROM users u
+     WHERE u.status = 'active' AND NOT u.is_bot
+       AND GREATEST(u.created_at, COALESCE(u.last_seen_at, u.created_at)) < now() - make_interval(days => u.account_ttl_days)
+       AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.last_active_at > now() - make_interval(days => u.account_ttl_days))
+     LIMIT 50`,
+  );
+  for (const u of gone) await deleteAccount(u.id).catch(() => {});
+  return { sessions: revoked.length, accounts: gone.length };
+}
+
 module.exports = {
+  sweepInactive,
+  EXCEPTION_SETTINGS,
   sendBirthdayReminders,
   allowedFor,
   getPrivacyExceptions,

@@ -796,6 +796,13 @@ class ChatStore extends ChangeNotifier {
   }
 
   /// Group / channel settings that live on the chat (welcome, rules, reactions, linked group…).
+  /// New member passes the group's "I'm not a robot" check.
+  Future<Chat> verifyHuman(int chatId) async {
+    final c = Chat.fromJson(Map<String, dynamic>.from(await api.post('/chats/$chatId/verify-human') as Map));
+    _upsertChat(c);
+    return c;
+  }
+
   Future<Chat> updateChat(int chatId, Map<String, dynamic> body) async {
     final c = Chat.fromJson(Map<String, dynamic>.from(await api.patch('/chats/$chatId', body) as Map));
     _upsertChat(c);

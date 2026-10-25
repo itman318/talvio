@@ -901,3 +901,31 @@ CREATE INDEX IF NOT EXISTS story_highlight_items_story_idx ON story_highlight_it
 CREATE TABLE IF NOT EXISTS job_runs (name VARCHAR(32) NOT NULL, day DATE NOT NULL, PRIMARY KEY (name, day));
 ALTER TABLE polls ADD COLUMN IF NOT EXISTS close_at TIMESTAMPTZ;
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS mentions BIGINT[] NOT NULL DEFAULT '{}';
+
+-- ---------------------------------------------------------------- privacy & security plus
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_bio VARCHAR(10) NOT NULL DEFAULT 'everyone';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_forwards VARCHAR(10) NOT NULL DEFAULT 'everyone';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_messages VARCHAR(10) NOT NULL DEFAULT 'everyone';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_phone_search VARCHAR(10) NOT NULL DEFAULT 'everyone';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS default_disappear_sec INT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_ttl_days INT NOT NULL DEFAULT 365;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS session_ttl_days INT NOT NULL DEFAULT 180;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS hide_from_search BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ---------------------------------------------------------------- BotFather conversations
+CREATE TABLE IF NOT EXISTS botfather_state (
+  user_id    BIGINT      PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  step       VARCHAR(32) NOT NULL,
+  data       JSONB       NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------- group protection
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS join_captcha BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS anti_flood BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS anti_links BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS hide_service BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS banned_words JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS member_perms JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS captcha_until TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS chat_members_captcha_idx ON chat_members (captcha_until) WHERE captcha_until IS NOT NULL;

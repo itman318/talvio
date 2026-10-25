@@ -297,6 +297,20 @@ Verify init data on your server: `secret = HMAC_SHA256(key="TalvioMiniApp", msg=
 `hash = HEX(HMAC_SHA256(key=secret, msg=data_check_string))` where data_check_string is every field except
 `hash`, sorted, as `key=value` lines joined by `\n`.
 
+**BotFather:** a built-in bot (@BotFather, created on start) makes and manages bots from a chat:
+`/newbot`, `/mybots` (buttons: token, edit name/description/commands/photo, mini app, group privacy, revoke,
+delete), `/setcommands`, `/setuserpic`, `/setmenu`, `/setprivacy`, `/deletebot`, `/cancel`.
+
+## Privacy, security & group protection
+
+- Privacy: last seen, photo, phone, birthday, **bio**, **forwarded messages** (link to your account),
+  **who can message me** (everybody / contacts), group invites, calls, **who can find me by number** — with
+  always/never exceptions. Default **auto-delete timer** for new chats, **log out inactive devices** after
+  1 week–1 year, **delete my account if away** 1 month–2 years, hide from username search, Security checkup.
+- Groups: **human check** for new members (removed after 5 minutes if not verified), **anti-flood**,
+  **block links**, **blocked words**, **member permissions** (media, voice, stickers, polls, links),
+  hide join/leave messages — admins are never limited.
+
 ## Talvio Plus (premium), payments & ads (Batch D)
 
 - **Premium plans** are edited in the admin panel (default: 1 month Rs 299, 12 months Rs 2,999).

@@ -21,7 +21,8 @@ async function requireMember(chatIdRaw, userId) {
   const chatId = v.id(chatIdRaw, 'chat_id');
   const row = await db.one(
     `SELECT c.*, cm.role AS my_role, cm.cleared_before_id, cm.last_read_message_id,
-            cm.admin_rights AS my_rights, cm.restricted_until AS my_restricted_until, cm.joined_at AS my_joined_at
+            cm.admin_rights AS my_rights, cm.restricted_until AS my_restricted_until, cm.joined_at AS my_joined_at,
+            cm.captcha_until AS my_captcha_until
      FROM chats c JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = $2
      WHERE c.id = $1`,
     [chatId, userId],
@@ -100,6 +101,7 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
        c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
        c.welcome_text, c.rules, c.new_member_limits, c.protected_content, c.allowed_reactions, c.category, c.linked_chat_id,
        cm.admin_rights AS my_rights, cm.admin_title AS my_title, cm.restricted_until AS my_restricted_until, cm.draft, cm.draft_at,
+       c.join_captcha, c.anti_flood, c.anti_links, c.hide_service, c.banned_words, c.member_perms, cm.captcha_until AS my_captcha_until,
        (SELECT l.title FROM chats l WHERE l.id = c.linked_chat_id) AS linked_title,
        (SELECT ch.id FROM chats ch WHERE ch.linked_chat_id = c.id LIMIT 1) AS linked_channel_id,
        CASE WHEN c.type = 'channel' AND cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM post_queue q WHERE q.chat_id = c.id) ELSE 0 END AS queue_count,
@@ -182,6 +184,13 @@ async function serializeChats(userId, rows) {
       welcome_text: r.welcome_text || '',
       rules: r.rules || '',
       new_member_limits: !!r.new_member_limits,
+      join_captcha: !!r.join_captcha,
+      anti_flood: !!r.anti_flood,
+      anti_links: !!r.anti_links,
+      hide_service: !!r.hide_service,
+      banned_words: ADMIN_ROLES.includes(r.my_role) ? r.banned_words || [] : [],
+      member_perms: { media: true, links: true, polls: true, stickers: true, voice: true, ...(r.member_perms || {}) },
+      needs_captcha: !!r.my_captcha_until,
       protected_content: !!r.protected_content,
       allowed_reactions: r.allowed_reactions || null,
       category: r.category || null,
@@ -252,7 +261,9 @@ async function getOrCreatePrivate(userId, peerIdRaw) {
   const key = `${Math.min(userId, peerId)}:${Math.max(userId, peerId)}`;
   const chatId = await db.tx(async (c) => {
     let r = await c.query(
-      `INSERT INTO chats (type, private_key, created_by) VALUES ('private', $1, $2)
+      `INSERT INTO chats (type, private_key, created_by, disappear_after_sec)
+       VALUES ('private', $1::text, $2, CASE WHEN split_part($1::text, ':', 1) <> split_part($1::text, ':', 2)
+                                       THEN (SELECT default_disappear_sec FROM users WHERE id = $2) ELSE 0 END)
        ON CONFLICT (private_key) DO NOTHING RETURNING id`,
       [key, userId],
     );
@@ -364,8 +375,8 @@ async function createGroup(ownerId, body) {
 
   const chatId = await db.tx(async (c) => {
     const r = await c.query(
-      `INSERT INTO chats (type, title, description, created_by, invite_code)
-       VALUES ('group', $1, $2, $3, $4) RETURNING id`,
+      `INSERT INTO chats (type, title, description, created_by, invite_code, disappear_after_sec)
+       VALUES ('group', $1, $2, $3, $4, (SELECT default_disappear_sec FROM users WHERE id = $3)) RETURNING id`,
       [title, description, ownerId, randomToken(12)],
     );
     const id = r.rows[0].id;
@@ -429,7 +440,7 @@ async function updateGroup(userId, chatIdRaw, body) {
     [chat.id, title === undefined ? null : title, description === undefined ? null : description, signatures, slow, approval, comments, forum],
   );
   if (approval === false) await db.query('DELETE FROM chat_join_requests WHERE chat_id = $1', [chat.id]);
-  const changed = Object.keys(body).filter((k) => !['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id'].includes(k));
+  const changed = Object.keys(body).filter((k) => !EXTRA_KEYS.includes(k));
   if (changed.length) await logEvent(chat.id, userId, 'info_changed', null, { fields: changed, title: title || undefined });
   if (title !== undefined && title !== chat.title) {
     await lazyMessages().createSystemMessage(chat.id, userId, { event: 'title_changed', title });
@@ -437,6 +448,9 @@ async function updateGroup(userId, chatIdRaw, body) {
   await emitUpdated(chat.id);
   return getChat(userId, chat.id);
 }
+
+const EXTRA_KEYS = ['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id',
+  'join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'banned_words', 'member_perms'];
 
 /** Welcome text, rules, member limits, protected content, reactions, category, discussion group. */
 async function updateExtras(userId, chat, body) {
@@ -456,6 +470,25 @@ async function updateExtras(userId, chat, body) {
     set('new_member_limits', v.bool(body.new_member_limits, 'new_member_limits'));
   }
   if (body.protected_content !== undefined) set('protected_content', v.bool(body.protected_content, 'protected_content'));
+  for (const k of ['join_captcha', 'anti_flood', 'anti_links', 'hide_service']) {
+    if (body[k] !== undefined) {
+      if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
+      set(k, v.bool(body[k], k));
+    }
+  }
+  if (body.banned_words !== undefined) {
+    if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
+    if (!Array.isArray(body.banned_words) || body.banned_words.length > 200) throw badRequest('invalid_input', 'banned_words: a list of up to 200 words');
+    const words = [...new Set(body.banned_words.map((w) => String(w).trim().toLowerCase()).filter((w) => w.length >= 2 && w.length <= 40))];
+    set('banned_words', JSON.stringify(words));
+  }
+  if (body.member_perms !== undefined) {
+    if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
+    const p = body.member_perms || {};
+    const out = {};
+    for (const k of ['media', 'links', 'polls', 'stickers', 'voice']) if (p[k] !== undefined) out[k] = v.bool(p[k], k);
+    set('member_perms', JSON.stringify(out));
+  }
   if (body.allowed_reactions !== undefined) {
     let list = null;
     if (body.allowed_reactions !== null) {
@@ -483,7 +516,7 @@ async function updateExtras(userId, chat, body) {
   if (!sets.length) return;
   await db.query(`UPDATE chats SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, params);
   await logEvent(chat.id, userId, 'settings_changed', null, {
-    fields: Object.keys(body).filter((k) => ['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id'].includes(k)),
+    fields: Object.keys(body).filter((k) => EXTRA_KEYS.includes(k)),
   });
 }
 
@@ -564,7 +597,8 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
   bus.emit('chat:removed', { chatId, userIds: [userId] });
   if (!outcome.chatDeleted) {
     const event = reason === 'removed' ? 'member_removed' : 'member_left';
-    if (outcome.chatType === 'group') {
+    const quiet = reason === 'left' && (await db.one('SELECT hide_service FROM chats WHERE id = $1', [chatId]) || {}).hide_service;
+    if (outcome.chatType === 'group' && !quiet) {
       await lazyMessages().createSystemMessage(chatId, by || userId, { event, user_id: userId });
     }
     if (outcome.newOwner) {
@@ -864,7 +898,13 @@ async function joinChat(userId, chat) {
     );
     await logEvent(chat.id, userId, 'member_joined', userId);
     if (chat.type === 'group') {
-      await lazyMessages().createSystemMessage(chat.id, userId, { event: 'member_joined', user_id: userId });
+      if (chat.join_captcha) {
+        // new member proves they're human within 5 minutes (until then they can only read)
+        await db.query(`UPDATE chat_members SET captcha_until = now() + interval '5 minutes' WHERE chat_id = $1 AND user_id = $2`, [chat.id, userId]);
+        await lazyMessages().createSystemMessage(chat.id, userId, { event: 'captcha', user_id: userId });
+      } else if (!chat.hide_service) {
+        await lazyMessages().createSystemMessage(chat.id, userId, { event: 'member_joined', user_id: userId });
+      }
       await sendWelcome(chat, [userId]);
       await emitUpdated(chat.id);
     } else {
@@ -1131,7 +1171,27 @@ async function chatStats(userId, chatIdRaw) {
   return { ...totals, joins_30d: growth, top_posts: top };
 }
 
+/** The new member tapped “I’m not a robot”. */
+async function verifyHuman(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  if (!chat.my_captcha_until) return getChat(userId, chat.id);
+  await db.query('UPDATE chat_members SET captcha_until = NULL WHERE chat_id = $1 AND user_id = $2', [chat.id, userId]);
+  await logEvent(chat.id, userId, 'member_verified', userId);
+  await emitUpdated(chat.id);
+  return getChat(userId, chat.id);
+}
+
+/** Scheduler: members who never passed the human check are removed. */
+async function sweepCaptcha() {
+  const rows = await db.many('SELECT chat_id, user_id FROM chat_members WHERE captcha_until IS NOT NULL AND captcha_until < now() LIMIT 100');
+  for (const r of rows) {
+    await removeUserFromGroup(r.chat_id, r.user_id, { reason: 'removed' }).catch(() => {});
+  }
+}
+
 module.exports = {
+  verifyHuman,
+  sweepCaptcha,
   RIGHTS,
   CATEGORIES,
   hasRight,

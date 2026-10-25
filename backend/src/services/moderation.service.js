@@ -51,7 +51,8 @@ async function checkOutgoing(sender, texts) {
   assertNotRestricted(sender);
 
   const hours = await settings.get('new_account_link_hours');
-  if (hours > 0 && Date.now() - new Date(sender.created_at).getTime() < hours * 3600 * 1000) {
+  // bots are exempt: their owner's account already passed this check
+  if (hours > 0 && !sender.is_bot && Date.now() - new Date(sender.created_at).getTime() < hours * 3600 * 1000) {
     if (texts.some((t) => t && LINK_RE.test(t))) {
       throw forbidden('links_restricted', `New accounts can send links after ${hours} hours`);
     }

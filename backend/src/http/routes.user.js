@@ -190,6 +190,7 @@ router.get('/chats/:id/queue', h(async (req, res) => res.json(await messageServi
 router.post('/chats/:id/queue/:qid/publish', h(async (req, res) => res.json(await messageService.publishQueued(req.userId, req.params.id, req.params.qid))));
 router.delete('/chats/:id/queue/:qid', h(async (req, res) => res.json(await messageService.deleteQueued(req.userId, req.params.id, req.params.qid))));
 router.post('/chats/:id/leave', h(async (req, res) => res.json(await chatService.leaveChat(req.userId, req.params.id))));
+router.post('/chats/:id/verify-human', h(async (req, res) => res.json(await chatService.verifyHuman(req.userId, req.params.id))));
 router.post('/chats/:id/request/accept', h(async (req, res) => res.json(await chatService.acceptRequest(req.userId, req.params.id))));
 router.post('/chats/:id/request/decline', h(async (req, res) => res.json(await chatService.declineRequest(req.userId, req.params.id, req.body))));
 router.put('/chats/:id/disappearing', h(async (req, res) => res.json(await chatService.setDisappearing(req.userId, req.params.id, req.body.seconds))));

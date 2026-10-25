@@ -602,3 +602,183 @@ class _ChannelDirectoryScreenState extends State<ChannelDirectoryScreen> {
     );
   }
 }
+
+/// Human check for new members, flood & link blocking, blocked words, quiet joins.
+class GroupProtectionScreen extends StatefulWidget {
+  const GroupProtectionScreen({super.key, required this.chatId});
+  final int chatId;
+
+  @override
+  State<GroupProtectionScreen> createState() => _GroupProtectionScreenState();
+}
+
+class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
+  bool _busy = false;
+
+  Future<void> _set(Map<String, dynamic> body) async {
+    setState(() => _busy = true);
+    try {
+      await context.read<ChatStore>().updateChat(widget.chatId, body);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _addWords(List<String> current) async {
+    final c = TextEditingController();
+    final words = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block words'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'One or more words, separated by commas'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, c.text.split(RegExp(r'[,\n]')).map((w) => w.trim().toLowerCase()).where((w) => w.length >= 2).toList()),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (words == null || words.isEmpty) return;
+    await _set({'banned_words': {...current, ...words}.toList()});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chat = context.watch<ChatStore>().chatById(widget.chatId);
+    if (chat == null) return const Scaffold();
+    final words = chat.bannedWords;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Group protection'),
+        bottom: _busy ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator(minHeight: 2)) : null,
+      ),
+      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+        SettingsGroup(title: 'New members', children: [
+          SettingsSwitchTile(
+            icon: Icons.smart_toy_outlined,
+            color: const Color(0xFF12A150),
+            title: 'Human check',
+            subtitle: 'People who join must tap “I’m not a robot” within 5 minutes or they are removed',
+            value: chat.joinCaptcha,
+            onChanged: (v) => _set({'join_captcha': v}),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.shield_rounded,
+            color: Brand.green,
+            title: 'Limit new members',
+            subtitle: 'No links, photos or files in their first 24 hours',
+            value: chat.newMemberLimits,
+            onChanged: (v) => _set({'new_member_limits': v}),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.notifications_off_rounded,
+            color: const Color(0xFF5E6B8C),
+            title: 'Hide join & leave messages',
+            subtitle: 'Keep the chat clean in big groups',
+            value: chat.hideService,
+            onChanged: (v) => _set({'hide_service': v}),
+          ),
+        ]),
+        SettingsGroup(title: 'Spam filter', children: [
+          SettingsSwitchTile(
+            icon: Icons.speed_rounded,
+            color: Brand.amber,
+            title: 'Anti-flood',
+            subtitle: 'Stops members sending more than 5 messages in 10 seconds, or the same message again and again',
+            value: chat.antiFlood,
+            onChanged: (v) => _set({'anti_flood': v}),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.link_off_rounded,
+            color: const Color(0xFFE5484D),
+            title: 'Block links',
+            subtitle: 'Only admins can send links',
+            value: chat.antiLinks,
+            onChanged: (v) => _set({'anti_links': v}),
+          ),
+        ]),
+        SettingsGroup(title: 'Blocked words', children: [
+          SettingsTile(
+            icon: Icons.add_rounded,
+            color: Brand.primary,
+            title: 'Add words',
+            subtitle: 'Messages with these words aren’t sent (admins aren’t affected)',
+            onTap: () => _addWords(words),
+          ),
+          if (words.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+              child: Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final w in words)
+                  InputChip(
+                    label: Text(w),
+                    onDeleted: () => _set({'banned_words': words.where((x) => x != w).toList()}),
+                  ),
+              ]),
+            ),
+        ]),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Text('Admins and the owner are never limited. Everything here is also logged in Recent actions.',
+              style: TextStyle(color: Brand.muted, fontSize: 12.5)),
+        ),
+      ]),
+    );
+  }
+}
+
+/// What ordinary members may send (like Telegram's group permissions).
+class MemberPermissionsScreen extends StatelessWidget {
+  const MemberPermissionsScreen({super.key, required this.chatId});
+  final int chatId;
+
+  static const _rows = [
+    ('media', Icons.photo_library_rounded, 'Photos, videos & files', Brand.sky),
+    ('voice', Icons.mic_rounded, 'Voice & video messages', Brand.rose),
+    ('stickers', Icons.emoji_emotions_rounded, 'Stickers & GIFs', Brand.amber),
+    ('polls', Icons.poll_rounded, 'Polls', Brand.violet),
+    ('links', Icons.link_rounded, 'Links', Color(0xFF3C83DE)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<ChatStore>();
+    final chat = store.chatById(chatId);
+    if (chat == null) return const Scaffold();
+    final perms = chat.memberPerms;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Member permissions')),
+      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+        SettingsGroup(title: 'What members can send', children: [
+          for (final r in _rows)
+            SettingsSwitchTile(
+              icon: r.$2,
+              color: r.$4,
+              title: r.$3,
+              value: perms[r.$1] ?? true,
+              onChanged: (v) async {
+                try {
+                  await store.updateChat(chatId, {'member_perms': {...perms, r.$1: v}});
+                } catch (e) {
+                  if (context.mounted) showError(context, e);
+                }
+              },
+            ),
+        ]),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Text('Text messages are always allowed. Admins can send everything.', style: TextStyle(color: Brand.muted, fontSize: 12.5)),
+        ),
+      ]),
+    );
+  }
+}

@@ -26,6 +26,7 @@ import 'calls_screen.dart' show CallLinksScreen;
 import 'story_screens.dart' show MyHighlightsScreen;
 import 'new_chat_screen.dart' show PickUsersScreen;
 import '../core/passkeys.dart';
+import '../core/prefs.dart';
 import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
@@ -218,7 +219,8 @@ class SettingsScreen extends StatelessWidget {
               ),
           ]),
           SettingsGroup(title: 'Privacy & security', children: [
-            SettingsTile(icon: Icons.visibility_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Last seen, photo, calls, read receipts', onTap: () => go(const PrivacyScreen())),
+            SettingsTile(icon: Icons.health_and_safety_rounded, color: const Color(0xFF12A150), title: 'Security checkup', subtitle: 'Your protection score and quick fixes', onTap: () => go(const SecurityCheckupScreen())),
+            SettingsTile(icon: Icons.visibility_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Who can see, message, call and find you', onTap: () => go(const PrivacyScreen())),
             SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
             SettingsTile(icon: Icons.fingerprint_rounded, color: const Color(0xFFC8366E), title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
             SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', subtitle: 'PIN or fingerprint to open Talvio', onTap: () => go(const AppLockSettingsScreen())),
@@ -558,8 +560,28 @@ class PrivacyScreen extends StatefulWidget {
     'avatar': 'Profile photo',
     'phone': 'Phone number',
     'birthday': 'Birthday',
+    'bio': 'Bio',
+    'messages': 'Who can message me',
+    'forwards': 'Forwarded messages',
     'group_add': 'Who can add me to groups',
     'calls': 'Who can call me',
+    'phone_search': 'Who can find me by my number',
+  };
+
+  /// Settings with only Everybody / My contacts.
+  static const twoChoice = {'messages', 'phone_search'};
+  static const noExceptions = {'phone_search'};
+  static const help = {
+    'last_seen': 'If you hide your last seen, you won’t see other people’s either.',
+    'avatar': 'Choose who sees your profile photo.',
+    'phone': 'Choose who sees your phone number on your profile.',
+    'birthday': 'Choose who sees your birthday and gets a reminder.',
+    'bio': 'Choose who can read the bio on your profile.',
+    'messages': 'People who aren’t your contacts can’t start a chat with you. They can still reply if you write first.',
+    'forwards': 'When someone forwards your messages, the name links to your profile only for the people you allow.',
+    'group_add': 'Choose who can add you to groups and channels.',
+    'calls': 'Choose who can call you.',
+    'phone_search': 'Choose who can find you when they search your number or sync their contacts.',
   };
   static const icons = {
     'last_seen': (Icons.visibility_rounded, Brand.green),
@@ -568,6 +590,10 @@ class PrivacyScreen extends StatefulWidget {
     'birthday': (Icons.cake_rounded, Brand.rose),
     'group_add': (Icons.group_add_rounded, Brand.amber),
     'calls': (Icons.call_rounded, Brand.primary),
+    'bio': (Icons.notes_rounded, Color(0xFF3C83DE)),
+    'messages': (Icons.chat_bubble_rounded, Color(0xFF0FA3A3)),
+    'forwards': (Icons.forward_rounded, Color(0xFFE07A2E)),
+    'phone_search': (Icons.person_search_rounded, Color(0xFF5E6B8C)),
   };
 
   @override
@@ -607,11 +633,63 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     }
   }
 
+  String _daysLabel(Object d) {
+    final n = d is num ? d.toInt() : int.tryParse('$d') ?? 0;
+    if (n >= 730) return '2 years';
+    if (n >= 365) return '1 year';
+    if (n >= 30) return '${n ~/ 30} month${n >= 60 ? 's' : ''}';
+    return '${n ~/ 7} week${n >= 14 ? 's' : ''}';
+  }
+
+  String _durationLabel(Object s, {String zero = 'Off'}) {
+    final n = s is num ? s.toInt() : 0;
+    if (n == 0) return zero;
+    if (n >= 2592000) return '1 month';
+    if (n >= 604800) return '1 week';
+    return '1 day';
+  }
+
+  Future<void> _pickNumber(String title, String help, String key, Map<int, String> options, Object current) async {
+    final cur = current is num ? current.toInt() : 0;
+    final v = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+            child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(help, style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+          ),
+          for (final e in options.entries)
+            ListTile(
+              title: Text(e.value),
+              trailing: e.key == cur ? const Icon(Icons.check_circle_rounded, color: Brand.primary) : null,
+              onTap: () => Navigator.pop(ctx, e.key),
+            ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (v == null || v == cur || !mounted) return;
+    try {
+      final u = await context.read<AppServices>().api.put('/me/privacy', {key: v});
+      if (mounted) context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<AuthState>().me?.privacy ?? {};
+    final me = context.watch<AuthState>().me;
+    final p = me?.privacy ?? {};
+    final sec = me?.security ?? const <String, dynamic>{};
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy')),
+      appBar: AppBar(title: const Text('Privacy & security')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -627,6 +705,64 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
                   _loadExceptions();
                 },
               ),
+          ]),
+          SettingsGroup(title: 'Security', children: [
+            SettingsTile(
+              icon: Icons.health_and_safety_rounded,
+              color: Brand.green,
+              title: 'Security checkup',
+              subtitle: 'See how well your account is protected',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SecurityCheckupScreen())),
+            ),
+            SettingsTile(
+              icon: Icons.timer_rounded,
+              color: Brand.violet,
+              title: 'Auto-delete messages',
+              subtitle: 'Timer for new chats you start',
+              trailing: _durationLabel(sec['default_disappear_sec'] ?? 0, zero: 'Off'),
+              onTap: () => _pickNumber('Auto-delete messages', 'New chats and groups you create get this timer. Messages disappear for everyone after the time.', 'default_disappear_sec', const {
+                0: 'Off',
+                86400: '1 day',
+                604800: '1 week',
+                2592000: '1 month',
+              }, sec['default_disappear_sec'] ?? 0),
+            ),
+            SettingsTile(
+              icon: Icons.phonelink_erase_rounded,
+              color: Brand.amber,
+              title: 'Log out inactive devices',
+              subtitle: 'Devices you don’t use are logged out by themselves',
+              trailing: _daysLabel(sec['session_ttl_days'] ?? 180),
+              onTap: () => _pickNumber('Log out inactive devices', 'A device you haven’t used for this long is logged out automatically.', 'session_ttl_days', const {
+                7: '1 week',
+                30: '1 month',
+                90: '3 months',
+                180: '6 months',
+                365: '1 year',
+              }, sec['session_ttl_days'] ?? 180),
+            ),
+            SettingsTile(
+              icon: Icons.auto_delete_rounded,
+              color: const Color(0xFFE5484D),
+              title: 'Delete my account if away for',
+              subtitle: 'Your account and messages are removed if you don’t come online',
+              trailing: _daysLabel(sec['account_ttl_days'] ?? 365),
+              onTap: () => _pickNumber('Delete my account if away for', 'If you don’t come online at least once in this time, your account is deleted with all messages and contacts.', 'account_ttl_days', const {
+                30: '1 month',
+                90: '3 months',
+                180: '6 months',
+                365: '1 year',
+                730: '2 years',
+              }, sec['account_ttl_days'] ?? 365),
+            ),
+            SettingsSwitchTile(
+              icon: Icons.visibility_off_rounded,
+              color: const Color(0xFF5E6B8C),
+              title: 'Hide me from username search',
+              subtitle: 'Only people who type your exact username (or your contacts) can find you',
+              value: sec['hide_from_search'] == true,
+              onChanged: (v) => _setBool('hide_from_search', v),
+            ),
           ]),
           SettingsGroup(title: 'Messages', children: [
             SettingsSwitchTile(
@@ -733,8 +869,10 @@ class _PrivacySettingScreenState extends State<PrivacySettingScreen> {
       body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
         SettingsGroup(title: 'Who can see it', children: [
           for (final e in PrivacyScreen.labels.entries)
-            RadioListTile<String>(value: e.key, groupValue: current, title: Text(e.value), onChanged: (v) => _setValue(v!)),
+            if (!(PrivacyScreen.twoChoice.contains(key) && e.key == 'nobody'))
+              RadioListTile<String>(value: e.key, groupValue: current, title: Text(e.value), onChanged: (v) => _setValue(v!)),
         ]),
+        if (!PrivacyScreen.noExceptions.contains(key))
         SettingsGroup(title: 'Exceptions', children: [
           if (current != 'nobody')
             SettingsTile(
@@ -758,9 +896,9 @@ class _PrivacySettingScreenState extends State<PrivacySettingScreen> {
           child: Row(children: [
             Icon(icon.$1, size: 16, color: Brand.muted),
             const SizedBox(width: 8),
-            const Expanded(
-              child: Text('Exceptions win over the choice above. People you block never see anything.',
-                  style: TextStyle(color: Brand.muted, fontSize: 12.5)),
+            Expanded(
+              child: Text('${PrivacyScreen.help[key] ?? ''} ${PrivacyScreen.noExceptions.contains(key) ? '' : 'Exceptions win over the choice above.'} People you block never see anything.',
+                  style: const TextStyle(color: Brand.muted, fontSize: 12.5)),
             ),
           ]),
         ),
@@ -1203,6 +1341,119 @@ class _PasskeysScreenState extends State<PasskeysScreen> {
                     ),
                 ]),
             ]),
+    );
+  }
+}
+
+
+/// A quick score of how well the account is protected, with one tap to fix each item.
+class SecurityCheckupScreen extends StatefulWidget {
+  const SecurityCheckupScreen({super.key});
+
+  @override
+  State<SecurityCheckupScreen> createState() => _SecurityCheckupScreenState();
+}
+
+class _SecurityCheckupScreenState extends State<SecurityCheckupScreen> {
+  int? _devices;
+  int? _passkeys;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final api = context.read<AppServices>().api;
+    try {
+      final s = await api.get('/me/sessions') as List;
+      if (mounted) setState(() => _devices = s.length);
+    } catch (_) {}
+    try {
+      final p = await api.get('/me/passkeys') as List;
+      if (mounted) setState(() => _passkeys = p.length);
+    } catch (_) {}
+  }
+
+  Future<void> _go(Widget w) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => w));
+    if (!mounted) return;
+    try {
+      await context.read<AuthState>().refreshMe();
+    } catch (_) {}
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final me = context.watch<AuthState>().me;
+    final prefs = context.watch<AppPrefs>();
+    final p = me?.privacy ?? {};
+    final items = <(bool, IconData, String, String, Widget)>[
+      (me?.hasPassword == true, Icons.key_rounded, 'Two-step verification', 'An extra password protects you if someone gets your login code', const TwoStepScreen()),
+      ((me?.email ?? '').isNotEmpty, Icons.alternate_email_rounded, 'Login email', 'Lets you get back into your account', const EditProfileScreen()),
+      ((_passkeys ?? 0) > 0, Icons.fingerprint_rounded, 'Passkey', 'Log in with your fingerprint — nothing to steal', const PasskeysScreen()),
+      (prefs.lockEnabled, Icons.pin_rounded, 'App lock', 'A PIN or fingerprint when Talvio opens', const AppLockSettingsScreen()),
+      ((_devices ?? 1) <= 3, Icons.devices_rounded, 'Devices', _devices == null ? 'Checking…' : '$_devices device${_devices == 1 ? '' : 's'} logged in — remove ones you don’t know', const SessionsScreen()),
+      (p['phone'] != 'everyone', Icons.phone_locked_rounded, 'Phone number hidden', 'Strangers can’t see your number', const PrivacySettingScreen(setting: 'phone')),
+      (p['last_seen'] != 'everyone' || p['messages'] == 'contacts', Icons.shield_moon_rounded, 'Stranger protection', 'Hide last seen or allow messages only from contacts', const PrivacySettingScreen(setting: 'messages')),
+    ];
+    final done = items.where((i) => i.$1).length;
+    final score = (done / items.length * 100).round();
+    final color = score >= 80 ? Brand.green : (score >= 50 ? Brand.amber : const Color(0xFFE5484D));
+    final label = score >= 80 ? 'Strong' : (score >= 50 ? 'Good — a few steps left' : 'Needs attention');
+    return Scaffold(
+      appBar: AppBar(title: const Text('Security checkup')),
+      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(24)),
+          child: Row(children: [
+            SizedBox(
+              width: 84,
+              height: 84,
+              child: Stack(alignment: Alignment.center, children: [
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: score / 100,
+                    strokeWidth: 8,
+                    backgroundColor: Colors.white24,
+                    valueColor: const AlwaysStoppedAnimation(Colors.white),
+                  ),
+                ),
+                Text('$score', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
+              ]),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('$done of ${items.length} protections are on', style: const TextStyle(color: Colors.white, fontSize: 13.5)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                  child: Text(score >= 80 ? 'Well protected' : 'Tap an item to fix it', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+        SettingsGroup(children: [
+          for (final i in items)
+            SettingsTile(
+              icon: i.$2,
+              color: i.$1 ? Brand.green : Brand.amber,
+              title: i.$3,
+              subtitle: i.$4,
+              trailing: i.$1 ? 'On' : 'Fix',
+              onTap: () => _go(i.$5),
+            ),
+        ]),
+      ]),
     );
   }
 }

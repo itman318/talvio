@@ -26,6 +26,8 @@ class AppUser {
   final DateTime? premiumUntil; // only for "me"
   final Map<String, dynamic>? limits; // only for "me": {premium, upload_mb, folders, ads}
   final Birthday? birthday; // when they share it with me
+  final Map<String, dynamic>? security; // only for "me": default timer, auto-logout, account TTL, search
+  final bool hasPassword; // only for "me": two-step verification is on
 
   AppUser({
     required this.id,
@@ -49,6 +51,8 @@ class AppUser {
     this.premiumUntil,
     this.limits,
     this.birthday,
+    this.security,
+    this.hasPassword = false,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
@@ -73,6 +77,8 @@ class AppUser {
         premiumUntil: _date(j['premium_until']),
         limits: j['limits'] == null ? null : Map<String, dynamic>.from(j['limits'] as Map),
         birthday: j['birthday'] is Map ? Birthday.fromJson(Map<String, dynamic>.from(j['birthday'] as Map)) : null,
+        security: j['security'] is Map ? Map<String, dynamic>.from(j['security'] as Map) : null,
+        hasPassword: j['has_password'] == true,
       );
 
   String get name {
@@ -651,6 +657,19 @@ class Chat {
   String get rules => '${extra['rules'] ?? ''}';
   bool get newMemberLimits => extra['new_member_limits'] == true;
   bool get protectedContent => extra['protected_content'] == true;
+  bool get joinCaptcha => extra['join_captcha'] == true;
+  bool get antiFlood => extra['anti_flood'] == true;
+  bool get antiLinks => extra['anti_links'] == true;
+  bool get hideService => extra['hide_service'] == true;
+  bool get needsCaptcha => extra['needs_captcha'] == true;
+  List<String> get bannedWords => extra['banned_words'] is List ? (extra['banned_words'] as List).map((e) => '$e').toList() : const [];
+
+  /// What ordinary members may send: media, links, polls, stickers, voice.
+  Map<String, bool> get memberPerms {
+    final p = extra['member_perms'];
+    const keys = ['media', 'links', 'polls', 'stickers', 'voice'];
+    return {for (final k in keys) k: p is Map ? p[k] != false : true};
+  }
 
   /// Reactions allowed here (null = all, empty = none).
   List<String>? get allowedReactions => extra['allowed_reactions'] is List ? (extra['allowed_reactions'] as List).map((e) => '$e').toList() : null;

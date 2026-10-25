@@ -97,6 +97,8 @@ String systemText(Message m, ChatStore store) {
       return '$actor removed ${who(meta['user_id'])}';
     case 'member_left':
       return '${who(meta['user_id'])} left the group';
+    case 'captcha':
+      return '${who(meta['user_id'])} joined — waiting for the “I’m not a robot” check';
     case 'member_joined':
       return '${who(meta['user_id'])} joined the group via invite link';
     case 'owner_changed':

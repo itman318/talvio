@@ -2279,6 +2279,36 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _bottomBar(Chat chat) {
     if (chat.isRequest) return _requestBar(chat);
+    if (chat.needsCaptcha) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: GlassPanel(
+            radius: 22,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text('This group checks new members', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              const SizedBox(height: 4),
+              const Text('Confirm you’re a person to start chatting. Unverified members are removed after 5 minutes.',
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Brand.muted)),
+              const SizedBox(height: 12),
+              AuroraButton(
+                label: 'I’m not a robot',
+                icon: Icons.verified_user_rounded,
+                onPressed: () async {
+                  try {
+                    await _store.verifyHuman(chat.id);
+                  } catch (e) {
+                    if (mounted) showError(context, e);
+                  }
+                },
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
     if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
       return SafeArea(
         top: false,

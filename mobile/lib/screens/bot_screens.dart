@@ -5,7 +5,11 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../core/services.dart';
 import '../models/models.dart';
+import '../state/chat_store.dart';
+import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../widgets/premium.dart';
+import 'chat_screen.dart';
 
 /// Settings → My bots: create bots and get their Talvio Bot API token.
 class MyBotsScreen extends StatefulWidget {
@@ -65,6 +69,51 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
     }
   }
 
+  Future<void> _openBotFather() async {
+    final store = context.read<ChatStore>();
+    try {
+      final id = await store.botByUsername('BotFather');
+      if (id == null) throw Exception();
+      final chat = await store.openPrivateWith(id);
+      if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+    } catch (_) {
+      if (mounted) showInfo(context, 'BotFather isn’t available on this server yet');
+    }
+  }
+
+  Widget _botFatherCard() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: _openBotFather,
+            child: Ink(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(22)),
+              child: Row(children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
+                  child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 30),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('BotFather', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 3),
+                    Text('Create and manage bots right in a chat: /newbot, /mybots, /setcommands…',
+                        style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ]),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white),
+              ]),
+            ),
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final bots = _bots;
@@ -73,15 +122,16 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
       body: bots == null
           ? const Center(child: CircularProgressIndicator())
           : bots.isEmpty
-              ? const Center(
-                  child: Padding(
+              ? ListView(children: [
+                  _botFatherCard(),
+                  const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('Bots are programs that chat with people. Create one, then use its token with the Bot API on your server.', textAlign: TextAlign.center),
+                    child: Text('Bots are programs that chat with people. Create one here or with BotFather, then use its token with the Bot API on your server.', textAlign: TextAlign.center),
                   ),
-                )
+                ])
               : ListView(
-                  children: bots
-                      .map((b) => ListTile(
+                  children: [_botFatherCard(), SettingsGroup(title: 'Your bots', children: bots
+                      .map<Widget>((b) => ListTile(
                             leading: const CircleAvatar(child: Icon(Icons.smart_toy_outlined)),
                             title: Text(b.name),
                             subtitle: Text('@${b.username}${b.status != 'active' ? ' · disabled' : ''}${b.webhookError != null ? ' · webhook error' : ''}'),
@@ -91,7 +141,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                               _load();
                             },
                           ))
-                      .toList(),
+                      .toList())],
                 ),
       floatingActionButton: FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.add), label: const Text('New bot')),
     );

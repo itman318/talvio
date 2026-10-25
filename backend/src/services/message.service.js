@@ -292,10 +292,20 @@ async function assertCanSend(userId, chat, { comment = false } = {}) {
   if (chat.type === 'private') {
     const peerId = await chatService.privatePeerId(chat.id, userId);
     if (peerId) {
-      const peer = await db.one('SELECT id, status FROM users WHERE id = $1', [peerId]);
+      const peer = await db.one('SELECT id, status, is_bot, first_name, privacy_messages FROM users WHERE id = $1', [peerId]);
       if (!peer || peer.status === 'deleted') throw forbidden('peer_deleted', 'You can’t message a deleted account');
       if (await userService.isBlockedEither(userId, peerId)) {
         throw forbidden('blocked', 'You can’t send messages to this user');
+      }
+      if (peer.privacy_messages === 'contacts' && !peer.is_bot) {
+        const ok = await db.one(
+          `SELECT (EXISTS (SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1)
+                   OR EXISTS (SELECT 1 FROM privacy_exceptions WHERE owner_id = $2 AND target_id = $1 AND setting = 'messages' AND allow)
+                   OR EXISTS (SELECT 1 FROM messages WHERE chat_id = $3 AND sender_id = $2 AND type <> 'system'))
+             AND NOT EXISTS (SELECT 1 FROM privacy_exceptions WHERE owner_id = $2 AND target_id = $1 AND setting = 'messages' AND NOT allow) AS ok`,
+          [userId, peerId, chat.id],
+        );
+        if (!ok.ok) throw forbidden('privacy_messages', `${peer.first_name || 'This user'} only accepts messages from their contacts`);
       }
     }
   }
@@ -666,6 +676,47 @@ async function createCallMessage(chatId, callerId, meta) {
  * Sends a message, or schedules it when body.schedule_at is given (returns { scheduled }).
  * internal: { meta, skipRateLimit } — only set by server code, never from request bodies.
  */
+const LINK_RE = /https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|pk|me|ly|gg|app|xyz|info)\b/i;
+const PERM_LABELS = { media: 'photos, videos and files', links: 'links', polls: 'polls', stickers: 'stickers and GIFs', voice: 'voice and video messages' };
+
+function permOf(prepared) {
+  if (['image', 'video', 'file'].includes(prepared.type)) return 'media';
+  if (['voice', 'video_note'].includes(prepared.type)) return 'voice';
+  if (['sticker', 'gif'].includes(prepared.type)) return 'stickers';
+  if (prepared.type === 'poll') return 'polls';
+  return null;
+}
+
+/** Group protection for ordinary members: human check, permissions, link block, banned words, flood. */
+async function assertGroupRules(userId, chat, prepared) {
+  if (chat.type !== 'group' || chatService.ADMIN_ROLES.includes(chat.my_role)) return;
+  if (chat.my_captcha_until) throw forbidden('verify_first', 'Tap “I’m not a robot” in the group first');
+  const perms = chat.member_perms || {};
+  const text = String(prepared.text || '');
+  const kind = permOf(prepared);
+  if (kind && perms[kind] === false) throw forbidden('no_permission', `Members can’t send ${PERM_LABELS[kind]} in this group`);
+  if ((perms.links === false || chat.anti_links) && LINK_RE.test(text)) throw forbidden('no_links', 'Links aren’t allowed in this group');
+  const words = Array.isArray(chat.banned_words) ? chat.banned_words : [];
+  if (words.length && text) {
+    const low = text.toLowerCase();
+    if (words.some((w) => w && low.includes(String(w).toLowerCase()))) {
+      throw forbidden('banned_word', 'Your message contains a word that isn’t allowed in this group');
+    }
+  }
+  if (chat.anti_flood) {
+    if (!rateLimit.hit(`flood:${chat.id}:${userId}`, 5, 10 * 1000).allowed) {
+      throw forbidden('flood', 'Slow down — you are sending too fast in this group');
+    }
+    if (text) {
+      const same = await db.one(
+        `SELECT count(*)::int AS n FROM (SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 3) x WHERE x.text = $3`,
+        [chat.id, userId, text],
+      );
+      if (same.n >= 2) throw forbidden('flood', 'Please don’t send the same message again and again');
+    }
+  }
+}
+
 async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
   if (!internal.skipRateLimit) rateLimit.enforce(`msg:${userId}`, 30, 10 * 1000, 'You are sending messages too fast');
   const chat = await chatService.requireMember(chatIdRaw, userId);
@@ -702,6 +753,8 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     await chatService.emitUpdated(chat.id);
     return { queued: { id: q.id } };
   }
+
+  await assertGroupRules(userId, chat, prepared);
 
   // groups can keep links and media away from brand-new members for 24 h
   if (chat.type === 'group' && chat.new_member_limits && chat.my_role === 'member' && chat.my_joined_at
@@ -817,6 +870,11 @@ async function forwardMessages(userId, body = {}) {
     }
     targetChats.push(chat);
   }
+  // "Forwarded messages" privacy: people can hide the link to their account
+  const origIds = [...new Set(rows.map((r) => r.forwarded_from_user_id || r.sender_id).filter(Boolean))];
+  const origUsers = await db.many('SELECT id, privacy_forwards FROM users WHERE id = ANY($1::bigint[])', [origIds]);
+  const fwdRel = await userService.relations(userId, origIds);
+  const fwdLink = new Map(origUsers.map((u) => [u.id, u.id === userId || userService.allowedFor(fwdRel, u.id, 'forwards', u.privacy_forwards || 'everyone')]));
   let count = 0;
   for (const chat of targetChats) {
     for (const r of rows) {
@@ -828,7 +886,7 @@ async function forwardMessages(userId, body = {}) {
         type: r.type,
         text: r.text,
         mediaId: r.media_id,
-        fwdUserId: from.type === 'channel' ? null : r.forwarded_from_user_id || r.sender_id,
+        fwdUserId: from.type === 'channel' ? null : fwdLink.get(r.forwarded_from_user_id || r.sender_id) ? r.forwarded_from_user_id || r.sender_id : null,
         fwdName: r.forwarded_from_name || fromName,
         meta: r.type === 'location' || r.type === 'voice' ? r.meta : null, // forwarded voice keeps its waveform
         forwardSourceId: r.forward_source_id || r.id,
