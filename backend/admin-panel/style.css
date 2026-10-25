@@ -137,3 +137,6 @@ tr.clickable:hover td { background: #f6f7fb; }
   .stat .value { font-size: 20px; }
   .charts { grid-template-columns: 1fr; }
 }
+
+/* elements marked hidden stay hidden even when a class sets display */
+[hidden] { display: none !important; }
