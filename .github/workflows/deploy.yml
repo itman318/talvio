@@ -1,0 +1,74 @@
+# Puts the backend (API + Socket.IO + web app + admin panel) on your VPS and keeps it updated.
+# Needs repo secrets: SERVER_HOST (IP), SERVER_PASSWORD (root password).
+# Optional secrets: ADMIN_EMAIL + ADMIN_PASSWORD (10+ characters) to create the admin-panel login.
+# Run it from Actions → Deploy → Run workflow. The short result goes to the ci-deploy branch (no secrets).
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check secrets
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+          PASS: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          [ -n "$HOST" ] || { echo "Add the SERVER_HOST secret (the server IP)"; exit 1; }
+          [ -n "$PASS" ] || { echo "Add the SERVER_PASSWORD secret (the root password)"; exit 1; }
+
+      - name: Package the backend
+        run: |
+          tar -czf talvio-backend.tgz -C backend --exclude=node_modules --exclude=uploads --exclude=test --exclude=.env .
+          ls -la talvio-backend.tgz
+
+      - name: Upload and set up the server
+        id: setup
+        env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          HOST: ${{ secrets.SERVER_HOST }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          sudo apt-get install -y -qq sshpass >/dev/null
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ServerAliveInterval=30 -o LogLevel=ERROR"
+          sshpass -e scp $SSH_OPTS talvio-backend.tgz .github/scripts/server-setup.sh root@"$HOST":/root/
+          set -o pipefail
+          {
+            printf 'export ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
+            echo 'bash /root/server-setup.sh'
+          } | sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' 2>&1 | tee deploy.txt
+
+      - name: Check from outside
+        if: always()
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          echo "outside health: $(curl -fsS --max-time 15 "http://$HOST/health" || echo FAILED)" | tee -a deploy.txt
+
+      - name: Save result to ci-deploy branch
+        if: always()
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          mkdir -p out
+          # never publish the address or any secret: mask the IP
+          sed "s/${HOST//./\\.}/<server-ip>/g" deploy.txt > out/deploy.txt 2>/dev/null || true
+          echo "sha=${{ github.sha }} result=${{ steps.setup.outcome }}" > out/status.txt
+          cd out
+          git init -q -b ci-deploy
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "deploy ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-deploy
