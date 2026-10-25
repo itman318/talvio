@@ -70,7 +70,9 @@ jobs:
             sudo apt-get install -y -qq expect >/dev/null
             TEMP_PASS="T$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)9!" HOST="$HOST" \
               expect .github/scripts/root-password-renew.exp > renew.log 2>&1 || true
-            grep -o 'RENEW[_: ].*' renew.log | grep -v "chpasswd" | tail -3 | tee -a deploy.txt
+            echo "--- first login said: $(echo "$probe" | tr -d '\r' | tail -c 300 | tr '\n' ' ')" | tee -a deploy.txt
+            echo "--- renewal transcript (passwords removed):" >> deploy.txt
+            tr -d '\r' < renew.log | grep -v chpasswd | awk -v p="$SSHPASS" '{gsub(p,"***")}1' | tail -25 >> deploy.txt
             probe=$(sshpass -e ssh $SSH_OPTS root@"$HOST" 'echo LOGIN_OK' 2>&1 || true)
             echo "login after renewal: $(echo "$probe" | grep -q LOGIN_OK && echo ok || echo still failing)" | tee -a deploy.txt
           else
