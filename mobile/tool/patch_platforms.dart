@@ -371,11 +371,12 @@ void _releaseSigning() {
     // talvio-release-signing
     signingConfigs {
         create("release") {
-            val props = java.util.Properties().apply { load(rootProject.file("key.properties").inputStream()) }
-            keyAlias = props["keyAlias"] as String
-            keyPassword = props["keyPassword"] as String
-            storeFile = rootProject.file(props["storeFile"] as String)
-            storePassword = props["storePassword"] as String
+            val props = Properties()
+            rootProject.file("key.properties").inputStream().use { props.load(it) }
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+            storeFile = rootProject.file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
         }
     }
 '''
@@ -394,6 +395,8 @@ void _releaseSigning() {
 ''';
       final i = s.indexOf('buildTypes');
       if (i > 0) s = s.substring(0, i) + block.trimLeft() + '\n    ' + s.substring(i);
+      // Kotlin DSL: inside android { } the name "java" means the java extension, so import Properties
+      if (kts && !s.contains('import java.util.Properties')) s = 'import java.util.Properties\n' + s;
       s = kts
           ? s.replaceAll('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")')
           : s.replaceAll('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release');
