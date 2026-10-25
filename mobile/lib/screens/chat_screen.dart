@@ -5,6 +5,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
@@ -159,9 +160,21 @@ class _ChatScreenState extends State<ChatScreen> {
   int _newBelow = 0;
   int? _newestSeen;
 
+  int? _online; // groups: members online now
+
+  Future<void> _loadOnline() async {
+    try {
+      final r = await context.read<AppServices>().api.get('/chats/$chatId/online') as Map;
+      if (mounted) setState(() => _online = (r['online'] as num?)?.toInt());
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ((_store.chatById(chatId) ?? _chat)?.isGroup ?? false)) _loadOnline();
+    });
     _store = context.read<ChatStore>();
     _prefs = context.read<AppPrefs>();
     _chat = widget.initial;
@@ -1275,7 +1288,10 @@ class _ChatScreenState extends State<ChatScreen> {
     } else if (typing != null) {
       subtitle = typing;
     } else if (chat.isMulti) {
-      subtitle = chat.isChannel ? '${chat.memberCount} subscribers' : '${chat.memberCount} members';
+      final n = NumberFormat.decimalPattern().format(chat.memberCount);
+      subtitle = chat.isChannel
+          ? '$n subscriber${chat.memberCount == 1 ? '' : 's'}'
+          : '$n member${chat.memberCount == 1 ? '' : 's'}${(_online ?? 0) > 1 ? ', ${_online!} online' : ''}';
     } else if (chat.peer != null) {
       subtitle = lastSeenText(chat.peer!);
     } else {
@@ -1710,6 +1726,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat),
                 onTap: m.sendState == SendState.failed ? () => _messageMenu(m, chat) : null,
                 onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
+                onForward: chat.isChannel && !chat.noForwards && !selecting
+                    ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
+                    : null,
               ),
               ),
               ),

@@ -1173,6 +1173,15 @@ async function chatStats(userId, chatIdRaw) {
   return { ...totals, joins_30d: growth, top_posts: top };
 }
 
+/** How many members of a group are online right now (the header shows "1,204 members, 37 online"). */
+async function onlineCount(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  if (!isMulti(chat)) return { online: 0 };
+  const presence = require('./presence'); // eslint-disable-line global-require
+  const ids = await memberIds(chat.id);
+  return { online: ids.filter((id) => id !== userId && presence.isOnline(id)).length + 1 };
+}
+
 /** The new member tapped “I’m not a robot”. */
 async function verifyHuman(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
@@ -1192,6 +1201,7 @@ async function sweepCaptcha() {
 }
 
 module.exports = {
+  onlineCount,
   verifyHuman,
   sweepCaptcha,
   RIGHTS,
@@ -1214,6 +1224,7 @@ module.exports = {
   usernameTaken,
   assertNotReserved,
   getChatsByIds,
+  publicSummary,
   listInvites,
   createInvite,
   revokeInvite,

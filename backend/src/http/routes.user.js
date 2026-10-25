@@ -190,6 +190,7 @@ router.get('/chats/:id/queue', h(async (req, res) => res.json(await messageServi
 router.post('/chats/:id/queue/:qid/publish', h(async (req, res) => res.json(await messageService.publishQueued(req.userId, req.params.id, req.params.qid))));
 router.delete('/chats/:id/queue/:qid', h(async (req, res) => res.json(await messageService.deleteQueued(req.userId, req.params.id, req.params.qid))));
 router.post('/chats/:id/leave', h(async (req, res) => res.json(await chatService.leaveChat(req.userId, req.params.id))));
+router.get('/chats/:id/online', h(async (req, res) => res.json(await chatService.onlineCount(req.userId, req.params.id))));
 router.post('/chats/:id/verify-human', h(async (req, res) => res.json(await chatService.verifyHuman(req.userId, req.params.id))));
 router.post('/chats/:id/request/accept', h(async (req, res) => res.json(await chatService.acceptRequest(req.userId, req.params.id))));
 router.post('/chats/:id/request/decline', h(async (req, res) => res.json(await chatService.declineRequest(req.userId, req.params.id, req.body))));
@@ -266,6 +267,7 @@ router.post('/secret-chats/:id/messages', h(async (req, res) => {
 }));
 router.post('/secret-chats/:id/ack', h(async (req, res) => res.json(await secretService.ack(req.userId, req.sessionId, { ...req.body, secret_chat_id: req.params.id }))));
 router.post('/secret-chats/:id/read', h(async (req, res) => res.json(await secretService.markRead(req.userId, req.sessionId, { ...req.body, secret_chat_id: req.params.id }))));
+router.get('/search', h(async (req, res) => res.json(await require('../services/search.service').search(req.userId, req.query)))); // eslint-disable-line global-require
 router.get('/search/messages', h(async (req, res) => res.json(await messageService.searchMessages(req.userId, req.query))));
 router.put('/chats/:id/username', h(async (req, res) => res.json(await chatService.setChatUsername(req.userId, req.params.id, req.body.username))));
 router.get('/chats/:id/stats', h(async (req, res) => res.json(await chatService.chatStats(req.userId, req.params.id))));

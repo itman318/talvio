@@ -39,7 +39,11 @@ class MessageBubble extends StatelessWidget {
     this.lastInGroup = true,
     this.showAvatar = false,
     this.onDiscuss,
+    this.onForward,
   });
+
+  /// Channel posts: the round share button next to the post.
+  final VoidCallback? onForward;
 
   /// Channel posts with a discussion group: open it.
   final VoidCallback? onDiscuss;
@@ -295,7 +299,7 @@ class MessageBubble extends StatelessWidget {
         onLongPress: onLongPress,
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : 0.78)),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : (_asChannel ? 0.84 : 0.78))),
           margin: EdgeInsets.fromLTRB(showAvatar || reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
           padding: mediaOnly ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
@@ -330,6 +334,27 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
       );
+    if (_asChannel && onForward != null && !m.isLocal && !m.isSystem) {
+      // channel post + a round "share" button beside it, like a magazine feed
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Flexible(child: bubble),
+          Padding(
+            padding: EdgeInsets.only(bottom: lastInGroup ? 5 : 3, right: 6),
+            child: Material(
+              color: dark ? Colors.white.withAlpha(22) : Colors.black.withAlpha(22),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onForward,
+                child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.shortcut_rounded, size: 18, color: Colors.white)),
+              ),
+            ),
+          ),
+        ]),
+      );
+    }
     if (!reserveAvatar) {
       return Align(alignment: isMine ? Alignment.centerRight : Alignment.centerLeft, child: bubble);
     }

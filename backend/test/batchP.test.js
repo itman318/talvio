@@ -220,3 +220,28 @@ test('Tavi animated stickers: free ones for everybody, the rest with Plus', asyn
   await db.query(`UPDATE users SET premium_until = now() + interval '1 day' WHERE id = $1`, [A.id]);
   assert.equal((await messages.sendMessage(A.id, chat.id, { type: 'sticker', tavi: 'celebrate' })).meta.sticker.tavi, 'celebrate');
 });
+
+test('global search: my chats, people, bots, public groups & channels; discover', async () => {
+  const search = require('../src/services/search.service');
+  const G = await signup('+923260000010', 'Gul', 'gul_trader');
+  const { chat: grp } = await chats.createGroup(G.id, { title: 'Gold Traders PK' });
+  await chats.setChatUsername(G.id, grp.id, 'goldtraderspk');
+  const ch = await chats.createChannel(G.id, { title: 'Gold Signals', username: 'goldsignals' });
+  await bots.createBot(G.id, { name: 'Gold Price', username: 'goldprice_bot', about: 'Live gold rates' });
+  const r = await search.search(B.id, { q: 'gold' });
+  assert.equal(r.groups[0].username, 'goldtraderspk');
+  assert.equal(r.channels[0].username, 'goldsignals');
+  assert.equal(r.bots[0].username, 'goldprice_bot');
+  assert.equal(r.bots[0].about, 'Live gold rates');
+  assert.equal((await search.search(B.id, { q: 'gul_tr' })).people[0].username, 'gul_trader');
+  // the owner finds them under "chats" instead
+  const mine = await search.search(G.id, { q: 'gold' });
+  assert.ok(mine.chats.some((c) => c.id === grp.id));
+  assert.equal(mine.groups.length, 0);
+  const only = await search.search(B.id, { q: 'gold', type: 'channels' });
+  assert.equal(only.groups.length, 0);
+  assert.equal(only.channels.length, 1);
+  const d = await search.search(B.id, { q: '' });
+  assert.equal(d.discover, true);
+  assert.ok(d.channels.some((c) => c.chat_id === (ch.id || ch.chat?.id)));
+});

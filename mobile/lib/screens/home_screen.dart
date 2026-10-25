@@ -1,3 +1,4 @@
+import 'global_search_screen.dart';
 import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
@@ -98,11 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
 
-  void _openSearch() => setState(() {
-        _searching = true;
-        _search.clear();
-        _found = [];
-      });
+  /// Search everything: chats, people, groups, channels, bots and messages.
+  void _openSearch() => Navigator.push(context, MaterialPageRoute(builder: (_) => const GlobalSearchScreen()));
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +293,10 @@ extension on _HomeScreenState {
             child: Row(children: [
               Icon(Icons.search_rounded, size: 21, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 10),
-              Text('Search', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 15)),
+              Expanded(
+                child: Text('Search people, groups, channels, bots',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 15)),
+              ),
             ]),
           ),
         ),
