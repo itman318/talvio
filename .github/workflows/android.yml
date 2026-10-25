@@ -88,7 +88,11 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          DEFINES="--dart-define=API_BASE=${{ vars.API_BASE || 'http://10.0.2.2:4000' }} --build-number=${{ github.run_number }}"
+          # tidy the address: no spaces, no trailing "/" or "/32" (a network mask copied with the IP)
+          API="$(echo '${{ vars.API_BASE || 'http://10.0.2.2:4000' }}' | tr -d '[:space:]' | sed -E 's#/[0-9]{1,3}$##; s#/+$##')"
+          case "$API" in http://*|https://*) ;; *) API="http://$API" ;; esac
+          echo "API_BASE=$API" >> "$GITHUB_ENV"
+          DEFINES="--dart-define=API_BASE=$API --build-number=${{ github.run_number }}"
           { flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 $DEFINES &&
             { [ "$SIGNED" != release ] || flutter build appbundle --release $DEFINES; }; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
@@ -118,7 +122,7 @@ jobs:
           fi
           R="${{ github.repository }}"
           TITLE="Talvio Android (test build #${{ github.run_number }})"
-          NOTES="Built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${{ vars.API_BASE || 'http://10.0.2.2:4000 (emulator only - set the API_BASE variable)' }}"
+          NOTES="Built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${API_BASE:-http://10.0.2.2:4000 (emulator only - set the API_BASE variable)}"
           for i in 1 2 3; do
             if gh release view android-latest -R "$R" >/dev/null 2>&1; then
               gh release upload android-latest $FILES --clobber -R "$R" &&
