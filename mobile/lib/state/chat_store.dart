@@ -714,6 +714,16 @@ class ChatStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setMemberTag(int chatId, int userId, String? tag) async {
+    await api.put('/chats/$chatId/members/$userId/tag', {'tag': tag});
+    await loadMembers(chatId);
+  }
+
+  Future<List<Map<String, dynamic>>> similarChannels(int chatId) async {
+    final r = await api.get('/chats/$chatId/similar') as Map;
+    return (r['channels'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   Future<List<GroupMember>> loadMembers(int chatId) async {
     final data = await api.get('/chats/$chatId/members') as List;
     final list = data.map((j) => GroupMember.fromJson(Map<String, dynamic>.from(j as Map))).toList();

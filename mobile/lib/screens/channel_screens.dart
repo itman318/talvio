@@ -1,3 +1,4 @@
+import 'global_search_screen.dart' show SimilarChannels;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -528,6 +529,7 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
                 ? 'Open'
                 : (isChannel ? 'Join channel' : (i['join_approval'] == true ? 'Request to join' : 'Join group'))),
           ),
+          if (isChannel) ...[const SizedBox(height: 12), SimilarChannels(chatId: (i['chat_id'] as num).toInt())],
         ],
       ),
     );

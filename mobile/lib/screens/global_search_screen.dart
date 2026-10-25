@@ -19,8 +19,9 @@ import 'user_profile_screen.dart';
 /// One search for everything: my chats, people, bots, public groups, channels and messages.
 /// With an empty box it shows recent searches and popular channels, groups and bots.
 class GlobalSearchScreen extends StatefulWidget {
-  const GlobalSearchScreen({super.key, this.initialFilter = 'all'});
+  const GlobalSearchScreen({super.key, this.initialFilter = 'all', this.initialQuery = ''});
   final String initialFilter;
+  final String initialQuery;
 
   @override
   State<GlobalSearchScreen> createState() => _GlobalSearchScreenState();
@@ -37,7 +38,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     ('messages', 'Messages', Icons.forum_rounded),
   ];
 
-  final _q = TextEditingController();
+  late final _q = TextEditingController(text: widget.initialQuery);
   Timer? _debounce;
   late String _filter = widget.initialFilter;
   Map<String, dynamic>? _data;
@@ -171,7 +172,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           decoration: BoxDecoration(color: dark ? const Color(0xFF181C31) : const Color(0xFFEBEDF4), borderRadius: BorderRadius.circular(14)),
           child: TextField(
             controller: _q,
-            autofocus: true,
+            autofocus: widget.initialQuery.isEmpty,
             textInputAction: TextInputAction.search,
             onChanged: _onChanged,
             onSubmitted: (v) {
@@ -573,5 +574,60 @@ class _ChannelCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Opens a public group / channel from its summary: the chat if I'm in, otherwise its preview.
+Future<void> openPublicSummary(BuildContext context, Map<String, dynamic> info) async {
+  final store = context.read<ChatStore>();
+  if (info['is_member'] == true) {
+    try {
+      final chat = await store.getChat((info['chat_id'] as num).toInt());
+      if (context.mounted) await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+    return;
+  }
+  await Navigator.push(context, MaterialPageRoute(builder: (_) => PublicChatPreviewScreen(info: info)));
+}
+
+/// "Similar channels" strip for a channel's info page (shared subscribers first, then the same topic).
+class SimilarChannels extends StatefulWidget {
+  const SimilarChannels({super.key, required this.chatId});
+  final int chatId;
+
+  @override
+  State<SimilarChannels> createState() => _SimilarChannelsState();
+}
+
+class _SimilarChannelsState extends State<SimilarChannels> {
+  List<Map<String, dynamic>>? _list;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<ChatStore>().similarChannels(widget.chatId).then((l) {
+      if (mounted) setState(() => _list = l);
+    }).catchError((_) {
+      if (mounted) setState(() => _list = const []);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = _list;
+    if (l == null || l.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const _Header('Similar channels'),
+      SizedBox(
+        height: 178,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          children: [for (final c in l) _ChannelCard(info: c, onTap: () => openPublicSummary(context, c))],
+        ),
+      ),
+    ]);
   }
 }

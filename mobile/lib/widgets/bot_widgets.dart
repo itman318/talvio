@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -18,6 +19,12 @@ class InlineKeyboard extends StatelessWidget {
   final String botName;
 
   Future<void> _press(BuildContext context, Map<String, dynamic> b) async {
+    final copy = b['copy_text'];
+    if (copy is Map && copy['text'] != null) {
+      await Clipboard.setData(ClipboardData(text: '${copy['text']}'));
+      if (context.mounted) showInfo(context, 'Copied to clipboard');
+      return;
+    }
     final services = context.read<AppServices>();
     if (b['url'] != null) {
       final ok = await confirm(context, 'Open link?', '${b['url']}', ok: 'Open');
@@ -82,6 +89,7 @@ class InlineKeyboard extends StatelessWidget {
                                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                                   Flexible(child: Text('${b['text']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent))),
                                   if (b['url'] != null) Icon(Icons.north_east, size: 12, color: accent),
+                                  if (b['copy_text'] != null) Icon(Icons.copy_rounded, size: 12, color: accent),
                                   if (b['web_app'] != null) Icon(Icons.apps, size: 12, color: accent),
                                 ]),
                               ),

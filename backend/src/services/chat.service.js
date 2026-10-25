@@ -748,7 +748,7 @@ async function getMembers(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
   const adminsOnly = chat.type === 'channel' && !ADMIN_ROLES.includes(chat.my_role);
   const rows = await db.many(
-    `SELECT user_id, role, joined_at, admin_rights, admin_title, restricted_until FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
+    `SELECT user_id, role, joined_at, admin_rights, admin_title, member_tag, restricted_until FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
      ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, joined_at
      LIMIT 5000`,
     [chat.id],
@@ -760,6 +760,7 @@ async function getMembers(userId, chatIdRaw) {
       user: users.get(r.user_id),
       role: r.role,
       title: r.admin_title || null,
+      tag: r.member_tag || null,
       rights: r.role === 'member' ? null : rightsOf(r.role, r.admin_rights),
       restricted_until: r.restricted_until && new Date(r.restricted_until) > new Date() ? new Date(r.restricted_until).toISOString() : null,
       joined_at: new Date(r.joined_at).toISOString(),
@@ -1173,6 +1174,48 @@ async function chatStats(userId, chatIdRaw) {
   return { ...totals, joins_30d: growth, top_posts: top };
 }
 
+/** Admins give members a short tag ("Mentor", "VIP", "Trader") shown next to their name in the group. */
+async function setMemberTag(actorId, chatIdRaw, targetIdRaw, tagRaw) {
+  const chat = await requireMember(chatIdRaw, actorId);
+  if (chat.type !== 'group') throw badRequest('invalid_input', 'Member tags are for groups');
+  requireRight(chat, 'ban_users');
+  const targetId = v.id(targetIdRaw, 'user_id');
+  const tag = tagRaw === null || tagRaw === undefined || String(tagRaw).trim() === '' ? null : v.str(String(tagRaw).trim(), { field: 'tag', min: 1, max: 16 });
+  const r = await db.one('UPDATE chat_members SET member_tag = $3 WHERE chat_id = $1 AND user_id = $2 RETURNING user_id', [chat.id, targetId, tag]);
+  if (!r) throw notFound('member_not_found', 'This user is not in the group');
+  await logEvent(chat.id, actorId, 'member_tagged', targetId, { tag });
+  await emitUpdated(chat.id);
+  return { ok: true, tag };
+}
+
+/** "Similar channels": public channels with the most shared subscribers, then the same category. */
+async function similarChannels(userId, chatIdRaw) {
+  const chatId = v.id(chatIdRaw, 'chat_id');
+  const c = await db.one('SELECT id, type, category, is_public FROM chats WHERE id = $1', [chatId]);
+  if (!c || c.type !== 'channel') return { channels: [] };
+  if (!c.is_public) await requireMember(chatId, userId);
+  const cols = `c.*, (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id) AS n,
+                EXISTS (SELECT 1 FROM chat_members me WHERE me.chat_id = c.id AND me.user_id = $2) AS me`;
+  const shared = await db.many(
+    `SELECT ${cols}, o.overlap FROM (
+       SELECT b.chat_id, count(*) AS overlap FROM chat_members a
+       JOIN chat_members b ON b.user_id = a.user_id AND b.chat_id <> a.chat_id
+       WHERE a.chat_id = $1 GROUP BY b.chat_id
+     ) o JOIN chats c ON c.id = o.chat_id
+     WHERE c.type = 'channel' AND c.is_public AND NOT c.is_suspended
+     ORDER BY o.overlap DESC, c.is_verified DESC LIMIT 12`,
+    [chatId, userId],
+  );
+  const seen = new Set([chatId, ...shared.map((r) => r.id)]);
+  const more = shared.length >= 12 ? [] : await db.many(
+    `SELECT ${cols} FROM chats c
+     WHERE c.type = 'channel' AND c.is_public AND NOT c.is_suspended AND c.id <> $1 AND c.id <> ALL($3::bigint[])
+     ORDER BY (c.category IS NOT DISTINCT FROM $4) DESC, c.is_verified DESC, n DESC LIMIT $5`,
+    [chatId, userId, [...seen], c.category, 12 - shared.length],
+  );
+  return { channels: [...shared, ...more].map((r) => ({ ...publicSummary(r, Number(r.n), r.me), category: r.category || null })) };
+}
+
 /** How many members of a group are online right now (the header shows "1,204 members, 37 online"). */
 async function onlineCount(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
@@ -1201,6 +1244,8 @@ async function sweepCaptcha() {
 }
 
 module.exports = {
+  setMemberTag,
+  similarChannels,
   onlineCount,
   verifyHuman,
   sweepCaptcha,

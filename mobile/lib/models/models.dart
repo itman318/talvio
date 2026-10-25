@@ -262,6 +262,7 @@ class Message {
   final ReplyInfo? replyTo;
   final String? forwardedFromName;
   final String? authorSignature;
+  final Map<String, dynamic>? senderBadge; // groups: {kind: owner|admin|tag, text}
   final PollInfo? poll;
   List<ReactionCount> reactions;
   String? myReaction;
@@ -302,6 +303,7 @@ class Message {
     this.replyTo,
     this.forwardedFromName,
     this.authorSignature,
+    this.senderBadge,
     this.poll,
     List<ReactionCount>? reactions,
     this.myReaction,
@@ -350,6 +352,7 @@ class Message {
       replyTo: j['reply_to'] == null ? null : ReplyInfo.fromJson(Map<String, dynamic>.from(j['reply_to'] as Map)),
       forwardedFromName: j['forwarded_from'] == null ? null : (j['forwarded_from']['name'] as String?),
       authorSignature: j['author_signature'] as String?,
+      senderBadge: j['sender_badge'] is Map ? Map<String, dynamic>.from(j['sender_badge'] as Map) : null,
       poll: j['poll'] == null ? null : PollInfo.fromJson(Map<String, dynamic>.from(j['poll'] as Map)),
       reactions: ReactionCount.listFrom(j['reactions']),
       myReaction: j['my_reaction'] as String?,
@@ -694,16 +697,18 @@ class GroupMember {
   String role;
   final DateTime joinedAt;
   final String? title; // custom admin title ("Moderator")
+  final String? tag; // member tag set by admins ("Mentor")
   final Map<String, bool>? rights;
   final DateTime? restrictedUntil;
 
-  GroupMember({required this.user, required this.role, required this.joinedAt, this.title, this.rights, this.restrictedUntil});
+  GroupMember({required this.user, required this.role, required this.joinedAt, this.title, this.tag, this.rights, this.restrictedUntil});
 
   factory GroupMember.fromJson(Map<String, dynamic> j) => GroupMember(
         user: AppUser.fromJson(Map<String, dynamic>.from(j['user'] as Map)),
         role: j['role'] as String,
         joinedAt: _date(j['joined_at']) ?? DateTime.now(),
         title: j['title'] as String?,
+        tag: j['tag'] as String?,
         rights: j['rights'] is Map ? (j['rights'] as Map).map((k, v) => MapEntry('$k', v == true)) : null,
         restrictedUntil: _date(j['restricted_until']),
       );

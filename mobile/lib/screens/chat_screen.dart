@@ -5,6 +5,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
+import '../widgets/mascot.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -161,6 +162,102 @@ class _ChatScreenState extends State<ChatScreen> {
   int? _newestSeen;
 
   int? _online; // groups: members online now
+  bool _formatOpen = false; // the B / I / S / code / spoiler bar above the message box
+
+  /// Puts [mark] around the selected text (or removes it when it's already there).
+  void _wrapSelection(String mark) {
+    final sel = _text.selection;
+    if (!sel.isValid || sel.isCollapsed) return;
+    final t = _text.text;
+    final before = sel.textBefore(t);
+    final inner = sel.textInside(t);
+    final after = sel.textAfter(t);
+    if (before.endsWith(mark) && after.startsWith(mark)) {
+      final b = before.substring(0, before.length - mark.length);
+      _text.value = TextEditingValue(
+        text: '$b$inner${after.substring(mark.length)}',
+        selection: TextSelection(baseOffset: b.length, extentOffset: b.length + inner.length),
+      );
+    } else {
+      _text.value = TextEditingValue(
+        text: '$before$mark$inner$mark$after',
+        selection: TextSelection(baseOffset: before.length + mark.length, extentOffset: before.length + mark.length + inner.length),
+      );
+    }
+    HapticFeedback.selectionClick();
+    setState(() {});
+  }
+
+  Widget _formatBar() {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    Widget b(String tip, Widget child, String mark) => Tooltip(
+          message: tip,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _wrapSelection(mark),
+            child: SizedBox(width: 44, height: 38, child: Center(child: child)),
+          ),
+        );
+    const st = TextStyle(fontSize: 17);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1A1F35).withValues(alpha: 0.97) : Colors.white.withValues(alpha: 0.97),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Row(children: [
+        b('Bold', const Text('B', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)), '**'),
+        b('Italic', const Text('I', style: TextStyle(fontSize: 17, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600)), '_'),
+        b('Strikethrough', const Text('S', style: TextStyle(fontSize: 17, decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w600)), '~'),
+        b('Monospace', const Text('</>', style: TextStyle(fontSize: 14, fontFamily: 'monospace', fontWeight: FontWeight.w700)), '`'),
+        b('Spoiler', const Icon(Icons.blur_on_rounded, size: 20), '||'),
+        const Spacer(),
+        Text('Format', style: st.copyWith(fontSize: 12.5, color: Brand.muted, fontWeight: FontWeight.w700)),
+        IconButton(
+          tooltip: 'Close',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.close_rounded, size: 18),
+          onPressed: () => setState(() => _formatOpen = false),
+        ),
+      ]),
+    );
+  }
+
+  /// Groups with rules: show them once when I first open the group (and again when they change).
+  Future<void> _showRulesOnce() async {
+    final chat = _store.chatById(chatId) ?? _chat;
+    if (chat == null || chat.rules.trim().isEmpty || chat.isAdmin) return;
+    final key = 'rules.seen.${chat.id}';
+    final sig = '${chat.rules.hashCode}';
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (p.getString(key) == sig || !mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Center(child: TaviMascot(pose: TaviPose.think, size: 96)),
+              Text('Rules of ${chat.title}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.45),
+                child: SingleChildScrollView(child: Text(chat.rules, style: const TextStyle(fontSize: 15, height: 1.45))),
+              ),
+              const SizedBox(height: 16),
+              AuroraButton(label: 'I agree', icon: Icons.check_rounded, onPressed: () => Navigator.pop(ctx)),
+            ]),
+          ),
+        ),
+      );
+      await p.setString(key, sig);
+    } catch (_) {}
+  }
 
   Future<void> _loadOnline() async {
     try {
@@ -173,12 +270,18 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && ((_store.chatById(chatId) ?? _chat)?.isGroup ?? false)) _loadOnline();
+      if (mounted && ((_store.chatById(chatId) ?? _chat)?.isGroup ?? false)) {
+        _loadOnline();
+        _showRulesOnce();
+      }
     });
     _store = context.read<ChatStore>();
     _prefs = context.read<AppPrefs>();
     _chat = widget.initial;
     _text.text = _prefs.draft(widget.chatId) ?? '';
+    _text.addListener(() {
+      if (_formatOpen && (!_text.selection.isValid || _text.selection.isCollapsed) && mounted) setState(() => _formatOpen = false);
+    });
     _scroll.addListener(() {
       if (_scroll.hasClients && _scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
         _store.loadMore(chatId).catchError((_) {});
@@ -2039,28 +2142,16 @@ class _ChatScreenState extends State<ChatScreen> {
               textCapitalization: TextCapitalization.sentences,
               style: const TextStyle(fontSize: 16, height: 1.3),
               // select text → Bold / Italic / Strike / Code / Spoiler
+              // only our own menu: Cut · Copy · Paste · Select all (+ "Format" when text is selected) —
+              // no "Ask …", "Translate", "WPS Memo"… entries other apps add to the system menu
               contextMenuBuilder: (ctx, state) {
-                final items = [...state.contextMenuButtonItems];
+                final items = state.contextMenuButtonItems.where((i) => i.type != ContextMenuButtonType.custom).toList();
                 final sel = _text.selection;
                 if (sel.isValid && !sel.isCollapsed) {
-                  void wrap(String mark) {
-                    final t = _text.text;
-                    final inner = sel.textInside(t);
-                    _text.value = TextEditingValue(
-                      text: '${sel.textBefore(t)}$mark$inner$mark${sel.textAfter(t)}',
-                      selection: TextSelection.collapsed(offset: sel.end + mark.length * 2),
-                    );
-                    state.hideToolbar();
-                    setState(() {});
-                  }
-
-                  items.addAll([
-                    ContextMenuButtonItem(label: 'Bold', onPressed: () => wrap('**')),
-                    ContextMenuButtonItem(label: 'Italic', onPressed: () => wrap('_')),
-                    ContextMenuButtonItem(label: 'Strike', onPressed: () => wrap('~')),
-                    ContextMenuButtonItem(label: 'Code', onPressed: () => wrap('`')),
-                    ContextMenuButtonItem(label: 'Spoiler', onPressed: () => wrap('||')),
-                  ]);
+                  items.insert(0, ContextMenuButtonItem(label: 'Format', onPressed: () {
+                    state.hideToolbar(false);
+                    setState(() => _formatOpen = true);
+                  }));
                 }
                 return AdaptiveTextSelectionToolbar.buttonItems(anchors: state.contextMenuAnchors, buttonItems: items);
               },
@@ -2459,6 +2550,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
             ),
+            if (_formatOpen && _text.selection.isValid && !_text.selection.isCollapsed && !_recording && _reviewPath == null) _formatBar(),
             if (_reviewPath != null)
               _reviewBar(chat)
             else if (_recording)

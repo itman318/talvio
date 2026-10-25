@@ -1,3 +1,4 @@
+import '../screens/global_search_screen.dart';
 import 'dart:async';
 import '../theme/chat_theme.dart';
 import 'tali_emoji.dart';
@@ -89,7 +90,18 @@ class _MessageTextState extends State<MessageText> {
           }),
         ));
       } else {
-        spans.add(TextSpan(text: token, style: style.copyWith(color: accent, fontWeight: FontWeight.w600)));
+        // @mention or #hashtag: tap to search for it
+        final isTag = token.startsWith('#');
+        spans.add(TextSpan(
+          text: token,
+          style: style.copyWith(color: accent, fontWeight: FontWeight.w600),
+          recognizer: token == '@all'
+              ? null
+              : _tap(() => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => GlobalSearchScreen(initialQuery: isTag ? token : token.substring(1), initialFilter: isTag ? 'messages' : 'all')),
+                  )),
+        ));
       }
       last = m.end;
     }

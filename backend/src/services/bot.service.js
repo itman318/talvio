@@ -378,7 +378,11 @@ function parseReplyMarkup(raw) {
         return { text, url: u.toString() };
       }
       if (btn.web_app && btn.web_app.url) return { text, web_app: { url: parseHttpsUrl(btn.web_app.url, 'web_app.url') } };
-      throw badRequest('invalid_markup', 'Each button needs callback_data, url or web_app');
+      if (btn.copy_text && btn.copy_text.text !== undefined) {
+        // tap → the text goes to the clipboard (like Telegram's CopyTextButton)
+        return { text, copy_text: { text: v.str(String(btn.copy_text.text), { field: 'copy_text', min: 1, max: 256 }) } };
+      }
+      throw badRequest('invalid_markup', 'Each button needs callback_data, url, web_app or copy_text');
     });
   });
   return { inline_keyboard: rows };

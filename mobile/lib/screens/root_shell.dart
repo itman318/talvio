@@ -1,3 +1,7 @@
+import '../theme/brand.dart';
+import '../widgets/avatar.dart';
+import '../state/auth_state.dart';
+import 'my_profile_screen.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
 import 'dart:async';
@@ -59,7 +63,7 @@ class _RootShellState extends State<RootShell> {
     final unread = context.select<ChatStore, int>((s) => s.chats.where((c) => !c.isMuted && !c.isRequest && !c.isLocked).fold<int>(0, (a, c) => a + c.unreadCount));
     Widget page(int i) {
       if (!_built.contains(i)) return const SizedBox.shrink();
-      return switch (i) { 0 => const HomeScreen(), 1 => const CallsScreen(), _ => const SettingsScreen() };
+      return switch (i) { 0 => const HomeScreen(), 1 => const CallsScreen(), 2 => const SettingsScreen(), _ => const MyProfileScreen() };
     }
 
     return PopScope(
@@ -68,7 +72,7 @@ class _RootShellState extends State<RootShell> {
         if (!didPop) setState(() => _tab = 0);
       },
       child: Scaffold(
-        body: IndexedStack(index: _tab, children: [page(0), page(1), page(2)]),
+        body: IndexedStack(index: _tab, children: [page(0), page(1), page(2), page(3)]),
         bottomNavigationBar: Column(mainAxisSize: MainAxisSize.min, children: [
           VoiceMiniPlayer(onOpen: (id) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)))),
           DecoratedBox(
@@ -90,11 +94,30 @@ class _RootShellState extends State<RootShell> {
             ),
             const NavigationDestination(icon: Icon(Icons.call_outlined), selectedIcon: Icon(Icons.call_rounded), label: 'Calls'),
             const NavigationDestination(icon: Icon(Icons.tune_rounded), selectedIcon: Icon(Icons.tune_rounded), label: 'Settings'),
+            NavigationDestination(icon: _MeIcon(selected: false), selectedIcon: _MeIcon(selected: true), label: 'Profile'),
           ],
         ),
         ),
         ]),
       ),
+    );
+  }
+}
+
+
+/// My photo as the Profile tab icon.
+class _MeIcon extends StatelessWidget {
+  const _MeIcon({required this.selected});
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final me = context.watch<AuthState>().me;
+    if (me == null) return Icon(selected ? Icons.person_rounded : Icons.person_outline_rounded);
+    return Container(
+      padding: const EdgeInsets.all(1.5),
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: selected ? Brand.aurora : null),
+      child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 24)),
     );
   }
 }

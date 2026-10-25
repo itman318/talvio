@@ -148,6 +148,23 @@ async function serializeRows(viewerId, rows) {
     )
     : [];
   const commentMap = new Map(commentRows.map((c) => [c.thread_id, c.n]));
+  // groups: "owner" / "admin" (or their custom title) / a member tag next to the sender's name
+  const groupRows = rows.filter((r) => r.sender_id && (chatMap.get(r.chat_id) || {}).type === 'group');
+  const badgeRows = groupRows.length
+    ? await db.many(
+      `SELECT chat_id, user_id, role, admin_title, member_tag FROM chat_members
+       WHERE chat_id = ANY($1::bigint[]) AND user_id = ANY($2::bigint[])`,
+      [[...new Set(groupRows.map((r) => r.chat_id))], [...new Set(groupRows.map((r) => r.sender_id))]],
+    )
+    : [];
+  const badgeMap = new Map(badgeRows.map((b) => [`${b.chat_id}:${b.user_id}`, b]));
+  const badgeOf = (m) => {
+    const b = badgeMap.get(`${m.chat_id}:${m.sender_id}`);
+    if (!b) return null;
+    if (b.role === 'owner') return { kind: 'owner', text: b.admin_title || 'owner' };
+    if (b.role === 'admin') return { kind: 'admin', text: b.admin_title || 'admin' };
+    return b.member_tag ? { kind: 'tag', text: b.member_tag } : null;
+  };
   const onceIds = rows.filter((r) => r.meta && r.meta.view_once).map((r) => r.id);
   const onceRows = onceIds.length ? await db.many('SELECT message_id, user_id FROM message_once_views WHERE message_id = ANY($1::bigint[])', [onceIds]) : [];
 
@@ -166,6 +183,7 @@ async function serializeRows(viewerId, rows) {
       sender_id: isChannel ? null : m.sender_id,
       sender: isChannel ? null : minimalUser(sender),
       author_signature: isChannel && chat.signatures && m.type !== 'system' ? nameOf(sender) : null,
+      sender_badge: chat.type === 'group' ? badgeOf(m) : null,
       type: m.type,
       text: m.text,
       media: m.media_id ? mediaService.serialize(mediaMap.get(m.media_id)) : null,

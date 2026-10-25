@@ -1,3 +1,4 @@
+import 'global_search_screen.dart' show SimilarChannels;
 import 'package:flutter/material.dart';
 import '../core/chat_links.dart';
 import 'package:flutter/services.dart';
@@ -181,6 +182,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       builder: (ctx) => SafeArea(
         child: Wrap(children: [
           ListTile(leading: const Icon(Icons.person), title: const Text('View profile'), onTap: () => Navigator.pop(ctx, 'profile')),
+          if (chat.isGroup && m.role == 'member' && chat.can('ban_users'))
+            ListTile(leading: const Icon(Icons.sell_rounded), title: Text(m.tag == null ? 'Add a member tag' : 'Edit tag “${m.tag}”'), onTap: () => Navigator.pop(ctx, 'tag')),
           if (chat.isOwner && m.role == 'member')
             ListTile(leading: const Icon(Icons.admin_panel_settings), title: const Text('Make admin'), onTap: () => Navigator.pop(ctx, 'admin')),
           if (chat.isOwner && m.role == 'admin')
@@ -216,6 +219,26 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         break;
       case 'member':
         await _run(() => _store.setRole(chat.id, m.user.id, 'member'));
+        break;
+      case 'tag':
+        final c = TextEditingController(text: m.tag ?? '');
+        final tag = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Tag for ${m.user.name}'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: c, autofocus: true, maxLength: 16, decoration: const InputDecoration(hintText: 'Mentor, VIP, Trader…')),
+              const Text('Shown next to their name in the group.', style: TextStyle(fontSize: 12.5, color: Brand.muted)),
+            ]),
+            actions: [
+              if (m.tag != null) TextButton(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Remove')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Save')),
+            ],
+          ),
+        );
+        if (tag == null) return;
+        await _run(() => _store.setMemberTag(chat.id, m.user.id, tag.isEmpty ? null : tag), tag.isEmpty ? 'Tag removed' : 'Tag saved');
         break;
       case 'restrict':
         final minutes = await pickRestriction(context, name: m.user.name, restricted: m.isRestricted);
@@ -584,6 +607,12 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                         ),
                         if (m.isRestricted)
                           const Padding(padding: EdgeInsets.only(right: 6), child: Icon(Icons.volume_off_rounded, size: 18, color: Brand.amber)),
+                        if (m.role == 'member' && m.tag != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                            decoration: BoxDecoration(color: colorForId(m.user.id).withValues(alpha: dark ? 0.22 : 0.12), borderRadius: BorderRadius.circular(20)),
+                            child: Text(m.tag!, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: colorForId(m.user.id))),
+                          ),
                         if (m.role != 'member')
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -599,6 +628,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   )),
             ],
           ),
+          if (chat.isChannel && chat.isPublic) SimilarChannels(chatId: chat.id),
           SettingsGroup(children: [
             SettingsTile(icon: Icons.flag_rounded, color: Brand.amber, title: 'Report $what', onTap: () => showReportDialog(context, targetType: 'chat', targetId: chat.id)),
             SettingsTile(

@@ -174,8 +174,23 @@ class MessageBubble extends StatelessWidget {
       if (showSender && !isMine && !_asChannel)
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
-          child: Text(m.sender?.name ?? 'Deleted Account',
-              style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Flexible(
+              child: Text(m.sender?.name ?? 'Deleted Account',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
+            ),
+            if (m.senderBadge != null) ...[
+              const SizedBox(width: 6),
+              Text(
+                '${m.senderBadge!['text']}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: m.senderBadge!['kind'] == 'tag' ? colorForId(m.senderId ?? 0).withValues(alpha: 0.85) : (dark ? Colors.white54 : const Color(0xFF7A8099)),
+                ),
+              ),
+            ],
+          ]),
         ),
       if (m.forwardedFromName != null)
         Padding(

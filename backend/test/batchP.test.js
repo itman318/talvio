@@ -245,3 +245,24 @@ test('global search: my chats, people, bots, public groups & channels; discover'
   assert.equal(d.discover, true);
   assert.ok(d.channels.some((c) => c.chat_id === (ch.id || ch.chat?.id)));
 });
+
+test('groups: sender badges, member tags; similar channels', async () => {
+  const H = await signup('+923260000020', 'Hina', 'hina_p');
+  const I = await signup('+923260000021', 'Imran', 'imran_p');
+  const { chat: g } = await chats.createGroup(H.id, { title: 'Badges', member_ids: [I.id] });
+  const m1 = await messages.sendMessage(H.id, g.id, { text: 'owner here' });
+  assert.equal(m1.sender_badge.kind, 'owner');
+  await chats.setMemberTag(H.id, g.id, I.id, 'Mentor');
+  const m2 = await messages.sendMessage(I.id, g.id, { text: 'hi' });
+  assert.deepEqual(m2.sender_badge, { kind: 'tag', text: 'Mentor' });
+  await rejects(chats.setMemberTag(I.id, g.id, H.id, 'x'), 'not_admin');
+  const members = await chats.getMembers(H.id, g.id);
+  assert.equal(members.find((x) => x.user.id === I.id).tag, 'Mentor');
+
+  const a = await chats.createChannel(H.id, { title: 'Forex A', username: 'forexchan_a' });
+  const b = await chats.createChannel(H.id, { title: 'Forex B', username: 'forexchan_b' });
+  await chats.joinPublic(I.id, a.id);
+  await chats.joinPublic(I.id, b.id);
+  const sim = await chats.similarChannels(I.id, a.id);
+  assert.equal(sim.channels[0].chat_id, b.id);
+});

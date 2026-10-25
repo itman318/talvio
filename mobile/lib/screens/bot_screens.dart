@@ -11,6 +11,7 @@ import '../utils/format.dart';
 import '../widgets/mascot.dart';
 import '../widgets/premium.dart';
 import 'chat_screen.dart';
+import 'global_search_screen.dart';
 
 /// Settings → My bots: create bots and get their Talvio Bot API token.
 class MyBotsScreen extends StatefulWidget {
@@ -114,7 +115,13 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
   Widget build(BuildContext context) {
     final bots = _bots;
     return Scaffold(
-      appBar: AppBar(title: const Text('My bots')),
+      appBar: AppBar(title: const Text('My bots'), actions: [
+        IconButton(
+          tooltip: 'Discover bots',
+          icon: const Icon(Icons.travel_explore_rounded),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GlobalSearchScreen(initialFilter: 'bots'))),
+        ),
+      ]),
       body: bots == null
           ? const Center(child: CircularProgressIndicator())
           : bots.isEmpty

@@ -249,7 +249,7 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
     }
     case 'revyes': {
       const { token } = await bots.regenerateToken(userId, b.id);
-      return say(chatId, tokenText(b, token), kb([[btn('« Back to bot', `bot:${b.id}`)]]));
+      return say(chatId, tokenText(b, token), kb([[{ text: '📋 Copy token', copy_text: { text: token } }], [btn('« Back to bot', `bot:${b.id}`)]]));
     }
     case 'priv': {
       await bots.updateBot(userId, b.id, { group_privacy: !b.group_privacy });
@@ -357,7 +357,7 @@ async function onMessage(userId, chatId, row) {
             '',
             `Bot API: POST ${config.publicUrl}/api/bot/v1/<method> with “Authorization: Bearer <token>”.`,
           ].join('\n'),
-          kb([[btn('⚙️ Manage bot', `bot:${r.bot.id}`)], [{ text: '💬 Open bot', url: link(r.bot.username) }]]),
+          kb([[{ text: '📋 Copy token', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }]]),
         );
       }
       case 'set_name':
