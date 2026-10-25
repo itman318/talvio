@@ -1,3 +1,4 @@
+import '../widgets/mascot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config.dart';
@@ -131,7 +132,7 @@ class _CallsScreenState extends State<CallsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : calls.isEmpty
               ? EmptyState(
-                  tali: _missedOnly ? 'cool' : 'busy',
+                  pose: _missedOnly ? TaviPose.cool : TaviPose.sleep,
                   title: _missedOnly ? 'No missed calls' : 'No calls yet',
                   subtitle: _missedOnly ? 'You picked up every call. Nice!' : 'Voice and video calls you make or receive will appear here.',
                 )

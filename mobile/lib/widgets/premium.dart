@@ -1,3 +1,4 @@
+import 'mascot.dart';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -213,10 +214,11 @@ class SettingsTile extends StatelessWidget {
   }
 }
 
-/// Friendly empty screen with a Tali emoji.
+/// Friendly empty screen with Tavi, our animated mascot.
 class EmptyState extends StatelessWidget {
-  const EmptyState({super.key, required this.tali, required this.title, this.subtitle, this.action, this.onAction});
-  final String tali; // name of a Tali emoji (assets/emoji/tali/<name>.png)
+  const EmptyState({super.key, this.tali = 'think', this.pose, required this.title, this.subtitle, this.action, this.onAction});
+  final String tali; // older name-based pick: hello | think | cool
+  final TaviPose? pose;
   final String title;
   final String? subtitle;
   final String? action;
@@ -228,14 +230,8 @@ class EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 132,
-            height: 132,
-            decoration: BoxDecoration(shape: BoxShape.circle, gradient: Brand.auroraSoft(Theme.of(context).brightness == Brightness.dark)),
-            padding: const EdgeInsets.all(14),
-            child: Image.asset('assets/emoji/tali/$tali.png'),
-          ),
-          const SizedBox(height: 18),
+          TaviMascot(pose: pose ?? taviPoseByName(const {'hello': 'wave', 'think': 'think', 'cool': 'cool'}[tali]) ?? TaviPose.idle, size: 150),
+          const SizedBox(height: 12),
           Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
           if (subtitle != null) ...[
             const SizedBox(height: 6),

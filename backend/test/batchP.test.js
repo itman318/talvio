@@ -210,3 +210,13 @@ test('Plus: prices in the buyer currency, perks enforced', async () => {
   assert.equal(lim.pinned_chats, 15);
   assert.equal(lim.exclusive_stickers, true);
 });
+
+test('Tavi animated stickers: free ones for everybody, the rest with Plus', async () => {
+  const chat = await chats.getOrCreatePrivate(A.id, B.id);
+  const m = await messages.sendMessage(A.id, chat.id, { type: 'sticker', tavi: 'wave', emoji: '👋' });
+  assert.equal(m.meta.sticker.tavi, 'wave');
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'sticker', tavi: 'celebrate' }), 'premium_required');
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'sticker', tavi: 'dance' }), 'invalid_sticker');
+  await db.query(`UPDATE users SET premium_until = now() + interval '1 day' WHERE id = $1`, [A.id]);
+  assert.equal((await messages.sendMessage(A.id, chat.id, { type: 'sticker', tavi: 'celebrate' })).meta.sticker.tavi, 'celebrate');
+});

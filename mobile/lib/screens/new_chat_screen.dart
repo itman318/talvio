@@ -1,3 +1,4 @@
+import '../widgets/mascot.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -111,10 +112,23 @@ class _UserSearchState extends State<UserSearch> {
           child: ListView(
             children: [
               if (widget.header != null && _q.text.isEmpty) widget.header!,
+              if (_q.text.trim().length < 2 && _contacts.isEmpty && !_loading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: TaviEmptyState(
+                    pose: TaviPose.search,
+                    title: 'No contacts yet',
+                    text: 'Search for people by their @username above, or let Talvio find friends from your phone contacts.',
+                    size: 140,
+                  ),
+                ),
               if (_q.text.trim().length < 2 && _contacts.isNotEmpty)
                 const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Contacts', style: TextStyle(fontWeight: FontWeight.w600))),
               if (_q.text.trim().length >= 2 && !_loading && _results.isEmpty && _public.isEmpty)
-                const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Nothing found'))),
+                const Padding(
+                  padding: EdgeInsets.only(top: 24),
+                  child: TaviEmptyState(pose: TaviPose.search, title: 'Nobody found', text: 'Check the spelling, or search by their exact @username.', size: 130),
+                ),
               if (_public.isNotEmpty && _q.text.trim().length >= 2) ...[
                 const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 4), child: Text('Public groups & channels', style: TextStyle(fontWeight: FontWeight.w600))),
                 ..._public.map((c) => ListTile(

@@ -106,13 +106,15 @@ class _TaviMascotState extends State<TaviMascot> with TickerProviderStateMixin {
 
 /// Wing placement for a pose: angle (radians, 0 = hanging down) and where the wing tip sits.
 class _Wings {
-  const _Wings(this.leftAngle, this.rightAngle, {this.leftLift = 0, this.rightLift = 0, this.leftIn = 0, this.rightIn = 0});
+  const _Wings(this.leftAngle, this.rightAngle, {this.leftLift = 0, this.rightLift = 0, this.leftIn = 0, this.rightIn = 0, this.leftScale = 1, this.rightScale = 1});
   final double leftAngle;
   final double rightAngle;
   final double leftLift; // move up (units)
   final double rightLift;
   final double leftIn; // move toward the middle (units)
   final double rightIn;
+  final double leftScale; // bigger wings when they cover the eyes
+  final double rightScale;
 
   static _Wings lerp(_Wings a, _Wings b, double t) => _Wings(
         a.leftAngle + (b.leftAngle - a.leftAngle) * t,
@@ -121,6 +123,8 @@ class _Wings {
         rightLift: a.rightLift + (b.rightLift - a.rightLift) * t,
         leftIn: a.leftIn + (b.leftIn - a.leftIn) * t,
         rightIn: a.rightIn + (b.rightIn - a.rightIn) * t,
+        leftScale: a.leftScale + (b.leftScale - a.leftScale) * t,
+        rightScale: a.rightScale + (b.rightScale - a.rightScale) * t,
       );
 }
 
@@ -152,9 +156,11 @@ class _TaviPainter extends CustomPainter {
       case TaviPose.wave:
         return _Wings(0.15, -2.3 + 0.35 * math.sin(t * 4 * math.pi), rightLift: 10);
       case TaviPose.hideEyes:
-        return const _Wings(-2.55, 2.55, leftLift: 24, rightLift: 24, leftIn: 9, rightIn: 9);
+        // wings folded over the eyes (a tiny nervous shiver)
+        final s = 0.03 * math.sin(t * 8 * math.pi);
+        return _Wings(-2.3 + s, 2.3 - s, leftLift: 5, rightLift: 5, leftIn: 2, rightIn: 2, leftScale: 1.3, rightScale: 1.3);
       case TaviPose.peek:
-        return const _Wings(-2.55, 0.9, leftLift: 24, rightLift: 6, leftIn: 9, rightIn: 2);
+        return _Wings(-2.3, 1.0 + 0.08 * math.sin(t * 2 * math.pi), leftLift: 5, rightLift: 4, leftIn: 2, rightIn: 1, leftScale: 1.3);
       case TaviPose.celebrate:
         return _Wings(-2.5 - 0.25 * w, 2.5 + 0.25 * w, leftLift: 12, rightLift: 12);
       case TaviPose.search:
@@ -448,14 +454,15 @@ class _TaviPainter extends CustomPainter {
   }
 
   void _wingsPaint(Canvas c, _Wings w) {
-    _wing(c, Offset(23 + w.leftIn, 63 - w.leftLift), w.leftAngle, false);
-    _wing(c, Offset(77 - w.rightIn, 63 - w.rightLift), w.rightAngle, true);
+    _wing(c, Offset(23 + w.leftIn, 63 - w.leftLift), w.leftAngle, false, w.leftScale);
+    _wing(c, Offset(77 - w.rightIn, 63 - w.rightLift), w.rightAngle, true, w.rightScale);
   }
 
-  void _wing(Canvas c, Offset shoulder, double angle, bool right) {
+  void _wing(Canvas c, Offset shoulder, double angle, bool right, [double scale = 1]) {
     c.save();
     c.translate(shoulder.dx, shoulder.dy);
     c.rotate(angle);
+    c.scale(scale);
     final d = right ? 1.0 : -1.0;
     final path = Path()
       ..moveTo(0, -6)

@@ -1,3 +1,4 @@
+import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
 import 'dart:async';
@@ -253,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(top: 40),
                             child: q.isNotEmpty
-                                ? const EmptyState(tali: 'think', title: 'No chats found', subtitle: 'Try another name.')
+                                ? const EmptyState(pose: TaviPose.search, title: 'No chats found', subtitle: 'Try another name.')
                                 : folder == null
                                 ? EmptyState(
                                     tali: 'hello',
@@ -784,7 +785,7 @@ class LockedChatsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Locked chats')),
       body: list.isEmpty
-          ? const EmptyState(tali: 'cool', title: 'No locked chats', subtitle: 'Long-press a chat → Lock chat to hide it behind your fingerprint.')
+          ? const EmptyState(pose: TaviPose.hideEyes, title: 'No locked chats', subtitle: 'Long-press a chat → Lock chat to hide it behind your fingerprint.')
           : ListView(children: [for (final c in list) ChatTile(chat: c)]),
     );
   }

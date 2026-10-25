@@ -15,6 +15,7 @@ import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import 'mascot.dart';
 import 'sticker_maker.dart';
 
 String stickerUrl(Message m) {
@@ -32,6 +33,8 @@ class StickerView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tavi = taviPoseByName('${(message.meta?['sticker'] as Map?)?['tavi'] ?? ''}');
+    if (tavi != null) return TaviMascot(pose: tavi, size: size + 10);
     final url = stickerUrl(message);
     final emoji = '${(message.meta?['sticker'] as Map?)?['emoji'] ?? '🙂'}';
     return SizedBox(
@@ -314,7 +317,7 @@ class _StickerPanelState extends State<StickerPanel> {
   List<Map<String, dynamic>>? _packs;
   List<Map<String, dynamic>> _recent = [];
   List<Map<String, dynamic>> _favs = [];
-  int _sel = 0; // -1 = favorites, 0 = recent (when there are recents), otherwise pack index + 1
+  int _sel = 0; // -2 = Tavi, -1 = favorites, 0 = recent (when there are recents), otherwise pack index + 1
 
   @override
   void initState() {
@@ -409,7 +412,10 @@ class _StickerPanelState extends State<StickerPanel> {
     final hasRecent = _recent.isNotEmpty;
     final List<Map<String, dynamic>> stickers;
     String title;
-    if (_sel == -1 && _favs.isNotEmpty) {
+    if (_sel == -2) {
+      stickers = const [];
+      title = 'Tavi — animated';
+    } else if (_sel == -1 && _favs.isNotEmpty) {
       stickers = _favs;
       title = 'Favorites';
     } else if (_sel == 0 && hasRecent) {
@@ -454,6 +460,12 @@ class _StickerPanelState extends State<StickerPanel> {
             },
             child: const Icon(Icons.auto_fix_high_rounded, color: Brand.primary),
           ),
+          packButton(
+            selected: _sel == -2,
+            tooltip: 'Tavi (animated)',
+            onTap: () => setState(() => _sel = -2),
+            child: const TaviMascot(pose: TaviPose.wave, size: 36, animate: false),
+          ),
           if (_favs.isNotEmpty)
             packButton(
               selected: _sel == -1,
@@ -496,7 +508,9 @@ class _StickerPanelState extends State<StickerPanel> {
         ),
       ),
       Expanded(
-        child: stickers.isEmpty
+        child: _sel == -2
+            ? _taviGrid(context)
+            : stickers.isEmpty
             ? const Center(child: Text('No stickers here yet', style: TextStyle(color: Brand.muted)))
             : GridView.builder(
                 padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
@@ -510,6 +524,46 @@ class _StickerPanelState extends State<StickerPanel> {
               ),
       ),
     ]);
+  }
+}
+
+extension on _StickerPanelState {
+  Widget _taviGrid(BuildContext context) {
+    final plus = context.watch<AuthState>().me?.limits?['exclusive_stickers'] == true;
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 96, mainAxisSpacing: 6, crossAxisSpacing: 6),
+      itemCount: taviStickers.length,
+      itemBuilder: (_, i) {
+        final (pose, emoji, plusOnly) = taviStickers[i];
+        final locked = plusOnly && !plus;
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            if (locked) {
+              showInfo(context, 'This Tavi sticker comes with Talvio Plus ⭐');
+              return;
+            }
+            HapticFeedback.selectionClick();
+            widget.onSent?.call();
+            context.read<ChatStore>().sendTavi(widget.chatId, pose.name, emoji);
+          },
+          child: Stack(children: [
+            Center(child: Opacity(opacity: locked ? 0.55 : 1, child: TaviMascot(pose: pose, size: 84))),
+            if (plusOnly)
+              Positioned(
+                right: 4,
+                top: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(color: Brand.premium, shape: BoxShape.circle),
+                  child: Icon(locked ? Icons.lock_rounded : Icons.star_rounded, size: 11, color: Colors.white),
+                ),
+              ),
+          ]),
+        );
+      },
+    );
   }
 }
 

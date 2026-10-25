@@ -379,6 +379,17 @@ async function prepareMessage(userId, chat, body) {
     if (chat.type === 'private') throw badRequest('invalid_poll', 'Polls can be sent in groups and channels');
     out.poll = parsePoll(body.poll);
     out.text = out.poll.question;
+  } else if (type === 'sticker' && body.tavi) {
+    // Tavi, our animated mascot: drawn by the app, so no file is needed
+    const FREE = ['wave', 'love', 'sleep', 'think'];
+    const PLUS = ['celebrate', 'hideEyes', 'search', 'mail', 'sad', 'cool'];
+    const pose = String(body.tavi);
+    if (![...FREE, ...PLUS].includes(pose)) throw badRequest('invalid_sticker', 'Unknown Tavi sticker');
+    if (PLUS.includes(pose) && !(await require('./payment.service').limitsFor(userId)).exclusive_stickers) { // eslint-disable-line global-require
+      throw forbidden('premium_required', 'This Tavi sticker is part of Talvio Plus');
+    }
+    out.meta = { sticker: { tavi: pose, emoji: v.str(String(body.emoji || ''), { field: 'emoji', max: 8 }) || '🙂' } };
+    out.text = '';
   } else if (type === 'sticker') {
     await settings.requireFeature('feature_stickers', 'Stickers');
     const st = await require('./sticker.service').stickerForSend(body.sticker_id); // lazy: avoids circular import
@@ -888,7 +899,7 @@ async function forwardMessages(userId, body = {}) {
         mediaId: r.media_id,
         fwdUserId: from.type === 'channel' ? null : fwdLink.get(r.forwarded_from_user_id || r.sender_id) ? r.forwarded_from_user_id || r.sender_id : null,
         fwdName: r.forwarded_from_name || fromName,
-        meta: r.type === 'location' || r.type === 'voice' ? r.meta : null, // forwarded voice keeps its waveform
+        meta: ['location', 'voice', 'sticker'].includes(r.type) ? r.meta : null, // voice keeps its waveform, stickers their pack / Tavi pose
         forwardSourceId: r.forward_source_id || r.id,
       });
       count += 1;

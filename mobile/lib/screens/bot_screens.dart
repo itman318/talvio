@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../widgets/mascot.dart';
 import '../widgets/premium.dart';
 import 'chat_screen.dart';
 
@@ -92,12 +93,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(22)),
               child: Row(children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 30),
-                ),
+                const TaviMascot(pose: TaviPose.think, size: 64),
                 const SizedBox(width: 14),
                 const Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

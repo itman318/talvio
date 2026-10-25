@@ -1,3 +1,4 @@
+import '../widgets/mascot.dart';
 import 'proxy_screen.dart';
 import 'dart:async';
 import 'dart:io';
@@ -383,8 +384,8 @@ class _OtpScreenState extends State<OtpScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Icon(widget.isEmail ? Icons.mark_email_read_rounded : Icons.sms_rounded, size: 56, color: Brand.primary),
-          const SizedBox(height: 12),
+          const Center(child: TaviMascot(pose: TaviPose.mail, size: 140)),
+          const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(widget.isEmail ? 'We emailed a 6-digit code to ${widget.phone}' : 'We sent an SMS with a code to ${widget.phone}',
@@ -574,8 +575,24 @@ class PasswordLoginScreen extends StatefulWidget {
 
 class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
   final _pw = TextEditingController();
+  final _focus = FocusNode();
   bool _busy = false;
   bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    _pw.dispose();
+    super.dispose();
+  }
+
+  TaviPose get _pose => _show ? TaviPose.peek : (_focus.hasFocus || _pw.text.isNotEmpty ? TaviPose.hideEyes : TaviPose.idle);
 
   Future<void> _submit() async {
     if (_pw.text.isEmpty) return;
@@ -628,23 +645,18 @@ class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
       appBar: AppBar(),
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.all(24), children: [
-          Center(
-            child: Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(color: Brand.primary.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: const Icon(Icons.lock_rounded, color: Brand.primary, size: 40),
-            ),
-          ),
-          const SizedBox(height: 18),
+          Center(child: TaviMascot(pose: _pose, size: 150)),
+          const SizedBox(height: 8),
           Text('Two-step verification', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           const Text('Your account is protected with an extra password. Enter it to finish logging in.', textAlign: TextAlign.center),
           const SizedBox(height: 24),
           TextField(
             controller: _pw,
+            focusNode: _focus,
             autofocus: true,
             obscureText: !_show,
+            onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _submit(),
             decoration: InputDecoration(

@@ -436,6 +436,10 @@ class ChatStore extends ChangeNotifier {
   Future<void> sendSticker(int chatId, Map<String, dynamic> sticker) => sendSpecial(chatId, 'sticker', {'sticker_id': sticker['id']},
       meta: {'sticker': {'id': sticker['id'], 'emoji': sticker['emoji'], 'url': sticker['url'], 'pack_id': sticker['pack_id']}});
 
+  /// An animated Tavi sticker (drawn by the app — nothing to upload).
+  Future<void> sendTavi(int chatId, String pose, String emoji) =>
+      sendSpecial(chatId, 'sticker', {'tavi': pose, 'emoji': emoji}, meta: {'sticker': {'tavi': pose, 'emoji': emoji}});
+
   Future<void> sendGif(int chatId, Map<String, dynamic> gif) => sendSpecial(chatId, 'gif', {'gif': gif}, meta: {'gif': gif});
 
   /// type: image | video | voice | file
