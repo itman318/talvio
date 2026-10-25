@@ -45,17 +45,17 @@ async function seed() {
 
   const pc = await call('POST', '/chats/private', { user_id: me.id }, sana.token);
   await call('POST', `/chats/${pc.id}/messages`, { text: 'Hello! How is the app working for you?' }, sana.token);
-  await call('POST', `/chats/${pc.id}/messages`, { text: 'Naya design dekha? 🔥' }, sana.token);
+  await call('POST', `/chats/${pc.id}/messages`, { text: 'Have you seen the new design? 🔥' }, sana.token);
 
   const pc2 = await call('POST', '/chats/private', { user_id: me.id }, ali.token);
   await call('POST', `/chats/${pc2.id}/messages`, { text: 'Meeting tomorrow at 11 am' }, ali.token);
 
   const g = (await call('POST', '/chats/group', { title: 'Dev Team', member_ids: [me.id, sana.id] }, ali.token)).chat;
-  await call('POST', `/chats/${g.id}/messages`, { text: 'Build pass ho gaya ✅' }, sana.token);
+  await call('POST', `/chats/${g.id}/messages`, { text: 'The build passed ✅' }, sana.token);
   await call('POST', `/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'When should we launch?', options: ['Today', 'Tomorrow', 'Next week'] } }, ali.token);
 
   const ch = await call('POST', '/chats/channel', { title: 'Talvio News', username: 'talvio_news' }, ali.token);
-  await call('POST', `/chats/${ch.id}/messages`, { text: 'Talvio ka pehla test build aa gaya 🚀' }, ali.token);
+  await call('POST', `/chats/${ch.id}/messages`, { text: 'The first Talvio test build is here 🚀' }, ali.token);
   await call('POST', `/chats/${ch.id}/join`, {}, me.token);
 
   fs.writeFileSync(STATE, JSON.stringify({ sana, privateChatId: pc.id }));

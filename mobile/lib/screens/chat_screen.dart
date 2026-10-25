@@ -138,7 +138,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(children: [
                   IconButton(
                     tooltip: 'Back',
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
                     onPressed: () => Navigator.maybePop(context),
                   ),
                   Expanded(child: DefaultTextStyle.merge(style: TextStyle(color: Theme.of(context).colorScheme.onSurface), child: title)),
@@ -1289,7 +1290,7 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Row(
             children: [
               Stack(clipBehavior: Clip.none, children: [
-                Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 40, icon: chat.isSavedMessages ? Icons.bookmark_rounded : null),
+                Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 38, icon: chat.isSavedMessages ? Icons.bookmark_rounded : null),
                 if (chat.peer?.online == true && !chat.isSavedMessages && !chat.isBot)
                   Positioned(
                     right: -1,
@@ -1305,13 +1306,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
               ]),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(children: [
-                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, letterSpacing: -0.2))),
+                      Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2))),
                       if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
                       if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
                     ]),

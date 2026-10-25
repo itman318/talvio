@@ -305,7 +305,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     });
     await step('promote B to admin', () => api.put(`/api/chats/${g.id}/members/${B.me.id}/role`, { role: 'admin' }, A.access_token));
     await step('rename group', () => api.patch(`/api/chats/${g.id}`, { title: 'Dev Team ✅' }, A.access_token));
-    await step('mention + group message', () => api.post(`/api/chats/${g.id}/messages`, { text: '@ali_e2e build check karo' }, C.access_token));
+    await step('mention + group message', () => api.post(`/api/chats/${g.id}/messages`, { text: '@ali_e2e please check the build' }, C.access_token));
     const poll = await step('poll', async () => {
       const r = await api.post(`/api/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'Launch when?', options: ['Today', 'Tomorrow'] } }, A.access_token);
       return r.message || r;
