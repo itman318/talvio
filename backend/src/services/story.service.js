@@ -172,7 +172,10 @@ async function reply(userId, storyIdRaw, body = {}) {
 async function react(userId, storyIdRaw, body = {}) {
   const s = await requireVisible(userId, storyIdRaw);
   if (s.user_id === userId) throw forbidden('not_allowed', 'You can’t react to your own story');
-  const emoji = v.oneOf(body.emoji, STORY_REACTIONS, 'emoji');
+  // compare without the emoji variation selector (keyboards differ: ❤ vs ❤️)
+  const bare = (x) => String(x || '').replace(/\uFE0F/g, '');
+  const emoji = STORY_REACTIONS.find((e) => bare(e) === bare(body.emoji));
+  if (!emoji) throw badRequest('invalid_input', 'Pick one of the reactions');
   const prev = await db.one('SELECT emoji FROM story_views WHERE story_id = $1 AND viewer_id = $2', [s.id, userId]);
   await view(userId, s.id, { emoji });
   if (prev && prev.emoji === emoji) return { ok: true }; // same reaction again: no new message

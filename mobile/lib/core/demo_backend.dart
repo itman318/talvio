@@ -392,7 +392,7 @@ class DemoBackend {
 
   void _reply(Map<String, dynamic> chat, Map<String, dynamic> peer, String text) {
     final t = text.toLowerCase();
-    final answer = RegExp(r'\b(hi|hello|hey|salam)\b').hasMatch(t)
+    final answer = RegExp(r'\b(hi|hello|hey)\b').hasMatch(t)
         ? 'Hey! 👋 How are you?'
         : t.contains('?')
             ? 'Good question, let me think 🤔'

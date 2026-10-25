@@ -966,8 +966,8 @@ String stripFormatting(String s) => s.replaceAllMapped(formatRe, (m) {
 /// Effect that fits a text by itself ("Happy birthday" → balloons), or null.
 String? autoEffectFor(String text) {
   final t = text.toLowerCase();
-  if (RegExp(r'happy\s*birthday|\bhbd\b|سالگرہ').hasMatch(t)) return 'balloons';
-  if (RegExp(r'congrat|mubarak|مبارک|well done|🎉|🥳').hasMatch(t)) return 'confetti';
+  if (RegExp(r'happy\s*birthday|\bhbd\b').hasMatch(t)) return 'balloons';
+  if (RegExp(r'congrat|well done|🎉|🥳').hasMatch(t)) return 'confetti';
   if (RegExp(r'happy new year|🎆|🎇').hasMatch(t)) return 'fireworks';
   if (RegExp(r'^\s*(i love you|love you|❤️+|💕+|😍+)\s*$').hasMatch(t)) return 'hearts';
   return null;

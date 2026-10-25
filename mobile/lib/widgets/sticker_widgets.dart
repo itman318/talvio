@@ -325,11 +325,12 @@ class _StickerPanelState extends State<StickerPanel> {
   }
 
   Future<void> _load() async {
+    final api = context.read<AppServices>().api;
     final recent = await RecentStickers.load();
     final favs = await FavoriteStickers.load();
     if (mounted) setState(() => _favs = favs);
     try {
-      final r = await context.read<AppServices>().api.get('/stickers/packs') as List;
+      final r = await api.get('/stickers/packs') as List;
       if (!mounted) return;
       setState(() {
         _recent = recent;

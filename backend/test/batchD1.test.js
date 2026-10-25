@@ -71,7 +71,7 @@ test.after(async () => {
 
 test('create a bot, getMe, user writes → getUpdates, bot replies with buttons, callback flow, edit', async () => {
   await rejects(bots.createBot(A.id, { name: 'Weather', username: 'weather' }), 'invalid_username');
-  const created = await bots.createBot(A.id, { name: 'Weather', username: 'weather_info_bot', about: 'Mausam batata hai' });
+  const created = await bots.createBot(A.id, { name: 'Weather', username: 'weather_info_bot', about: 'Shows the weather' });
   bot = created.bot;
   token = created.token;
   assert.match(token, /^tlv_\d+_[A-Za-z0-9]{20,}$/);
@@ -81,7 +81,7 @@ test('create a bot, getMe, user writes → getUpdates, bot replies with buttons,
 
   const me = await bots.callMethod(token, 'me');
   assert.deepEqual([me.id, me.is_bot, me.username], [bot.id, true, 'weather_info_bot']);
-  await bots.callMethod(token, 'commands.set', { commands: [{ command: 'start', description: 'Shuru' }, { command: '/today', description: 'Aaj ka mausam' }] });
+  await bots.callMethod(token, 'commands.set', { commands: [{ command: 'start', description: 'Start' }, { command: '/today', description: 'Today\'s weather' }] });
   assert.deepEqual((await bots.callMethod(token, 'commands.get')).map((c) => c.command), ['start', 'today']);
 
   // the bot can't write to someone who never opened it
@@ -149,10 +149,10 @@ test('groups: privacy mode delivers only commands, mentions and replies', async 
   await bots.callMethod(token, 'updates', { offset: 1e12 }); // clear
   await messages.sendMessage(B.id, g.id, { text: 'normal chat message' });
   await messages.sendMessage(B.id, g.id, { text: '/today@weather_info_bot' });
-  await messages.sendMessage(A.id, g.id, { text: 'hey @weather_info_bot kya haal' });
+  await messages.sendMessage(A.id, g.id, { text: 'hey @weather_info_bot how are you' });
   await flush();
   const ups = await bots.callMethod(token, 'updates', {});
-  assert.deepEqual(ups.map((u) => u.message.text), ['/today@weather_info_bot', 'hey @weather_info_bot kya haal']);
+  assert.deepEqual(ups.map((u) => u.message.text), ['/today@weather_info_bot', 'hey @weather_info_bot how are you']);
   assert.equal(ups[0].message.chat.type, 'group');
   assert.equal(ups[0].message.chat.title, 'Dev');
 

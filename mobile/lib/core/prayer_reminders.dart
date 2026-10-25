@@ -7,7 +7,7 @@ import 'message_notifications.dart';
 import 'prayer_times.dart';
 import 'prefs.dart';
 
-/// Local notifications for prayer times (and Sehri/Iftar in Ramadan) for the next 7 days.
+/// Local notifications for prayer times (and Suhoor/Iftar in Ramadan) for the next 7 days.
 /// Scheduled on the phone — they work offline and without the server.
 class PrayerReminders {
   PrayerReminders._();
@@ -61,7 +61,7 @@ class PrayerReminders {
         }
         if (p.ramadanReminders && ramadan) {
           plan.add((t.fajr.subtract(const Duration(minutes: 30)), 'Suhoor ends in 30 minutes', 'Suhoor until ${_hm(t.fajr)}.'));
-          plan.add((t.maghrib, 'Iftar time', 'Iftar now — ${_hm(t.maghrib)}. Ramadan Mubarak!'));
+          plan.add((t.maghrib, 'Iftar time', 'Iftar now — ${_hm(t.maghrib)}. Have a blessed Ramadan!'));
         }
         for (final (at, title, body) in plan) {
           if (!at.isAfter(now)) continue;

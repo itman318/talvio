@@ -367,7 +367,7 @@ class AppearanceScreen extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text('The quick brown fox jumps over the lazy dog. یہ ایک مثال ہے۔'),
+          child: Text('The quick brown fox jumps over the lazy dog.'),
         ),
       ]),
     );

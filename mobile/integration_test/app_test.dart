@@ -75,7 +75,7 @@ void main() {
     await snap(t, 'chats');
 
     await t.tap(find.text('Sana Ahmed'));
-    await pumpUntil(t, find.text('Assalam o alaikum! App kaisi chal rahi hai?'), what: 'messages in chat');
+    await pumpUntil(t, find.text('Hello! How is the app working for you?'), what: 'messages in chat');
     await snap(t, 'chat');
 
     await t.enterText(find.widgetWithText(TextField, 'Message'), 'Hello from the app ✅');
@@ -88,7 +88,7 @@ void main() {
     await t.pageBack();
     await settle(t);
     await t.tap(find.text('Dev Team'));
-    await pumpUntil(t, find.text('Launch kab karein?'), what: 'poll in group');
+    await pumpUntil(t, find.text('When should we launch?'), what: 'poll in group');
     await snap(t, 'group-poll');
     await t.pageBack();
     await settle(t);
@@ -118,7 +118,7 @@ void main() {
     await t.pageBack();
     await settle(t);
     await t.tap(find.text('Dev Team'));
-    await pumpUntil(t, find.text('Launch kab karein?'), what: 'group in dark mode');
+    await pumpUntil(t, find.text('When should we launch?'), what: 'group in dark mode');
     await snap(t, 'group-dark');
     await t.pageBack();
     await settle(t);

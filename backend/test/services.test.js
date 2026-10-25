@@ -170,12 +170,12 @@ test('private chat: hidden until first message, unread, receipts, dedupe', async
   assert.equal(privateChat.title, 'Bilal');
   assert.equal((await chats.listChats(B.id)).length, 0, 'peer should not see an empty chat');
 
-  firstMsg = await messages.sendMessage(A.id, privateChat.id, { text: '  Assalam o Alaikum  ', client_id: 'c-1' });
-  assert.equal(firstMsg.text, 'Assalam o Alaikum');
+  firstMsg = await messages.sendMessage(A.id, privateChat.id, { text: '  Hello there  ', client_id: 'c-1' });
+  assert.equal(firstMsg.text, 'Hello there');
   const ev = lastEvent('message:new');
   assert.deepEqual(ev.memberIds.sort(), [A.id, B.id].sort());
 
-  const again = await messages.sendMessage(A.id, privateChat.id, { text: 'Assalam o Alaikum', client_id: 'c-1' });
+  const again = await messages.sendMessage(A.id, privateChat.id, { text: 'Hello there', client_id: 'c-1' });
   assert.equal(again.id, firstMsg.id, 'same client_id must not create a duplicate');
 
   let bList = await chats.listChats(B.id);
@@ -196,7 +196,7 @@ test('private chat: hidden until first message, unread, receipts, dedupe', async
   assert.equal(bList[0].unread_count, 0);
   assert.equal(lastEvent('receipt:read').userId, B.id);
 
-  const reply = await messages.sendMessage(B.id, privateChat.id, { text: 'Walaikum Assalam', reply_to_id: firstMsg.id });
+  const reply = await messages.sendMessage(B.id, privateChat.id, { text: 'Hi, welcome back', reply_to_id: firstMsg.id });
   assert.equal(reply.reply_to.id, firstMsg.id);
   assert.equal(reply.reply_to.sender_name, 'Ali Khan');
 

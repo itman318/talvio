@@ -120,9 +120,9 @@ test('mark as unread, silent and location messages', async () => {
   await rejects(messages.editMessage(A.id, loc.id, { text: 'x' }), 'cannot_edit');
 });
 
-test('message search: prefix, Urdu text, only my chats, per-chat filter', async () => {
+test('message search: prefix, words, only my chats, per-chat filter', async () => {
   await messages.sendMessage(A.id, group.id, { text: 'Quarterly report is ready for review' });
-  await messages.sendMessage(B.id, group.id, { text: 'رپورٹ مکمل ہو گئی' });
+  await messages.sendMessage(B.id, group.id, { text: 'deployment is complete' });
   const other = (await chats.createGroup(C.id, { title: 'Secret' })).chat;
   await messages.sendMessage(C.id, other.id, { text: 'quarterly numbers, private' });
 
@@ -130,7 +130,7 @@ test('message search: prefix, Urdu text, only my chats, per-chat filter', async 
   assert.equal(r.results.length, 1);
   assert.equal(r.results[0].chat.title, 'Team');
   assert.match(r.results[0].message.text, /Quarterly/);
-  assert.equal((await messages.searchMessages(A.id, { q: 'رپورٹ' })).results.length, 1);
+  assert.equal((await messages.searchMessages(A.id, { q: 'deployment' })).results.length, 1);
   assert.equal((await messages.searchMessages(C.id, { q: 'quarterly' })).results.length, 2);
   assert.equal((await messages.searchMessages(C.id, { q: 'quarterly', chat_id: other.id })).results.length, 1);
   assert.equal((await messages.searchMessages(A.id, { q: '!!' })).results.length, 0);

@@ -204,8 +204,9 @@ class _CallScreenState extends State<CallScreen> {
             label: c.sharingScreen ? 'Stop' : 'Share',
             active: c.sharingScreen,
             onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
               final err = await c.toggleScreenShare();
-              if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+              if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
             },
           ),
         _RoundButton(

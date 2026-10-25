@@ -21,7 +21,7 @@ String _left(Duration d) {
   return h > 0 ? '${h}h ${m.toString().padLeft(2, '0')}m' : '${m}m ${s.toString().padLeft(2, '0')}s';
 }
 
-/// Settings → Prayer times: today's prayer times, next-prayer countdown, Sehri/Iftar, Hijri date, Qibla.
+/// Settings → Prayer times: today's prayer times, next-prayer countdown, Suhoor/Iftar, Hijri date, Qibla.
 class PrayerScreen extends StatefulWidget {
   const PrayerScreen({super.key});
 
@@ -216,7 +216,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
         ]),
       ),
       const SizedBox(height: 14),
-      // Sehri / Iftar
+      // Suhoor / Iftar
       Row(children: [
         Expanded(child: _miniCard(Icons.nightlight_outlined, 'Suhoor ends', _hm(sehri), Brand.accent, dark)),
         const SizedBox(width: 12),
@@ -225,7 +225,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
       if (hijri.isRamadan || (hijriTonight?.isRamadan ?? false))
         Padding(
           padding: const EdgeInsets.only(top: 10),
-          child: Text('Ramadan Mubarak 🌙', textAlign: TextAlign.center, style: TextStyle(color: Brand.premium, fontWeight: FontWeight.w700)),
+          child: Text('Blessed Ramadan 🌙', textAlign: TextAlign.center, style: TextStyle(color: Brand.premium, fontWeight: FontWeight.w700)),
         ),
       const SizedBox(height: 14),
       // today's list

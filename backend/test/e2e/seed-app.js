@@ -44,15 +44,15 @@ async function seed() {
   await call('POST', `/contacts/${ali.id}`, {}, me.token);
 
   const pc = await call('POST', '/chats/private', { user_id: me.id }, sana.token);
-  await call('POST', `/chats/${pc.id}/messages`, { text: 'Assalam o alaikum! App kaisi chal rahi hai?' }, sana.token);
+  await call('POST', `/chats/${pc.id}/messages`, { text: 'Hello! How is the app working for you?' }, sana.token);
   await call('POST', `/chats/${pc.id}/messages`, { text: 'Naya design dekha? 🔥' }, sana.token);
 
   const pc2 = await call('POST', '/chats/private', { user_id: me.id }, ali.token);
-  await call('POST', `/chats/${pc2.id}/messages`, { text: 'Kal meeting 11 baje hai' }, ali.token);
+  await call('POST', `/chats/${pc2.id}/messages`, { text: 'Meeting tomorrow at 11 am' }, ali.token);
 
   const g = (await call('POST', '/chats/group', { title: 'Dev Team', member_ids: [me.id, sana.id] }, ali.token)).chat;
   await call('POST', `/chats/${g.id}/messages`, { text: 'Build pass ho gaya ✅' }, sana.token);
-  await call('POST', `/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'Launch kab karein?', options: ['Aaj', 'Kal', 'Agle hafte'] } }, ali.token);
+  await call('POST', `/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'When should we launch?', options: ['Today', 'Tomorrow', 'Next week'] } }, ali.token);
 
   const ch = await call('POST', '/chats/channel', { title: 'Talvio News', username: 'talvio_news' }, ali.token);
   await call('POST', `/chats/${ch.id}/messages`, { text: 'Talvio ka pehla test build aa gaya 🚀' }, ali.token);

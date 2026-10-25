@@ -177,7 +177,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   let m1;
   if (pc) {
     m1 = await step('send text + B gets message:new over socket', async () => {
-      const m = await api.post(`/api/chats/${pc.id}/messages`, { text: 'Assalam o alaikum 👋', client_id: 'e2e-1' }, A.access_token);
+      const m = await api.post(`/api/chats/${pc.id}/messages`, { text: 'Hello 👋', client_id: 'e2e-1' }, A.access_token);
       const msg = m.message || m;
       assert(msg.id, `no message id: ${JSON.stringify(m).slice(0, 200)}`);
       if (sb) await waitFor(sb, 'message:new', (p) => p.chat_id === pc.id);
@@ -188,7 +188,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       assert(sb, 'no socket');
       const ack = await new Promise((resolve, reject) => {
         const t = setTimeout(() => reject(new Error('no ack')), 6000);
-        sb.s.emit('message:send', { chat_id: pc.id, text: 'Walaikum salam', client_id: 'e2e-2' }, (r) => {
+        sb.s.emit('message:send', { chat_id: pc.id, text: 'Hi there', client_id: 'e2e-2' }, (r) => {
           clearTimeout(t);
           resolve(r);
         });
@@ -197,7 +197,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       bMsg = ack.message;
     });
     await step('idempotent client_id', async () => {
-      const again = await api.post(`/api/chats/${pc.id}/messages`, { text: 'Assalam o alaikum 👋', client_id: 'e2e-1' }, A.access_token);
+      const again = await api.post(`/api/chats/${pc.id}/messages`, { text: 'Hello 👋', client_id: 'e2e-1' }, A.access_token);
       assert((again.message || again).id === m1.id, 'duplicate created for same client_id');
     });
     await step('list messages', async () => {
@@ -222,7 +222,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
         if (sb) await waitFor(sb, 'receipt:read', (p) => p.chat_id === pc.id);
       });
       await step('edit message → message:edited', async () => {
-        await api.patch(`/api/messages/${m1.id}`, { text: 'Assalam o alaikum! (edited)' }, A.access_token);
+        await api.patch(`/api/messages/${m1.id}`, { text: 'Hello! (edited)' }, A.access_token);
         if (sb) await waitFor(sb, 'message:edited', (p) => p.chat_id === pc.id);
       });
       await step('reaction → message:reactions', async () => {
@@ -307,7 +307,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     await step('rename group', () => api.patch(`/api/chats/${g.id}`, { title: 'Dev Team ✅' }, A.access_token));
     await step('mention + group message', () => api.post(`/api/chats/${g.id}/messages`, { text: '@ali_e2e build check karo' }, C.access_token));
     const poll = await step('poll', async () => {
-      const r = await api.post(`/api/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'Launch kab?', options: ['Aaj', 'Kal'] } }, A.access_token);
+      const r = await api.post(`/api/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'Launch when?', options: ['Today', 'Tomorrow'] } }, A.access_token);
       return r.message || r;
     });
     if (poll && poll.id) {

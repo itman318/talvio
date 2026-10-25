@@ -284,9 +284,9 @@ test('stories: privacy, media access, views, viewers, reply, delete', async () =
 });
 
 test('moderation: banned words, links from new accounts, copy-paste spam, report threshold, phone blacklist', async () => {
-  await settings.update({ banned_words: ['scamword', 'جعلی'], banned_words_action: 'block' });
+  await settings.update({ banned_words: ['scamword', 'fakeword'], banned_words_action: 'block' });
   await rejects(messages.sendMessage(B.id, group.id, { text: 'this is a SCAMWORD offer' }), 'message_blocked');
-  await rejects(messages.sendMessage(B.id, group.id, { text: 'یہ جعلی ہے' }), 'message_blocked');
+  await rejects(messages.sendMessage(B.id, group.id, { text: 'this is fakeword here' }), 'message_blocked');
   await messages.sendMessage(B.id, group.id, { text: 'scamwords is a different word' });
 
   await settings.update({ banned_words_action: 'flag' });

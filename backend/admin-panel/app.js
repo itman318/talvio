@@ -962,7 +962,7 @@
 
   // ------------------------------------------------------------------ broadcast
   async function pageBroadcast() {
-    const title = el('input', { type: 'text', maxlength: 120, placeholder: 'e.g. Eid Mubarak!' });
+    const title = el('input', { type: 'text', maxlength: 120, placeholder: 'e.g. Happy Eid!' });
     const body = el('textarea', { rows: 4, maxlength: 1000, placeholder: 'Message shown to users' });
     const prefix = el('input', { type: 'text', placeholder: 'All countries (or e.g. +92)' });
     const platform = el('select', {}, el('option', { value: '' }, 'All platforms'), el('option', { value: 'android' }, 'Android only'), el('option', { value: 'ios' }, 'iOS only'));

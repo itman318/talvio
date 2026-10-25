@@ -126,7 +126,7 @@ test('key exchange, device binding and an encrypted round trip the server cannot
   const keyB = crypto.hkdfSync('sha256', shared(kb.privateKey, ka.pub), Buffer.from(`chat-${sc.id}`), 'test', 32);
   assert.deepEqual(Buffer.from(keyA), Buffer.from(keyB));
 
-  const ct = encrypt(Buffer.from(keyA), 'Assalam o alaikum — yeh sirf hum dono parh sakte hain');
+  const ct = encrypt(Buffer.from(keyA), 'Hello — only the two of us can read this');
   const sent = await secret.send(A.id, A.sid, { secret_chat_id: sc.id, ciphertext: ct, ttl_sec: 30, client_id: 'c1' });
   const again = await secret.send(A.id, A.sid, { secret_chat_id: sc.id, ciphertext: ct, ttl_sec: 30, client_id: 'c1' });
   assert.equal(again.message.id, sent.message.id, 'retries are de-duplicated');
@@ -134,8 +134,8 @@ test('key exchange, device binding and an encrypted round trip the server cannot
   assert.equal(relayed.length, 1);
   assert.deepEqual(relayed[0].sessionIds, [B2.sid], 'only the device that owns the chat');
   const stored = await db.one('SELECT ciphertext FROM secret_messages WHERE id = $1', [sent.message.id]);
-  assert.ok(!stored.ciphertext.includes('Assalam'), 'server stores ciphertext only');
-  assert.equal(decrypt(Buffer.from(keyB), relayed[0].payload.message.ciphertext), 'Assalam o alaikum — yeh sirf hum dono parh sakte hain');
+  assert.ok(!stored.ciphertext.includes('Hello'), 'server stores ciphertext only');
+  assert.equal(decrypt(Buffer.from(keyB), relayed[0].payload.message.ciphertext), 'Hello — only the two of us can read this');
 
   // offline catch-up, then ack → server forgets the ciphertext
   const pend = await secret.pending(B.id, B2.sid);
