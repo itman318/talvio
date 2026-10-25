@@ -856,9 +856,6 @@ class _ChatScreenState extends State<ChatScreen> {
           final x = await picker.pickImage(source: ImageSource.camera, imageQuality: _prefs.uploadQuality, maxWidth: _prefs.uploadMaxSide, maxHeight: _prefs.uploadMaxSide);
           if (x != null) await _editAndSend(x.path, x.name);
           break;
-        case 'voice_chat':
-          await openVoiceChat(context, chat, start: chat.voiceChat == null);
-          break;
         case 'video':
           final x = await picker.pickVideo(source: ImageSource.gallery);
           if (x != null && mounted) {
@@ -1377,6 +1374,9 @@ class _ChatScreenState extends State<ChatScreen> {
           break;
         case 'search':
           Navigator.push(context, MaterialPageRoute(builder: (_) => GlobalSearchScreen(chatId: chat.id)));
+          break;
+        case 'voice_chat':
+          await openVoiceChat(context, chat, start: chat.voiceChat == null);
           break;
         case 'passcode':
           await _passcodeMenu(chat);
