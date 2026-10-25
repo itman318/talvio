@@ -275,6 +275,28 @@ curl -X POST $API/messages.send -H "$AUTH" -H 'Content-Type: application/json' \
 curl -X POST $API/webhook.set -H "$AUTH" -d url=https://yourbot.example.com/hook -d secret_token=abc
 ```
 
+### Talvio Bot API v2 (recommended)
+
+Talvio's own bot interface — its own words, event format and signed hooks:
+
+```bash
+API=https://chat.example.com/api/bots/v2
+KEY="X-Bot-Key: tlv_123_xxxxxxxx"
+curl -X POST $API/profile.get -H "$KEY"
+curl -X POST "$API/events.poll?wait=30" -H "$KEY"                       # long polling; pass after=<last event_id>
+curl -X POST $API/message.send -H "$KEY" -H 'Content-Type: application/json' \
+  -d '{"to": 42, "text": "Gold: 2,410", "buttons": [[{"label":"Refresh","data":"r1"},{"label":"Chart","link":"https://…"}]]}'
+curl -X POST $API/hook.set -H "$KEY" -d url=https://yourbot.example.com/hook  # → {url, secret}
+```
+
+Methods: `profile.get/update`, `events.poll`, `hook.set/remove/status`, `message.send/photo/file/edit/buttons/delete/pin/unpin/forward`,
+`poll.send`, `place.send`, `activity.show`, `button.reply`, `commands.set/get/clear`, `conversation.get/member/size`, `inline.reply`.
+Words: `to` = conversation id, `buttons` = rows under a message (`data` / `link` / `app` / `copy`), `keyboard` = rows of big
+buttons (`keyboard_once`, `keyboard_hint`, `hide_keyboard`). Events: `{event_id, kind, at, …}` with kind `message`,
+`button_press`, `inline_search` or `app_data`. Hooks are signed: `X-Talvio-Signature: sha256=HMAC_SHA256(secret, body)`.
+
+### Bot API v1 (older bots keep working)
+
 Every call answers `{ "ok": true, "data": … }` or `{ "ok": false, "error": { "code", "message" } }`.
 
 Methods: `me`, `updates`, `webhook.set`, `webhook.delete`, `webhook.info`, `messages.send`, `photos.send`,

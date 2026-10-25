@@ -135,7 +135,7 @@ const HELP = [
   '/revoke — make a new token',
   '/deletebot — delete a bot',
   '',
-  `Bot API: POST ${config.publicUrl}/api/bot/v1/<method> with the header “Authorization: Bearer <token>”.`,
+  `Talvio Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>”. Start with profile.get, events.poll and message.send.`,
 ].join('\n');
 
 async function myBots(ownerId) {
@@ -206,12 +206,12 @@ function editCard(b) {
 
 function tokenText(b, token) {
   return [
-    `Here is the token for @${b.username}:`,
+    `Here is the new key for @${b.username}:`,
     '',
     token,
     '',
-    'Keep it secret — anyone with it can control the bot.',
-    `API: ${config.publicUrl}/api/bot/v1/me  (header “Authorization: Bearer <token>”)`,
+    'Keep it secret — anyone with it can control the bot. The old key no longer works.',
+    `Try it: POST ${config.publicUrl}/api/bots/v2/profile.get  (header “X-Bot-Key: <key>”)`,
   ].join('\n');
 }
 
@@ -253,7 +253,7 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
     }
     case 'revyes': {
       const { token } = await bots.regenerateToken(userId, b.id);
-      return say(chatId, tokenText(b, token), kb([[{ text: '📋 Copy token', copy_text: { text: token } }], [btn('« Back to bot', `bot:${b.id}`)]]));
+      return say(chatId, tokenText(b, token), kb([[{ text: '📋 Copy key', copy_text: { text: token } }], [btn('« Back to bot', `bot:${b.id}`)]]));
     }
     case 'priv': {
       await bots.updateBot(userId, b.id, { group_privacy: !b.group_privacy });
@@ -358,14 +358,14 @@ async function onMessage(userId, chatId, row) {
             '',
             'You can now add a description, commands and a profile photo — see /mybots.',
             '',
-            'Use this token to access the Bot API:',
+            'Your bot key for the Talvio Bot API:',
             r.token,
             '',
-            'Keep your token secure and store it safely — it can be used by anyone to control your bot.',
+            'Keep your key secret — anyone who has it can control your bot.',
             '',
-            `Bot API: POST ${config.publicUrl}/api/bot/v1/<method> with “Authorization: Bearer <token>”.`,
+            `Talvio Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>” — e.g. message.send {to, text, buttons}.`,
           ].join('\n'),
-          kb([[{ text: '📋 Copy token', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }]]),
+          kb([[{ text: '📋 Copy key', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }]]),
         );
       }
       case 'set_name':

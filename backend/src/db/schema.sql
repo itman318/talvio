@@ -995,3 +995,6 @@ CREATE TABLE IF NOT EXISTS voice_chat_participants (
   hand_raised   BOOLEAN     NOT NULL DEFAULT FALSE,
   PRIMARY KEY (voice_chat_id, user_id)
 );
+
+-- ---------------------------------------------------------------- Talvio Bot API v2 (own event shape, signed hooks)
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS api_version VARCHAR(4) NOT NULL DEFAULT 'v1';

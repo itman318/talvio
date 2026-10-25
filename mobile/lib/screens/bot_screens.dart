@@ -129,7 +129,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                   _botFatherCard(),
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('Bots are programs that chat with people. Create one here or with BotForge, then use its token with the Bot API on your server.', textAlign: TextAlign.center),
+                    child: Text('Bots are programs that chat with people. Create one here or with BotForge, then use its key with the Talvio Bot API on your server.', textAlign: TextAlign.center),
                   ),
                 ])
               : ListView(
@@ -161,7 +161,7 @@ Future<void> showTokenDialog(BuildContext context, String token) {
         const SizedBox(height: 10),
         SelectableText(token, style: const TextStyle(fontFamily: 'monospace')),
         const SizedBox(height: 10),
-        Text('API: ${AppConfig.serverUrl}/api/bot/v1/me\nHeader: Authorization: Bearer <token>', style: const TextStyle(fontSize: 12)),
+        Text('Talvio Bot API v2: POST ${AppConfig.serverUrl}/api/bots/v2/profile.get\nHeader: X-Bot-Key: <key>', style: const TextStyle(fontSize: 12)),
       ]),
       actions: [
         TextButton(

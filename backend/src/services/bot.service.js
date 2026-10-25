@@ -84,7 +84,7 @@ async function createBot(ownerId, body = {}) {
       [name, username],
     )).rows[0];
     const t = newToken(u.id);
-    await c.query('INSERT INTO bots (user_id, owner_id, token_hash, about) VALUES ($1, $2, $3, $4)', [
+    await c.query(`INSERT INTO bots (user_id, owner_id, token_hash, about, api_version) VALUES ($1, $2, $3, $4, 'v2')`, [
       u.id,
       ownerId,
       sha256(t),
@@ -223,18 +223,21 @@ async function deliverWebhook(botId) {
   delivering.add(botId);
   try {
     for (;;) {
-      const b = await db.one('SELECT webhook_url, webhook_secret FROM bots WHERE user_id = $1 AND status = $2', [botId, 'active']);
+      const b = await db.one('SELECT webhook_url, webhook_secret, api_version FROM bots WHERE user_id = $1 AND status = $2', [botId, 'active']);
       if (!b || !b.webhook_url) return;
       const u = await db.one('SELECT * FROM bot_updates WHERE bot_id = $1 ORDER BY id LIMIT 1', [botId]);
       if (!u) return;
       try {
+        const update = { update_id: Number(u.id), ...u.payload };
+        // v2 bots get Talvio events, signed with their hook secret
+        const v2 = b.api_version === 'v2' ? require('./botv2.service').hookRequest({ ...update }, b.webhook_secret) : null; // eslint-disable-line global-require
         const res = await fetch(b.webhook_url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(b.webhook_secret ? { 'X-Talvio-Webhook-Secret': b.webhook_secret } : {}),
+            ...(v2 ? v2.headers : b.webhook_secret ? { 'X-Talvio-Webhook-Secret': b.webhook_secret } : {}),
           },
-          body: JSON.stringify({ update_id: Number(u.id), ...u.payload }),
+          body: v2 ? v2.body : JSON.stringify(update),
           signal: AbortSignal.timeout(10000),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -584,7 +587,10 @@ async function setWebhook(bot, p) {
   const url = p.url ? parseHttpsUrl(p.url, 'url') : null;
   const secret = p.secret_token ? String(p.secret_token) : null;
   if (secret && !/^[A-Za-z0-9_-]{1,256}$/.test(secret)) throw badRequest('invalid_secret', 'secret_token: 1–256 characters A-Z a-z 0-9 _ -');
-  await db.query('UPDATE bots SET webhook_url = $2, webhook_secret = $3, webhook_error = NULL WHERE user_id = $1', [bot.user_id, url, secret]);
+  // which event format the hook gets: v1 updates, or (set through API v2) signed Talvio events
+  await db.query(`UPDATE bots SET webhook_url = $2, webhook_secret = $3, webhook_error = NULL, api_version = $4 WHERE user_id = $1`, [
+    bot.user_id, url, secret, p.api_version === 'v2' ? 'v2' : 'v1',
+  ]);
   if (url) deliverWebhook(bot.user_id).catch(() => {});
   return true;
 }

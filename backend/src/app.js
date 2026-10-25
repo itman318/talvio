@@ -27,6 +27,8 @@ function createApp() {
 
   // Talvio Bot API: /api/bot/v1/<method>, token in "Authorization: Bearer <token>"
   app.all('/api/bot/v1/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
+  // Talvio Bot API v2 (own naming, Talvio events, signed hooks): /api/bots/v2/<method>, key in "X-Bot-Key"
+  app.all('/api/bots/v2/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botv2'));
 
   // Payment pages for JazzCash / Easypaisa hosted checkout
   app.use('/pay', require('./http/routes.pay'));

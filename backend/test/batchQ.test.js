@@ -182,3 +182,65 @@ test('voice chats: start, join, mute, raise hand in channels, signalling, end', 
   assert.equal(after.voice_chat.participants.find((p) => p.user.id === B.id).muted, false);
   await vcs.end(A.id, ch.id);
 });
+
+test('Talvio Bot API v2: own names, Talvio events, buttons, signed hooks', async () => {
+  const v2 = require('../src/services/botv2.service');
+  const http = require('http');
+  const crypto = require('crypto');
+  const { bot, token: key } = await bots.createBot(A.id, { name: 'Signals', username: 'signals_v2_bot' });
+  const me = await v2.call(key, 'profile.get');
+  assert.deepEqual([me.username, me.bot], ['signals_v2_bot', true]);
+  await rejects(v2.call(key, 'sendMessage', {}), 'unknown_method');
+  await v2.call(key, 'commands.set', { commands: [{ name: 'gold', about: 'Gold price' }] });
+  assert.deepEqual(await v2.call(key, 'commands.get'), [{ name: 'gold', about: 'Gold price' }]);
+
+  const chat = await chats.getOrCreatePrivate(B.id, bot.id);
+  await messages.sendMessage(B.id, chat.id, { text: '/gold' });
+  await flush();
+  const { events } = await v2.call(key, 'events.poll', {});
+  const e = events[0];
+  assert.equal(e.kind, 'message');
+  assert.equal(e.message.text, '/gold');
+  assert.deepEqual(e.message.conversation, { id: chat.id, kind: 'direct', title: 'Bilal' });
+  assert.equal(e.message.author.username, 'bilal_p');
+  assert.ok(e.at);
+
+  const sent = await v2.call(key, 'message.send', { to: chat.id, text: 'Gold: 2,410', buttons: [[{ label: 'Refresh', data: 'r1' }, { label: 'Chart', link: 'https://example.com' }]] });
+  assert.equal(sent.text, 'Gold: 2,410');
+  assert.equal(sent.author.id, bot.id);
+  const press = await bots.pressButton(B.id, sent.id, { data: 'r1' });
+  const { events: ev2 } = await v2.call(key, 'events.poll', { after: e.event_id });
+  assert.equal(ev2[0].kind, 'button_press');
+  assert.equal(ev2[0].press.data, 'r1');
+  assert.equal(ev2[0].press.id, press.callback_query_id);
+  assert.equal(await v2.call(key, 'button.reply', { press: press.callback_query_id, notice: 'Updated' }), true);
+  const kb = await v2.call(key, 'message.send', { to: chat.id, text: 'Pick', keyboard: [['Buy', 'Sell']], keyboard_once: true });
+  assert.ok(kb.id);
+  assert.deepEqual(await v2.call(key, 'conversation.size', { to: chat.id }), { members: 2 });
+
+  // hooks: Talvio events, signed with the secret
+  const got = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      got.push({ sig: req.headers['x-talvio-signature'], id: req.headers['x-talvio-event-id'], body });
+      res.end('ok');
+    });
+  });
+  await new Promise((r) => server.listen(0, r));
+  await v2.call(key, 'events.poll', { after: 1e12 });
+  const hook = await v2.call(key, 'hook.set', { url: `http://127.0.0.1:${server.address().port}/hook` });
+  assert.ok(/^[a-f0-9]{48}$/.test(hook.secret));
+  await messages.sendMessage(B.id, chat.id, { text: 'hello hook' });
+  for (let i = 0; i < 30 && !got.length; i += 1) await flush(100);
+  server.close();
+  assert.equal(got.length, 1);
+  const body = JSON.parse(got[0].body);
+  assert.equal(body.kind, 'message');
+  assert.equal(body.message.text, 'hello hook');
+  const expect = crypto.createHmac('sha256', hook.secret).update(got[0].body).digest('hex');
+  assert.equal(got[0].sig, `sha256=${expect}`);
+  assert.equal((await v2.call(key, 'hook.status')).url.startsWith('http://127.0.0.1'), true);
+  await v2.call(key, 'hook.remove', { drop_pending: true });
+});
