@@ -62,8 +62,9 @@ jobs:
             echo "SIGNED=release" >> $GITHUB_ENV
           else
             # one fixed test key (instead of a new random one per build), so updates install over the old app
-            mkdir -p ~/.android && cp signing/test-debug.keystore ~/.android/debug.keystore
-            echo "SIGNED=debug" >> $GITHUB_ENV
+            cp signing/test-debug.keystore android/upload.jks
+            printf 'storeFile=upload.jks\nstorePassword=android\nkeyAlias=androiddebugkey\nkeyPassword=android\n' > android/key.properties
+            echo "SIGNED=test" >> $GITHUB_ENV
           fi
           # push notifications: Firebase config from the GOOGLE_SERVICES_JSON secret (optional)
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json; fi
