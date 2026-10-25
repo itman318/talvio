@@ -60,6 +60,22 @@ jobs:
           SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ServerAliveInterval=30 -o LogLevel=ERROR"
           set -o pipefail
           echo "port 22 (ssh): $(timeout 10 bash -c "</dev/tcp/$HOST/22" 2>/dev/null && echo open || echo CLOSED)" | tee -a deploy.txt
+          # first login after Hetzner sets a root password asks to change it: answer that once
+          probe=$(sshpass -e ssh $SSH_OPTS root@"$HOST" 'echo LOGIN_OK' 2>&1 || true)
+          if ! echo "$probe" | grep -q LOGIN_OK; then
+            if echo "$probe" | grep -qi "permission denied"; then
+              echo "login: the root password was not accepted (check SERVER_PASSWORD)" | tee -a deploy.txt; exit 1
+            fi
+            echo "login: password must be renewed first — doing it now" | tee -a deploy.txt
+            sudo apt-get install -y -qq expect >/dev/null
+            TEMP_PASS="T$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)9!" HOST="$HOST" \
+              expect .github/scripts/root-password-renew.exp > renew.log 2>&1 || true
+            grep -o 'RENEW[_: ].*' renew.log | grep -v "chpasswd" | tail -3 | tee -a deploy.txt
+            probe=$(sshpass -e ssh $SSH_OPTS root@"$HOST" 'echo LOGIN_OK' 2>&1 || true)
+            echo "login after renewal: $(echo "$probe" | grep -q LOGIN_OK && echo ok || echo still failing)" | tee -a deploy.txt
+          else
+            echo "login: ok" | tee -a deploy.txt
+          fi
           if ! sshpass -e scp $SSH_OPTS talvio-backend.tgz .github/scripts/server-setup.sh root@"$HOST":/root/ 2>scp.err; then
             echo "upload failed: $(head -c 400 scp.err | tr '\n' ' ')" | tee -a deploy.txt
             grep -qi "permission denied" scp.err && echo "→ the root password was not accepted (check SERVER_PASSWORD)" | tee -a deploy.txt
