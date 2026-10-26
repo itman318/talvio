@@ -1724,7 +1724,22 @@ class _ChatScreenState extends State<ChatScreen> {
               onHeight: (h) {
                 if (mounted && (h - _bottomH).abs() > 0.5) setState(() => _bottomH = h);
               },
-              child: _bottomBar(chat),
+              // messages scrolling under the floating bar fade out instead of showing through around it
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0, 0.45, 1],
+                    colors: [
+                      ChatColors.of(context).background.withValues(alpha: 0),
+                      ChatColors.of(context).background.withValues(alpha: 0.85),
+                      ChatColors.of(context).background,
+                    ],
+                  ),
+                ),
+                child: _bottomBar(chat),
+              ),
             ),
           ),
           Positioned(right: 12, bottom: _bottomH + 10, child: _downButton(messages)),
@@ -2373,7 +2388,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // wait until the keyboard has gone down (both at once would not fit)
     if (MediaQuery.viewInsetsOf(context).bottom > 0) return const SizedBox.shrink();
     // small phones: keep room for the messages above
-    final pickerH = (MediaQuery.of(context).size.height * 0.25).clamp(140.0, 300.0);
+    final pickerH = (MediaQuery.of(context).size.height * 0.31).clamp(170.0, 330.0);
     final tabs = <(IconData, String, int)>[
       (Icons.emoji_emotions_rounded, 'Emoji', 0),
       if (auth.feature('stickers')) (Icons.sticky_note_2_rounded, 'Stickers', 1),
@@ -2419,9 +2434,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 checkPlatformCompatibility: true,
                 emojiViewConfig: EmojiViewConfig(
                   backgroundColor: bg,
-                  columns: 8,
-                  emojiSizeMax: 30,
-                  verticalSpacing: 2,
+                  columns: MediaQuery.of(context).size.width > 600 ? 12 : 8,
+                  emojiSizeMax: 32,
+                  verticalSpacing: 4,
+                  horizontalSpacing: 2,
+                  buttonMode: ButtonMode.MATERIAL,
                   recentsLimit: 32,
                   gridPadding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   noRecents: const Text('No recent emoji', style: TextStyle(fontSize: 15, color: Brand.muted)),
@@ -2438,6 +2455,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 skinToneConfig: SkinToneConfig(dialogBackgroundColor: bg, indicatorColor: Brand.muted),
                 bottomActionBarConfig: BottomActionBarConfig(
+                  enabled: false,
                   showBackspaceButton: false,
                   backgroundColor: bg,
                   buttonColor: bg,

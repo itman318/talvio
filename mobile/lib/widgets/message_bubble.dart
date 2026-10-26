@@ -137,7 +137,10 @@ class MessageBubble extends StatelessWidget {
         m.reactions.isEmpty &&
         m.inlineKeyboard.isEmpty;
 
-    if ((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) {
+    final big = m.type == 'text' && m.replyTo == null && m.forwardedFromName == null && m.quote == null && m.inlineKeyboard.isEmpty && !m.viewOnce
+        ? bigEmojiCount(m.text)
+        : 0;
+    if (((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) || big > 0) {
       // stickers float without a bubble; a small time chip sits under them
       return Align(
         alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -149,7 +152,12 @@ class MessageBubble extends StatelessWidget {
             child: Column(crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               if (showSender && !isMine)
                 Text(m.sender?.name ?? '', style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
-              if (m.type == 'video_note') VideoNoteBubble(message: m) else StickerView(message: m),
+              if (big > 0)
+                BigEmoji(text: m.text.trim(), count: big, fresh: DateTime.now().difference(m.createdAt).inSeconds.abs() < 8)
+              else if (m.type == 'video_note')
+                VideoNoteBubble(message: m)
+              else
+                StickerView(message: m),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(color: Colors.black.withAlpha(dark ? 90 : 40), borderRadius: BorderRadius.circular(10)),
@@ -522,4 +530,50 @@ class DateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SystemBubble(text: dateSeparator(date), date: true);
+}
+
+
+final _pictographic = RegExp(r'[\p{Extended_Pictographic}\p{Regional_Indicator}]', unicode: true);
+final _emojiOnly = RegExp(r'^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0F\u20E3#*0-9])+$', unicode: true);
+
+/// 1–3 emoji and nothing else → how many (shown big, without a bubble); otherwise 0.
+int bigEmojiCount(String text) {
+  final t = text.replaceAll(RegExp(r'\s'), '');
+  if (t.isEmpty || t.length > 48 || !_pictographic.hasMatch(t) || !_emojiOnly.hasMatch(t)) return 0;
+  final n = t.characters.length;
+  return n <= 3 ? n : 0;
+}
+
+/// Emoji sent on their own: large, with a soft shadow; a fresh one pops in.
+class BigEmoji extends StatelessWidget {
+  const BigEmoji({super.key, required this.text, required this.count, this.fresh = false});
+  final String text;
+  final int count;
+  final bool fresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = switch (count) { 1 => 76.0, 2 => 58.0, _ => 48.0 };
+    final glyph = Padding(
+      padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
+      child: Text(
+        text,
+        textScaler: TextScaler.noScaling,
+        style: TextStyle(
+          fontSize: size,
+          height: 1.15,
+          letterSpacing: count > 1 ? 2 : 0,
+          shadows: [Shadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+      ),
+    );
+    if (!fresh) return glyph;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.4, end: 1),
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.elasticOut,
+      builder: (_, v, child) => Transform.scale(scale: v, child: child),
+      child: glyph,
+    );
+  }
 }
