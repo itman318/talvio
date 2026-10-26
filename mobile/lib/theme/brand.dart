@@ -145,6 +145,17 @@ class Brand {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.primary, width: 1.6)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE5484D), width: 1.2)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE5484D), width: 1.6)),
+        disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        floatingLabelStyle: WidgetStateTextStyle.resolveWith(
+          (st) => TextStyle(fontWeight: FontWeight.w600, color: st.contains(WidgetState.error) ? const Color(0xFFE5484D) : (st.contains(WidgetState.focused) ? scheme.primary : scheme.onSurfaceVariant)),
+        ),
+        prefixIconColor: WidgetStateColor.resolveWith((st) => st.contains(WidgetState.focused) ? scheme.primary : scheme.onSurfaceVariant),
+        suffixIconColor: scheme.onSurfaceVariant,
+        helperStyle: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+        counterStyle: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11.5),
+        errorStyle: const TextStyle(color: Color(0xFFE5484D), fontSize: 12, fontWeight: FontWeight.w500),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
       ),
       cardTheme: CardThemeData(

@@ -539,13 +539,14 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Text('${ad['button_text']}'),
           ),
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
-            child: const Text('Remove ads with Talvio Plus ⭐', style: TextStyle(fontSize: 12)),
+        if (context.read<AuthState>().plusAvailable)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
+              child: const Text('Remove ads with Talvio Plus ⭐', style: TextStyle(fontSize: 12)),
+            ),
           ),
-        ),
       ]),
     );
   }

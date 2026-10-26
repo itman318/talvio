@@ -541,7 +541,7 @@ extension on _StickerPanelState {
           borderRadius: BorderRadius.circular(14),
           onTap: () {
             if (locked) {
-              showInfo(context, 'This Tavi sticker comes with Talvio Plus ⭐');
+              showInfo(context, context.read<AuthState>().plusAvailable ? 'This Tavi sticker comes with Talvio Plus ⭐' : 'This Tavi sticker comes with Talvio Plus — coming soon ⭐');
               return;
             }
             HapticFeedback.selectionClick();

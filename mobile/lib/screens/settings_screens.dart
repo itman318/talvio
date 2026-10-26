@@ -187,7 +187,7 @@ class SettingsScreen extends StatelessWidget {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Text('Talvio Plus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                          Text(plus ? 'Active — thank you for your support' : 'Bigger uploads, more folders, no ads',
+                          Text(plus ? 'Active — thank you for your support' : (context.read<AuthState>().plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon · bigger uploads, themes, no ads'),
                               style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
                         ]),
                       ),

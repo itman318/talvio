@@ -26,6 +26,8 @@ class AuthState extends ChangeNotifier {
   AuthStatus status = AuthStatus.loading;
   AppUser? me;
   Map<String, dynamic> appConfig = {};
+  /// Talvio Plus can be bought (admin opened sales); otherwise the app shows it as coming soon.
+  bool get plusAvailable => appConfig['plus_available'] == true;
   String? logoutReason;
 
   /// Device prefs; drafts and app lock are cleared on logout.

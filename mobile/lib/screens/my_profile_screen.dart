@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
@@ -14,6 +15,58 @@ import 'premium_screens.dart';
 import 'qr_screens.dart';
 import 'settings_screens.dart';
 import 'story_screens.dart' show HighlightsRow, MyHighlightsScreen;
+
+/// "Finish your profile": shown until photo, username, bio and birthday are set.
+Widget _completeCard(BuildContext context, AppUser me, VoidCallback edit) {
+  final steps = [
+    (me.avatarUrl != null, 'Photo'),
+    (me.username != null, 'Username'),
+    (me.bio.isNotEmpty, 'Bio'),
+    (me.birthday != null, 'Birthday'),
+  ];
+  final done = steps.where((s) => s.$1).length;
+  if (done == steps.length) return const SizedBox.shrink();
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+    child: Material(
+      color: dark ? const Color(0xFF181C30) : Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: edit,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(children: [
+            SizedBox(
+              width: 46,
+              height: 46,
+              child: Stack(alignment: Alignment.center, children: [
+                CircularProgressIndicator(
+                  value: done / steps.length,
+                  strokeWidth: 4.5,
+                  backgroundColor: Brand.primary.withValues(alpha: 0.12),
+                  valueColor: const AlwaysStoppedAnimation(Brand.primary),
+                ),
+                Text('$done/${steps.length}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+              ]),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Finish your profile', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                const SizedBox(height: 3),
+                Text('Add: ${steps.where((s) => !s.$1).map((s) => s.$2).join(', ')}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Brand.muted, fontSize: 13)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Brand.muted),
+          ]),
+        ),
+      ),
+    ),
+  );
+}
 
 /// Bottom-bar "Profile" tab: how others see me, with quick edit, share and my things.
 class MyProfileScreen extends StatelessWidget {
@@ -70,6 +123,7 @@ class MyProfileScreen extends StatelessWidget {
           ),
         ]),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true),
+        _completeCard(context, me, () => go(const EditProfileScreen())),
         SettingsGroup(title: 'About me', children: [
           SettingsTile(
             icon: Icons.notes_rounded,
@@ -90,8 +144,15 @@ class MyProfileScreen extends StatelessWidget {
                 if (context.mounted) showInfo(context, 'Profile link copied');
               },
             ),
-          if ((me.phone ?? '').isNotEmpty) SettingsTile(icon: Icons.phone_rounded, color: Brand.green, title: me.phone!, subtitle: 'Phone'),
-          if ((me.email ?? '').isNotEmpty) SettingsTile(icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), title: me.email!, subtitle: 'Email'),
+          if ((me.phone ?? '').isNotEmpty)
+            SettingsTile(
+              icon: Icons.phone_rounded,
+              color: Brand.green,
+              title: me.phone!,
+              subtitle: 'Phone · only people you allow see it',
+              onTap: () => go(const PrivacyScreen()),
+            ),
+          if ((me.email ?? '').isNotEmpty) SettingsTile(icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), title: me.email!, subtitle: 'Email · for login, never shown'),
           SettingsTile(
             icon: Icons.cake_rounded,
             color: Brand.rose,
@@ -120,8 +181,10 @@ class MyProfileScreen extends StatelessWidget {
           SettingsTile(
             icon: Icons.star_rounded,
             color: Brand.premium,
-            title: me.isPremium ? 'Talvio Plus — active' : 'Get Talvio Plus',
-            subtitle: me.isPremium ? 'Thank you for your support' : 'Animated stickers, themes, no ads and more',
+            title: me.isPremium ? 'Talvio Plus — active' : 'Talvio Plus',
+            subtitle: me.isPremium
+                ? 'Thank you for your support'
+                : (context.read<AuthState>().plusAvailable ? 'Animated stickers, themes, no ads and more' : 'Coming soon · stickers, themes, no ads'),
             onTap: () => go(const PremiumScreen()),
           ),
           SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy & security', onTap: () => go(const PrivacyScreen())),

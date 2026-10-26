@@ -85,7 +85,7 @@ class _ChatThemeScreenState extends State<ChatThemeScreen> {
                   onTap: () {
                     final plus = context.read<AuthState>().me?.limits?['exclusive_themes'] == true;
                     if (plusThemes.contains(t.id) && !plus) {
-                      showInfo(context, '${t.name} is a Talvio Plus theme ⭐');
+                      showInfo(context, context.read<AuthState>().plusAvailable ? '${t.name} is a Talvio Plus theme ⭐' : '${t.name} comes with Talvio Plus — coming soon ⭐');
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
                       return;
                     }
