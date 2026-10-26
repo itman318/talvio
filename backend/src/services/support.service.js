@@ -26,7 +26,17 @@ function serializeTicket(t) {
     created_at: iso(t.created_at),
     updated_at: iso(t.updated_at),
     last_message: t.last_text === undefined ? undefined : t.last_text,
+    rating: t.rating || null,
+    can_rate: !t.rating && ['resolved', 'closed'].includes(t.status),
   };
+}
+
+/** A screenshot the user attaches: their own uploaded image. */
+async function ownImage(userId, mediaIdRaw) {
+  if (mediaIdRaw === undefined || mediaIdRaw === null) return null;
+  const m = await db.one('SELECT id, kind, uploader_id FROM media WHERE id = $1', [v.id(mediaIdRaw, 'media_id')]);
+  if (!m || Number(m.uploader_id) !== Number(userId) || !['image', 'avatar'].includes(m.kind)) throw notFound('media_not_found', 'Picture not found');
+  return m.id;
 }
 
 function serializeMessage(m, { forAdmin = false } = {}) {
@@ -34,6 +44,8 @@ function serializeMessage(m, { forAdmin = false } = {}) {
     id: m.id,
     from_user: m.from_user,
     text: m.text,
+    media_url: m.media_id ? `/api/media/${m.media_id}` : null,
+    media_id: m.media_id || null,
     created_at: iso(m.created_at),
     ...(forAdmin ? { admin_id: m.admin_id, admin_name: m.admin_name || null } : {}),
   };
@@ -45,12 +57,14 @@ async function createTicket(userId, body = {}) {
   const subject = v.str(body.subject, { field: 'subject', min: 3, max: 150, required: true });
   const category = v.oneOf(body.category || 'other', CATEGORIES, 'category');
   const text = v.str(body.message, { field: 'message', min: 1, max: 4000, required: true });
+  const device = v.str(body.device, { field: 'device', max: 120 }) || null;
+  const mediaId = await ownImage(userId, body.media_id);
   const t = await db.tx(async (c) => {
     const r = await c.query(
-      'INSERT INTO support_tickets (user_id, subject, category) VALUES ($1, $2, $3) RETURNING *',
-      [userId, subject, category],
+      'INSERT INTO support_tickets (user_id, subject, category, device) VALUES ($1, $2, $3, $4) RETURNING *',
+      [userId, subject, category, device],
     );
-    await c.query('INSERT INTO support_messages (ticket_id, from_user, text) VALUES ($1, TRUE, $2)', [r.rows[0].id, text]);
+    await c.query('INSERT INTO support_messages (ticket_id, from_user, text, media_id) VALUES ($1, TRUE, $2, $3)', [r.rows[0].id, text, mediaId]);
     return r.rows[0];
   });
   bus.emit('support:new', { ticketId: t.id });
@@ -79,8 +93,9 @@ async function userReply(userId, ticketIdRaw, body = {}) {
   if (!t) throw notFound('ticket_not_found', 'Ticket not found');
   if (t.status === 'closed') throw forbidden('ticket_closed', 'This ticket is closed. Please open a new one.');
   rateLimit.enforce(`ticket-msg:${userId}`, 30, 60 * 60 * 1000, 'Slow down');
-  const text = v.str(body.text, { field: 'text', min: 1, max: 4000, required: true });
-  await db.query('INSERT INTO support_messages (ticket_id, from_user, text) VALUES ($1, TRUE, $2)', [t.id, text]);
+  const mediaId = await ownImage(userId, body.media_id);
+  const text = v.str(body.text, { field: 'text', min: mediaId ? 0 : 1, max: 4000, required: !mediaId }) || '';
+  await db.query('INSERT INTO support_messages (ticket_id, from_user, text, media_id) VALUES ($1, TRUE, $2, $3)', [t.id, text, mediaId]);
   await db.query(`UPDATE support_tickets SET status = 'open', updated_at = now() WHERE id = $1`, [t.id]);
   bus.emit('support:new', { ticketId: t.id });
   return getMine(userId, t.id);
@@ -92,6 +107,20 @@ async function userClose(userId, ticketIdRaw) {
     [v.id(ticketIdRaw, 'ticket_id'), userId],
   );
   if (!r) throw notFound('ticket_not_found', 'Ticket not found');
+  return getMine(userId, r.id);
+}
+
+/** After help: how did we do? (1–5 stars and a short note) */
+async function rateTicket(userId, ticketIdRaw, body = {}) {
+  const rating = parseInt(body.rating, 10);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw require('../utils/errors').badRequest('invalid_input', 'Rating must be 1 to 5'); // eslint-disable-line global-require
+  const comment = v.str(body.comment, { field: 'comment', max: 500 }) || null;
+  const r = await db.one(
+    `UPDATE support_tickets SET rating = $3, rating_comment = $4, status = 'closed', updated_at = now()
+     WHERE id = $1 AND user_id = $2 AND status IN ('resolved', 'closed') AND rating IS NULL RETURNING id`,
+    [v.id(ticketIdRaw, 'ticket_id'), userId, rating, comment],
+  );
+  if (!r) throw forbidden('cannot_rate', 'You can rate a request once, after it is resolved');
   return getMine(userId, r.id);
 }
 
@@ -185,6 +214,7 @@ async function adminUpdate(ticketIdRaw, body = {}) {
 }
 
 module.exports = {
+  rateTicket,
   CATEGORIES,
   STATUSES,
   PRIORITIES,

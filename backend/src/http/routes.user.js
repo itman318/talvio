@@ -352,6 +352,7 @@ router.get('/support/tickets', h(async (req, res) => res.json(await supportServi
 router.post('/support/tickets', h(async (req, res) => res.json(await supportService.createTicket(req.userId, req.body))));
 router.get('/support/tickets/:id', h(async (req, res) => res.json(await supportService.getMine(req.userId, req.params.id))));
 router.post('/support/tickets/:id/messages', h(async (req, res) => res.json(await supportService.userReply(req.userId, req.params.id, req.body))));
+router.post('/support/tickets/:id/rate', h(async (req, res) => res.json(await supportService.rateTicket(req.userId, req.params.id, req.body))));
 router.post('/support/tickets/:id/close', h(async (req, res) => res.json(await supportService.userClose(req.userId, req.params.id))));
 router.get('/announcements', h(async (req, res) => res.json(await announcementService.forUser(req.userId))));
 router.post('/announcements/:id/dismiss', h(async (req, res) => res.json(await announcementService.dismiss(req.userId, req.params.id))));

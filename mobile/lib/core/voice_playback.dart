@@ -112,7 +112,7 @@ class VoicePlayback extends ChangeNotifier {
         final firstTime = !PlayedVoices.played(m.id);
         PlayedVoices.mark(m.id);
         // tell the sender it was listened to (their mic turns blue)
-        if (firstTime && m.senderId != null && m.senderId != myId?.call()) {
+        if (firstTime && (m.type == 'voice' || m.type == 'video_note') && m.senderId != null && m.senderId != myId?.call()) {
           unawaited(services.api.post('/messages/${m.id}/played').catchError((_) => null));
         }
       }

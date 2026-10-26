@@ -119,6 +119,8 @@ test('auth: OTP flow, wrong code, refresh rotation, logout', async () => {
 
   const r2 = await auth.refresh(s.refresh_token, '1.1.1.1');
   assert.notEqual(r2.refresh_token, s.refresh_token);
+  // the replaced token works for a short while only (lost answers), then never again
+  await db.query(`UPDATE sessions SET prev_valid_until = now() - interval '1 minute'`);
   await rejects(auth.refresh(s.refresh_token, '1.1.1.1'), 'invalid_refresh_token');
 
   await auth.logout(ctx.user.id, ctx.sessionId);

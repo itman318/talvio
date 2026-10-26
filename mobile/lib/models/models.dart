@@ -879,6 +879,8 @@ class SupportTicket {
   final bool unread;
   final String? lastMessage;
   final DateTime? updatedAt;
+  final int? rating;
+  final bool canRate;
 
   SupportTicket({
     required this.id,
@@ -889,6 +891,8 @@ class SupportTicket {
     required this.unread,
     this.lastMessage,
     this.updatedAt,
+    this.rating,
+    this.canRate = false,
   });
 
   factory SupportTicket.fromJson(Map<String, dynamic> j) => SupportTicket(
@@ -900,6 +904,8 @@ class SupportTicket {
         unread: j['unread'] == true,
         lastMessage: j['last_message'] as String?,
         updatedAt: _date(j['updated_at']),
+        rating: _intOrNull(j['rating']),
+        canRate: j['can_rate'] == true,
       );
 }
 
@@ -908,14 +914,18 @@ class SupportMessage {
   final bool fromUser;
   final String text;
   final DateTime createdAt;
+  final int? mediaId;
+  final String? mediaUrl;
 
-  SupportMessage({required this.id, required this.fromUser, required this.text, required this.createdAt});
+  SupportMessage({required this.id, required this.fromUser, required this.text, required this.createdAt, this.mediaId, this.mediaUrl});
 
   factory SupportMessage.fromJson(Map<String, dynamic> j) => SupportMessage(
         id: _int(j['id']),
         fromUser: j['from_user'] == true,
-        text: j['text'] as String,
+        text: (j['text'] ?? '') as String,
         createdAt: _date(j['created_at']) ?? DateTime.now(),
+        mediaId: _intOrNull(j['media_id']),
+        mediaUrl: j['media_url'] as String?,
       );
 }
 

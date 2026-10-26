@@ -258,13 +258,26 @@ async function refresh(refreshToken, ip) {
     throw unauthorized('invalid_refresh_token', 'Please log in again');
   }
   const next = randomToken(48);
-  const s = await db.one(
-    `UPDATE sessions SET refresh_token_hash = $2, last_active_at = now(), ip = COALESCE($3, ip),
+  const h = sha256(refreshToken);
+  // Rotate the refresh token. The one just replaced keeps working for a while: if the phone lost the
+  // answer (bad network, app closed mid-request) it would otherwise be logged out for no reason.
+  let s = await db.one(
+    `UPDATE sessions SET prev_refresh_hash = refresh_token_hash, prev_valid_until = now() + interval '3 days',
+       refresh_token_hash = $2, last_active_at = now(), ip = COALESCE($3, ip),
        expires_at = now() + make_interval(days => $4)
      WHERE refresh_token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
      RETURNING id, user_id`,
-    [sha256(refreshToken), sha256(next), ip || null, config.refreshTokenTtlDays],
+    [h, sha256(next), ip || null, config.refreshTokenTtlDays],
   );
+  if (!s) {
+    s = await db.one(
+      `UPDATE sessions SET refresh_token_hash = $2, last_active_at = now(), ip = COALESCE($3, ip),
+         expires_at = now() + make_interval(days => $4)
+       WHERE prev_refresh_hash = $1 AND prev_valid_until > now() AND revoked_at IS NULL AND expires_at > now()
+       RETURNING id, user_id`,
+      [h, sha256(next), ip || null, config.refreshTokenTtlDays],
+    );
+  }
   if (!s) throw unauthorized('invalid_refresh_token', 'Please log in again');
 
   let user = await db.one('SELECT * FROM users WHERE id = $1', [s.user_id]);

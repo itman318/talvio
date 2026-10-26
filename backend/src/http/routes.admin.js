@@ -118,6 +118,13 @@ router.get('/groups/:id/members', requireAdmin('groups.view'), h(async (req, res
 router.post('/groups/:id/transfer', requireAdmin('groups.transfer'), h(async (req, res) => {
   res.json(await admin.transferGroupOwner(req.admin, req.params.id, req.body, req.ip));
 }));
+router.get('/groups/:id/messages', requireAdmin('groups.view'), h(async (req, res) => res.json(await admin.groupMessages(req.params.id, req.query))));
+router.put('/groups/:id', requireAdmin('groups.suspend'), h(async (req, res) => res.json(await admin.editGroup(req.admin, req.params.id, req.body, req.ip))));
+router.delete('/groups/:id/members/:uid', requireAdmin('groups.suspend'), h(async (req, res) => res.json(await admin.removeGroupMember(req.admin, req.params.id, req.params.uid, req.ip))));
+router.delete('/messages/:id', requireAdmin('reports'), h(async (req, res) => res.json(await admin.deleteMessage(req.admin, req.params.id, req.ip))));
+router.put('/users/:id/profile', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.editUserProfile(req.admin, req.params.id, req.body, req.ip))));
+router.get('/users/:id/sessions', requireAdmin('users.view'), h(async (req, res) => res.json(await admin.userSessions(req.params.id))));
+router.post('/sessions/:id/revoke', requireAdmin('users.logout'), h(async (req, res) => res.json(await admin.revokeSession(req.admin, req.params.id, req.ip))));
 router.delete('/groups/:id', requireAdmin('groups.delete'), h(async (req, res) => res.json(await admin.deleteGroup(req.admin, req.params.id, req.ip))));
 
 // settings

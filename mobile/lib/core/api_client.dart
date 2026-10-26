@@ -67,6 +67,7 @@ class ApiClient {
   String? accessToken;
   String? refreshToken;
   Future<void>? _refreshing;
+  bool _quiet = false;
   Timer? _refreshTimer;
 
   /// Called when the server says this session is over (logout everywhere, ban, deletion).
@@ -113,7 +114,23 @@ class ApiClient {
   Future<void> _doRefresh() async {
     final rt = refreshToken;
     if (rt == null) throw ApiException(401, 'invalid_refresh_token', 'Please log in again');
-    final data = await _send('POST', '/auth/refresh', body: {'refresh_token': rt}, auth: false, retry: false);
+    dynamic data;
+    try {
+      _quiet = true; // don't end the session on the first "invalid" answer — check the saved token first
+      data = await _send('POST', '/auth/refresh', body: {'refresh_token': rt}, auth: false, retry: false);
+    } on ApiException catch (e) {
+      _quiet = false;
+      // another part of the app may have just saved a newer token: try that one before giving up
+      final saved = await _storage.read(key: 'refresh_token');
+      if (!_sessionEndingCodes.contains(e.code) || saved == null || saved == rt) {
+        if (_sessionEndingCodes.contains(e.code)) onSessionEnded?.call(e);
+        rethrow;
+      }
+      refreshToken = saved;
+      data = await _send('POST', '/auth/refresh', body: {'refresh_token': saved}, auth: false, retry: false);
+    } finally {
+      _quiet = false;
+    }
     await setTokens(data['access_token'] as String, data['refresh_token'] as String, (data['expires_in'] as num).toInt());
   }
 
@@ -194,7 +211,7 @@ class ApiClient {
       (err['message'] ?? 'Something went wrong (${res.statusCode})') as String,
       err,
     );
-    if (_sessionEndingCodes.contains(ex.code)) onSessionEnded?.call(ex);
+    if (_sessionEndingCodes.contains(ex.code) && !_quiet) onSessionEnded?.call(ex);
     throw ex;
   }
 

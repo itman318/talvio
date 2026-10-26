@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 
 import 'package:flutter/material.dart';
 
@@ -93,6 +95,7 @@ class MessageBubble extends StatelessWidget {
       case 'video_note':
         return VideoNoteBubble(message: m, size: 200);
       case 'file':
+        if (AudioFilePlayer.isAudio(m)) return AudioFilePlayer(message: m, color: isMine ? Colors.white : accent, isMine: isMine);
         return MessageFile(message: m, color: accent);
       case 'poll':
         return PollView(message: m, accent: accent);
@@ -275,14 +278,37 @@ class MessageBubble extends StatelessWidget {
       ReactionChips(message: m),
       if (m.inlineKeyboard.isNotEmpty) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
       if (!mediaOnly) const SizedBox(height: 2),
-      if (!mediaOnly)
+      if (!mediaOnly && _asChannel)
+        // channel post footer: who wrote it on the left; views, edited and time on the right
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Row(children: [
+            if (m.authorSignature != null) ...[
+              Icon(Icons.edit_rounded, size: 12, color: meta),
+              const SizedBox(width: 3),
+              Flexible(child: Text(m.authorSignature!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: meta, fontWeight: FontWeight.w600))),
+            ],
+            const Spacer(),
+            const SizedBox(width: 10),
+            if (!m.isLocal) ...[
+              Icon(Icons.remove_red_eye_rounded, size: 13, color: meta),
+              const SizedBox(width: 3),
+              Text(compactNumber(m.views), style: TextStyle(fontSize: 11.5, color: meta, fontWeight: FontWeight.w600, fontFeatures: const [FontFeature.tabularFigures()])),
+              const SizedBox(width: 8),
+            ],
+            if (m.editedAt != null)
+              GestureDetector(
+                onTap: m.isLocal ? null : () => showEditHistory(context, m),
+                child: Padding(padding: const EdgeInsets.only(right: 6), child: Text('edited', style: TextStyle(fontSize: 11.5, color: meta, fontStyle: FontStyle.italic))),
+              ),
+            Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11.5, color: meta, fontFeatures: const [FontFeature.tabularFigures()])),
+            if (m.isLocal) ...[const SizedBox(width: 3), _ticks(context)],
+          ]),
+        ),
+      if (!mediaOnly && !_asChannel)
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_asChannel && !m.isLocal) ...[
-            Icon(Icons.visibility_outlined, size: 13, color: meta),
-            Text(' ${compactNumber(m.views)}  ', style: TextStyle(fontSize: 11, color: meta)),
-          ],
           if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
           if (m.editedAt != null)
             GestureDetector(
@@ -307,26 +333,37 @@ class MessageBubble extends StatelessWidget {
             ]),
           ),
         ),
-      if (_asChannel && chat.commentsEnabled && !m.isLocal && !m.isSystem && m.threadId == null)
+      if (_asChannel && chat.commentsEnabled && !m.isLocal && !m.isSystem && m.threadId == null) ...[
+        const SizedBox(height: 6),
+        Divider(height: 1, thickness: 0.8, color: meta.withValues(alpha: 0.25)),
         InkWell(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ThreadScreen(chat: chat, root: m))),
           child: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.chat_bubble_outline, size: 15, color: accent),
-              const SizedBox(width: 6),
-              Text(m.commentsCount == 0 ? 'Leave a comment' : '${m.commentsCount} comment${m.commentsCount == 1 ? '' : 's'}',
-                  style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 13)),
+            padding: const EdgeInsets.only(top: 7, bottom: 1),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(color: accent.withValues(alpha: 0.14), shape: BoxShape.circle),
+                child: Icon(Icons.forum_rounded, size: 13, color: accent),
+              ),
+              const SizedBox(width: 8),
+              Text(m.commentsCount == 0 ? 'Leave a comment' : '${compactNumber(m.commentsCount)} comment${m.commentsCount == 1 ? '' : 's'}',
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 13)),
+              const Spacer(),
+              Icon(Icons.chevron_right_rounded, size: 19, color: accent),
             ]),
           ),
         ),
+      ],
     ];
 
     final bubble = GestureDetector(
         onLongPress: onLongPress,
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : (_asChannel ? 0.84 : 0.78))),
+          constraints: _asChannel
+              ? BoxConstraints.tightFor(width: math.min(MediaQuery.of(context).size.width * 0.84, 520))
+              : BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : 0.78)),
           margin: EdgeInsets.fromLTRB(showAvatar || reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
           padding: mediaOnly ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
@@ -353,11 +390,14 @@ class MessageBubble extends StatelessWidget {
           ),
           child: Theme(
             data: isMine ? _inkTheme : Theme.of(context),
-            child: Column(
-              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: children,
-            ),
+            child: _asChannel
+                // channel posts are full cards (like a feed), so the footer can spread across them
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: children)
+                : Column(
+                    crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: children,
+                  ),
           ),
         ),
       );

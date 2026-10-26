@@ -406,8 +406,8 @@ async function prepareMessage(userId, chat, body) {
     out.text = out.poll.question;
   } else if (type === 'sticker' && body.tavi) {
     // Tavi, our animated mascot: drawn by the app, so no file is needed
-    const FREE = ['wave', 'love', 'sleep', 'think'];
-    const PLUS = ['celebrate', 'hideEyes', 'search', 'mail', 'sad', 'cool'];
+    const FREE = ['wave', 'love', 'sleep', 'think', 'laugh', 'thumbsUp', 'coffee'];
+    const PLUS = ['celebrate', 'hideEyes', 'search', 'mail', 'sad', 'cool', 'angry', 'shocked', 'music'];
     const pose = String(body.tavi);
     if (![...FREE, ...PLUS].includes(pose)) throw badRequest('invalid_sticker', 'Unknown Tavi sticker');
     if (PLUS.includes(pose) && !(await require('./payment.service').limitsFor(userId)).exclusive_stickers) { // eslint-disable-line global-require

@@ -312,39 +312,56 @@ class _VoicePlayerState extends State<VoicePlayer> {
     final local = widget.message.isLocal;
     final fresh = !widget.isMine && !local && !PlayedVoices.played(widget.message.id);
     return SizedBox(
-      width: 236,
-      child: Row(children: [
-        GestureDetector(
-          onTap: local ? null : () => _toggle(vp),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.isMine ? Colors.white.withValues(alpha: 0.16) : null,
-              gradient: widget.isMine ? null : Brand.aurora,
-              boxShadow: widget.isMine ? null : [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
-            ),
-            child: loading || local
-                ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                : AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 150),
-                    transitionBuilder: (ch, a) => ScaleTransition(scale: a, child: ch),
-                    child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, key: ValueKey(playing), color: Colors.white, size: 28),
+      width: 248,
+      child: StreamBuilder<Duration>(
+        stream: mine ? vp.player.positionStream : const Stream<Duration>.empty(),
+        builder: (ctx, snap) {
+          final pos = mine ? (snap.data ?? Duration.zero) : Duration.zero;
+          final len = mine && vp.player.duration != null ? vp.player.duration!.inMilliseconds : total * 1000;
+          final frac = _drag ?? (len > 0 ? (pos.inMilliseconds / len).clamp(0.0, 1.0) : 0.0);
+          final started = mine && (playing || pos > Duration.zero);
+          return Row(children: [
+            // play button with a ring that fills as it plays
+            GestureDetector(
+              onTap: local ? null : () => _toggle(vp),
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Stack(alignment: Alignment.center, children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: widget.isMine ? Colors.white.withValues(alpha: 0.18) : null,
+                      gradient: widget.isMine ? null : Brand.aurora,
+                      boxShadow: widget.isMine ? null : [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
+                    ),
+                    child: loading || local
+                        ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                        : AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 150),
+                            transitionBuilder: (ch, a) => ScaleTransition(scale: a, child: ch),
+                            child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, key: ValueKey(playing), color: Colors.white, size: 28),
+                          ),
                   ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: StreamBuilder<Duration>(
-            stream: mine ? vp.player.positionStream : const Stream<Duration>.empty(),
-            builder: (ctx, snap) {
-              final pos = mine ? (snap.data ?? Duration.zero) : Duration.zero;
-              final len = mine && vp.player.duration != null ? vp.player.duration!.inMilliseconds : total * 1000;
-              final frac = _drag ?? (len > 0 ? (pos.inMilliseconds / len).clamp(0.0, 1.0) : 0.0);
-              final started = mine && (playing || pos > Duration.zero);
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  if (started)
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: CircularProgressIndicator(
+                        value: frac,
+                        strokeWidth: 2.2,
+                        backgroundColor: Colors.transparent,
+                        valueColor: AlwaysStoppedAnimation(widget.isMine ? Colors.white : Brand.rose),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 LayoutBuilder(
                   builder: (ctx, box) => GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -359,49 +376,142 @@ class _VoicePlayerState extends State<VoicePlayer> {
                             _seek(vp, f);
                           },
                     child: SizedBox(
-                      height: 30,
+                      height: 32,
                       width: box.maxWidth,
-                      child: CustomPaint(painter: VoiceWavePainter(_bars, frac, played: c, rest: c.withValues(alpha: 0.32))),
+                      child: CustomPaint(
+                        painter: VoiceWavePainter(_bars, frac, played: c, rest: c.withValues(alpha: 0.3), knob: started || _drag != null),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Row(children: [
                   Text(
-                    started ? duration(pos.inSeconds) : duration(total),
+                    started ? '${duration(pos.inSeconds)} / ${duration(total > 0 ? total : (len ~/ 1000))}' : duration(total),
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.withValues(alpha: 0.9), fontFeatures: const [FontFeature.tabularFigures()]),
                   ),
                   if (fresh) ...[
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 6),
                     Container(width: 7, height: 7, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
                   ],
                   if (widget.isMine && !local) ...[
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 6),
                     Tooltip(
                       message: widget.message.played ? 'Listened' : 'Not listened yet',
                       child: Icon(Icons.mic_rounded, size: 14, color: widget.message.played ? const Color(0xFF7DF3DB) : c.withValues(alpha: 0.45)),
                     ),
                   ],
                   if (mine && vp.earpiece) ...[
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 6),
                     Icon(Icons.hearing_rounded, size: 13, color: c),
                   ],
                   const Spacer(),
-                  if (!local)
+                  // speed only matters once it plays
+                  if (!local && started)
                     GestureDetector(
                       onTap: vp.cycleSpeed,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
-                        decoration: BoxDecoration(color: c.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(10)),
-                        child: Text(speedLabel(vp.speed), style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: c)),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: vp.speed == 1.0 ? c.withValues(alpha: 0.14) : c,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(speedLabel(vp.speed),
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: vp.speed == 1.0 ? c : (widget.isMine ? Brand.ink : Colors.white))),
                       ),
                     ),
                 ]),
-              ]);
-            },
-          ),
-        ),
-      ]),
+              ]),
+            ),
+          ]);
+        },
+      ),
+    );
+  }
+}
+
+/// An audio file (mp3, m4a…): plays right in the chat, with the title, a seek bar and the time.
+class AudioFilePlayer extends StatelessWidget {
+  const AudioFilePlayer({super.key, required this.message, required this.color, this.isMine = false});
+  final Message message;
+  final Color color;
+  final bool isMine;
+
+  static bool isAudio(Message m) {
+    final md = m.media;
+    if (md == null || m.type != 'file') return false;
+    final n = md.name.toLowerCase();
+    return md.mime.startsWith('audio/') || ['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.flac'].any(n.endsWith);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vp = context.watch<VoicePlayback>();
+    final md = message.media!;
+    final mine = vp.isCurrent(message);
+    final playing = mine && vp.playing;
+    final loading = mine && vp.loading;
+    final name = md.name.isEmpty ? 'Audio' : md.name.replaceAll(RegExp(r'\.[A-Za-z0-9]{2,4}$'), '');
+    final c = color;
+    return SizedBox(
+      width: 250,
+      child: StreamBuilder<Duration>(
+        stream: mine ? vp.player.positionStream : const Stream<Duration>.empty(),
+        builder: (ctx, snap) {
+          final pos = mine ? (snap.data ?? Duration.zero) : Duration.zero;
+          final lenMs = mine && vp.player.duration != null ? vp.player.duration!.inMilliseconds : (md.duration ?? 0) * 1000;
+          final frac = lenMs > 0 ? (pos.inMilliseconds / lenMs).clamp(0.0, 1.0) : 0.0;
+          return Row(children: [
+            GestureDetector(
+              onTap: message.isLocal
+                  ? null
+                  : () => vp.toggle(message, title: name).catchError((_) {
+                        if (context.mounted) showInfo(context, 'Could not play this file');
+                      }),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: isMine ? null : const LinearGradient(colors: [Color(0xFFFF8A65), Color(0xFFE0417A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  color: isMine ? Colors.white.withValues(alpha: 0.18) : null,
+                ),
+                child: loading
+                    ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                    : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 30),
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Row(children: [
+                  Icon(Icons.music_note_rounded, size: 15, color: c),
+                  const SizedBox(width: 3),
+                  Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: isMine ? Colors.white : null))),
+                ]),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LayoutBuilder(
+                    builder: (ctx, box) => GestureDetector(
+                      onTapUp: mine ? (d) => vp.seekFraction(d.localPosition.dx / box.maxWidth) : null,
+                      child: LinearProgressIndicator(value: frac, minHeight: 4, backgroundColor: c.withValues(alpha: 0.2), valueColor: AlwaysStoppedAnimation(c)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  mine && pos > Duration.zero
+                      ? '${duration(pos.inSeconds)} / ${duration(lenMs ~/ 1000)}'
+                      : '${md.duration != null ? '${duration(md.duration!)} · ' : ''}${fileSize(md.size)}',
+                  style: TextStyle(fontSize: 11.5, color: isMine ? Colors.white70 : Brand.muted, fontFeatures: const [FontFeature.tabularFigures()]),
+                ),
+              ]),
+            ),
+          ]);
+        },
+      ),
     );
   }
 }
@@ -435,11 +545,12 @@ List<double> resampleBars(List<double> src, int n) {
 
 /// Rounded loudness bars; the played part is drawn in full colour.
 class VoiceWavePainter extends CustomPainter {
-  VoiceWavePainter(this.bars, this.progress, {required this.played, required this.rest});
+  VoiceWavePainter(this.bars, this.progress, {required this.played, required this.rest, this.knob = false});
   final List<double> bars;
   final double progress;
   final Color played;
   final Color rest;
+  final bool knob; // a small playhead dot while playing or dragging
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -454,10 +565,15 @@ class VoiceWavePainter extends CustomPainter {
       final r = RRect.fromRectAndRadius(Rect.fromLTWH(x, (size.height - h) / 2, w, h), Radius.circular(w / 2));
       canvas.drawRRect(r, (i + 0.5) / bars.length <= progress ? on : off);
     }
+    if (knob) {
+      final x = (size.width * progress).clamp(4.0, size.width - 4.0);
+      canvas.drawCircle(Offset(x, size.height / 2), 5, Paint()..color = played);
+      canvas.drawCircle(Offset(x, size.height / 2), 2.2, Paint()..color = rest.withValues(alpha: 1).computeLuminance() > 0.5 ? Colors.black26 : Colors.white70);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant VoiceWavePainter old) => old.progress != progress || old.played != played || old.bars != bars;
+  bool shouldRepaint(covariant VoiceWavePainter old) => old.progress != progress || old.played != played || old.bars != bars || old.knob != knob;
 }
 
 class MessageFile extends StatefulWidget {

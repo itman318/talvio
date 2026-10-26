@@ -323,3 +323,54 @@ test('admins & moderators: owner, admins who may add admins, only rights they ha
     if (b && b.rights) assert.equal(b.rights.change_info, false);
   }
 });
+
+test('refresh: a lost answer does not log you out (the previous token still works for a while)', async () => {
+  const r = await auth.requestOtp('+923270000099', '10.30.9.9');
+  const s1 = await auth.verifyOtp('+923270000099', r.dev_code, { platform: 'android', app_version: '1.0.0' }, '10.30.9.9');
+  const t1 = s1.refresh_token;
+  const s2 = await auth.refresh(t1, '10.30.9.9'); // the phone never got this answer
+  assert.ok(s2.refresh_token);
+  const s3 = await auth.refresh(t1, '10.30.9.9'); // so it tries the old one again
+  assert.ok(s3.refresh_token, 'still logged in');
+  const s4 = await auth.refresh(s3.refresh_token, '10.30.9.9');
+  assert.ok(s4.access_token);
+  await rejects(auth.refresh('x'.repeat(40), '10.30.9.9'), 'invalid_refresh_token');
+});
+
+test('admin full control: group messages, delete, edit group & user, remove member, sessions', async () => {
+  const admin = require('../src/services/admin.service');
+  const { hashPassword } = require('../src/utils/crypto');
+  const root = await db.one(`INSERT INTO admins (email, password_hash, name, role) VALUES ('rootq@example.com', $1, 'Root', 'super_admin') RETURNING *`, [hashPassword('x-very-long-password')]);
+  const { chat: g } = await chats.createGroup(A.id, { title: 'Ctl', member_ids: [B.id, C.id] });
+  const m = await messages.sendMessage(B.id, g.id, { text: 'bad words here' });
+  const list = await admin.groupMessages(g.id);
+  assert.ok(list.some((x) => Number(x.id) === Number(m.id)));
+  await admin.deleteMessage(root, m.id, '1.1.1.1');
+  assert.ok(!(await admin.groupMessages(g.id)).some((x) => Number(x.id) === Number(m.id)));
+  await admin.editGroup(root, g.id, { title: 'Clean name', description: 'ok' }, '1.1.1.1');
+  assert.equal((await db.one('SELECT title FROM chats WHERE id = $1', [g.id])).title, 'Clean name');
+  await admin.removeGroupMember(root, g.id, C.id, '1.1.1.1');
+  assert.equal(await db.one('SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2', [g.id, C.id]), null);
+  await rejects(admin.removeGroupMember(root, g.id, A.id, '1.1.1.1'), 'no_rights');
+  await admin.editUserProfile(root, B.id, { first_name: 'Renamed' }, '1.1.1.1');
+  assert.equal((await users.getMe(B.id)).first_name, 'Renamed');
+  const ss = await admin.userSessions(B.id);
+  assert.ok(ss.length >= 1);
+  await admin.revokeSession(root, ss[0].id, '1.1.1.1');
+  assert.equal((await admin.userSessions(B.id)).length, ss.length - 1);
+});
+
+test('support: screenshot, phone info, rating once after it is resolved', async () => {
+  const support = require('../src/services/support.service');
+  const pic = await db.one(`INSERT INTO media (uploader_id, kind, mime, size_bytes, storage_path, original_name) VALUES ($1, 'image', 'image/jpeg', 10, '/tmp/s.jpg', 's.jpg') RETURNING id`, [A.id]);
+  const r = await support.createTicket(A.id, { subject: 'App crashes', category: 'bug', message: 'When I open a chat', device: 'Android 14 · v1.2', media_id: pic.id });
+  assert.ok(r.messages[0].media_url);
+  await rejects(support.rateTicket(A.id, r.ticket.id, { rating: 5 }), 'cannot_rate');
+  await db.query(`UPDATE support_tickets SET status = 'resolved' WHERE id = $1`, [r.ticket.id]);
+  const rated = await support.rateTicket(A.id, r.ticket.id, { rating: 4, comment: 'Quick help' });
+  assert.equal(rated.ticket.rating, 4);
+  assert.equal(rated.ticket.can_rate, false);
+  await rejects(support.rateTicket(A.id, r.ticket.id, { rating: 5 }), 'cannot_rate');
+  const reply = await support.userReply(B.id, r.ticket.id, { text: 'x' }).catch((e) => e);
+  assert.equal(reply.code, 'ticket_not_found');
+});

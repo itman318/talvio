@@ -579,6 +579,46 @@
           }, 'Remove Talvio Plus'));
         }
       }
+      if (can('users.ban')) {
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: () => {
+            const first = el('input', { type: 'text', value: u.first_name || '' });
+            const last = el('input', { type: 'text', value: u.last_name || '' });
+            const bio = el('textarea', {}, u.bio || '');
+            const photo = el('input', { type: 'checkbox' });
+            modal('Edit profile', [
+              el('p', { class: 'muted' }, 'For offensive names, bios or photos. The change is logged.'),
+              el('div', { class: 'field' }, el('label', {}, 'First name'), first),
+              el('div', { class: 'field' }, el('label', {}, 'Last name'), last),
+              el('div', { class: 'field' }, el('label', {}, 'Bio'), bio),
+              el('label', { class: 'check' }, photo, ' Remove profile photo'),
+            ], 'Save', async () => {
+              const r = await action(() => api('PUT', `/users/${id}/profile`, { first_name: first.value.trim(), last_name: last.value.trim(), bio: bio.value.trim(), remove_photo: photo.checked }), 'Profile updated');
+              if (r) reload();
+              return !!r;
+            });
+          },
+        }, 'Edit profile'));
+      }
+      if (can('users.view')) {
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: async () => {
+            const list = await action(() => api('GET', `/users/${id}/sessions`));
+            if (!list) return;
+            const rows = list.map((ss) => el('tr', {},
+              el('td', {}, `${ss.device_name || 'Device'}`, el('div', { class: 'muted' }, `${ss.platform || ''} ${ss.app_version || ''}`)),
+              el('td', { class: 'muted' }, ss.ip || '—'),
+              el('td', { class: 'muted' }, ago(ss.last_active_at)),
+              el('td', {}, can('users.logout') ? el('button', {
+                class: 'btn small danger',
+                onclick: async (ev) => { if (await action(() => api('POST', `/sessions/${ss.id}/revoke`), 'Device logged out')) ev.target.closest('tr').remove(); },
+              }, 'Log out') : null)));
+            modal(`Devices of #${id}`, [table(['Device', 'IP', 'Last active', ''], rows, 'No active devices')], 'Done', async () => true);
+          },
+        }, 'Devices'));
+      }
       if (can('users.export')) {
         actions.push(el('button', {
           class: 'btn',
@@ -798,6 +838,64 @@
                 }, true);
               },
             }, 'Suspend'));
+        }
+        acts.push(el('button', {
+          class: 'btn small',
+          onclick: async () => {
+            const box = el('div', {});
+            async function showMsgs() {
+              const list = await action(() => api('GET', `/groups/${g.id}/messages?limit=80`));
+              if (!list) return;
+              const rows = list.map((m) => el('tr', {},
+                el('td', { class: 'muted' }, new Date(m.created_at).toLocaleString()),
+                el('td', {}, `${`${m.first_name || ''} ${m.last_name || ''}`.trim() || (m.sender_id ? `#${m.sender_id}` : 'System')}`, m.username ? el('div', { class: 'muted' }, `@${m.username}`) : null),
+                el('td', { style: 'max-width:420px;white-space:pre-wrap;word-break:break-word' }, m.type === 'text' ? (m.text || '') : `[${m.type}] ${m.text || ''}`),
+                el('td', {}, can('reports') ? el('button', {
+                  class: 'btn small danger',
+                  onclick: async (ev) => { if (await action(() => api('DELETE', `/messages/${m.id}`), 'Message deleted')) ev.target.closest('tr').remove(); },
+                }, 'Delete') : null)));
+              box.replaceChildren(table(['Time', 'From', 'Message', ''], rows, 'No messages'));
+            }
+            await showMsgs();
+            modal(`Messages · ${g.title}`, [el('p', { class: 'muted' }, 'Latest messages, newest first. Deleting removes it for everyone.'), box], 'Done', async () => true);
+          },
+        }, 'Messages'));
+        acts.push(el('button', {
+          class: 'btn small',
+          onclick: async () => {
+            const members = await action(() => api('GET', `/groups/${g.id}/members?limit=500`));
+            if (!members) return;
+            const rows = members.map((m) => el('tr', {},
+              el('td', {}, `${`${m.first_name || ''} ${m.last_name || ''}`.trim() || 'User'} (#${m.id})`, m.username ? el('div', { class: 'muted' }, `@${m.username}`) : null),
+              el('td', {}, el('span', { class: 'chip' }, m.role)),
+              el('td', { class: 'muted' }, new Date(m.joined_at).toLocaleDateString()),
+              el('td', {}, el('div', { class: 'btn-row' },
+                el('button', { class: 'btn small', onclick: () => openUser(m.id) }, 'Open'),
+                can('groups.suspend') && m.role !== 'owner' ? el('button', {
+                  class: 'btn small danger',
+                  onclick: async (ev) => { if (await action(() => api('DELETE', `/groups/${g.id}/members/${m.id}`), 'Removed from the group')) ev.target.closest('tr').remove(); },
+                }, 'Remove') : null))));
+            modal(`Members · ${g.title}`, [table(['Member', 'Role', 'Joined', ''], rows, 'No members')], 'Done', async () => true);
+          },
+        }, 'Members'));
+        if (can('groups.suspend')) {
+          acts.push(el('button', {
+            class: 'btn small',
+            onclick: () => {
+              const title = el('input', { type: 'text', value: g.title || '' });
+              const desc = el('textarea', {}, g.description || '');
+              const uname = el('input', { type: 'text', value: g.username || '', placeholder: 'empty = private' });
+              modal(`Edit “${g.title}”`, [
+                el('div', { class: 'field' }, el('label', {}, 'Name'), title),
+                el('div', { class: 'field' }, el('label', {}, 'Description'), desc),
+                el('div', { class: 'field' }, el('label', {}, 'Public @username'), uname),
+              ], 'Save', async () => {
+                const r = await action(() => api('PUT', `/groups/${g.id}`, { title: title.value.trim(), description: desc.value.trim(), username: uname.value.trim().replace(/^@/, '') || null }), 'Saved');
+                if (r) load();
+                return !!r;
+              });
+            },
+          }, 'Edit'));
         }
         if (can('groups.transfer')) {
           acts.push(el('button', {
@@ -1153,8 +1251,15 @@
         el('span', { class: 'chip' }, t.status), 'Priority', priority,
         t.assigned_to === state.admin.id ? null : el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { assigned_to: state.admin.id }), 'Assigned to you')) openTicket(id); } }, 'Assign to me'),
         setStatus('resolved'), setStatus('closed'))),
-      el('section', {}, el('h4', {}, 'Conversation'), d.messages.map((m) => el('div', { class: m.from_user ? 'bubble' : 'bubble hl' },
-        el('small', {}, `${m.from_user ? 'User' : (m.admin_name || 'Admin')} · ${fmtDate(m.created_at)}`), m.text))),
+      t.device || t.rating ? el('div', { class: 'muted', style: 'margin-top:6px' },
+        t.device ? `Phone: ${t.device}` : '',
+        t.rating ? `  ·  Rating: ${'★'.repeat(t.rating)}${'☆'.repeat(5 - t.rating)}${t.rating_comment ? ` — “${t.rating_comment}”` : ''}` : '') : null,
+      el('section', {}, el('h4', {}, 'Conversation'), d.messages.map((m) => {
+        const pic = el('div', {});
+        if (m.media_id) mediaPreview({ admin_url: `/api/admin/media/${m.media_id}`, mime: 'image/png', name: 'screenshot' }).then((n) => pic.replaceWith(n));
+        return el('div', { class: m.from_user ? 'bubble' : 'bubble hl' },
+          el('small', {}, `${m.from_user ? 'User' : (m.admin_name || 'Admin')} · ${fmtDate(m.created_at)}`), m.text, m.media_id ? pic : null);
+      })),
       t.status === 'closed' ? el('section', {}, el('div', { class: 'muted' }, 'This ticket is closed.'))
         : el('section', {}, el('h4', {}, 'Reply'), el('div', { class: 'field' }, reply), el('div', { class: 'btn-row' }, statusSel, send)),
     ]);

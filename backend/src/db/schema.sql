@@ -1004,3 +1004,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_settings JSONB NOT NULL DEFAUL
 
 -- who made this admin (admins with "add new admins" may only change the admins they added)
 ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS promoted_by BIGINT;
+
+-- the refresh token that was just replaced stays valid for a while (lost answers must not log people out)
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS prev_refresh_hash CHAR(64);
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS prev_valid_until TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS sessions_prev_refresh_idx ON sessions (prev_refresh_hash) WHERE prev_refresh_hash IS NOT NULL;
+
+-- support: screenshots, the phone it was sent from, and a rating after help
+ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS media_id BIGINT REFERENCES media(id) ON DELETE SET NULL;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS device VARCHAR(120);
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS rating SMALLINT;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS rating_comment VARCHAR(500);

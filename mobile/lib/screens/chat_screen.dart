@@ -50,6 +50,7 @@ import 'calls_screen.dart';
 import 'home_screen.dart' show activityIcon;
 import 'premium_screens.dart';
 import 'image_editor_screen.dart';
+import 'album_send_screen.dart';
 import 'video_send_screen.dart';
 import 'live_map_screen.dart';
 import '../widgets/swipe_reply.dart';
@@ -846,10 +847,28 @@ class _ChatScreenState extends State<ChatScreen> {
           if (picked.length == 1) {
             await _editAndSend(picked.first.path, picked.first.name);
           } else {
-            // several photos → one album
-            final albumId = 'a${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}-${picked.length}';
-            for (final x in picked.take(10)) {
-              await _sendFile(x.path, type: 'image', name: x.name, albumId: albumId);
+            // several photos: look through, edit, remove, add more, caption → one album
+            if (!mounted) break;
+            final r = await Navigator.push<AlbumSendResult>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AlbumSendScreen(
+                  paths: picked.take(10).map((x) => x.path).toList(),
+                  caption: _text.text.trim(),
+                  imageQuality: _prefs.uploadQuality,
+                  maxSide: _prefs.uploadMaxSide,
+                ),
+              ),
+            );
+            if (r == null || r.paths.isEmpty) break;
+            _text.text = r.caption; // goes with the first photo
+            if (r.paths.length == 1) {
+              await _sendFile(r.paths.first, type: 'image', name: 'photo.jpg');
+              break;
+            }
+            final albumId = 'a${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}-${r.paths.length}';
+            for (final p in r.paths) {
+              await _sendFile(p, type: 'image', name: p.split('/').last, albumId: albumId);
             }
           }
           break;
@@ -2169,7 +2188,12 @@ class _ChatScreenState extends State<ChatScreen> {
           boxShadow: dark ? null : [BoxShadow(color: Brand.ink.withValues(alpha: 0.08), blurRadius: 24, offset: const Offset(0, 8))],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Image.asset('assets/emoji/tali/${chat.isSavedMessages ? 'think' : 'hello'}.png', width: 110, height: 110),
+          GestureDetector(
+            onTap: canSend && !chat.isSavedMessages ? () => _store.sendTavi(chatId, TaviPose.wave.name, '👋') : null,
+            child: TaviMascot(pose: chat.isSavedMessages ? TaviPose.think : (chat.isBot ? TaviPose.coffee : TaviPose.wave), size: 130),
+          ),
+          if (canSend && !chat.isSavedMessages)
+            const Text('Tap Tavi to say hi', style: TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Text(chat.isSavedMessages ? 'Your notes' : 'No messages yet',
               textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),

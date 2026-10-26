@@ -18,6 +18,12 @@ enum TaviPose {
   love, // hearts
   think, // bots / setting things up
   cool, // sunglasses
+  laugh, // laughing with happy tears
+  thumbsUp, // "great!"
+  coffee, // good morning / a break
+  angry, // grumpy, steam puffs
+  shocked, // wide eyes, "!"
+  music, // headphones, swaying
 }
 
 /// Tavi stickers people can send. The second half are Talvio Plus only.
@@ -32,6 +38,12 @@ const taviStickers = <(TaviPose, String, bool)>[
   (TaviPose.mail, '✉️', true),
   (TaviPose.sad, '😢', true),
   (TaviPose.cool, '😎', true),
+  (TaviPose.laugh, '😂', false),
+  (TaviPose.thumbsUp, '👍', false),
+  (TaviPose.coffee, '☕', false),
+  (TaviPose.angry, '😠', true),
+  (TaviPose.shocked, '😮', true),
+  (TaviPose.music, '🎧', true),
 ];
 
 TaviPose? taviPoseByName(String? name) {
@@ -177,6 +189,22 @@ class _TaviPainter extends CustomPainter {
         return const _Wings(0.25, -0.25, leftIn: 2, rightIn: 2);
       case TaviPose.cool:
         return _Wings(0.2, -1.6 + 0.15 * w, rightLift: 6);
+      case TaviPose.laugh:
+        // holding the belly while laughing
+        final k = 0.12 * math.sin(t * 8 * math.pi);
+        return _Wings(-0.95 + k, 0.95 - k, leftLift: 2, rightLift: 2, leftIn: 7, rightIn: 7);
+      case TaviPose.thumbsUp:
+        return _Wings(0.2, -2.55 + 0.08 * w, rightLift: 13, rightIn: 1);
+      case TaviPose.coffee:
+        return const _Wings(-1.1, 1.1, leftLift: 5, rightLift: 5, leftIn: 8, rightIn: 8);
+      case TaviPose.angry:
+        // wings on the hips
+        return const _Wings(0.85, -0.85, leftLift: -2, rightLift: -2, leftIn: -1, rightIn: -1);
+      case TaviPose.shocked:
+        final k = 0.05 * math.sin(t * 10 * math.pi);
+        return _Wings(-2.1 + k, 2.1 - k, leftLift: 9, rightLift: 9);
+      case TaviPose.music:
+        return _Wings(0.25 + 0.15 * w, -0.25 + 0.15 * w);
       case TaviPose.idle:
         return _Wings(0.2 + 0.06 * w, -0.2 - 0.06 * w);
     }
@@ -207,6 +235,21 @@ class _TaviPainter extends CustomPainter {
         tilt = 0.05 * math.sin(t * 2 * math.pi);
       case TaviPose.love:
         tilt = 0.06 * math.sin(t * 2 * math.pi);
+      case TaviPose.laugh:
+        final j = math.sin(t * 8 * math.pi);
+        tilt = 0.05 * j;
+        bob = -1.6 * j.abs();
+      case TaviPose.angry:
+        tilt = 0.015 * math.sin(t * 16 * math.pi);
+      case TaviPose.shocked:
+        final j = math.max(0.0, math.sin(t * 2 * math.pi));
+        bob = -4 * j;
+        squash = 1 + 0.04 * j;
+      case TaviPose.music:
+        tilt = 0.1 * math.sin(t * 2 * math.pi);
+        bob = 1.2 * math.sin(t * 4 * math.pi);
+      case TaviPose.thumbsUp:
+        bob = -1.2 * math.sin(t * 2 * math.pi).abs();
       default:
         break;
     }
@@ -221,13 +264,21 @@ class _TaviPainter extends CustomPainter {
     _feet(canvas);
     final wings = _Wings.lerp(_wingsFor(from), _wingsFor(pose), blend.clamp(0.0, 1.0));
     // back wing details are drawn after the body when they cover the face
-    final wingsInFront = pose == TaviPose.hideEyes || pose == TaviPose.peek || pose == TaviPose.mail || pose == TaviPose.love || pose == TaviPose.think;
+    final wingsInFront = pose == TaviPose.hideEyes ||
+        pose == TaviPose.peek ||
+        pose == TaviPose.mail ||
+        pose == TaviPose.love ||
+        pose == TaviPose.think ||
+        pose == TaviPose.coffee ||
+        pose == TaviPose.laugh;
     if (!wingsInFront) _wingsPaint(canvas, wings);
     _body(canvas);
     _tuft(canvas);
     _face(canvas);
     if (pose == TaviPose.mail) _envelope(canvas);
     if (pose == TaviPose.love) _heldHeart(canvas);
+    if (pose == TaviPose.coffee) _cup(canvas);
+    if (pose == TaviPose.music) _headphones(canvas);
     if (wingsInFront) _wingsPaint(canvas, wings);
     if (pose == TaviPose.search) _magnifier(canvas);
     if (pose == TaviPose.cool) _sunglasses(canvas);
@@ -249,6 +300,19 @@ class _TaviPainter extends CustomPainter {
         _sparkles(canvas, 3);
       case TaviPose.cool:
         _sparkles(canvas, 2);
+      case TaviPose.thumbsUp:
+        _badge(canvas);
+        _sparkles(canvas, 3);
+      case TaviPose.coffee:
+        _steam(canvas, const Offset(50, 60), const Color(0xFFB9A79A));
+      case TaviPose.angry:
+        _steam(canvas, const Offset(26, 30), const Color(0xFFCBD1E2));
+        _steam(canvas, const Offset(74, 30), const Color(0xFFCBD1E2));
+        _angerMark(canvas);
+      case TaviPose.shocked:
+        _exclaim(canvas);
+      case TaviPose.music:
+        _notes(canvas);
       default:
         break;
     }
@@ -346,6 +410,8 @@ class _TaviPainter extends CustomPainter {
 
   bool get _eyesClosed {
     if (pose == TaviPose.sleep) return true;
+    if (pose == TaviPose.music) return math.sin(t * 2 * math.pi) > -0.3; // enjoying the song
+    if (pose == TaviPose.shocked) return false;
     if (pose == TaviPose.celebrate) return false;
     // blink about once per loop
     return t > 0.46 && t < 0.5;
@@ -374,7 +440,7 @@ class _TaviPainter extends CustomPainter {
         look = Offset(0.6 * math.sin(t * 2 * math.pi * 0.5), 0);
     }
 
-    if (pose == TaviPose.celebrate || pose == TaviPose.love) {
+    if (pose == TaviPose.celebrate || pose == TaviPose.love || pose == TaviPose.laugh || pose == TaviPose.thumbsUp) {
       // happy closed "^ ^" eyes
       final p = Paint()
         ..color = _ink
@@ -389,8 +455,25 @@ class _TaviPainter extends CustomPainter {
       }
     } else {
       for (final x in [39.5, 60.5]) {
-        _eye(c, Offset(x, 48), look);
+        _eye(c, Offset(x, 48), look, big: pose == TaviPose.shocked);
       }
+    }
+    if (pose == TaviPose.laugh) {
+      // happy tears
+      for (final (x, d) in [(32.0, -1.0), (68.0, 1.0)]) {
+        final p = (t * 2) % 1;
+        c.drawOval(Rect.fromCenter(center: Offset(x + d * p * 3, 51 + p * 9), width: 3.2, height: 4.4),
+            Paint()..color = const Color(0xFF5AB3F5).withValues(alpha: 0.9 * (1 - p)));
+      }
+    }
+    if (pose == TaviPose.angry) {
+      // angry brows: down toward the beak
+      final p = Paint()
+        ..color = _ink
+        ..strokeWidth = 2.4
+        ..strokeCap = StrokeCap.round;
+      c.drawLine(const Offset(32, 38), const Offset(45, 42.5), p);
+      c.drawLine(const Offset(68, 38), const Offset(55, 42.5), p);
     }
 
     // sad brows
@@ -405,13 +488,19 @@ class _TaviPainter extends CustomPainter {
 
     // cheeks
     final blush = Paint()
-      ..color = const Color(0xFFFF6F91).withValues(alpha: pose == TaviPose.love ? 0.55 : 0.35)
+      ..color = (pose == TaviPose.angry ? const Color(0xFFFF3B3B) : const Color(0xFFFF6F91)).withValues(alpha: pose == TaviPose.love || pose == TaviPose.angry ? 0.55 : 0.35)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6);
     c.drawOval(Rect.fromCenter(center: const Offset(31, 58), width: 8, height: 5), blush);
     c.drawOval(Rect.fromCenter(center: const Offset(69, 58), width: 8, height: 5), blush);
 
     // beak (opens a little when celebrating / waving)
-    final open = pose == TaviPose.celebrate || pose == TaviPose.wave ? 1.6 + 0.8 * _wave.abs() : 0.0;
+    final open = switch (pose) {
+      TaviPose.celebrate || TaviPose.wave => 1.6 + 0.8 * _wave.abs(),
+      TaviPose.laugh => 3.0 + 1.2 * math.sin(t * 8 * math.pi).abs(),
+      TaviPose.shocked => 3.4,
+      TaviPose.music => 1.0 + 1.0 * math.sin(t * 4 * math.pi).abs(),
+      _ => 0.0,
+    };
     final top = Path()
       ..moveTo(45.5, 55)
       ..quadraticBezierTo(50, 52.5, 54.5, 55)
@@ -425,7 +514,7 @@ class _TaviPainter extends CustomPainter {
     c.drawCircle(const Offset(48.5, 55.2), 0.7, Paint()..color = Colors.white.withValues(alpha: 0.7));
   }
 
-  void _eye(Canvas c, Offset center, Offset look) {
+  void _eye(Canvas c, Offset center, Offset look, {bool big = false}) {
     if (_eyesClosed) {
       final p = Paint()
         ..color = _ink
@@ -439,7 +528,14 @@ class _TaviPainter extends CustomPainter {
       return;
     }
     // white
-    c.drawOval(Rect.fromCenter(center: center, width: 15, height: 16), Paint()..color = Colors.white);
+    c.drawOval(Rect.fromCenter(center: center, width: big ? 18 : 15, height: big ? 19 : 16), Paint()..color = Colors.white);
+    if (big) {
+      // tiny surprised pupils
+      final iris = center + look;
+      c.drawCircle(iris, 3.6, Paint()..color = _ink);
+      c.drawCircle(iris + const Offset(-1.2, -1.3), 1.2, Paint()..color = Colors.white);
+      return;
+    }
     // iris with a warm ring
     final iris = center + look;
     c.drawCircle(iris, 6.2, Paint()..shader = const RadialGradient(colors: [Color(0xFF3A2F7A), _ink], stops: [0.3, 1]).createShader(Rect.fromCircle(center: iris, radius: 6.2)));
@@ -543,7 +639,97 @@ class _TaviPainter extends CustomPainter {
       ..strokeWidth = 2);
   }
 
+  void _cup(Canvas c) {
+    final lift = 0.8 * _wave;
+    final cup = RRect.fromRectAndCorners(Rect.fromLTWH(39, 64 + lift, 22, 18), bottomLeft: const Radius.circular(7), bottomRight: const Radius.circular(7), topLeft: const Radius.circular(2), topRight: const Radius.circular(2));
+    c.drawShadow(Path()..addRRect(cup), Colors.black, 2, false);
+    c.drawRRect(cup, Paint()..shader = const LinearGradient(colors: [Colors.white, Color(0xFFE3E6F0)]).createShader(cup.outerRect));
+    // handle
+    c.drawArc(Rect.fromLTWH(57, 67 + lift, 9, 10), -1.4, 2.8, false, Paint()
+      ..color = const Color(0xFFE3E6F0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4);
+    // coffee + a little heart on the cup
+    c.drawOval(Rect.fromLTWH(40.5, 63.5 + lift, 19, 4), Paint()..color = const Color(0xFF7A4A2A));
+    _heart(c, Offset(50, 74 + lift), 3.2, const Color(0xFFF2557E));
+  }
+
+  void _headphones(Canvas c) {
+    final band = Paint()
+      ..shader = const LinearGradient(colors: [Color(0xFF3A3F5C), Color(0xFF1C1F33)]).createShader(const Rect.fromLTWH(18, 18, 64, 30))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    c.drawArc(const Rect.fromLTWH(20, 22, 60, 50), math.pi * 1.08, math.pi * 0.84, false, band);
+    for (final x in [21.0, 79.0]) {
+      final pad = RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, 48), width: 10, height: 16), const Radius.circular(5));
+      c.drawRRect(pad, Paint()..shader = const LinearGradient(colors: [Color(0xFFFF5E8A), Color(0xFF8E54E9)], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(pad.outerRect));
+    }
+  }
+
   // ------------------------------------------------------------------ effects
+  void _steam(Canvas c, Offset base, Color color) {
+    for (var i = 0; i < 3; i++) {
+      final p = (t * 1.2 + i / 3) % 1;
+      c.drawCircle(base + Offset(math.sin((p + i) * 6) * 2.5, -p * 18), 2 + p * 3, Paint()..color = color.withValues(alpha: 0.55 * (1 - p)));
+    }
+  }
+
+  void _angerMark(Canvas c) {
+    final s = 1 + 0.15 * math.sin(t * 8 * math.pi);
+    final p = Paint()
+      ..color = const Color(0xFFFF3B3B)
+      ..strokeWidth = 2.2 * s
+      ..strokeCap = StrokeCap.round;
+    const o = Offset(76, 20);
+    for (final a in [0.0, math.pi / 2, math.pi, math.pi * 1.5]) {
+      final d = Offset(math.cos(a), math.sin(a));
+      c.drawLine(o + d * 1.5 * s, o + d * 5 * s + Offset(-d.dy, d.dx) * 1.5, p);
+    }
+  }
+
+  void _exclaim(Canvas c) {
+    final pop = math.max(0.0, math.sin(t * 2 * math.pi));
+    for (final (x, a) in [(18.0, -0.3), (82.0, 0.3)]) {
+      c.save();
+      c.translate(x, 22 - pop * 3);
+      c.rotate(a);
+      final p = Paint()..color = const Color(0xFFFFB534).withValues(alpha: 0.4 + 0.6 * pop);
+      c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(-1.6, -8, 3.2, 9), const Radius.circular(1.6)), p);
+      c.drawCircle(const Offset(0, 4.5), 1.8, p);
+      c.restore();
+    }
+  }
+
+  void _notes(Canvas c) {
+    for (var i = 0; i < 3; i++) {
+      final p = (t + i / 3) % 1;
+      final x = (i.isEven ? 84.0 : 14.0) + math.sin(p * 6) * 3;
+      final y = 40 - p * 34;
+      final paint = Paint()..color = [const Color(0xFF8E54E9), const Color(0xFFFF5E8A), const Color(0xFF3CC8FF)][i].withValues(alpha: 1 - p);
+      c.drawOval(Rect.fromCenter(center: Offset(x, y), width: 5, height: 3.8), paint);
+      c.drawLine(Offset(x + 2.2, y), Offset(x + 2.2, y - 8), paint..strokeWidth = 1.3);
+      c.drawLine(Offset(x + 2.2, y - 8), Offset(x + 5.5, y - 6), paint);
+    }
+  }
+
+  void _badge(Canvas c) {
+    // a round "great!" seal next to the raised wing
+    final s = 1 + 0.08 * math.sin(t * 4 * math.pi);
+    const o = Offset(84, 26);
+    c.drawCircle(o, 8 * s, Paint()..shader = const LinearGradient(colors: [Color(0xFF2ED47A), Color(0xFF12A150)]).createShader(Rect.fromCircle(center: o, radius: 8)));
+    final p = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    c.drawPath(Path()
+      ..moveTo(o.dx - 3.5 * s, o.dy)
+      ..lineTo(o.dx - 1 * s, o.dy + 2.8 * s)
+      ..lineTo(o.dx + 3.8 * s, o.dy - 2.6 * s), p);
+  }
+
   void _zzz(Canvas c) {
     for (var i = 0; i < 3; i++) {
       final p = (t + i / 3) % 1;

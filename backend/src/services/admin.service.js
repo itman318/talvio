@@ -626,6 +626,108 @@ async function deleteGroup(admin, chatIdRaw, ip) {
   return { ok: true };
 }
 
+// ------------------------------------------------------------------ full control: messages, members, info
+/** Latest messages of a group/channel (newest first), for moderation. */
+async function groupMessages(chatIdRaw, query = {}) {
+  const chatId = v.id(chatIdRaw, 'chat_id');
+  const before = query.before ? v.id(query.before, 'before') : null;
+  const rows = await db.many(
+    `SELECT m.id, m.type, m.text, m.created_at, m.edited_at, m.media_id, m.sender_id,
+            u.first_name, u.last_name, u.username
+     FROM messages m LEFT JOIN users u ON u.id = m.sender_id
+     WHERE m.chat_id = $1 AND m.deleted_at IS NULL ${before ? 'AND m.id < $2' : ''}
+     ORDER BY m.id DESC LIMIT ${v.limit(query.limit, 50, 200)}`,
+    before ? [chatId, before] : [chatId],
+  );
+  return rows;
+}
+
+async function deleteMessage(admin, messageIdRaw, ip) {
+  const id = v.id(messageIdRaw, 'message_id');
+  const m = await db.one('SELECT chat_id, text, type FROM messages WHERE id = $1', [id]);
+  if (!m) throw notFound('message_not_found', 'Message not found');
+  const ok = await require('./message.service').adminDeleteMessage(id); // eslint-disable-line global-require
+  await log(admin.id, 'message.delete', 'message', id, { chat_id: m.chat_id, type: m.type, text: String(m.text || '').slice(0, 120) }, ip);
+  return { ok };
+}
+
+async function removeGroupMember(admin, chatIdRaw, userIdRaw, ip) {
+  const chatId = v.id(chatIdRaw, 'chat_id');
+  const userId = v.id(userIdRaw, 'user_id');
+  const m = await db.one('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, userId]);
+  if (!m) throw notFound('member_not_found', 'Not a member');
+  if (m.role === 'owner') throw forbidden('no_rights', 'Transfer ownership first, then remove this person');
+  await require('./chat.service').removeUserFromGroup(chatId, userId, { reason: 'removed' }); // eslint-disable-line global-require
+  await log(admin.id, 'group.member_remove', 'chat', chatId, { user_id: userId }, ip);
+  return { ok: true };
+}
+
+/** Edit a group/channel's name, description or @username (reserved names allowed for admins). */
+async function editGroup(admin, chatIdRaw, body = {}, ip) {
+  const chatId = v.id(chatIdRaw, 'chat_id');
+  const c = await db.one(`SELECT id FROM chats WHERE id = $1 AND type IN ('group', 'channel')`, [chatId]);
+  if (!c) throw notFound('chat_not_found', 'Group not found');
+  const sets = [];
+  const params = [chatId];
+  const add = (col, val) => {
+    params.push(val);
+    sets.push(`${col} = $${params.length}`);
+  };
+  if (body.title !== undefined) add('title', v.str(body.title, { field: 'title', min: 1, max: 128 }));
+  if (body.description !== undefined) add('description', v.str(body.description, { field: 'description', max: 255 }) || '');
+  if (body.username !== undefined) {
+    const raw = typeof body.username === 'string' ? body.username.trim().replace(/^@/, '') : null;
+    const name = raw ? v.validateUsername(raw) : null;
+    if (name && (await require('./chat.service').usernameTaken(name, { exceptChatId: chatId }))) throw conflict('username_taken', 'This username is already taken'); // eslint-disable-line global-require
+    add('username', name);
+    add('is_public', !!name);
+  }
+  if (!sets.length) return { ok: true };
+  await db.query(`UPDATE chats SET ${sets.join(', ')} WHERE id = $1`, params);
+  bus.emit('chat:updated', { chatId, memberIds: (await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1', [chatId])).map((r) => r.user_id) });
+  await log(admin.id, 'group.edit', 'chat', chatId, body, ip);
+  return { ok: true };
+}
+
+/** Edit a user's name and bio (e.g. offensive names). */
+async function editUserProfile(admin, userIdRaw, body = {}, ip) {
+  const userId = v.id(userIdRaw, 'user_id');
+  const sets = [];
+  const params = [userId];
+  const add = (col, val) => {
+    params.push(val);
+    sets.push(`${col} = $${params.length}`);
+  };
+  if (body.first_name !== undefined) add('first_name', v.str(body.first_name, { field: 'first_name', min: 1, max: 64 }));
+  if (body.last_name !== undefined) add('last_name', v.str(body.last_name, { field: 'last_name', max: 64 }) || '');
+  if (body.bio !== undefined) add('bio', v.str(body.bio, { field: 'bio', max: 300 }) || '');
+  if (body.remove_photo === true) sets.push('avatar_media_id = NULL');
+  if (!sets.length) return { ok: true };
+  const r = await db.one(`UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 RETURNING id`, params);
+  if (!r) throw notFound('user_not_found', 'User not found');
+  bus.emit('user:updated', { userId });
+  await log(admin.id, 'user.edit', 'user', userId, body, ip);
+  return { ok: true };
+}
+
+async function userSessions(userIdRaw) {
+  const userId = v.id(userIdRaw, 'user_id');
+  return db.many(
+    `SELECT id, device_name, platform, app_version, ip, created_at, last_active_at FROM sessions
+     WHERE user_id = $1 AND revoked_at IS NULL ORDER BY last_active_at DESC`,
+    [userId],
+  );
+}
+
+async function revokeSession(admin, sessionIdRaw, ip) {
+  const id = v.id(sessionIdRaw, 'session_id');
+  const s = await db.one('UPDATE sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING user_id', [id]);
+  if (!s) throw notFound('session_not_found', 'Session not found');
+  bus.emit('sessions:revoked', { userId: s.user_id, sessionIds: [id], reason: 'admin' });
+  await log(admin.id, 'user.session_revoke', 'user', s.user_id, { session_id: id }, ip);
+  return { ok: true };
+}
+
 // ------------------------------------------------------------------ settings
 async function getSettings() {
   return { settings: await settings.getAll(), definitions: settings.DEFINITIONS };
@@ -718,6 +820,13 @@ async function listLogs(query = {}) {
 }
 
 module.exports = {
+  groupMessages,
+  deleteMessage,
+  removeGroupMember,
+  editGroup,
+  editUserProfile,
+  userSessions,
+  revokeSession,
   log,
   addNote,
   deleteNote,
