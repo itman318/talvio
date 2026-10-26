@@ -20,9 +20,9 @@ class ChatThemeDef {
 }
 
 const chatThemes = <ChatThemeDef>[
-  // Default: sapphire ink — calm, professional, easy on the eyes.
+  // Default: sapphire — a clear indigo gradient for my messages, calm white cards for others.
   ChatThemeDef('classic', 'Sapphire', [Color(0xFFEEF1F8), Color(0xFFE7EBF5)], [Color(0xFF0A0D18), Color(0xFF0D1122)], Color(0xFFDDE3EF),
-      Color(0xFF161B30), [Color(0xFF25306B), Color(0xFF3B4798)], [Color(0xFF2E3A84), Color(0xFF4655B3)]),
+      Color(0xFF161B30), [Color(0xFF3442B8), Color(0xFF5A5CE6)], [Color(0xFF2F3CA6), Color(0xFF4D52D0)]),
   ChatThemeDef('teal', 'Teal', [Color(0xFFE6F3F1), Color(0xFFD8ECE8)], [Color(0xFF061614), Color(0xFF0A221F)], Color(0xFFCCE5E0),
       Color(0xFF12312C), [Color(0xFF0E6F68), Color(0xFF159488)], [Color(0xFF0E6A63), Color(0xFF13877C)]),
   ChatThemeDef('graphite', 'Graphite', [Color(0xFFEDEEF0), Color(0xFFE3E5E9)], [Color(0xFF0C0D10), Color(0xFF121418)], Color(0xFFD8DBE0),
