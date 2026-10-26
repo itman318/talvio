@@ -98,7 +98,7 @@ jobs:
           heap-size: 512M
           cores: 3
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu guest -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash .github/scripts/app-e2e.sh
 
       - name: Check the message reached the other user
