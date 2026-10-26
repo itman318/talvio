@@ -998,3 +998,6 @@ CREATE TABLE IF NOT EXISTS voice_chat_participants (
 
 -- ---------------------------------------------------------------- Talvio Bot API v2 (own event shape, signed hooks)
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS api_version VARCHAR(4) NOT NULL DEFAULT 'v1';
+
+-- Settings → Notifications (private / groups / channels on-off, message text in notifications)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_settings JSONB NOT NULL DEFAULT '{}'::jsonb;

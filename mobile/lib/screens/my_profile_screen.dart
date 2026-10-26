@@ -14,7 +14,31 @@ import 'chat_screen.dart';
 import 'premium_screens.dart';
 import 'qr_screens.dart';
 import 'settings_screens.dart';
+import 'notifications_screen.dart';
 import 'story_screens.dart' show HighlightsRow, MyHighlightsScreen;
+
+/// Chats / groups / channels I am in — a quick look at my Talvio.
+Widget _statsRow(BuildContext context) {
+  final chats = context.watch<ChatStore>().chats;
+  final private = chats.where((c) => c.type == 'private' && !c.isSavedMessages).length;
+  final groups = chats.where((c) => c.isGroup).length;
+  final channels = chats.where((c) => c.isChannel).length;
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  Widget cell(String n, String label) => Expanded(
+        child: Column(children: [
+          Text(n, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
+        ]),
+      );
+  Widget line() => Container(width: 1, height: 28, color: dark ? Colors.white12 : const Color(0xFFE6E8F0));
+  return Container(
+    margin: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    decoration: BoxDecoration(color: dark ? const Color(0xFF181C30) : Colors.white, borderRadius: BorderRadius.circular(18)),
+    child: Row(children: [cell('$private', 'Chats'), line(), cell('$groups', 'Groups'), line(), cell('$channels', 'Channels')]),
+  );
+}
 
 /// "Finish your profile": shown until photo, username, bio and birthday are set.
 Widget _completeCard(BuildContext context, AppUser me, VoidCallback edit) {
@@ -122,6 +146,7 @@ class MyProfileScreen extends StatelessWidget {
             ),
           ),
         ]),
+        _statsRow(context),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true),
         _completeCard(context, me, () => go(const EditProfileScreen())),
         SettingsGroup(title: 'About me', children: [
@@ -187,7 +212,12 @@ class MyProfileScreen extends StatelessWidget {
                 : (context.read<AuthState>().plusAvailable ? 'Animated stickers, themes, no ads and more' : 'Coming soon · stickers, themes, no ads'),
             onTap: () => go(const PremiumScreen()),
           ),
-          SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy & security', onTap: () => go(const PrivacyScreen())),
+        ]),
+        SettingsGroup(title: 'Account', children: [
+          SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Who sees your phone, photo and last seen', onTap: () => go(const PrivacyScreen())),
+          SettingsTile(icon: Icons.notifications_rounded, color: const Color(0xFFE5484D), title: 'Notifications', onTap: () => go(const NotificationsScreen())),
+          SettingsTile(icon: Icons.devices_rounded, color: Brand.sky, title: 'Devices', subtitle: 'Where you are logged in', onTap: () => go(const SessionsScreen())),
+          SettingsTile(icon: Icons.settings_rounded, color: const Color(0xFF5E6B8C), title: 'All settings', onTap: () => go(const SettingsScreen())),
         ]),
         const SizedBox(height: 24),
       ]),

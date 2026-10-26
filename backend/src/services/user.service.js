@@ -212,6 +212,23 @@ async function checkUsername(userId, username) {
   return { username: name, available: !taken };
 }
 
+const NOTIFY_DEFAULTS = { private: true, groups: true, channels: true, preview: true };
+
+/** Settings → Notifications (applied by the server when it sends pushes). */
+async function getNotifySettings(userId) {
+  const r = await db.one('SELECT notify_settings FROM users WHERE id = $1', [userId]);
+  return { ...NOTIFY_DEFAULTS, ...((r && r.notify_settings) || {}) };
+}
+
+async function setNotifySettings(userId, body = {}) {
+  const cur = await getNotifySettings(userId);
+  for (const k of Object.keys(NOTIFY_DEFAULTS)) {
+    if (body[k] !== undefined) cur[k] = v.bool(body[k], k);
+  }
+  await db.query('UPDATE users SET notify_settings = $2::jsonb WHERE id = $1', [userId, JSON.stringify(cur)]);
+  return cur;
+}
+
 async function setAvatar(userId, mediaId) {
   const media = await db.one('SELECT * FROM media WHERE id = $1', [v.id(mediaId, 'media_id')]);
   if (!media || media.uploader_id !== userId) throw notFound('media_not_found', 'Media not found');
@@ -664,6 +681,8 @@ async function sweepInactive() {
 }
 
 module.exports = {
+  getNotifySettings,
+  setNotifySettings,
   loginActivity,
   notMe,
   sweepInactive,

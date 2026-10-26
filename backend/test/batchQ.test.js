@@ -253,3 +253,15 @@ test('Talvio Bot API v2: own names, Talvio events, buttons, signed hooks', async
   assert.equal((await v2.call(key, 'hook.status')).url.startsWith('http://127.0.0.1'), true);
   await v2.call(key, 'hook.remove', { drop_pending: true });
 });
+
+test('notification settings: defaults, update, validation', async () => {
+  const d = await users.getNotifySettings(A.id);
+  assert.deepEqual(d, { private: true, groups: true, channels: true, preview: true });
+  const s = await users.setNotifySettings(A.id, { groups: false, preview: false, junk: true });
+  assert.equal(s.groups, false);
+  assert.equal(s.preview, false);
+  assert.equal(s.junk, undefined);
+  assert.equal((await users.getNotifySettings(A.id)).groups, false);
+  await rejects(users.setNotifySettings(A.id, { channels: 'maybe' }), 'invalid_input');
+  await users.setNotifySettings(A.id, { groups: true, preview: true });
+});

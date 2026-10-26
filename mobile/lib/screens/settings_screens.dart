@@ -3,6 +3,7 @@ import 'login_activity_screen.dart';
 import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
+import 'notifications_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -37,8 +38,82 @@ import '../theme/brand.dart';
 import '../widgets/premium.dart';
 import '../widgets/message_extras.dart';
 
-class SettingsScreen extends StatelessWidget {
+/// One row of Settings (also what the settings search looks through).
+class _Item {
+  const _Item(this.section, this.icon, this.color, this.title, {this.subtitle, this.trailing, this.onTap, this.danger = false, this.keywords = ''});
+  final String section;
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String? subtitle;
+  final String? trailing;
+  final VoidCallback? onTap;
+  final bool danger;
+  final String keywords;
+
+  bool matches(String q) => '$title ${subtitle ?? ''} $keywords $section'.toLowerCase().contains(q);
+  Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap, danger: danger);
+}
+
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _search = TextEditingController();
+  String _q = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<_Item> _items(BuildContext context, AuthState auth, AppUser me, String support) {
+    void go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    const acc = 'Account', notif = 'Notifications', priv = 'Privacy & security', chats = 'Chats', data = 'Data & connection', extra = 'Extras', help = 'Help';
+    return [
+      _Item(acc, Icons.person_rounded, Brand.sky, 'Edit profile', subtitle: 'Name, photo, username, bio, birthday', keywords: 'name photo avatar username bio', onTap: () => go(const EditProfileScreen())),
+      _Item(acc, Icons.auto_awesome_rounded, Brand.rose, 'Story highlights', subtitle: 'Keep your best stories on your profile', keywords: 'stories', onTap: () => go(const MyHighlightsScreen())),
+      _Item(acc, Icons.add_link_rounded, const Color(0xFF3C83DE), 'Call links', subtitle: 'A link anyone can use to call you', keywords: 'call', onTap: () => go(const CallLinksScreen())),
+      if (auth.accounts.list.length < auth.maxAccounts)
+        _Item(acc, Icons.person_add_alt_1_rounded, Brand.primary, 'Add another account', subtitle: 'Switch between accounts in one tap', keywords: 'switch login', onTap: () async {
+          Navigator.of(context).popUntil((r) => r.isFirst);
+          try {
+            await auth.addAccount();
+          } catch (e) {
+            if (context.mounted) showError(context, e);
+          }
+        }),
+      _Item(notif, Icons.notifications_rounded, const Color(0xFFE5484D), 'Notifications', subtitle: 'Chats, groups, channels, sound, vibration', keywords: 'sound vibrate alert push preview', onTap: () => go(const NotificationsScreen())),
+      _Item(priv, Icons.health_and_safety_rounded, const Color(0xFF12A150), 'Security checkup', subtitle: 'Your protection score and quick fixes', keywords: 'secure score', onTap: () => go(const SecurityCheckupScreen())),
+      _Item(priv, Icons.visibility_rounded, Brand.green, 'Privacy', subtitle: 'Who can see, message, call and find you', keywords: 'last seen online phone', onTap: () => go(const PrivacyScreen())),
+      _Item(priv, Icons.key_rounded, Brand.amber, 'Two-step verification', subtitle: 'An extra password when logging in', keywords: 'password 2fa', onTap: () => go(const TwoStepScreen())),
+      _Item(priv, Icons.fingerprint_rounded, const Color(0xFFC8366E), 'Passkeys', subtitle: 'Log in with your fingerprint or face', keywords: 'biometric', onTap: () => go(const PasskeysScreen())),
+      _Item(priv, Icons.pin_rounded, Brand.violet, 'App lock', subtitle: 'PIN or fingerprint to open Talvio', keywords: 'pin lock passcode', onTap: () => go(const AppLockSettingsScreen())),
+      _Item(priv, Icons.devices_rounded, Brand.sky, 'Devices', subtitle: 'Where you are logged in', keywords: 'sessions logout', onTap: () => go(const SessionsScreen())),
+      _Item(priv, Icons.manage_history_rounded, const Color(0xFF3C83DE), 'Login activity', subtitle: 'Every login and blocked attempt', keywords: 'history', onTap: () => go(const LoginActivityScreen())),
+      _Item(priv, Icons.block_rounded, const Color(0xFFE5484D), 'Blocked users', keywords: 'block', onTap: () => go(const BlockedUsersScreen())),
+      _Item(chats, Icons.palette_rounded, Brand.rose, 'Appearance', subtitle: 'Dark mode, chat theme, text size', keywords: 'theme dark night font wallpaper colour color', onTap: () => go(const AppearanceScreen())),
+      _Item(chats, Icons.emoji_emotions_rounded, Brand.primary, 'Stickers & emoji', keywords: 'sticker emoji', onTap: () => go(const StickerPacksScreen())),
+      _Item(chats, Icons.folder_rounded, Brand.sky, 'Chat folders', keywords: 'folder tabs', onTap: () => go(const FoldersScreen())),
+      _Item(chats, Icons.bookmarks_rounded, Brand.violet, 'Read later', subtitle: 'Messages you saved — on all your devices', keywords: 'bookmark saved', onTap: () => go(const ReadLaterScreen())),
+      _Item(chats, Icons.alarm_rounded, Brand.amber, 'Reminders', subtitle: 'Messages you asked to be reminded about', keywords: 'remind', onTap: () => go(const RemindersScreen())),
+      _Item(chats, Icons.archive_rounded, const Color(0xFF8A93B4), 'Archived chats', keywords: 'archive', onTap: () => go(const ArchivedChatsScreen())),
+      _Item(data, Icons.data_usage_rounded, Brand.green, 'Data & storage', subtitle: 'Auto-download, data saver, storage', keywords: 'download cache space', onTap: () => go(const StorageScreen())),
+      _Item(data, Icons.cloud_upload_rounded, Brand.violet, 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', keywords: 'backup restore drive', onTap: () => go(const BackupScreen())),
+      _Item(data, Icons.vpn_lock_rounded, const Color(0xFF3C83DE), 'Proxy', trailing: context.watch<ProxyManager>().enabled ? 'On' : 'Off', keywords: 'socks vpn blocked', onTap: () => go(const ProxySettingsScreen())),
+      _Item(extra, Icons.mosque_rounded, const Color(0xFF13A07E), 'Prayer times', subtitle: 'Qibla, Suhoor & Iftar reminders', keywords: 'namaz salah qibla ramadan', onTap: () => go(const PrayerScreen())),
+      if (auth.feature('bots')) _Item(extra, Icons.smart_toy_rounded, const Color(0xFF5B49D6), 'My bots', subtitle: 'Create bots and get their keys', keywords: 'bot api botforge', onTap: () => go(const MyBotsScreen())),
+      _Item(help, Icons.support_agent_rounded, Brand.sky, 'Help & support', subtitle: support.isNotEmpty ? 'Or message @$support' : null, keywords: 'contact', onTap: () => go(const SupportListScreen())),
+      _Item(help, Icons.quiz_rounded, Brand.amber, 'FAQ', keywords: 'questions', onTap: () => go(const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
+      _Item(help, Icons.description_rounded, const Color(0xFF8A93B4), 'Terms of service', onTap: () => go(const ContentPageScreen(slug: 'terms', fallbackTitle: 'Terms'))),
+      _Item(help, Icons.privacy_tip_rounded, Brand.green, 'Privacy policy', onTap: () => go(const ContentPageScreen(slug: 'privacy', fallbackTitle: 'Privacy'))),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +124,62 @@ class SettingsScreen extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     void go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
     final plus = auth.me?.isPremium == true;
+    final items = _items(context, auth, me, support);
+    final q = _q.trim().toLowerCase();
+
+    final searchField = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: TextField(
+        controller: _search,
+        onChanged: (v) => setState(() => _q = v),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search settings',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: _q.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() {
+                    _search.clear();
+                    _q = '';
+                  }),
+                ),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+
+    if (q.isNotEmpty) {
+      final hits = items.where((i) => i.matches(q)).toList();
+      return Scaffold(
+        appBar: AppBar(title: const Text('Settings')),
+        body: ListView(children: [
+          searchField,
+          if (hits.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Column(children: [
+                Icon(Icons.search_off_rounded, size: 44, color: Brand.muted),
+                SizedBox(height: 10),
+                Text('Nothing found', textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontWeight: FontWeight.w600)),
+              ]),
+            )
+          else
+            SettingsGroup(title: '${hits.length} result${hits.length == 1 ? '' : 's'}', children: [
+              for (final h in hits)
+                SettingsTile(icon: h.icon, color: h.color, title: h.title, subtitle: h.subtitle ?? h.section, trailing: h.trailing, onTap: h.onTap),
+            ]),
+        ]),
+      );
+    }
+
+    final sections = <String>[];
+    for (final i in items) {
+      if (!sections.contains(i.section)) sections.add(i.section);
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -121,9 +252,10 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ),
+          searchField,
           // quick shortcuts
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
             child: Row(children: [
               Expanded(
                 child: QuickTile(
@@ -141,7 +273,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: QuickTile(icon: Icons.qr_code_2_rounded, label: 'QR code', color: Brand.violet, onTap: () => go(const MyQrScreen()))),
+              Expanded(child: QuickTile(icon: Icons.notifications_rounded, label: 'Alerts', color: const Color(0xFFE5484D), onTap: () => go(const NotificationsScreen()))),
               const SizedBox(width: 10),
               Expanded(child: QuickTile(icon: Icons.palette_rounded, label: 'Theme', color: Brand.rose, onTap: () => go(const AppearanceScreen()))),
               const SizedBox(width: 10),
@@ -197,75 +329,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ),
-          SettingsGroup(title: 'Account', children: [
-            SettingsTile(icon: Icons.person_rounded, color: Brand.sky, title: 'Edit profile', subtitle: 'Name, photo, username, bio, birthday', onTap: () => go(const EditProfileScreen())),
-            SettingsTile(
-              icon: Icons.auto_awesome_rounded,
-              color: Brand.rose,
-              title: 'Story highlights',
-              subtitle: 'Keep your best stories on your profile',
-              onTap: () => go(const MyHighlightsScreen()),
-            ),
-            SettingsTile(icon: Icons.add_link_rounded, color: const Color(0xFF3C83DE), title: 'Call links', subtitle: 'A link anyone can use to call you', onTap: () => go(const CallLinksScreen())),
-            if (auth.accounts.list.length < auth.maxAccounts)
-              SettingsTile(
-                icon: Icons.person_add_alt_1_rounded,
-                color: Brand.primary,
-                title: 'Add another account',
-                subtitle: 'Switch between accounts in one tap',
-                onTap: () async {
-                  Navigator.of(context).popUntil((r) => r.isFirst);
-                  try {
-                    await auth.addAccount();
-                  } catch (e) {
-                    if (context.mounted) showError(context, e);
-                  }
-                },
-              ),
-          ]),
-          SettingsGroup(title: 'Privacy & security', children: [
-            SettingsTile(icon: Icons.health_and_safety_rounded, color: const Color(0xFF12A150), title: 'Security checkup', subtitle: 'Your protection score and quick fixes', onTap: () => go(const SecurityCheckupScreen())),
-            SettingsTile(icon: Icons.visibility_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Who can see, message, call and find you', onTap: () => go(const PrivacyScreen())),
-            SettingsTile(icon: Icons.key_rounded, color: Brand.amber, title: 'Two-step verification', subtitle: 'An extra password when logging in', onTap: () => go(const TwoStepScreen())),
-            SettingsTile(icon: Icons.manage_history_rounded, color: const Color(0xFF3C83DE), title: 'Login activity', subtitle: 'Every login and blocked attempt', onTap: () => go(const LoginActivityScreen())),
-            SettingsTile(icon: Icons.fingerprint_rounded, color: const Color(0xFFC8366E), title: 'Passkeys', subtitle: 'Log in with your fingerprint or face', onTap: () => go(const PasskeysScreen())),
-            SettingsTile(icon: Icons.pin_rounded, color: Brand.violet, title: 'App lock', subtitle: 'PIN or fingerprint to open Talvio', onTap: () => go(const AppLockSettingsScreen())),
-            SettingsTile(icon: Icons.block_rounded, color: const Color(0xFFE5484D), title: 'Blocked users', onTap: () => go(const BlockedUsersScreen())),
-          ]),
-          SettingsGroup(title: 'Chats', children: [
-            SettingsTile(icon: Icons.palette_rounded, color: Brand.rose, title: 'Appearance', subtitle: 'Dark mode, chat theme, text size', onTap: () => go(const AppearanceScreen())),
-            SettingsTile(icon: Icons.emoji_emotions_rounded, color: Brand.primary, title: 'Stickers & emoji', onTap: () => go(const StickerPacksScreen())),
-            SettingsTile(icon: Icons.folder_rounded, color: Brand.sky, title: 'Chat folders', onTap: () => go(const FoldersScreen())),
-            SettingsTile(icon: Icons.bookmarks_rounded, color: Brand.violet, title: 'Read later', subtitle: 'Messages you saved — on all your devices', onTap: () => go(const ReadLaterScreen())),
-            SettingsTile(icon: Icons.alarm_rounded, color: Brand.amber, title: 'Reminders', subtitle: 'Messages you asked to be reminded about', onTap: () => go(const RemindersScreen())),
-            SettingsTile(icon: Icons.archive_rounded, color: const Color(0xFF8A93B4), title: 'Archived chats', onTap: () => go(const ArchivedChatsScreen())),
-            SettingsTile(icon: Icons.cloud_upload_rounded, color: Brand.violet, title: 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', onTap: () => go(const BackupScreen())),
-            SettingsTile(icon: Icons.data_usage_rounded, color: Brand.green, title: 'Data & storage', onTap: () => go(const StorageScreen())),
-            SettingsTile(
-              icon: Icons.vpn_lock_rounded,
-              color: const Color(0xFF3C83DE),
-              title: 'Proxy',
-              trailing: context.watch<ProxyManager>().enabled ? 'On' : 'Off',
-              onTap: () => go(const ProxySettingsScreen()),
-            ),
-          ]),
-          SettingsGroup(title: 'Extras', children: [
-            SettingsTile(icon: Icons.mosque_rounded, color: const Color(0xFF13A07E), title: 'Prayer times', subtitle: 'Qibla, Suhoor & Iftar reminders', onTap: () => go(const PrayerScreen())),
-            if (auth.feature('bots'))
-              SettingsTile(icon: Icons.smart_toy_rounded, color: const Color(0xFF5B49D6), title: 'My bots', onTap: () => go(const MyBotsScreen())),
-          ]),
-          SettingsGroup(title: 'Help', children: [
-            SettingsTile(
-              icon: Icons.support_agent_rounded,
-              color: Brand.sky,
-              title: 'Help & support',
-              subtitle: support.isNotEmpty ? 'Or message @$support' : null,
-              onTap: () => go(const SupportListScreen()),
-            ),
-            SettingsTile(icon: Icons.quiz_rounded, color: Brand.amber, title: 'FAQ', onTap: () => go(const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
-            SettingsTile(icon: Icons.description_rounded, color: const Color(0xFF8A93B4), title: 'Terms of service', onTap: () => go(const ContentPageScreen(slug: 'terms', fallbackTitle: 'Terms'))),
-            SettingsTile(icon: Icons.privacy_tip_rounded, color: Brand.green, title: 'Privacy policy', onTap: () => go(const ContentPageScreen(slug: 'privacy', fallbackTitle: 'Privacy'))),
-          ]),
+          for (final sec in sections) SettingsGroup(title: sec, children: [for (final i in items.where((i) => i.section == sec)) i.tile()]),
           SettingsGroup(children: [
             SettingsTile(
               icon: Icons.logout_rounded,

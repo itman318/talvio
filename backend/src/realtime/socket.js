@@ -170,11 +170,18 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   if (offline.length === 0) return;
   // muted chats still notify people who were @mentioned / replied to
   const rows = await db.many(
-    `SELECT user_id, is_locked FROM chat_members
-     WHERE chat_id = $1 AND user_id = ANY($2::bigint[]) AND NOT is_request
-       AND (muted_until IS NULL OR muted_until < now() OR user_id = ANY($3::bigint[]))`,
+    `SELECT m.user_id, m.is_locked, u.notify_settings AS ns FROM chat_members m JOIN users u ON u.id = m.user_id
+     WHERE m.chat_id = $1 AND m.user_id = ANY($2::bigint[]) AND NOT m.is_request
+       AND (m.muted_until IS NULL OR m.muted_until < now() OR m.user_id = ANY($3::bigint[]))`,
     [chatId, offline, message.mentions || []],
-  );
+  ).then(async (all) => {
+    // Settings → Notifications: private chats / groups / channels can be switched off (an @mention still comes through)
+    const ct = (await db.one('SELECT type FROM chats WHERE id = $1', [chatId]))?.type;
+    const key = ct === 'channel' ? 'channels' : ct === 'group' ? 'groups' : 'private';
+    const mentioned = new Set((message.mentions || []).map(Number));
+    return all.filter((r) => (r.ns || {})[key] !== false || mentioned.has(Number(r.user_id)));
+  });
+  const noPreview = new Set(rows.filter((r) => (r.ns || {}).preview === false).map((r) => Number(r.user_id)));
   // locked chats: a plain "New message" (no name, no text) — the phone opens the chat after the fingerprint
   const locked = rows.filter((r) => r.is_locked).map((r) => r.user_id);
   if (locked.length) {
@@ -183,8 +190,11 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   const targets = rows.filter((r) => !r.is_locked).map((r) => r.user_id);
   if (targets.length === 0) return;
   const chat = await db.one('SELECT type, title FROM chats WHERE id = $1', [chatId]);
+  const plain = targets.filter((id) => noPreview.has(Number(id)));
+  const full = targets.filter((id) => !noPreview.has(Number(id)));
   if (chat.type === 'channel') {
-    await push.sendToUsers(targets, { title: chat.title, body: previewText(message) }, { type: 'message', chat_id: chatId, message_id: message.id });
+    if (full.length) await push.sendToUsers(full, { title: chat.title, body: previewText(message) }, { type: 'message', chat_id: chatId, message_id: message.id });
+    if (plain.length) await push.sendToUsers(plain, { title: chat.title, body: 'New post' }, { type: 'message', chat_id: chatId, message_id: message.id });
     return;
   }
   const senderName = message.sender
@@ -194,7 +204,19 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   const notification =
     chat.type === 'group' ? { title: chat.title, body: `${senderName}: ${body}` } : { title: senderName, body };
   const notify = require('../services/notify.service');
-  await push.sendToUsers(targets, notification, {
+  if (plain.length) {
+    // "Show message text" off: who wrote, but not what
+    await push.sendToUsers(plain, { title: notification.title, body: 'New message' }, {
+      type: 'message',
+      chat_id: chatId,
+      message_id: message.id,
+      chat_title: chat.type === 'group' ? chat.title : senderName,
+      sender: senderName,
+      group: chat.type === 'group' ? 1 : 0,
+    }, { dataOnlyAndroid: true, category: 'MESSAGE', perSession: (row) => ({ reply_token: notify.replyToken(row.user_id, row.id, chatId) }) });
+  }
+  if (!full.length) return;
+  await push.sendToUsers(full, notification, {
     type: 'message',
     chat_id: chatId,
     message_id: message.id,

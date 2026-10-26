@@ -6,6 +6,7 @@ import 'chat_passcode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 
@@ -95,15 +96,27 @@ class MessageNotifications {
       if (ChatPasscode.has(chatId)) data = {...data, 'body': '🔒 New message'};
     } catch (_) {}
     final canReply = data['reply_token'] != null;
+    // Settings → Notifications → Sound / Vibrate. Android fixes sound per channel, so each mix has its own channel.
+    var sound = true, vibrate = true;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.reload();
+      sound = p.getBool('notif_sound') ?? true;
+      vibrate = p.getBool('notif_vibrate') ?? true;
+    } catch (_) {}
+    final channelId = sound && vibrate ? _channel.channelId : 'messages_${sound ? 's' : 'q'}${vibrate ? 'v' : 'n'}';
+    final channelName = sound && vibrate ? _channel.channelName : (sound ? 'Messages (no vibration)' : (vibrate ? 'Messages (no sound)' : 'Messages (silent)'));
     await plugin.show(
       idFor(chatId),
       '${data['title']}',
       '${data['body'] ?? ''}',
       NotificationDetails(
         android: AndroidNotificationDetails(
-          _channel.channelId,
-          _channel.channelName,
+          channelId,
+          channelName,
           channelDescription: _channel.channelDescription,
+          playSound: sound,
+          enableVibration: vibrate,
           importance: _channel.importance,
           priority: _channel.priority,
           category: _channel.category,
