@@ -7,6 +7,7 @@ import 'notifications_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -416,6 +417,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _busy = false;
   Birthday? _birthday;
   bool _birthdayChanged = false;
+  final _bday = TextEditingController();
 
   @override
   void initState() {
@@ -426,6 +428,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _username = TextEditingController(text: me.username ?? '');
     _bio = TextEditingController(text: me.bio);
     _birthday = me.birthday;
+    _bday.text = me.birthday?.label ?? '';
   }
 
   Future<void> _pickBirthday() async {
@@ -442,6 +445,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (d == null) return;
     setState(() {
       _birthday = Birthday(d.day, d.month, d.year);
+      _bday.text = _birthday!.label;
       _birthdayChanged = true;
     });
   }
@@ -470,6 +474,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _save() async {
+    if (_bday.text.trim().isNotEmpty && _birthday == null) {
+      showInfo(context, 'Check your birthday: write it like 15-02-1991');
+      return;
+    }
     setState(() => _busy = true);
     try {
       final u = await context.read<AppServices>().api.patch('/me', {
@@ -598,26 +606,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             decoration: const InputDecoration(labelText: 'Bio', hintText: 'A few words about you', alignLabelWithHint: true),
           ),
           label('Birthday'),
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: _pickBirthday,
-            child: InputDecorator(
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.cake_rounded),
-                suffixIcon: _birthday == null
-                    ? null
-                    : IconButton(
-                        tooltip: 'Remove',
-                        icon: const Icon(Icons.close_rounded),
-                        onPressed: () => setState(() {
-                          _birthday = null;
-                          _birthdayChanged = true;
-                        }),
-                      ),
-                helperText: 'Contacts see the day and month (change who in Privacy). The year stays private.',
-                helperMaxLines: 2,
-              ),
-              child: Text(_birthday?.label ?? 'Add your birthday', style: TextStyle(color: _birthday == null ? Brand.muted : null)),
+          TextField(
+            controller: _bday,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, _DateDashes()],
+            onChanged: (v) => setState(() {
+              _birthdayChanged = true;
+              _birthday = v.trim().isEmpty ? null : Birthday.parse(v);
+            }),
+            decoration: InputDecoration(
+              labelText: 'Birthday',
+              hintText: 'DD-MM-YYYY',
+              prefixIcon: const Icon(Icons.cake_rounded),
+              suffixIcon: IconButton(tooltip: 'Pick from calendar', icon: const Icon(Icons.calendar_month_rounded), onPressed: _pickBirthday),
+              errorText: _bday.text.trim().isNotEmpty && _birthday == null ? 'Write it like 15-02-1991' : null,
+              helperText: 'Contacts see the day and month (change who in Privacy). The year stays private.',
+              helperMaxLines: 2,
             ),
           ),
           const SizedBox(height: 18),
@@ -1534,5 +1538,21 @@ class _SecurityCheckupScreenState extends State<SecurityCheckupScreen> {
         ]),
       ]),
     );
+  }
+}
+
+
+/// Types "15021991" as "15-02-1991".
+class _DateDashes extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final d = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final b = StringBuffer();
+    for (var i = 0; i < d.length && i < 8; i++) {
+      if (i == 2 || i == 4) b.write('-');
+      b.write(d[i]);
+    }
+    final t = b.toString();
+    return TextEditingValue(text: t, selection: TextSelection.collapsed(offset: t.length));
   }
 }

@@ -5,6 +5,7 @@ import 'proxy_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'notices_screen.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
@@ -149,6 +150,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ]),
         actions: [
+          if (!_searching)
+            ValueListenableBuilder<int>(
+              valueListenable: store.noticeUnread,
+              builder: (_, n, __) => IconButton(
+                tooltip: 'Notifications',
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticesScreen())),
+                icon: Badge(
+                  isLabelVisible: n > 0,
+                  label: Text(n > 99 ? '99+' : '$n'),
+                  backgroundColor: Brand.rose,
+                  child: Icon(n > 0 ? Icons.notifications_active_rounded : Icons.notifications_none_rounded),
+                ),
+              ),
+            ),
           if (_searching)
           IconButton(
             icon: const Icon(Icons.close),

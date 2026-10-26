@@ -374,3 +374,36 @@ test('support: screenshot, phone info, rating once after it is resolved', async 
   const reply = await support.userReply(B.id, r.ticket.id, { text: 'x' }).catch((e) => e);
   assert.equal(reply.code, 'ticket_not_found');
 });
+
+test('blocking: the blocked person sees they were blocked', async () => {
+  const D = await signup('+923270000077', 'Dina', 'dina_blk');
+  const chat = await chats.getOrCreatePrivate(A.id, D.id);
+  const seen = [];
+  const on = (e) => seen.push(e);
+  bus.on('chat:updated', on);
+  await users.block(A.id, D.id);
+  bus.off('chat:updated', on);
+  assert.ok(seen.some((e) => e.chatId === chat.id && e.memberIds.includes(D.id)));
+  const map = await users.getUsersMap(D.id, [A.id]);
+  assert.equal(map.get(A.id).blocked_me, true);
+  await users.unblock(A.id, D.id);
+  assert.equal((await users.getUsersMap(D.id, [A.id])).get(A.id).blocked_me, false);
+});
+
+test('in-app notifications: new login, added to a group, admin rights, read all', async () => {
+  const notices = require('../src/services/notice.service');
+  const E = await signup('+923270000088', 'Erum', 'erum_ntf');
+  let l = await notices.list(E.id);
+  assert.ok(l.items.some((n) => n.kind === 'login'), 'login notice');
+  const { chat: g } = await chats.createGroup(A.id, { title: 'Notify grp', member_ids: [] });
+  await chats.addMembers(A.id, g.id, [E.id]);
+  await chats.setMemberRole(A.id, g.id, E.id, 'admin', { title: 'Helper' });
+  l = await notices.list(E.id);
+  assert.ok(l.items.some((n) => n.kind === 'group' && n.title.includes('Notify grp')));
+  assert.ok(l.items.some((n) => n.kind === 'admin' && n.title.includes('Helper')));
+  assert.ok(l.unread >= 3);
+  await notices.markAllRead(E.id);
+  assert.equal((await notices.unreadCount(E.id)).unread, 0);
+  await notices.clear(E.id);
+  assert.equal((await notices.list(E.id)).items.length, 0);
+});

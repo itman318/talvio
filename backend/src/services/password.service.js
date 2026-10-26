@@ -111,6 +111,7 @@ async function set(userId, body = {}) {
     `UPDATE users SET password_hash = $2, password_hint = $3, password_set_at = now(), password_reset_after = NULL WHERE id = $1 RETURNING *`,
     [userId, hashPassword(password), hint || null],
   );
+  await require('./notice.service').notify(userId, 'security', u.password_hash ? 'Two-step password changed' : 'Two-step verification is on', 'Your account now asks for this password when logging in on a new device.');
   return status(row);
 }
 
@@ -121,6 +122,7 @@ async function remove(userId, body = {}) {
     'UPDATE users SET password_hash = NULL, password_hint = NULL, password_reset_after = NULL WHERE id = $1 RETURNING *',
     [userId],
   );
+  await require('./notice.service').notify(userId, 'security', 'Two-step verification turned off', 'If you didn’t do this, change your login details and turn it back on in Settings → Two-step verification.');
   return status(row);
 }
 

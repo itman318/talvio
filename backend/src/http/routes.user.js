@@ -348,6 +348,12 @@ router.patch('/highlights/:id', h(async (req, res) => res.json(await storyServic
 router.delete('/highlights/:id', h(async (req, res) => res.json(await storyService.deleteHighlight(req.userId, req.params.id))));
 
 // --- support tickets & announcements
+// --- in-app notifications
+router.get('/notices', h(async (req, res) => res.json(await require('../services/notice.service').list(req.userId, req.query)))); // eslint-disable-line global-require
+router.get('/notices/unread', h(async (req, res) => res.json(await require('../services/notice.service').unreadCount(req.userId)))); // eslint-disable-line global-require
+router.post('/notices/read', h(async (req, res) => res.json(await require('../services/notice.service').markAllRead(req.userId)))); // eslint-disable-line global-require
+router.delete('/notices', h(async (req, res) => res.json(await require('../services/notice.service').clear(req.userId)))); // eslint-disable-line global-require
+router.delete('/notices/:id', h(async (req, res) => res.json(await require('../services/notice.service').remove(req.userId, req.params.id)))); // eslint-disable-line global-require
 router.get('/support/tickets', h(async (req, res) => res.json(await supportService.listMine(req.userId))));
 router.post('/support/tickets', h(async (req, res) => res.json(await supportService.createTicket(req.userId, req.body))));
 router.get('/support/tickets/:id', h(async (req, res) => res.json(await supportService.getMine(req.userId, req.params.id))));

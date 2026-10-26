@@ -139,7 +139,7 @@ async function createSession(userId, device, ip) {
      VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(days => $7)) RETURNING id`,
     [userId, sha256(refresh), d.name, d.platform, d.appVersion, ip || null, config.refreshTokenTtlDays],
   );
-  alertNewLogin(userId, s.id, d).catch(() => {});
+  alertNewLogin(userId, s.id, d, ip).catch(() => {});
   recordLoginEvent(userId, 'login', device, ip, s.id).catch(() => {});
   return issueTokens(userId, s.id, refresh);
 }
@@ -158,11 +158,14 @@ async function recordLoginEvent(userId, kind, device, ip, sessionId = null) {
     ? `A wrong two-step password was entered on ${device2}. If this wasn't you, change your password.`
     : `Someone on ${device2} entered your login code. Your two-step password stopped them — if it wasn't you, keep your codes private.`;
   await require('./push.service').sendToUsers([userId], { title: 'Security alert', body }, { type: 'security_alert' }, { tag: `sec-${userId}` }).catch(() => {});
+  await require('./notice.service').notify(userId, 'security', kind === 'wrong_password' ? 'Wrong two-step password' : 'Someone entered your login code', `${body}${ip ? ` (IP ${String(ip).replace(/^::ffff:/, '')})` : ''}`);
   bus.emit('rt:emit', { event: 'security:alert', payload: { kind, device: device2, at: new Date().toISOString() }, userIds: [userId] });
 }
 
 /** "New login on <device>": tells the account's other devices, so a stranger's login can be logged out at once. */
-async function alertNewLogin(userId, sessionId, d) {
+async function alertNewLogin(userId, sessionId, d, ip = null) {
+  const where = [d.name, d.platform, d.appVersion ? `Talvio ${d.appVersion}` : null].filter(Boolean).join(' · ') || 'a new device';
+  await require('./notice.service').notify(userId, 'login', 'New login to your account', `${where}${ip ? ` · IP ${String(ip).replace(/^::ffff:/, '')}` : ''}. If this wasn't you, open Settings → Devices and log it out, then turn on two-step verification.`, { session_id: sessionId });
   const others = await db.many(
     'SELECT id FROM sessions WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL AND expires_at > now()',
     [userId, sessionId],

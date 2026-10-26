@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/chat_links.dart';
 import '../core/services.dart';
 import '../widgets/avatar.dart';
+import '../widgets/celebration.dart';
 import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
@@ -131,7 +132,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       extendBodyBehindAppBar: true,
       body: u == null
           ? Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator())
-          : ListView(
+          : Stack(children: [
+              ListView(
               padding: EdgeInsets.zero,
               children: [
                 ProfileHero(
@@ -141,7 +143,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   online: u.online,
                   glow: u.isPremium,
                   topPadding: MediaQuery.of(context).padding.top + 44,
-                  status: u.isBot ? 'bot' : lastSeenText(u),
+                  status: u.isBot ? 'bot' : (u.blockedMe ? 'has blocked you' : lastSeenText(u)),
                   statusColor: u.online ? Brand.accent : null,
                   badges: [
                     if (u.isVerified) const Icon(Icons.verified_rounded, color: Brand.sky, size: 22),
@@ -162,8 +164,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             },
                           ),
                       ],
-                      if (!u.isBot && auth.feature('calls')) ProfileAction(icon: Icons.call_rounded, label: 'Call', onTap: () => startCall(context, u, video: false)),
-                      if (!u.isBot && auth.feature('calls') && auth.feature('video_calls'))
+                      if (!u.isBot && !u.blockedMe && auth.feature('calls')) ProfileAction(icon: Icons.call_rounded, label: 'Call', onTap: () => startCall(context, u, video: false)),
+                      if (!u.isBot && !u.blockedMe && auth.feature('calls') && auth.feature('video_calls'))
                         ProfileAction(icon: Icons.videocam_rounded, label: 'Video', onTap: () => startCall(context, u, video: true)),
                       if (chat != null)
                         ProfileAction(
@@ -181,6 +183,44 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ],
                   ],
                 ),
+                if (u.birthday?.isToday == true && !u.deleted)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFFF8A65), Color(0xFFFF5E8A), Color(0xFF8E54E9)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 6))],
+                    ),
+                    child: Row(children: [
+                      const Text('🎂', style: TextStyle(fontSize: 34)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(u.id == myId ? 'Happy birthday to you!' : 'It’s ${u.firstName.isEmpty ? u.name : u.firstName}’s birthday!',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                          const SizedBox(height: 2),
+                          Text(u.id == myId ? 'Everyone who opens your profile today sees the party 🎉' : 'Send a wish and make their day 🎉',
+                              style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+                        ]),
+                      ),
+                      if (other)
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFFE0417A), padding: const EdgeInsets.symmetric(horizontal: 14)),
+                          onPressed: () async {
+                            try {
+                              final chat = await context.read<ChatStore>().openPrivateWith(u.id);
+                              if (!mounted) return;
+                              await context.read<ChatStore>().sendText(chat.id, 'Happy birthday, ${u.firstName.isEmpty ? u.name : u.firstName}! 🎂🎉');
+                              if (mounted) showInfo(this.context, 'Wish sent 🎉');
+                            } catch (e) {
+                              if (mounted) showError(this.context, e);
+                            }
+                          },
+                          child: const Text('Wish 🎈', style: TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                    ]),
+                  ),
                 if (!u.deleted) HighlightsRow(key: ValueKey('hl${u.id}'), userId: u.id, mine: u.id == myId),
                 SettingsGroup(title: 'Info', children: [
                   if (u.phone != null)
@@ -259,6 +299,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 const SizedBox(height: 24),
               ],
             ),
+              // birthday today: fireworks and balloons for everyone who opens the profile
+              if (u.birthday?.isToday == true && !u.deleted) const Positioned.fill(child: BirthdayCelebration()),
+            ]),
     );
   }
 }

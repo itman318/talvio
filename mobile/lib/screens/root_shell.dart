@@ -18,6 +18,7 @@ import 'chat_screen.dart';
 import '../state/chat_store.dart';
 import 'calls_screen.dart';
 import 'home_screen.dart';
+import 'notices_screen.dart';
 import 'settings_screens.dart';
 import 'qr_screens.dart';
 import 'user_profile_screen.dart';
@@ -34,10 +35,30 @@ class _RootShellState extends State<RootShell> {
   int _tab = 0;
   final _built = <int>{0};
   StreamSubscription<Uri>? _links;
+  late final ChatStore _store = context.read<ChatStore>();
+
+  /// A new Talvio notification while the app is open: a small banner with a "View" button.
+  void _onNotice() {
+    final n = _store.lastNotice.value;
+    if (n == null || !mounted) return;
+    final m = ScaffoldMessenger.of(context);
+    m.hideCurrentSnackBar();
+    m.showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+      content: Row(children: [
+        const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 20),
+        const SizedBox(width: 10),
+        Expanded(child: Text('${n['title']}', maxLines: 2, overflow: TextOverflow.ellipsis)),
+      ]),
+      action: SnackBarAction(label: 'View', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticesScreen()))),
+    ));
+  }
 
   @override
   void initState() {
     super.initState();
+    _store.lastNotice.addListener(_onNotice);
     // talvio://u/<id> links (profile QR codes scanned with the phone camera)
     try {
       _links = AppLinks().uriLinkStream.listen((uri) {
@@ -55,6 +76,7 @@ class _RootShellState extends State<RootShell> {
 
   @override
   void dispose() {
+    _store.lastNotice.removeListener(_onNotice);
     _links?.cancel();
     super.dispose();
   }

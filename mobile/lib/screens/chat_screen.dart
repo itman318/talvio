@@ -93,6 +93,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
+  String? _emojiOnly; // the message box holds exactly one emoji
   bool _unlocked = ChatLock.isOpen; // locked chats: fingerprint first
   final Set<int> _selected = {}; // multi-select (message ids)
   Message? _quote; // private reply
@@ -402,6 +403,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _text.text = _prefs.draft(widget.chatId) ?? '';
     _text.addListener(_onInlineText);
     _text.addListener(() {
+      final t = _text.text.trim();
+      final one = t.isNotEmpty && t.length <= 16 && bigEmojiCount(t) == 1 ? t : null;
+      if (one != _emojiOnly && mounted) setState(() => _emojiOnly = one);
       if (_formatOpen && (!_text.selection.isValid || _text.selection.isCollapsed) && mounted) setState(() => _formatOpen = false);
     });
     _scroll.addListener(() {
@@ -2208,7 +2212,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (canSend && !chat.isSavedMessages) ...[
             const SizedBox(height: 14),
             Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
-              for (final g in ['👋 Hi!', 'Hello 🙂', '${taliChar(0)} Hey'])
+              for (final g in ['👋 Hi!', 'Hello 🙂', 'Salam 🤝'])
                 ActionChip(
                   label: Text.rich(TextSpan(children: taliSpans(g, const TextStyle(fontWeight: FontWeight.w700)))),
                   onPressed: () => _store.sendText(chatId, g),
@@ -2480,14 +2484,6 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       default:
         body = Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            margin: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-            decoration: BoxDecoration(
-              gradient: Brand.auroraSoft(dark),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: TaliEmojiStrip(onPick: (c) => setState(() => _text.insert(c))),
-          ),
           SizedBox(
             height: pickerH,
             child: EmojiPicker(
@@ -2669,8 +2665,10 @@ class _ChatScreenState extends State<ChatScreen> {
     } else if (chat.isRestricted) {
       blockedText = 'An admin muted you in this group until ${chatListTime(chat.restrictedUntil!)} ${messageTime(chat.restrictedUntil!)}.';
     } else if (chat.peer?.blocked == true) {
-      blockedText = 'You blocked this user.';
+      blockedText = 'You blocked ${chat.peer!.name}. They can’t message or call you.';
       blockedAction = TextButton(onPressed: () => _chatMenu('block', chat), child: const Text('Unblock'));
+    } else if (chat.peer?.blockedMe == true) {
+      blockedText = '${chat.peer!.name} has blocked you. You can’t send messages or call them.';
     }
     if (blockedText != null) {
       return SafeArea(
@@ -2680,6 +2678,8 @@ class _ChatScreenState extends State<ChatScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(chat.peer?.blockedMe == true || chat.peer?.blocked == true ? Icons.block_rounded : Icons.info_outline_rounded, color: Brand.muted, size: 22),
+            const SizedBox(height: 6),
             Text(blockedText, textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
             if (blockedAction != null) blockedAction,
           ]),
@@ -2776,6 +2776,14 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             if ((_inline != null || _inlineLoading) && !_recording && _reviewPath == null) _inlinePanel(),
             if (_formatOpen && _text.selection.isValid && !_text.selection.isCollapsed && !_recording && _reviewPath == null) _formatBar(),
+            // one emoji typed → matching stickers above the box
+            if (!_recording && _reviewPath == null && _editing == null && _emojiOnly != null && chat.canPost)
+              EmojiStickerSuggestions(
+                key: ValueKey(_emojiOnly),
+                chatId: chatId,
+                emoji: _emojiOnly!,
+                onSent: () => setState(() => _text.clear()),
+              ),
             if (_reviewPath != null)
               _reviewBar(chat)
             else if (_recording)

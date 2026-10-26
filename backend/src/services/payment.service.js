@@ -245,6 +245,7 @@ async function markPaid(orderId, { providerRef = null, raw = null, message = nul
   if (r) {
     bus.emit('user:updated', { userId: r.user_id });
     bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: r.id, status: 'paid' }, userIds: [r.user_id] });
+    await require('./notice.service').notify(r.user_id, 'payment', 'Payment received — Talvio Plus is active ⭐', `Order #${r.id}: ${r.months} month${r.months === 1 ? '' : 's'} added. Thank you!`, { order_id: r.id });
   }
   return r;
 }
@@ -255,7 +256,10 @@ async function markFailed(orderId, { status = 'failed', message = null, raw = nu
      WHERE id = $1 AND status IN ('pending', 'review') RETURNING *`,
     [orderId, status, message, raw ? JSON.stringify(raw) : null],
   );
-  if (r) bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: r.id, status: r.status }, userIds: [r.user_id] });
+  if (r) {
+    bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: r.id, status: r.status }, userIds: [r.user_id] });
+    await require('./notice.service').notify(r.user_id, 'payment', 'Payment not completed', `Order #${r.id}: ${message || 'the payment did not go through'}.`, { order_id: r.id });
+  }
   return r;
 }
 

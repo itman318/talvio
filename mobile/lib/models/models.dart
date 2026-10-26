@@ -20,6 +20,7 @@ class AppUser {
   final bool lastSeenHidden;
   final bool isContact;
   final bool blocked;
+  final bool blockedMe; // this person blocked me
   final Map<String, String>? privacy; // only for "me"
   final bool isBot;
   final bool isPremium;
@@ -45,6 +46,7 @@ class AppUser {
     this.lastSeenHidden = false,
     this.isContact = false,
     this.blocked = false,
+    this.blockedMe = false,
     this.privacy,
     this.isBot = false,
     this.isPremium = false,
@@ -71,6 +73,7 @@ class AppUser {
         lastSeenHidden: j['last_seen_hidden'] == true,
         isContact: j['is_contact'] == true,
         blocked: j['blocked'] == true,
+        blockedMe: j['blocked_me'] == true,
         privacy: j['privacy'] == null ? null : Map<String, String>.from(j['privacy'] as Map),
         isBot: j['is_bot'] == true,
         isPremium: j['is_premium'] == true,
@@ -101,7 +104,23 @@ class Birthday {
 
   static const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  String get label => '$day ${months[(month - 1).clamp(0, 11)]}${year != null ? ' $year' : ''}';
+  /// "15-02-1991" (or "15-02" when the year is private).
+  String get label => '${'$day'.padLeft(2, '0')}-${'$month'.padLeft(2, '0')}${year != null ? '-$year' : ''}';
+
+  /// Reads "15-02-1991", "15/02/1991", "15.02.1991" or "15-02". Null when it is not a real date.
+  static Birthday? parse(String raw) {
+    final m = RegExp(r'^\s*(\d{1,2})[-/. ](\d{1,2})(?:[-/. ](\d{4}))?\s*$').firstMatch(raw);
+    if (m == null) return null;
+    final d = int.parse(m[1]!), mo = int.parse(m[2]!);
+    final y = m[3] == null ? null : int.parse(m[3]!);
+    if (mo < 1 || mo > 12 || d < 1) return null;
+    final now = DateTime.now();
+    if (y != null && (y < 1900 || y > now.year)) return null;
+    final dim = DateTime(y ?? 2000, mo + 1, 0).day; // 2000 is a leap year: 29-02 allowed without a year
+    if (d > dim) return null;
+    if (y != null && DateTime(y, mo, d).isAfter(now)) return null;
+    return Birthday(d, mo, y);
+  }
 
   /// "1995-08-21" or "08-21" for the server.
   String get api => '${year != null ? '$year-' : ''}${'$month'.padLeft(2, '0')}-${'$day'.padLeft(2, '0')}';

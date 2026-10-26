@@ -82,6 +82,17 @@ class ChatStore extends ChangeNotifier {
 
   /// Bumped whenever an admin answers a support ticket (screens listen and refresh).
   final supportUpdates = ValueNotifier<int>(0);
+  /// Unread in-app notifications (the bell on the chat list).
+  final noticeUnread = ValueNotifier<int>(0);
+  /// The newest notification that just arrived (shown as a small banner).
+  final lastNotice = ValueNotifier<Map<String, dynamic>?>(null);
+
+  Future<void> refreshNoticeCount() async {
+    try {
+      final r = await api.get('/notices/unread') as Map;
+      noticeUnread.value = ((r['unread'] as num?) ?? 0).toInt();
+    } catch (_) {}
+  }
 
   StreamSubscription<SocketEvent>? _eventSub;
   StreamSubscription<bool>? _connSub;
@@ -154,6 +165,7 @@ class ChatStore extends ChangeNotifier {
     final gen = _session;
     final data = await api.get('/chats') as List;
     if (gen != _session) return;
+    unawaited(refreshNoticeCount());
     chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     for (final c in chats) {
       if (c.serverDraft.isNotEmpty && c.id != activeChatId) onDraftSynced?.call(c.id, c.serverDraft, false);
@@ -1452,6 +1464,10 @@ class ChatStore extends ChangeNotifier {
         if (pm != null && d['poll'] != null) {
           _applyPoll(pm, PollInfo.fromJson(Map<String, dynamic>.from(d['poll'] as Map)), own: false);
         }
+        break;
+      case 'notice:new':
+        noticeUnread.value++;
+        lastNotice.value = Map<String, dynamic>.from(d);
         break;
       case 'support:updated':
         supportUpdates.value++;

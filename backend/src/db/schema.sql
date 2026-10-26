@@ -1015,3 +1015,16 @@ ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS media_id BIGINT REFERENCES
 ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS device VARCHAR(120);
 ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS rating SMALLINT;
 ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS rating_comment VARCHAR(500);
+
+-- in-app notifications (Settings bell): logins, security, groups, admin rights, support, payments
+CREATE TABLE IF NOT EXISTS notices (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       VARCHAR(16)  NOT NULL,
+  title      VARCHAR(120) NOT NULL,
+  body       VARCHAR(500) NOT NULL DEFAULT '',
+  data       JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  read_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notices_user_idx ON notices (user_id, id DESC);

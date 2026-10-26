@@ -2,6 +2,7 @@
 
 const path = require('path');
 const express = require('express');
+require('./services/notice.service'); // in-app notifications listen to support replies etc.
 const config = require('./config');
 const db = require('./db');
 const { securityHeaders, cors, notFoundHandler, errorHandler } = require('./http/middleware');

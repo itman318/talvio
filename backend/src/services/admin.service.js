@@ -188,6 +188,7 @@ async function restrictUser(admin, userIdRaw, body = {}, ip) {
     [id, minutes, reason],
   );
   await log(admin.id, 'user.restrict', 'user', id, { minutes, reason }, ip);
+  await require('./notice.service').notify(id, 'account', 'You can’t send messages for a while', `Reason: ${reason}. You can still read chats.`);
   return { ok: true };
 }
 
@@ -724,6 +725,7 @@ async function revokeSession(admin, sessionIdRaw, ip) {
   const s = await db.one('UPDATE sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING user_id', [id]);
   if (!s) throw notFound('session_not_found', 'Session not found');
   bus.emit('sessions:revoked', { userId: s.user_id, sessionIds: [id], reason: 'admin' });
+  await require('./notice.service').notify(s.user_id, 'security', 'A device was logged out', 'Our team logged out one of your devices to protect your account.');
   await log(admin.id, 'user.session_revoke', 'user', s.user_id, { session_id: id }, ip);
   return { ok: true };
 }

@@ -138,6 +138,7 @@ function serialize(u, viewerId, rel) {
   } else {
     out.is_contact = r.iHaveThem.has(u.id);
     out.blocked = r.iBlocked.has(u.id);
+    out.blocked_me = r.blockedMe.has(u.id);
   }
   return out;
 }
@@ -567,12 +568,26 @@ async function block(userId, targetId) {
   const target = await db.one('SELECT id FROM users WHERE id = $1', [id]);
   if (!target) throw notFound('user_not_found', 'User not found');
   await db.query('INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, id]);
+  await tellBlockChange(userId, id);
   return { ok: true };
 }
 
 async function unblock(userId, targetId) {
-  await db.query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [userId, v.id(targetId, 'user_id')]);
+  const id = v.id(targetId, 'user_id');
+  await db.query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [userId, id]);
+  await tellBlockChange(userId, id);
   return { ok: true };
+}
+
+/** Both sides' apps refresh the private chat (the blocked person then sees that they can't write). */
+async function tellBlockChange(a, b) {
+  const chat = await db.one(
+    `SELECT c.id FROM chats c WHERE c.type = 'private'
+       AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = $1)
+       AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = $2) LIMIT 1`,
+    [a, b],
+  );
+  if (chat) bus.emit('chat:updated', { chatId: chat.id, memberIds: [a, b] });
 }
 
 async function listBlocked(userId) {

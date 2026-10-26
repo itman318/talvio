@@ -1,0 +1,15 @@
+{
+  "title": "Quack & Zib",
+  "size": 512,
+  "stickers": [
+    { "file": "detective_read.webp", "emoji": "🔍📚🤓" },
+    { "file": "detective_love.webp", "emoji": "❤️😍🥰" },
+    { "file": "detective_idea.webp", "emoji": "💡☝️🤔" },
+    { "file": "detective_chat.webp", "emoji": "💬💻😊" },
+    { "file": "alien_laptop.webp", "emoji": "👍👌💻" },
+    { "file": "alien_gamer.webp", "emoji": "🎮😁🎧" },
+    { "file": "alien_chill.webp", "emoji": "😎😌☁️" },
+    { "file": "alien_peace.webp", "emoji": "✌️😉🌈" },
+    { "file": "rocket.webp", "emoji": "🚀🔥🎉" }
+  ]
+}

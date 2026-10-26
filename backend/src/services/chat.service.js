@@ -402,6 +402,11 @@ async function createGroup(ownerId, body) {
   });
   await lazyMessages().createSystemMessage(chatId, ownerId, { event: 'group_created', title });
   await emitUpdated(chatId);
+  if (ok.length) {
+    const by = await db.one('SELECT first_name, last_name FROM users WHERE id = $1', [ownerId]);
+    const who = `${(by && by.first_name) || ''} ${(by && by.last_name) || ''}`.trim() || 'Someone';
+    for (const id of ok) await require('./notice.service').notify(id, 'group', `Added to ${title}`, `${who} created the group “${title}” and added you.`, { chat_id: chatId }); // eslint-disable-line global-require
+  }
   return { chat: await getChat(ownerId, chatId), skipped };
 }
 
@@ -570,6 +575,11 @@ async function addMembers(userId, chatIdRaw, userIdsRaw) {
       await lazyMessages().createSystemMessage(chat.id, userId, { event: 'members_added', user_ids: ok });
     }
     for (const id of ok) await logEvent(chat.id, userId, 'member_added', id);
+    const by = await db.one('SELECT first_name, last_name FROM users WHERE id = $1', [userId]);
+    const who = `${(by && by.first_name) || ''} ${(by && by.last_name) || ''}`.trim() || 'Someone';
+    for (const id of ok) {
+      await require('./notice.service').notify(id, 'group', `Added to ${chat.title}`, `${who} added you to the ${chat.type === 'channel' ? 'channel' : 'group'} “${chat.title}”.`, { chat_id: chat.id });
+    }
     await sendWelcome(chat, ok);
     await emitUpdated(chat.id);
   }
@@ -631,6 +641,7 @@ async function removeMember(actorId, chatIdRaw, targetIdRaw) {
     throw forbidden('not_allowed', 'You cannot remove this member');
   }
   await removeUserFromGroup(chat.id, targetId, { by: actorId, reason: 'removed' });
+  await require('./notice.service').notify(targetId, 'group', `Removed from ${chat.title}`, `An admin removed you from “${chat.title}”.`);
   return { ok: true };
 }
 
@@ -686,6 +697,13 @@ async function setMemberRole(actorId, chatIdRaw, targetIdRaw, role, extra = {}) 
   );
   if (!r) throw notFound('member_not_found', 'This user is not in the group');
   await logEvent(chat.id, actorId, newRole === 'admin' ? 'admin_set' : 'admin_removed', targetId, newRole === 'admin' ? { rights: rightsOf('admin', rights), title } : null);
+  await require('./notice.service').notify(
+    targetId,
+    'admin',
+    newRole === 'admin' ? `You are now ${title ? `“${title}”` : 'an admin'} in ${chat.title}` : `You are no longer an admin in ${chat.title}`,
+    newRole === 'admin' ? 'Open Manage to see what you can do there.' : 'You are still a member.',
+    { chat_id: chat.id },
+  );
   await emitUpdated(chat.id);
   return { ok: true };
 }

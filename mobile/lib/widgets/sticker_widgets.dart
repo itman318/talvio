@@ -994,3 +994,117 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
 /// Network image for stickers and pack covers.
 Widget netImage(String url, {BoxFit? fit, ImageErrorWidgetBuilder? errorBuilder}) =>
     Image.network(url, fit: fit, errorBuilder: errorBuilder, gaplessPlayback: true);
+
+// ------------------------------------------------------------------ emoji → sticker suggestions
+/// Emoji that mean nearly the same thing, so 🥰 also suggests ❤️ stickers.
+const _emojiFamilies = <List<String>>[
+  ['❤️', '😍', '🥰', '😘', '💕', '💖', '💗', '♥️', '❤'],
+  ['😂', '🤣', '😆', '😁', '😄', '😀'],
+  ['👍', '👌', '✅', '💯', '🙌'],
+  ['😎', '🆒', '😌'],
+  ['🤔', '💡', '☝️', '🧐', '🤓'],
+  ['🎉', '🥳', '🎊', '🚀', '🔥'],
+  ['😢', '😭', '🥺', '😞'],
+  ['👋', '🙋', '🤝', '✌️', '😉'],
+  ['😴', '💤', '🥱'],
+  ['😠', '😡', '🤬'],
+  ['😮', '😲', '😱', '🤯'],
+  ['☕', '🍵'],
+  ['🎮', '🎧', '🎵', '🎶'],
+  ['💬', '💻', '📱'],
+];
+
+Set<String> _related(String e) {
+  final clean = e.replaceAll('️', '');
+  for (final f in _emojiFamilies) {
+    if (f.any((x) => x.replaceAll('️', '') == clean)) return f.map((x) => x.replaceAll('️', '')).toSet();
+  }
+  return {clean};
+}
+
+/// When the message box holds just one emoji: matching stickers slide up above it, like a shortcut.
+class EmojiStickerSuggestions extends StatefulWidget {
+  const EmojiStickerSuggestions({super.key, required this.chatId, required this.emoji, required this.onSent});
+  final int chatId;
+  final String emoji;
+  final VoidCallback onSent;
+
+  static List<Map<String, dynamic>>? _cache; // official + installed pack stickers, loaded once
+
+  @override
+  State<EmojiStickerSuggestions> createState() => _EmojiStickerSuggestionsState();
+}
+
+class _EmojiStickerSuggestionsState extends State<EmojiStickerSuggestions> {
+  @override
+  void initState() {
+    super.initState();
+    if (EmojiStickerSuggestions._cache == null) _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await context.read<AppServices>().api.get('/stickers/packs') as List;
+      final all = <Map<String, dynamic>>[];
+      for (final p in r) {
+        for (final s in ((p as Map)['stickers'] as List? ?? [])) {
+          all.add(Map<String, dynamic>.from(s as Map));
+        }
+      }
+      EmojiStickerSuggestions._cache = all;
+      if (mounted) setState(() {});
+    } catch (_) {
+      EmojiStickerSuggestions._cache ??= [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final want = _related(widget.emoji);
+    bool hit(String e) => want.any((w) => e.replaceAll('️', '').contains(w));
+    final plus = context.read<AuthState>().me?.isPremium == true;
+    final tavi = taviStickers.where((t) => hit(t.$2) && (!t.$3 || plus)).toList();
+    final packs = (EmojiStickerSuggestions._cache ?? []).where((s) => hit('${s['emoji'] ?? ''}')).take(12).toList();
+    if (tavi.isEmpty && packs.isEmpty) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final store = context.read<ChatStore>();
+    Widget item(Widget child, VoidCallback onTap) => TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.5, end: 1),
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeOutBack,
+          builder: (_, v, c) => Transform.scale(scale: v, child: c),
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
+              widget.onSent();
+            },
+            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: SizedBox(width: 78, height: 78, child: child)),
+          ),
+        );
+    return Container(
+      height: 92,
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+      decoration: BoxDecoration(
+        color: (dark ? const Color(0xFF151A2E) : Colors.white).withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.3 : 0.08), blurRadius: 14, offset: const Offset(0, 4))],
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        children: [
+          for (final t in tavi) item(TaviMascot(pose: t.$1, size: 78), () => store.sendTavi(widget.chatId, t.$1.name, t.$2)),
+          for (final s in packs)
+            item(
+              netImage(AppConfig.absolute('${s['url']}'), fit: BoxFit.contain),
+              () {
+                store.sendSticker(widget.chatId, s);
+                RecentStickers.add(s);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
