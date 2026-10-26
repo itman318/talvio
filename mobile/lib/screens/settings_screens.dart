@@ -40,7 +40,7 @@ import '../widgets/message_extras.dart';
 
 /// One row of Settings (also what the settings search looks through).
 class _Item {
-  const _Item(this.section, this.icon, this.color, this.title, {this.subtitle, this.trailing, this.onTap, this.danger = false, this.keywords = ''});
+  const _Item(this.section, this.icon, this.color, this.title, {this.subtitle, this.trailing, this.onTap, this.keywords = ''});
   final String section;
   final IconData icon;
   final Color color;
@@ -48,11 +48,10 @@ class _Item {
   final String? subtitle;
   final String? trailing;
   final VoidCallback? onTap;
-  final bool danger;
   final String keywords;
 
   bool matches(String q) => '$title ${subtitle ?? ''} $keywords $section'.toLowerCase().contains(q);
-  Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap, danger: danger);
+  Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap);
 }
 
 class SettingsScreen extends StatefulWidget {
