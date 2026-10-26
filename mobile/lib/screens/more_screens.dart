@@ -696,6 +696,13 @@ class ContentPageScreen extends StatelessWidget {
   final String slug;
   final String fallbackTitle;
 
+  static const _icons = {
+    'privacy': Icons.privacy_tip_rounded,
+    'terms': Icons.gavel_rounded,
+    'faq': Icons.quiz_rounded,
+    'about': Icons.info_rounded,
+  };
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -703,28 +710,164 @@ class ContentPageScreen extends StatelessWidget {
       body: FutureBuilder<dynamic>(
         future: context.read<AppServices>().api.get('/pages/$slug'),
         builder: (ctx, snap) {
-          if (snap.hasError) return Center(child: Text('${snap.error}'));
+          if (snap.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}', textAlign: TextAlign.center)));
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final p = Map<String, dynamic>.from(snap.data as Map);
-          final body = '${p['body'] ?? ''}'.trim();
-          final blocks = body.isEmpty ? <String>[] : body.split(RegExp(r'\n{2,}'));
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text('${p['title']}', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 12),
-              if (blocks.isEmpty) const Text('Nothing here yet.'),
-              ...blocks.map((b) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: b.startsWith('# ')
-                        ? Text(b.substring(2), style: Theme.of(context).textTheme.titleMedium)
-                        : SelectableText(b, style: const TextStyle(height: 1.5)),
-                  )),
-            ],
-          );
+          return _ContentBody(title: '${p['title'] ?? fallbackTitle}', body: '${p['body'] ?? ''}', icon: _icons[slug] ?? Icons.article_rounded, faq: slug == 'faq');
         },
       ),
     );
+  }
+}
+
+/// Renders the simple page format: "# Heading", "## Sub", "• bullet", "Q:"/"A:" pairs, paragraphs.
+class _ContentBody extends StatefulWidget {
+  const _ContentBody({required this.title, required this.body, required this.icon, required this.faq});
+  final String title;
+  final String body;
+  final IconData icon;
+  final bool faq;
+
+  @override
+  State<_ContentBody> createState() => _ContentBodyState();
+}
+
+class _ContentBodyState extends State<_ContentBody> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final lines = widget.body.replaceAll('\r', '').split('\n');
+    final out = <Widget>[];
+    String? updated;
+    final para = StringBuffer();
+    void flush() {
+      final t = para.toString().trim();
+      para.clear();
+      if (t.isEmpty || _q.isNotEmpty) return;
+      out.add(Padding(padding: const EdgeInsets.only(bottom: 12), child: SelectableText(t, style: TextStyle(height: 1.55, fontSize: 14.5, color: scheme.onSurface))));
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      final l = lines[i].trimRight();
+      final t = l.trim();
+      if (t.isEmpty) {
+        flush();
+        continue;
+      }
+      if (t.startsWith('Last updated:')) {
+        updated = t;
+        continue;
+      }
+      if (t.startsWith('## ')) {
+        flush();
+        if (_q.isEmpty) out.add(Padding(padding: const EdgeInsets.fromLTRB(0, 6, 0, 6), child: Text(t.substring(3), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))));
+        continue;
+      }
+      if (t.startsWith('# ')) {
+        flush();
+        if (_q.isEmpty) {
+          out.add(Padding(
+            padding: const EdgeInsets.fromLTRB(0, 14, 0, 8),
+            child: Row(children: [
+              Container(width: 4, height: 20, decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 10),
+              Expanded(child: Text(t.substring(2), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.2))),
+            ]),
+          ));
+        }
+        continue;
+      }
+      if (t.startsWith('• ')) {
+        flush();
+        if (_q.isEmpty) {
+          out.add(Padding(
+            padding: const EdgeInsets.only(bottom: 7, left: 2),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(padding: const EdgeInsets.only(top: 8), child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Brand.primary, shape: BoxShape.circle))),
+              const SizedBox(width: 10),
+              Expanded(child: SelectableText(t.substring(2), style: TextStyle(height: 1.5, fontSize: 14.5, color: scheme.onSurface))),
+            ]),
+          ));
+        }
+        continue;
+      }
+      if (t.startsWith('Q: ')) {
+        flush();
+        final q = t.substring(3);
+        final a = StringBuffer();
+        while (i + 1 < lines.length && !lines[i + 1].trim().startsWith('Q: ') && !lines[i + 1].trim().startsWith('# ')) {
+          i++;
+          final x = lines[i].trim();
+          if (x.isEmpty) continue;
+          a.writeln(x.startsWith('A: ') ? x.substring(3) : x);
+        }
+        final answer = a.toString().trim();
+        if (_q.isNotEmpty && !'$q $answer'.toLowerCase().contains(_q)) continue;
+        out.add(Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: dark ? Colors.white10 : const Color(0xFFE8EBF2)),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: _q.isNotEmpty,
+              shape: const RoundedRectangleBorder(),
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              leading: const Icon(Icons.help_outline_rounded, color: Brand.primary),
+              title: Text(q, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+              expandedCrossAxisAlignment: CrossAxisAlignment.start,
+              children: [SelectableText(answer, style: TextStyle(height: 1.5, color: scheme.onSurfaceVariant))],
+            ),
+          ),
+        ));
+        continue;
+      }
+      para.writeln(t);
+    }
+    flush();
+
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+      Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(gradient: Brand.auroraSoft(dark), borderRadius: BorderRadius.circular(22)),
+        child: Row(children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(15)),
+            child: Icon(widget.icon, color: Colors.white),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              if (updated != null) ...[
+                const SizedBox(height: 3),
+                Text(updated, style: const TextStyle(fontSize: 12.5, color: Brand.muted)),
+              ],
+            ]),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      if (widget.faq)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+            decoration: const InputDecoration(hintText: 'Search questions', prefixIcon: Icon(Icons.search_rounded), isDense: true),
+          ),
+        ),
+      if (out.isEmpty) Padding(padding: const EdgeInsets.all(24), child: Text(_q.isEmpty ? 'Nothing here yet.' : 'No matching questions.', textAlign: TextAlign.center)),
+      ...out,
+    ]);
   }
 }
 

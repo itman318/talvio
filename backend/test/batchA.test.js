@@ -250,7 +250,7 @@ test('admin notes, user detail, data export', async () => {
 test('content pages and HTML rendering', async () => {
   const def = await content.get('privacy');
   assert.equal(def.is_default, true, 'built-in privacy text until an admin edits it');
-  assert.match(def.body, /Vault chats are end-to-end encrypted/);
+  assert.match(def.body, /Vault chats .*end-to-end encrypted/);
   await content.update(boss.id, 'privacy', { title: 'Privacy Policy', body: '# Data we keep\n\nYour phone number <and> messages.' });
   const p = await content.get('privacy');
   const html = content.renderHtml(p);

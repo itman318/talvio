@@ -11,53 +11,7 @@ const SLUGS = ['terms', 'privacy', 'faq', 'about'];
  * Built-in starting texts, shown until an admin edits the page (Admin → Pages & FAQ).
  * Written for a messaging app that stores normal chats on the server and vault chats only end-to-end encrypted.
  */
-const DEFAULTS = {
-  privacy: {
-    title: 'Privacy Policy',
-    body: `Talvio ("we") runs the Talvio messaging app, web app and website. This policy explains what we collect and why.
-
-WHAT WE COLLECT
-• Account: your email address or phone number (used to log in with a one-time code), name, optional username, bio and profile photo.
-• Messages and media: normal chats, groups and channels are stored on our servers so they sync to all your devices. Vault chats are end-to-end encrypted: the server only relays encrypted data it cannot read, and deletes it after delivery.
-• Contacts (optional): if you allow it, phone numbers from your address book are compared with Talvio accounts to show which friends use Talvio. We do not keep your address book.
-• Location (optional): only when you choose to share a location or live location in a chat.
-• Device and usage data: device model, app version, IP address, login sessions, push-notification token, and crash reports that help us fix bugs.
-• Payments: for Talvio Plus we keep the order, amount and status. Card/wallet details are handled by the payment provider (e.g. JazzCash, Easypaisa); we do not store them.
-
-HOW WE USE IT
-To provide and secure the service, deliver messages and notifications, prevent spam and abuse, handle reports, provide support, and improve the app. We do not sell your personal data. We do not use the content of your messages for advertising.
-
-SHARING
-Only with service providers that help us run Talvio (hosting, email/SMS delivery, push notifications, payments), when required by law, or to protect users from harm. Sponsored messages in public channels never use your private messages.
-
-YOUR CHOICES
-You can edit your profile, control who sees your last seen, photo and phone number (Settings → Privacy), log out other devices (Settings → Devices), download your data, and delete your account at any time (Settings → Privacy → Delete account). Deleting your account removes your profile and messages from our servers, except where the law requires us to keep records for a limited time.
-
-CHILDREN
-Talvio is not intended for children under 13.
-
-SECURITY
-We use encrypted connections (HTTPS), hashed login codes, and end-to-end encryption for vault chats. No system is 100% secure, so please keep your devices protected.
-
-CHANGES AND CONTACT
-We will post changes to this page. Questions: contact us from Settings → Help & support in the app.`,
-  },
-  terms: {
-    title: 'Terms of Service',
-    body: `By using Talvio you agree to these terms.
-
-1. Your account. You must give a valid email address or phone number, keep your login codes private, and be at least 13 years old.
-2. Acceptable use. Do not use Talvio to send spam, scams or malware; harass, threaten or impersonate others; share illegal content or content that sexualises minors; or break the law. We may remove content, limit features or ban accounts that break these rules, and report illegal activity to the authorities.
-3. Your content. You keep the rights to what you send. You give us the permission needed to store and deliver it to the people you send it to.
-4. Channels, groups and bots. Owners and admins are responsible for what they publish and for the bots they create.
-5. Talvio Plus. Paid features are described in the app. Payments are processed by the listed providers; unless the law says otherwise, payments are not refundable once the subscription has started.
-6. Availability. We work hard to keep Talvio running but cannot promise it will always be available or error-free. To the extent allowed by law, Talvio is provided "as is".
-7. Ending. You can delete your account any time. We may suspend accounts that break these terms.
-8. Changes. We may update these terms and will post the new version here; continuing to use Talvio means you accept it.
-
-Questions: contact us from Settings → Help & support in the app.`,
-  },
-};
+const DEFAULTS = require('./content_defaults');
 
 function serialize(p) {
   return { slug: p.slug, title: p.title, body: p.body, updated_at: new Date(p.updated_at).toISOString() };
@@ -100,16 +54,59 @@ function escapeHtml(s) {
 
 /** Plain HTML page for store listings / links (text paragraphs, "# " lines become headings). */
 function renderHtml(page) {
-  const blocks = page.body
-    .split(/\n{2,}/)
-    .map((b) => b.trim())
-    .filter(Boolean)
-    .map((b) => (b.startsWith('# ') ? `<h2>${escapeHtml(b.slice(2))}</h2>` : `<p>${escapeHtml(b).replace(/\n/g, '<br>')}</p>`))
-    .join('\n');
+  // line-based: "# h2", "## h3", "• list", "Q:"/"A:" (FAQ), blank line = paragraph
+  const out = [];
+  let para = [];
+  let list = [];
+  let updated = null;
+  const flushPara = () => {
+    if (para.length) out.push(`<p>${para.map(escapeHtml).join('<br>')}</p>`);
+    para = [];
+  };
+  const flushList = () => {
+    if (list.length) out.push(`<ul>${list.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`);
+    list = [];
+  };
+  const flush = () => {
+    flushPara();
+    flushList();
+  };
+  for (const raw of String(page.body || '').replace(/\r/g, '').split('\n')) {
+    const t = raw.trim();
+    if (!t) {
+      flush();
+    } else if (t.startsWith('Last updated:')) {
+      updated = t;
+    } else if (t.startsWith('## ')) {
+      flush();
+      out.push(`<h3>${escapeHtml(t.slice(3))}</h3>`);
+    } else if (t.startsWith('# ')) {
+      flush();
+      out.push(`<h2>${escapeHtml(t.slice(2))}</h2>`);
+    } else if (t.startsWith('• ')) {
+      flushPara();
+      list.push(t.slice(2));
+    } else if (t.startsWith('Q: ')) {
+      flush();
+      out.push(`<h4>${escapeHtml(t.slice(3))}</h4>`);
+    } else if (t.startsWith('A: ')) {
+      flush();
+      out.push(`<p>${escapeHtml(t.slice(3))}</p>`);
+    } else {
+      flushList();
+      para.push(t);
+    }
+  }
+  flush();
+  const blocks = out.join('\n');
+  const when = updated ? escapeHtml(updated) : `Last updated ${escapeHtml((page.updated_at || new Date().toISOString()).slice(0, 10))}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(page.title)}</title>
-<style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px 16px;line-height:1.6;color:#17202b}h1{font-size:26px}h2{font-size:19px;margin-top:28px}.muted{color:#64748b;font-size:13px}</style>
-</head><body><h1>${escapeHtml(page.title)}</h1><div class="muted">Last updated ${escapeHtml((page.updated_at || new Date().toISOString()).slice(0, 10))}</div>
+<title>${escapeHtml(page.title)} · Talvio</title>
+<style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px 18px 60px;line-height:1.65;color:#17202b;background:#fafbff}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:-.4px}h2{font-size:20px;margin-top:30px;padding-left:10px;border-left:4px solid #7b4fe0}h3{font-size:16px;margin:18px 0 6px}
+h4{font-size:15.5px;margin:22px 0 4px;color:#3b2fa8}ul{padding-left:22px}li{margin:5px 0}.muted{color:#64748b;font-size:13px}
+@media (prefers-color-scheme:dark){body{background:#0d1122;color:#e7e9f3}h4{color:#a99cff}.muted{color:#8a93b4}}</style>
+</head><body><h1>${escapeHtml(page.title)}</h1><div class="muted">${when}</div>
 ${blocks || '<p class="muted">This page has not been written yet.</p>'}
 </body></html>`;
 }

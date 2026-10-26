@@ -109,6 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (auth.feature('bots')) _Item(extra, Icons.smart_toy_rounded, const Color(0xFF5B49D6), 'My bots', subtitle: 'Create bots and get their keys', keywords: 'bot api botforge', onTap: () => go(const MyBotsScreen())),
       _Item(help, Icons.support_agent_rounded, Brand.sky, 'Help & support', subtitle: support.isNotEmpty ? 'Or message @$support' : null, keywords: 'contact', onTap: () => go(const SupportListScreen())),
       _Item(help, Icons.quiz_rounded, Brand.amber, 'FAQ', keywords: 'questions', onTap: () => go(const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
+      _Item(help, Icons.info_rounded, Brand.primary, 'About Talvio', keywords: 'version app info', onTap: () => go(const ContentPageScreen(slug: 'about', fallbackTitle: 'About'))),
       _Item(help, Icons.description_rounded, const Color(0xFF8A93B4), 'Terms of service', onTap: () => go(const ContentPageScreen(slug: 'terms', fallbackTitle: 'Terms'))),
       _Item(help, Icons.privacy_tip_rounded, Brand.green, 'Privacy policy', onTap: () => go(const ContentPageScreen(slug: 'privacy', fallbackTitle: 'Privacy'))),
     ];
