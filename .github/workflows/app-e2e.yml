@@ -92,13 +92,13 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          target: google_apis
+          target: default
           arch: x86_64
-          ram-size: 4096M
+          ram-size: 3072M
           heap-size: 512M
-          cores: 4
+          cores: 3
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: bash .github/scripts/app-e2e.sh
 
       - name: Check the message reached the other user
