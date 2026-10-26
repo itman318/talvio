@@ -56,7 +56,7 @@ async function broadcast(vc, extra = {}) {
 }
 
 function canManage(chat) {
-  return chatService.ADMIN_ROLES.includes(chat.my_role);
+  return chatService.ADMIN_ROLES.includes(chat.my_role) && chatService.hasRight(chat, 'manage_voice_chats');
 }
 
 async function start(userId, chatIdRaw, body = {}) {

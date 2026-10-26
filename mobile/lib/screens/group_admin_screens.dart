@@ -13,18 +13,30 @@ import 'chat_screen.dart';
 
 // ------------------------------------------------------------------ admin rights
 const adminRightLabels = <String, (IconData, String)>{
-  'change_info': (Icons.edit_rounded, 'Change group info'),
-  'delete_messages': (Icons.delete_sweep_rounded, 'Delete messages'),
+  'change_info': (Icons.edit_rounded, 'Change info, photo & rules'),
+  'post_messages': (Icons.campaign_rounded, 'Publish posts'),
+  'delete_messages': (Icons.delete_sweep_rounded, 'Delete messages of others'),
   'ban_users': (Icons.person_off_rounded, 'Remove and mute members'),
   'invite_users': (Icons.person_add_alt_1_rounded, 'Add members & invite links'),
   'pin_messages': (Icons.push_pin_rounded, 'Pin messages'),
-  'post_messages': (Icons.campaign_rounded, 'Publish posts (channels)'),
+  'manage_voice_chats': (Icons.graphic_eq_rounded, 'Manage voice chats'),
+  'add_admins': (Icons.admin_panel_settings_rounded, 'Add new admins'),
 };
 
-/// Owner → make someone an admin: pick what they may do and an optional title ("Moderator").
+/// Ready-made sets of rights.
+const _presets = <(String, IconData, Set<String>)>[
+  ('Moderator', Icons.shield_rounded, {'delete_messages', 'ban_users', 'pin_messages'}),
+  ('Editor', Icons.edit_note_rounded, {'post_messages', 'pin_messages', 'change_info'}),
+  ('Full admin', Icons.workspace_premium_rounded, {'change_info', 'post_messages', 'delete_messages', 'ban_users', 'invite_users', 'pin_messages', 'manage_voice_chats'}),
+];
+
+/// Make someone an admin or moderator: pick what they may do and an optional title ("Moderator").
+/// [allowed]: the rights the person giving them has (an admin can only pass on what they have).
 /// Returns (rights, title) or null when cancelled.
-Future<(Map<String, bool>, String)?> editAdminRights(BuildContext context, {required String name, required bool channel, Map<String, bool>? current, String? title}) {
-  final rights = {for (final k in adminRightLabels.keys) k: current?[k] ?? true};
+Future<(Map<String, bool>, String)?> editAdminRights(BuildContext context,
+    {required String name, required bool channel, Map<String, bool>? current, String? title, Map<String, bool>? allowed}) {
+  bool ok(String k) => allowed == null || allowed[k] != false;
+  final rights = {for (final k in adminRightLabels.keys) k: ok(k) && (current?[k] ?? (k != 'add_admins'))};
   final titleCtl = TextEditingController(text: title ?? '');
   return showModalBottomSheet<(Map<String, bool>, String)>(
     context: context,
@@ -37,6 +49,22 @@ Future<(Map<String, bool>, String)?> editAdminRights(BuildContext context, {requ
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text('Admin rights · $name', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              const Text('They can only do what you switch on here.', style: TextStyle(color: Brand.muted, fontSize: 13)),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final (label, icon, set) in _presets)
+                  ActionChip(
+                    avatar: Icon(icon, size: 18, color: Brand.primary),
+                    label: Text(label),
+                    onPressed: () => setSt(() {
+                      for (final k in rights.keys) {
+                        rights[k] = ok(k) && set.contains(k);
+                      }
+                      if (titleCtl.text.trim().isEmpty && label != 'Full admin') titleCtl.text = label;
+                    }),
+                  ),
+              ]),
               const SizedBox(height: 12),
               TextField(
                 controller: titleCtl,
@@ -47,10 +75,11 @@ Future<(Map<String, bool>, String)?> editAdminRights(BuildContext context, {requ
                 if (channel || e.key != 'post_messages')
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    secondary: Icon(e.value.$1),
+                    secondary: Icon(e.value.$1, color: ok(e.key) ? null : Brand.muted),
                     title: Text(e.value.$2),
+                    subtitle: ok(e.key) ? null : const Text('You don’t have this right', style: TextStyle(fontSize: 12)),
                     value: rights[e.key]!,
-                    onChanged: (v) => setSt(() => rights[e.key] = v),
+                    onChanged: ok(e.key) ? (v) => setSt(() => rights[e.key] = v) : null,
                   ),
               const SizedBox(height: 8),
               AuroraButton(label: 'Save', icon: Icons.check_rounded, onPressed: () => Navigator.pop(ctx, (rights, titleCtl.text.trim()))),
@@ -148,6 +177,8 @@ class _RecentActionsScreenState extends State<RecentActionsScreen> {
       case 'message_deleted':
         final text = '${d['text'] ?? ''}';
         return (Icons.delete_rounded, Colors.red, '$who deleted a message from $target${text.isEmpty ? '' : ': “$text”'}');
+      case 'history_cleared':
+        return (Icons.cleaning_services_rounded, Colors.red, '$who cleared the history for everyone');
       case 'message_pinned':
         return (Icons.push_pin_rounded, Brand.sky, '$who pinned a message');
       case 'photo_changed':

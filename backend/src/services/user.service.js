@@ -208,7 +208,10 @@ async function updateProfile(userId, body) {
 async function checkUsername(userId, username) {
   const name = v.validateUsername(String(username || '').trim().replace(/^@/, ''));
   if (!name) throw badRequest('invalid_username', 'Username is required');
-  const taken = await require('./chat.service').usernameTaken(name, { exceptUserId: userId });
+  const chatService = require('./chat.service'); // eslint-disable-line global-require
+  const current = await db.one('SELECT username FROM users WHERE id = $1', [userId]);
+  const mine = String((current && current.username) || '').toLowerCase() === name.toLowerCase();
+  const taken = (!mine && (await chatService.isReserved(name))) || (await chatService.usernameTaken(name, { exceptUserId: userId }));
   return { username: name, available: !taken };
 }
 

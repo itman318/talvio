@@ -7,6 +7,7 @@ const userService = require('./user.service');
 const v = require('../utils/validate');
 const { randomToken } = require('../utils/crypto');
 const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
+const { isReservedName } = require('../utils/reserved_names');
 
 const lazyMessages = () => require('./message.service'); // circular import guard
 
@@ -37,7 +38,9 @@ function requireGroupAdmin(chat) {
 }
 
 /** What an admin may do (the owner can do everything). Missing = allowed, so older admins keep their powers. */
-const RIGHTS = ['change_info', 'delete_messages', 'ban_users', 'invite_users', 'pin_messages', 'post_messages'];
+const RIGHTS = ['change_info', 'delete_messages', 'ban_users', 'invite_users', 'pin_messages', 'post_messages', 'manage_voice_chats', 'add_admins'];
+/** Rights an admin only has when given on purpose (not by default). */
+const OPT_IN_RIGHTS = ['add_admins'];
 const RIGHT_LABELS = {
   change_info: 'change the info',
   delete_messages: 'delete messages',
@@ -45,11 +48,15 @@ const RIGHT_LABELS = {
   invite_users: 'add members and manage invite links',
   pin_messages: 'pin messages',
   post_messages: 'publish posts',
+  manage_voice_chats: 'manage voice chats',
+  add_admins: 'add new admins',
 };
 
 function rightsOf(role, raw) {
   const out = {};
-  for (const r of RIGHTS) out[r] = role === 'owner' || (role === 'admin' && !(raw && raw[r] === false));
+  for (const r of RIGHTS) {
+    out[r] = role === 'owner' || (role === 'admin' && (OPT_IN_RIGHTS.includes(r) ? !!(raw && raw[r] === true) : !(raw && raw[r] === false)));
+  }
   return out;
 }
 
@@ -647,22 +654,35 @@ async function leaveChat(userId, chatIdRaw) {
 async function setMemberRole(actorId, chatIdRaw, targetIdRaw, role, extra = {}) {
   const chat = await requireMember(chatIdRaw, actorId);
   if (!isMulti(chat)) throw badRequest('not_a_group', 'This action is only for groups and channels');
-  if (chat.my_role !== 'owner') throw forbidden('not_owner', 'Only the owner can change admins');
+  const owner = chat.my_role === 'owner';
+  // the owner, or an admin allowed to "add new admins" (only for admins they added, with rights they have)
+  if (!owner && !hasRight(chat, 'add_admins')) throw forbidden('not_owner', 'Only the owner or admins who may add admins can change admins');
   const newRole = v.oneOf(role, ['admin', 'member'], 'role');
   const targetId = v.id(targetIdRaw, 'user_id');
+  if (targetId === actorId && !owner) throw forbidden('no_rights', 'You can’t change your own admin rights');
+  const target = await db.one('SELECT role, promoted_by FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, targetId]);
+  if (!target) throw notFound('member_not_found', 'This user is not in the group');
+  if (target.role === 'owner') throw forbidden('no_rights', 'The owner’s rights can’t be changed');
+  if (!owner && target.role === 'admin' && Number(target.promoted_by) !== Number(actorId)) {
+    throw forbidden('no_rights', 'You can only change admins you added yourself');
+  }
+  const mine = rightsOf(chat.my_role, chat.my_rights);
   let rights = null;
   let title = null;
   if (newRole === 'admin') {
-    if (extra.rights && typeof extra.rights === 'object') {
-      rights = {};
-      for (const k of RIGHTS) rights[k] = extra.rights[k] !== false;
+    rights = {};
+    const asked = extra.rights && typeof extra.rights === 'object' ? extra.rights : null;
+    for (const k of RIGHTS) {
+      const want = asked ? (OPT_IN_RIGHTS.includes(k) ? asked[k] === true : asked[k] !== false) : !OPT_IN_RIGHTS.includes(k);
+      if (want && !mine[k]) throw forbidden('no_rights', `You can’t give a right you don’t have (${RIGHT_LABELS[k]})`);
+      rights[k] = want;
     }
     title = v.str(extra.title, { field: 'title', max: 24 }) || null;
   }
   const r = await db.one(
-    `UPDATE chat_members SET role = $3, admin_rights = $4, admin_title = $5
+    `UPDATE chat_members SET role = $3, admin_rights = $4, admin_title = $5, promoted_by = $6
      WHERE chat_id = $1 AND user_id = $2 AND role <> 'owner' RETURNING user_id`,
-    [chat.id, targetId, newRole, rights ? JSON.stringify(rights) : null, title],
+    [chat.id, targetId, newRole, rights ? JSON.stringify(rights) : null, title, newRole === 'admin' ? actorId : null],
   );
   if (!r) throw notFound('member_not_found', 'This user is not in the group');
   await logEvent(chat.id, actorId, newRole === 'admin' ? 'admin_set' : 'admin_removed', targetId, newRole === 'admin' ? { rights: rightsOf('admin', rights), title } : null);
@@ -752,7 +772,7 @@ async function getMembers(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
   const adminsOnly = chat.type === 'channel' && !ADMIN_ROLES.includes(chat.my_role);
   const rows = await db.many(
-    `SELECT user_id, role, joined_at, admin_rights, admin_title, member_tag, restricted_until FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
+    `SELECT user_id, role, joined_at, admin_rights, admin_title, member_tag, restricted_until, promoted_by FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
      ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, joined_at
      LIMIT 5000`,
     [chat.id],
@@ -764,6 +784,7 @@ async function getMembers(userId, chatIdRaw) {
       user: users.get(r.user_id),
       role: r.role,
       title: r.admin_title || null,
+      promoted_by: r.promoted_by ? Number(r.promoted_by) : null,
       tag: r.member_tag || null,
       rights: r.role === 'member' ? null : rightsOf(r.role, r.admin_rights),
       restricted_until: r.restricted_until && new Date(r.restricted_until) > new Date() ? new Date(r.restricted_until).toISOString() : null,
@@ -820,15 +841,28 @@ async function updateMySettings(userId, chatIdRaw, body) {
   return getChat(userId, chat.id);
 }
 
-async function clearHistory(userId, chatIdRaw) {
+/**
+ * Clear history. for_everyone: in a private chat either person may clear it for both sides;
+ * in groups/channels only admins who may delete messages.
+ */
+async function clearHistory(userId, chatIdRaw, body = {}) {
   const chat = await requireMember(chatIdRaw, userId);
+  const forEveryone = body.for_everyone === true;
+  if (forEveryone) {
+    const self = chat.type === 'private' && (await db.one('SELECT count(*)::int AS n FROM chat_members WHERE chat_id = $1', [chat.id])).n < 2;
+    if (self) throw badRequest('invalid_input', 'There is no other side in this chat');
+    if (isMulti(chat) && !hasRight(chat, 'delete_messages')) throw forbidden('no_rights', 'Only admins who can delete messages can clear the history for everyone');
+  }
   await db.query(
     `UPDATE chat_members SET cleared_before_id = COALESCE((SELECT max(id) FROM messages WHERE chat_id = $1), 0)
-     WHERE chat_id = $1 AND user_id = $2`,
-    [chat.id, userId],
+     WHERE chat_id = $1 ${forEveryone ? '' : 'AND user_id = $2'}`,
+    forEveryone ? [chat.id] : [chat.id, userId],
   );
-  bus.emit('chat:updated', { chatId: chat.id, memberIds: [userId] });
-  return { ok: true };
+  const ids = forEveryone ? await memberIds(chat.id) : [userId];
+  if (forEveryone && isMulti(chat)) await logEvent(chat.id, userId, 'history_cleared', null, {});
+  bus.emit('chat:updated', { chatId: chat.id, memberIds: ids });
+  bus.emit('rt:emit', { event: 'chat:cleared', payload: { chat_id: chat.id, by: userId }, userIds: ids });
+  return { ok: true, for_everyone: forEveryone };
 }
 
 // ------------------------------------------------------------------ invite links
@@ -1019,12 +1053,15 @@ async function transferOwnershipByOwner(userId, chatIdRaw, toUserIdRaw) {
 // ------------------------------------------------------------------ channels & public usernames
 /** Usernames are shared between users, groups and channels. */
 /** Throws if the username is on the admin "reserved" list (admins can still assign it). */
+async function isReserved(name) {
+  const reserved = (await settings.get('reserved_usernames')) || [];
+  const n = String(name || '').toLowerCase();
+  return reserved.map((r) => String(r).toLowerCase()).includes(n) || isReservedName(n);
+}
+
+/** Reserved names look the same as taken ones to people ("already taken"). */
 async function assertNotReserved(name) {
-  const reserved = await settings.get('reserved_usernames');
-  const builtIn = ['botforge', 'botfather', 'talvio', 'talvioteam', 'support', 'admin'];
-  if ([...(reserved || []), ...builtIn].includes(String(name).toLowerCase())) {
-    throw conflict('username_reserved', 'This username is reserved');
-  }
+  if (await isReserved(name)) throw conflict('username_taken', 'This username is already taken');
 }
 
 async function usernameTaken(name, { exceptUserId = 0, exceptChatId = 0 } = {}) {
@@ -1272,6 +1309,7 @@ module.exports = {
   isMulti,
   usernameTaken,
   assertNotReserved,
+  isReserved,
   getChatsByIds,
   publicSummary,
   listInvites,

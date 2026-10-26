@@ -748,20 +748,16 @@ class GlassPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final tint = (opacity ?? (dark ? 0.72 : 0.78)).clamp(0.0, 1.0);
-    final inner = ClipRRect(
-      borderRadius: BorderRadius.circular(radius - (ring ? 1 : 0)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: (dark ? const Color(0xFF151A2E) : Colors.white).withValues(alpha: tint),
-            borderRadius: BorderRadius.circular(radius - (ring ? 1 : 0)),
-          ),
-          child: child,
-        ),
+    // No live blur here: blurring what scrolls behind the bar on every frame made chats slow on many phones.
+    // A nearly solid tint looks the same and costs nothing.
+    final tint = (opacity == null ? (dark ? 0.95 : 0.96) : (opacity! + 0.18)).clamp(0.0, 1.0);
+    final inner = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: (dark ? const Color(0xFF151A2E) : Colors.white).withValues(alpha: tint),
+        borderRadius: BorderRadius.circular(radius - (ring ? 1 : 0)),
       ),
+      child: child,
     );
     return DecoratedBox(
       decoration: BoxDecoration(

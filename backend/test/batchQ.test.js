@@ -265,3 +265,61 @@ test('notification settings: defaults, update, validation', async () => {
   await rejects(users.setNotifySettings(A.id, { channels: 'maybe' }), 'invalid_input');
   await users.setNotifySettings(A.id, { groups: true, preview: true });
 });
+
+test('clear history: only me, or both sides in a private chat; admins only in groups', async () => {
+  const chat = await chats.getOrCreatePrivate(A.id, C.id);
+  await messages.sendMessage(A.id, chat.id, { text: 'one' });
+  await messages.sendMessage(C.id, chat.id, { text: 'two' });
+  const count = async (uid) => {
+    const r = await messages.listMessages(uid, chat.id, {});
+    return (Array.isArray(r) ? r : r.messages).length;
+  };
+  await chats.clearHistory(A.id, chat.id);
+  assert.equal(await count(A.id), 0);
+  assert.equal(await count(C.id), 2, 'other side keeps them');
+  await messages.sendMessage(A.id, chat.id, { text: 'three' });
+  const sent = [];
+  const on = (e) => e.event === 'chat:cleared' && sent.push(e);
+  bus.on('rt:emit', on);
+  await chats.clearHistory(A.id, chat.id, { for_everyone: true });
+  bus.off('rt:emit', on);
+  assert.equal(await count(A.id), 0);
+  assert.equal(await count(C.id), 0, 'cleared for both');
+  assert.equal(sent.length, 1);
+  // groups: a member can't clear for everyone
+  const { chat: g } = await chats.createGroup(A.id, { title: 'Clear test', member_ids: [C.id] });
+  await rejects(chats.clearHistory(C.id, g.id, { for_everyone: true }), 'no_rights');
+  assert.equal((await chats.clearHistory(A.id, g.id, { for_everyone: true })).for_everyone, true);
+});
+
+test('reserved names: a long list, look-alikes, shown as "taken"', async () => {
+  const { isReservedName } = require('../src/utils/reserved_names');
+  for (const n of ['admin', 'Help', 'support_pk', 'official_news', 'talvio_team', 'mytalvio', 'help123', 'customercare', 'jazzcash', 'ali_admin']) {
+    assert.equal(isReservedName(n), true, n);
+  }
+  for (const n of ['amna_k', 'gul_trader', 'badminton_pk', 'helper_ali', 'signals_v2_bot', 'muhammad']) {
+    assert.equal(isReservedName(n), false, n);
+  }
+  assert.equal((await users.checkUsername(B.id, 'helpdesk')).available, false);
+  await rejects(users.updateProfile(B.id, { username: 'admin_ali' }), 'username_taken');
+});
+
+test('admins & moderators: owner, admins who may add admins, only rights they have', async () => {
+  const D = await signup('+923270000044', 'Dua', 'dua_mod');
+  const E = await signup('+923270000045', 'Ehsan', 'ehsan_mod');
+  const { chat: g } = await chats.createGroup(A.id, { title: 'Mods', member_ids: [B.id, C.id, D.id, E.id] });
+  // a moderator: only delete + ban + pin
+  await chats.setMemberRole(A.id, g.id, B.id, 'admin', { rights: { change_info: false, invite_users: false, post_messages: false, manage_voice_chats: false }, title: 'Moderator' });
+  await rejects(chats.setMemberRole(B.id, g.id, C.id, 'admin', {}), 'not_owner');
+  // an admin who may add admins
+  await chats.setMemberRole(A.id, g.id, C.id, 'admin', { rights: { add_admins: true, change_info: false } });
+  await rejects(chats.setMemberRole(C.id, g.id, D.id, 'admin', { rights: { change_info: true } }), 'no_rights');
+  await chats.setMemberRole(C.id, g.id, D.id, 'admin', { rights: { change_info: false, add_admins: false }, title: 'Helper' });
+  await rejects(chats.setMemberRole(C.id, g.id, B.id, 'member'), 'no_rights'); // B was added by the owner
+  await chats.setMemberRole(C.id, g.id, D.id, 'member'); // D was added by C
+  const list = await chats.listMembers ? await chats.listMembers(A.id, g.id) : null;
+  if (list) {
+    const b = (list.members || list).find((m) => (m.user ? m.user.id : m.id) === B.id);
+    if (b && b.rights) assert.equal(b.rights.change_info, false);
+  }
+});

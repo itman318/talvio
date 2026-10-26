@@ -128,7 +128,10 @@ class ChatBackground extends StatelessWidget {
     final photo = appearance.photoPath;
     Widget bg;
     if (photo != null) {
-      Widget img = Image.file(File(photo), fit: BoxFit.cover, width: double.infinity, height: double.infinity, gaplessPlayback: true);
+      // decode at screen size, not the camera's full resolution
+      final mq = MediaQuery.of(context);
+      Widget img = Image.file(File(photo),
+          fit: BoxFit.cover, width: double.infinity, height: double.infinity, gaplessPlayback: true, cacheHeight: (mq.size.height * mq.devicePixelRatio).round());
       if (appearance.blur) img = ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14), child: img);
       bg = Stack(fit: StackFit.expand, children: [
         img,
@@ -141,10 +144,12 @@ class ChatBackground extends StatelessWidget {
           ink: dark ? def.darkPattern : def.lightPattern,
           pattern: appearance.pattern,
         ),
+        isComplex: true,
         child: const SizedBox.expand(),
       );
     }
-    return Stack(children: [Positioned.fill(child: bg), child]);
+    // its own layer: painted once, not again on every scroll frame of the messages above it
+    return Stack(children: [Positioned.fill(child: RepaintBoundary(child: bg)), child]);
   }
 }
 

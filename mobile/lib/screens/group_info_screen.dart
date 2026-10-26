@@ -177,6 +177,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (m.user.id == _store.myId) return;
     final canRemove = chat.isOwner || (chat.myRole == 'admin' && m.role == 'member' && chat.can('ban_users'));
     final canMute = chat.isGroup && m.role == 'member' && chat.can('ban_users');
+    // the owner manages every admin; an admin with "Add new admins" only the ones they added
+    final canPromote = chat.isOwner || (chat.can('add_admins') && (m.role == 'member' || (m.role == 'admin' && m.promotedBy == _store.myId)));
     final a = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -184,11 +186,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           ListTile(leading: const Icon(Icons.person), title: const Text('View profile'), onTap: () => Navigator.pop(ctx, 'profile')),
           if (chat.isGroup && m.role == 'member' && chat.can('ban_users'))
             ListTile(leading: const Icon(Icons.sell_rounded), title: Text(m.tag == null ? 'Add a member tag' : 'Edit tag “${m.tag}”'), onTap: () => Navigator.pop(ctx, 'tag')),
-          if (chat.isOwner && m.role == 'member')
-            ListTile(leading: const Icon(Icons.admin_panel_settings), title: const Text('Make admin'), onTap: () => Navigator.pop(ctx, 'admin')),
-          if (chat.isOwner && m.role == 'admin')
+          if (canPromote && m.role == 'member')
+            ListTile(leading: const Icon(Icons.admin_panel_settings), title: const Text('Make admin or moderator'), onTap: () => Navigator.pop(ctx, 'admin')),
+          if (canPromote && m.role == 'admin')
             ListTile(leading: const Icon(Icons.tune_rounded), title: const Text('Edit admin rights'), onTap: () => Navigator.pop(ctx, 'admin')),
-          if (chat.isOwner && m.role == 'admin')
+          if (canPromote && m.role == 'admin')
             ListTile(leading: const Icon(Icons.remove_moderator), title: const Text('Remove admin rights'), onTap: () => Navigator.pop(ctx, 'member')),
           if (canMute)
             ListTile(
@@ -213,7 +215,12 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: m.user.id)));
         break;
       case 'admin':
-        final r = await editAdminRights(context, name: m.user.name, channel: chat.isChannel, current: m.rights, title: m.title);
+        final r = await editAdminRights(context,
+            name: m.user.name,
+            channel: chat.isChannel,
+            current: m.role == 'admin' ? m.rights : null,
+            title: m.title,
+            allowed: chat.isOwner ? null : {for (final k in adminRightLabels.keys) k: chat.can(k)});
         if (r == null) return;
         await _run(() => _store.setRole(chat.id, m.user.id, 'admin', rights: r.$1, title: r.$2), '${m.user.name} is an admin');
         break;
@@ -343,10 +350,80 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     );
   }
 
+  Future<void> _addAdmin(Chat chat) async {
+    final members = (_store.members[chat.id] ?? []).where((m) => m.role == 'member' && m.user.id != _store.myId && !m.user.deleted).toList();
+    if (members.isEmpty) {
+      showInfo(context, chat.isChannel ? 'Add subscribers first, then make one an admin' : 'Add members first, then make one an admin');
+      return;
+    }
+    final pick = await showModalBottomSheet<GroupMember>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          child: ListView(shrinkWrap: true, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Choose a new admin', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+            for (final m in members)
+              ListTile(
+                leading: Avatar(id: m.user.id, name: m.user.name, url: m.user.avatarAbsolute, size: 42),
+                title: Text(m.user.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(lastSeenText(m.user), maxLines: 1),
+                onTap: () => Navigator.pop(ctx, m),
+              ),
+          ]),
+        ),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    final r = await editAdminRights(context,
+        name: pick.user.name, channel: chat.isChannel, allowed: chat.isOwner ? null : {for (final k in adminRightLabels.keys) k: chat.can(k)});
+    if (r == null) return;
+    await _run(() => _store.setRole(chat.id, pick.user.id, 'admin', rights: r.$1, title: r.$2), '${pick.user.name} is now ${r.$2.isEmpty ? 'an admin' : r.$2}');
+  }
+
   List<Widget> _manageGroups(Chat chat) {
     final auth = context.read<AuthState>();
     final info = chat.can('change_info');
+    final admins = (_store.members[chat.id] ?? []).where((m) => m.role != 'member').toList();
+    final canAdd = chat.isOwner || chat.can('add_admins');
+    String rightsLine(GroupMember m) {
+      if (m.role == 'owner') return 'Owner · can do everything';
+      final r = m.rights;
+      if (r == null) return 'All rights';
+      final on = adminRightLabels.keys.where((k) => r[k] != false && (chat.isChannel || k != 'post_messages')).length;
+      final total = adminRightLabels.keys.where((k) => chat.isChannel || k != 'post_messages').length;
+      return on >= total ? 'All rights' : '$on of $total rights';
+    }
+
     return [
+      SettingsGroup(title: 'Admins & moderators', children: [
+        for (final m in admins)
+          ListTile(
+            leading: Avatar(id: m.user.id, name: m.user.name, url: m.user.avatarAbsolute, size: 40),
+            title: Text(m.user.id == _store.myId ? '${m.user.name} (you)' : m.user.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(rightsLine(m), maxLines: 1),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(color: (m.role == 'owner' ? Brand.premium : Brand.primary).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+              child: Text(m.title?.isNotEmpty == true ? m.title! : (m.role == 'owner' ? 'Owner' : 'Admin'),
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: m.role == 'owner' ? Brand.premium : Brand.primary)),
+            ),
+            onTap: () => _memberActions(chat, m),
+          ),
+        if (canAdd)
+          SettingsTile(
+            icon: Icons.person_add_alt_1_rounded,
+            color: Brand.green,
+            title: 'Add admin or moderator',
+            subtitle: 'Choose exactly what they may do',
+            onTap: () => _addAdmin(chat),
+          ),
+      ]),
       if (info)
         SettingsGroup(title: chat.isChannel ? 'Channel' : 'Group', children: [
           SettingsTile(icon: Icons.badge_rounded, color: Brand.primary, title: 'Name', trailing: chat.title, onTap: () => _editText(chat, title: true)),

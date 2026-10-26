@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -497,14 +496,12 @@ class SystemBubble extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: date ? 10 : 6, horizontal: 24),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          // frosted glass only for the few date chips (blur in a long list is costly)
-          child: BackdropFilter(
-            enabled: date,
-            filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
+          // no blur in the message list (costly while scrolling): a soft solid chip
+          child: Builder(
+            builder: (_) => Container(
               padding: EdgeInsets.symmetric(horizontal: date ? 14 : 12, vertical: 5),
               decoration: BoxDecoration(
-                color: dark ? Colors.white.withAlpha(20) : Colors.white.withAlpha(190),
+                color: dark ? const Color(0xFF1E2338).withAlpha(230) : Colors.white.withAlpha(225),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: dark ? Colors.white.withAlpha(14) : Colors.white.withAlpha(230), width: 0.8),
               ),

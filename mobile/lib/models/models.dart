@@ -709,8 +709,9 @@ class GroupMember {
   final String? tag; // member tag set by admins ("Mentor")
   final Map<String, bool>? rights;
   final DateTime? restrictedUntil;
+  final int? promotedBy; // who made them admin
 
-  GroupMember({required this.user, required this.role, required this.joinedAt, this.title, this.tag, this.rights, this.restrictedUntil});
+  GroupMember({required this.user, required this.role, required this.joinedAt, this.title, this.tag, this.rights, this.restrictedUntil, this.promotedBy});
 
   factory GroupMember.fromJson(Map<String, dynamic> j) => GroupMember(
         user: AppUser.fromJson(Map<String, dynamic>.from(j['user'] as Map)),
@@ -720,6 +721,7 @@ class GroupMember {
         tag: j['tag'] as String?,
         rights: j['rights'] is Map ? (j['rights'] as Map).map((k, v) => MapEntry('$k', v == true)) : null,
         restrictedUntil: _date(j['restricted_until']),
+        promotedBy: j['promoted_by'] == null ? null : _int(j['promoted_by']),
       );
 
   bool get isRestricted => restrictedUntil != null && restrictedUntil!.isAfter(DateTime.now());

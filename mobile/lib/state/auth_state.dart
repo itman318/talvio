@@ -75,9 +75,37 @@ class AuthState extends ChangeNotifier {
     }
 
 
+    // Fast start: use the last server settings right away and refresh them in the background.
+    final cachedCfg = await _storage.read(key: 'app_config');
+    if (cachedCfg != null) {
+      try {
+        appConfig = Map<String, dynamic>.from(jsonDecode(cachedCfg) as Map);
+        // an old "maintenance" must not lock the app: ask the server again
+        if (appConfig['maintenance_mode'] == true) appConfig = {};
+      } catch (_) {}
+    }
+    Future<Map<String, dynamic>> fetchCfg() async {
+      final c = Map<String, dynamic>.from(await api.get('/app-config').timeout(const Duration(seconds: 4)) as Map);
+      unawaited(_storage.write(key: 'app_config', value: jsonEncode(c)));
+      return c;
+    }
+
+    if (appConfig.isNotEmpty) {
+      unawaited(() async {
+        try {
+          appConfig = await fetchCfg();
+          if (appConfig['maintenance_mode'] == true) {
+            status = AuthStatus.maintenance;
+          } else if (_isOlder(AppConfig.appVersion, '${appConfig['min_app_version'] ?? '0'}')) {
+            status = AuthStatus.updateRequired;
+          }
+          notifyListeners();
+        } catch (_) {}
+      }());
+    }
     try {
-      // short timeout: an unreachable server must not keep the splash screen up
-      appConfig = Map<String, dynamic>.from(await api.get('/app-config').timeout(const Duration(seconds: 4)) as Map);
+      // first start: short timeout, an unreachable server must not keep the splash screen up
+      if (appConfig.isEmpty) appConfig = await fetchCfg();
       if (appConfig['maintenance_mode'] == true) {
         status = AuthStatus.maintenance;
         notifyListeners();

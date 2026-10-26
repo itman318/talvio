@@ -708,8 +708,19 @@ class ChatStore extends ChangeNotifier {
     _removeChat(chatId);
   }
 
-  Future<void> clearHistory(int chatId) async {
-    await api.post('/chats/$chatId/clear');
+  /// Typing / online events arrive in bursts: redraw at most ~8 times a second instead of on every event.
+  Timer? _soon;
+  void _notifySoon() {
+    if (_soon?.isActive == true) return;
+    _soon = Timer(const Duration(milliseconds: 120), notifyListeners);
+  }
+
+  Future<void> clearHistory(int chatId, {bool forEveryone = false}) async {
+    await api.post('/chats/$chatId/clear', {'for_everyone': forEveryone});
+    _clearedLocally(chatId);
+  }
+
+  void _clearedLocally(int chatId) {
     _messages[chatId] = [];
     _hasMore[chatId] = false;
     final chat = chatById(chatId);
@@ -1403,6 +1414,10 @@ class ChatStore extends ChangeNotifier {
       case 'chat:removed':
         _removeChat(_int(d['chat_id']));
         break;
+      case 'chat:cleared':
+        // the other person (or an admin) cleared the history for everyone
+        _clearedLocally(_int(d['chat_id']));
+        break;
       case 'typing':
         final uid = _int(d['user_id']);
         if (uid == myId) break;
@@ -1414,7 +1429,7 @@ class ChatStore extends ChangeNotifier {
           _typing.putIfAbsent(tChat, () => {})[uid] = DateTime.now().add(const Duration(seconds: 6));
           _typingAction.putIfAbsent(tChat, () => {})[uid] = action;
         }
-        notifyListeners();
+        _notifySoon();
         break;
       case 'presence':
         _onPresence(_int(d['user_id']), d['online'] == true, d['last_seen'] as String?);
@@ -1463,7 +1478,7 @@ class ChatStore extends ChangeNotifier {
       u.online = online;
       if (seen != null) u.lastSeen = seen;
     }
-    notifyListeners();
+    _notifySoon();
   }
 
   /// Inserts a message from the server into the loaded list (dedupes own optimistic copies).

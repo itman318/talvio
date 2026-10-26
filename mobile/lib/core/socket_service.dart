@@ -34,6 +34,7 @@ class SocketService {
     'receipt:read',
     'receipt:delivered',
     'chat:updated',
+    'chat:cleared',
     'chat:removed',
     'typing',
     'presence',

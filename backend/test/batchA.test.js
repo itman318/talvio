@@ -196,8 +196,8 @@ test('ownership transfer by owner and by admin panel', async () => {
 });
 
 test('reserved usernames and feature flags', async () => {
-  await rejects(users.updateProfile(B.id, { username: 'Support' }), 'username_reserved');
-  await rejects(chats.createChannel(A.id, { title: 'x', username: 'official' }), 'username_reserved');
+  await rejects(users.updateProfile(B.id, { username: 'Support' }), 'username_taken');
+  await rejects(chats.createChannel(A.id, { title: 'x', username: 'official' }), 'username_taken');
   await admin.setUsername(boss, B.id, 'support', '1.1.1.1');
   assert.equal((await users.getMe(B.id)).username, 'support');
   await users.updateProfile(B.id, { bio: 'help desk' }); // keeping a reserved name that was assigned is fine

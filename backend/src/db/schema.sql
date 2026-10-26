@@ -1001,3 +1001,6 @@ ALTER TABLE bots ADD COLUMN IF NOT EXISTS api_version VARCHAR(4) NOT NULL DEFAUL
 
 -- Settings → Notifications (private / groups / channels on-off, message text in notifications)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- who made this admin (admins with "add new admins" may only change the admins they added)
+ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS promoted_by BIGINT;

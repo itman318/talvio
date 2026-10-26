@@ -1135,6 +1135,45 @@ class _ChatScreenState extends State<ChatScreen> {
     await _sendFile(path, type: 'voice', duration: seconds, name: 'voice.m4a', waveform: wave.length >= 8 ? wave : null);
   }
 
+  /// Clear history: null = cancelled, false = only me, true = for everyone too.
+  Future<bool?> _askClearHistory(Chat chat) {
+    final canBoth = chat.type == 'private' && !chat.isSavedMessages && chat.peer != null && !chat.isBot;
+    final canAll = chat.isMulti && chat.can('delete_messages');
+    var both = false;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          icon: const Icon(Icons.cleaning_services_rounded, color: Color(0xFFE5484D)),
+          title: const Text('Clear history?'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(both
+                ? (canBoth ? 'All messages will be removed for you and ${chat.peer!.name}.' : 'All messages will be removed for every member.')
+                : 'All messages will be removed for you only.'),
+            if (canBoth || canAll) ...[
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: both,
+                onChanged: (v) => setD(() => both = v == true),
+                title: Text(canBoth ? 'Also clear for ${chat.peer!.name}' : 'Clear for all members'),
+              ),
+            ],
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE5484D)),
+              onPressed: () => Navigator.pop(ctx, both),
+              child: const Text('Clear'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ------------------------------------------------------------------ message menu
   Future<void> _messageMenu(Message m, Chat chat, [BuildContext? anchorCtx]) async {
     final mine = m.senderId == _store.myId && !chat.isChannel;
@@ -1427,8 +1466,10 @@ class _ChatScreenState extends State<ChatScreen> {
           await _store.updateChatSettings(chatId, {'muted_until': chat.isMuted ? null : 'forever'});
           break;
         case 'clear':
-          if (await confirm(context, 'Clear history?', 'Messages will be removed for you only.', ok: 'Clear', danger: true)) {
-            await _store.clearHistory(chatId);
+          final r = await _askClearHistory(chat);
+          if (r != null) {
+            await _store.clearHistory(chatId, forEveryone: r);
+            if (mounted) showInfo(context, r ? 'History cleared for everyone' : 'History cleared for you');
           }
           break;
         case 'block':
@@ -1616,7 +1657,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('calls') && auth.feature('video_calls'))
                 _mi('video', Icons.videocam_outlined, 'Video call'),
               _mi('search', Icons.search_rounded, 'Search messages'),
-              if (chat.isMulti && (chat.voiceChat != null || chat.isAdmin))
+              if (chat.isMulti && (chat.voiceChat != null || chat.can('manage_voice_chats')))
                 _mi('voice_chat', Icons.graphic_eq_rounded, chat.voiceChat != null ? 'Join voice chat' : 'Start voice chat'),
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
