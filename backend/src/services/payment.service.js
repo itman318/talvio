@@ -165,6 +165,7 @@ function checkPayToken(orderId, token) {
 
 async function checkout(userId, body = {}) {
   await settings.requireFeature('feature_premium', 'Talvio Plus');
+  if (!(await settings.get('plus_sales_open'))) throw forbidden('coming_soon', 'Talvio Plus is coming soon');
   const plan = await db.one('SELECT * FROM premium_plans WHERE id = $1 AND is_active', [v.id(body.plan_id, 'plan_id')]);
   if (!plan) throw notFound('plan_not_found', 'This plan is not available');
   const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual'], 'provider');

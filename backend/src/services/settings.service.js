@@ -63,6 +63,7 @@ const DEFINITIONS = {
 
   // ---- Batch D2
   feature_premium: { type: 'boolean', default: true },
+  plus_sales_open: { type: 'boolean', default: false },
   premium_upload_mb: { type: 'integer', default: 500, min: 1, max: 2048 },
   payment_manual_enabled: { type: 'boolean', default: true },
   payment_manual_instructions: {
@@ -212,6 +213,7 @@ async function publicConfig() {
       premium: s.feature_premium,
       web_login: s.feature_web_login,
     },
+    plus_available: !!(s.feature_premium && s.plus_sales_open),
     max_accounts: s.max_accounts_per_device,
     call_ring_timeout_sec: s.call_ring_timeout_sec,
   };

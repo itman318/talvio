@@ -91,6 +91,11 @@ test('premium info, manual payment with screenshot → admin approves → perks 
   assert.deepEqual([free.premium, free.upload_mb, free.folders], [false, 50, 10]);
   await rejects(fakeUpload(A.id, 60 * 1024 * 1024, 'file'), 'file_too_large');
 
+  // Plus is "coming soon" until the admin opens sales
+  await rejects(payments.checkout(A.id, { plan_id: plan1.id, provider: 'manual' }), 'coming_soon');
+  assert.equal((await settings.publicConfig()).plus_available, false);
+  await settings.update({ plus_sales_open: true });
+  assert.equal((await settings.publicConfig()).plus_available, true);
   await rejects(payments.checkout(A.id, { plan_id: plan1.id, provider: 'jazzcash' }), 'provider_unavailable');
   const co = await payments.checkout(A.id, { plan_id: plan1.id, provider: 'manual' });
   assert.equal(co.order.status, 'pending');

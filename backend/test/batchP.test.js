@@ -200,6 +200,7 @@ test('Plus: prices in the buyer currency, perks enforced', async () => {
   await db.query(`UPDATE users SET phone = NULL WHERE id = $1`, [B.id]);
   assert.equal((await pay.premiumInfo(B.id, { locale: 'en-GB,en;q=0.9' })).currency, 'GBP');
   assert.equal((await pay.premiumInfo(B.id, { country: 'de' })).plans[0].price_text, '€3.79');
+  await settings.update({ plus_sales_open: true });
   await rejects(pay.checkout(B.id, { plan_id: us.plans[0].id, provider: 'manual', country: 'US' }), 'provider_unavailable');
 
   const long = 'x'.repeat(200);

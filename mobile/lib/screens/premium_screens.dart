@@ -125,10 +125,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
   Widget build(BuildContext context) {
     final info = _info;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    // Plus sales are switched on from the admin panel (app config "plus_available"); until then: coming soon.
+    final comingSoon = context.watch<AuthState>().appConfig['plus_available'] != true && info?['is_premium'] != true;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Talvio Plus'),
         actions: [
+          if (!comingSoon)
           IconButton(
             tooltip: 'Payment history',
             icon: const Icon(Icons.receipt_long_outlined),
@@ -154,12 +157,44 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   Text(
                     info['is_premium'] == true
                         ? 'Active until ${_date(info['premium_until'] as String?)} — thank you! ⭐'
-                        : 'More space, more style, no ads — and you support an independent app.',
+                        : comingSoon
+                            ? 'More space, more style, no ads. We are putting the finishing touches on it.'
+                            : 'More space, more style, no ads — and you support an independent app.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white, fontSize: 14.5, height: 1.35),
                   ),
                 ]),
               ),
+              if (comingSoon) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  decoration: BoxDecoration(
+                    color: dark ? const Color(0xFF1A1E33) : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: premiumColor.withValues(alpha: 0.35)),
+                  ),
+                  child: Column(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(color: premiumColor.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+                      child: const Text('COMING SOON', style: TextStyle(color: premiumColor, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2)),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('Talvio Plus is almost here', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                    const SizedBox(height: 4),
+                    const Text('Everything in Talvio stays free. Plus will add extras on top — here is what is coming.',
+                        textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 13.5, height: 1.35)),
+                    const SizedBox(height: 10),
+                    TextButton.icon(
+                      onPressed: () => showInfo(context, 'We will tell you in the app when Talvio Plus starts'),
+                      icon: const Icon(Icons.notifications_active_outlined, size: 19),
+                      label: const Text('Notify me'),
+                    ),
+                  ]),
+                ),
+              ],
+              if (!comingSoon) ...[
               const SizedBox(height: 18),
               Row(children: [
                 Text(info['is_premium'] == true ? 'Extend your plan' : 'Choose a plan', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
@@ -242,8 +277,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   ),
                 );
               }),
+              ],
               const SizedBox(height: 14),
-              const Text('What you get', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+              Text(comingSoon ? 'What is coming' : 'What you get', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(color: dark ? const Color(0xFF1A1E33) : Colors.white, borderRadius: BorderRadius.circular(20)),

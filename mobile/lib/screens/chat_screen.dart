@@ -1135,7 +1135,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ------------------------------------------------------------------ message menu
-  Future<void> _messageMenu(Message m, Chat chat, [BuildContext? anchorCtx, Widget? preview]) async {
+  Future<void> _messageMenu(Message m, Chat chat, [BuildContext? anchorCtx]) async {
     final mine = m.senderId == _store.myId && !chat.isChannel;
     final channelAdmin = chat.isChannel && chat.can('post_messages');
     if (m.isLocal) {
@@ -1193,7 +1193,6 @@ class _ChatScreenState extends State<ChatScreen> {
       myReaction: m.myReaction,
       header: header,
       items: items,
-      preview: preview,
     );
     if (!mounted || a == null) return;
     if (a.startsWith('react:')) {
@@ -1942,8 +1941,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 lastInGroup: last,
                 showAvatar: last && chat.isGroup && !mine,
                 // one tap (or a long press) opens the message menu; long press while selecting adds to the selection
-                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat, bctx, _bubblePreview(m, chat, mine, showSender)),
-                onTap: selecting ? null : () => _messageMenu(m, chat, bctx, _bubblePreview(m, chat, mine, showSender)),
+                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat, bctx),
+                onTap: selecting ? null : () => _messageMenu(m, chat, bctx),
                 onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
                 onForward: chat.isChannel && !chat.noForwards && !selecting
                     ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
@@ -1958,12 +1957,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// The tapped message, drawn again above the blur while its menu is open.
-  Widget _bubblePreview(Message m, Chat chat, bool mine, bool showSender) => MediaQuery.removePadding(
-        context: context,
-        removeTop: true,
-        child: MessageBubble(message: m, chat: chat, isMine: mine, showSender: showSender, showAvatar: chat.isGroup && !mine),
-      );
-
   Widget _lockGate(Chat chat) {
     return Scaffold(
       appBar: AppBar(),
