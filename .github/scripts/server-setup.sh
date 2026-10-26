@@ -78,6 +78,19 @@ set_env MAIL_PROVIDER "${MAIL_PROVIDER:-}"
 set_env MAIL_FROM "${MAIL_FROM:-}"
 set_env BREVO_API_KEY "${BREVO_API_KEY:-}"
 set_env OTP_DEV_MODE "${OTP_DEV_MODE:-}"
+# push notifications (Firebase service account from the FIREBASE_SERVICE_ACCOUNT secret)
+if [ -n "${FIREBASE_SA_B64:-}" ]; then
+  if echo "$FIREBASE_SA_B64" | base64 -d > /etc/talvio/firebase.json.tmp 2>/dev/null && grep -q '"private_key"' /etc/talvio/firebase.json.tmp; then
+    mv /etc/talvio/firebase.json.tmp /etc/talvio/firebase.json
+    chown talvio:talvio /etc/talvio/firebase.json 2>/dev/null || true
+    chmod 600 /etc/talvio/firebase.json
+    set_env FIREBASE_SERVICE_ACCOUNT_PATH /etc/talvio/firebase.json
+    echo "push notifications: Firebase key installed"
+  else
+    rm -f /etc/talvio/firebase.json.tmp
+    echo "push notifications: FIREBASE_SERVICE_ACCOUNT is not a valid service-account JSON"
+  fi
+fi
 
 # keep the address current if the server IP changed
 sed -i "s#^PUBLIC_URL=http://[0-9.]*\$#PUBLIC_URL=http://${PUBLIC_IP}#" "$ENV_FILE"

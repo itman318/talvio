@@ -29,6 +29,7 @@ jobs:
           AE: ${{ secrets.ADMIN_EMAIL }}
           AP: ${{ secrets.ADMIN_PASSWORD }}
           API: ${{ vars.API_BASE }}
+          FSA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           # only which settings exist is reported, never their values
           {
@@ -37,6 +38,7 @@ jobs:
             echo "ADMIN_EMAIL: $([ -n "$AE" ] && echo set || echo missing)"
             echo "ADMIN_PASSWORD: $([ -n "$AP" ] && echo "set (${#AP} characters)" || echo missing)"
             echo "API_BASE variable: $([ -n "$API" ] && echo set || echo missing)"
+            echo "FIREBASE_SERVICE_ACCOUNT (push notifications): $([ -n "$FSA" ] && echo set || echo missing)"
           } | tee deploy.txt
           [ -n "$HOST" ] && [ -n "$PASS" ]
 
@@ -63,6 +65,7 @@ jobs:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           OTP_DEV_MODE: ${{ vars.OTP_DEV_MODE }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
@@ -100,6 +103,10 @@ jobs:
               printf 'export MAIL_PROVIDER=brevo BREVO_API_KEY=%q MAIL_FROM=%q\n' "$BREVO_API_KEY" "$MAIL_FROM"
             fi
             printf 'export OTP_DEV_MODE=%q\n' "$OTP_DEV_MODE"
+            if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+              # push notifications: the Firebase key goes into a root-only file on the server
+              printf 'export FIREBASE_SA_B64=%q\n' "$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | base64 -w0)"
+            fi
             echo 'bash /root/server-setup.sh'
           } | sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' 2>&1 | tee -a deploy.txt
 
