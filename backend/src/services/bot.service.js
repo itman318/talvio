@@ -157,6 +157,21 @@ async function updateBot(ownerId, botIdRaw, body = {}) {
        menu_url = CASE WHEN $4 THEN $5 ELSE menu_url END, group_privacy = COALESCE($6, group_privacy) WHERE user_id = $1`,
     [bot.user_id, about, commands, menu !== undefined, menu === undefined ? null : menu, privacy],
   );
+  if (body.avatar_media_id !== undefined) {
+    if (body.avatar_media_id === null) {
+      await db.query('UPDATE users SET avatar_media_id = NULL, updated_at = now() WHERE id = $1', [bot.user_id]);
+    } else {
+      // the owner uploads the photo, then gives it to the bot
+      const media = await db.one('SELECT * FROM media WHERE id = $1', [v.id(body.avatar_media_id, 'avatar_media_id')]);
+      if (!media || Number(media.uploader_id) !== Number(ownerId)) throw notFound('media_not_found', 'Media not found');
+      if (!['avatar', 'image'].includes(media.kind)) throw badRequest('invalid_media', 'The bot photo must be an image');
+      await db.query('UPDATE media SET is_public = TRUE WHERE id = $1', [media.id]);
+      await db.query('UPDATE users SET avatar_media_id = $2, updated_at = now() WHERE id = $1', [bot.user_id, media.id]);
+    }
+  }
+  if (body.remove_webhook === true) {
+    await db.query('UPDATE bots SET webhook_url = NULL, webhook_secret = NULL, webhook_error = NULL WHERE user_id = $1', [bot.user_id]);
+  }
   bus.emit('user:updated', { userId: bot.user_id });
   const r = await ownedBot(ownerId, bot.user_id);
   return serializeBot(r, r);

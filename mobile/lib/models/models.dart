@@ -948,6 +948,9 @@ class MyBot {
   final String? webhookUrl;
   final String? webhookError;
   final int pendingUpdates;
+  final String? avatarUrl;
+  final String? inlinePlaceholder;
+  String? get avatarAbsolute => avatarUrl == null ? null : AppConfig.absolute(avatarUrl!);
 
   MyBot({
     required this.id,
@@ -961,6 +964,8 @@ class MyBot {
     this.webhookUrl,
     this.webhookError,
     this.pendingUpdates = 0,
+    this.avatarUrl,
+    this.inlinePlaceholder,
   });
 
   factory MyBot.fromJson(Map<String, dynamic> j) => MyBot(
@@ -975,6 +980,8 @@ class MyBot {
         webhookUrl: j['webhook_url'] as String?,
         webhookError: j['webhook_error'] as String?,
         pendingUpdates: _int(j['pending_updates'] ?? 0),
+        avatarUrl: j['avatar_url'] as String?,
+        inlinePlaceholder: j['inline_placeholder'] as String?,
       );
 }
 

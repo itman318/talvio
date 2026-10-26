@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/chat_links.dart';
 import '../core/services.dart';
+import '../widgets/avatar.dart';
 import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
@@ -72,6 +74,46 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
+  /// Bots: pick one of my groups/channels where I can add people.
+  Future<void> _addBotToGroup(AppUser bot) async {
+    final store = context.read<ChatStore>();
+    final places = store.chats.where((c) => (c.isGroup || c.isChannel) && c.can('invite_users') && !c.isSuspended).toList();
+    if (places.isEmpty) {
+      showInfo(context, 'You need to be an admin of a group or channel first');
+      return;
+    }
+    final pick = await showModalBottomSheet<Chat>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+          child: ListView(shrinkWrap: true, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Add ${bot.name} to…', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+            for (final c in places)
+              ListTile(
+                leading: Avatar(id: c.id, name: c.title, url: c.avatarAbsolute, size: 42),
+                title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(c.isChannel ? 'Channel' : 'Group'),
+                onTap: () => Navigator.pop(ctx, c),
+              ),
+          ]),
+        ),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    try {
+      await store.addMembers(pick.id, [bot.id]);
+      if (mounted) showInfo(context, '${bot.name} added to ${pick.title}');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final u = _user;
@@ -108,8 +150,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   actions: [
                     if (other) ...[
                       ProfileAction(icon: Icons.chat_bubble_rounded, label: 'Message', highlight: true, onTap: () => _message(u)),
-                      if (auth.feature('calls')) ProfileAction(icon: Icons.call_rounded, label: 'Call', onTap: () => startCall(context, u, video: false)),
-                      if (auth.feature('calls') && auth.feature('video_calls'))
+                      if (u.isBot) ...[
+                        ProfileAction(icon: Icons.group_add_rounded, label: 'Add to group', onTap: () => _addBotToGroup(u)),
+                        if (u.username != null)
+                          ProfileAction(
+                            icon: Icons.ios_share_rounded,
+                            label: 'Share',
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: publicChatLink(u.username!)));
+                              showInfo(context, 'Bot link copied');
+                            },
+                          ),
+                      ],
+                      if (!u.isBot && auth.feature('calls')) ProfileAction(icon: Icons.call_rounded, label: 'Call', onTap: () => startCall(context, u, video: false)),
+                      if (!u.isBot && auth.feature('calls') && auth.feature('video_calls'))
                         ProfileAction(icon: Icons.videocam_rounded, label: 'Video', onTap: () => startCall(context, u, video: true)),
                       if (chat != null)
                         ProfileAction(
@@ -123,7 +177,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             }
                           },
                         ),
-                      if (auth.feature('secret_chats')) ProfileAction(icon: Icons.lock_rounded, label: 'Vault', onTap: () => startSecretChat(context, u)),
+                      if (!u.isBot && auth.feature('secret_chats')) ProfileAction(icon: Icons.lock_rounded, label: 'Vault', onTap: () => startSecretChat(context, u)),
                     ],
                   ],
                 ),
@@ -151,7 +205,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         showInfo(context, 'Username copied');
                       },
                     ),
-                  if (u.bio.isNotEmpty) SettingsTile(icon: Icons.info_rounded, color: Brand.violet, title: u.bio, subtitle: 'Bio'),
+                  if (u.bio.isNotEmpty) SettingsTile(icon: Icons.info_rounded, color: Brand.violet, title: u.bio, subtitle: u.isBot ? 'About' : 'Bio', maxSubtitleLines: 1),
                   if (u.birthday != null)
                     SettingsTile(
                       icon: Icons.cake_rounded,
@@ -175,6 +229,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ]),
                 if (other)
                   SettingsGroup(children: [
+                    if (!u.isBot)
                     SettingsTile(
                       icon: u.isContact ? Icons.person_remove_rounded : Icons.person_add_alt_1_rounded,
                       color: Brand.sky,
@@ -190,7 +245,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     SettingsTile(
                       icon: Icons.block_rounded,
                       color: const Color(0xFFE5484D),
-                      title: u.blocked ? 'Unblock' : 'Block',
+                      title: u.blocked ? 'Unblock' : (u.isBot ? 'Stop & block bot' : 'Block'),
                       danger: !u.blocked,
                       onTap: () async {
                         if (!u.blocked &&

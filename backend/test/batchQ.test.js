@@ -125,6 +125,15 @@ test('inline bots: @bot query → results → sent "via @bot"', async () => {
   // inline mode off → no bot
   assert.equal((await bots.inlineQuery(B.id, { username: 'inlineprice_bot', q: 'gold' })).bot, null);
   await bots.updateBot(A.id, bot.id, { inline_placeholder: 'Search prices…' });
+  // bot photo from the app (owner uploads, gives it to the bot) and removing the webhook
+  const pic = await db.one(`INSERT INTO media (uploader_id, kind, mime, size_bytes, storage_path, original_name) VALUES ($1, 'avatar', 'image/jpeg', 10, '/tmp/b.jpg', 'b.jpg') RETURNING id`, [A.id]);
+  const withPic = await bots.updateBot(A.id, bot.id, { avatar_media_id: pic.id });
+  assert.ok(withPic.avatar_url, 'bot photo set');
+  await rejects(bots.updateBot(B.id, bot.id, { avatar_media_id: pic.id }), 'bot_not_found');
+  await db.query(`UPDATE bots SET webhook_url = 'https://example.com/h', webhook_error = 'x' WHERE user_id = $1`, [bot.id]);
+  const noHook = await bots.updateBot(A.id, bot.id, { remove_webhook: true });
+  assert.equal(noHook.webhook_url, null);
+  assert.equal((await bots.updateBot(A.id, bot.id, { avatar_media_id: null })).avatar_url, null);
   assert.equal((await bots.callMethod(token, 'me')).supports_inline_queries, true);
   const pending = bots.inlineQuery(B.id, { username: '@inlineprice_bot', q: 'gold' });
   await new Promise((r) => setTimeout(r, 150));
