@@ -285,16 +285,21 @@ void _androidBranding() {
 
   const adaptive = '''<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/talvio_ink"/>
+    <background android:drawable="@drawable/ic_launcher_background"/>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
     <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
 </adaptive-icon>
 ''';
+  write('drawable/ic_launcher_background.xml', '''<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient android:angle="315" android:startColor="#FF9A62" android:centerColor="#F2557E" android:endColor="#6C4BE0"/>
+</shape>
+''');
   write('mipmap-anydpi-v26/ic_launcher.xml', adaptive);
   write('mipmap-anydpi-v26/ic_launcher_round.xml', adaptive);
   write('values/talvio_colors.xml', '''<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="talvio_ink">#151A2E</color>
+    <color name="talvio_ink">#F2557E</color>
 </resources>
 ''');
   const launch = '''<?xml version="1.0" encoding="utf-8"?>

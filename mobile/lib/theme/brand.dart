@@ -253,9 +253,9 @@ class BrandMark extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF232945), Color(0xFF12162A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(size * 0.3),
-          boxShadow: [BoxShadow(color: Brand.ink.withAlpha(70), blurRadius: size * 0.3, offset: Offset(0, size * 0.1))],
+          gradient: const LinearGradient(colors: [Color(0xFFFF9A62), Color(0xFFF2557E), Color(0xFF6C4BE0)], stops: [0, 0.48, 1], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          borderRadius: BorderRadius.circular(size * 0.227),
+          boxShadow: [BoxShadow(color: const Color(0xFFF2557E).withAlpha(70), blurRadius: size * 0.3, offset: Offset(0, size * 0.1))],
         ),
         child: CustomPaint(painter: _MarkPainter()),
       ),
@@ -263,25 +263,32 @@ class BrandMark extends StatelessWidget {
   }
 }
 
+/// The Talvio mark (same art as the app icon): a speech bubble holding a "T", with two sparks.
 class _MarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size s) {
-    final w = s.shortestSide;
-    final backRect = Rect.fromLTWH(w * 0.36, w * 0.2, w * 0.44, w * 0.36);
-    final back = RRect.fromRectAndCorners(
-      backRect,
-      topLeft: Radius.circular(w * 0.18), topRight: Radius.circular(w * 0.18), bottomLeft: Radius.circular(w * 0.18), bottomRight: Radius.circular(w * 0.05),
-    );
-    canvas.drawRRect(back, Paint()..shader = const LinearGradient(colors: [Color(0xFFFF8A6E), Brand.primary, Brand.rose]).createShader(backRect));
-    final front = RRect.fromRectAndCorners(
-      Rect.fromLTWH(w * 0.18, w * 0.38, w * 0.48, w * 0.38),
-      topLeft: Radius.circular(w * 0.19), topRight: Radius.circular(w * 0.19), bottomRight: Radius.circular(w * 0.19), bottomLeft: Radius.circular(w * 0.05),
-    );
-    canvas.drawRRect(front, Paint()..color = Colors.white);
-    final dot = Paint()..color = Brand.ink;
-    for (var i = 0; i < 3; i++) {
-      canvas.drawCircle(Offset(w * (0.31 + i * 0.11), w * 0.57), w * 0.034, dot);
-    }
+    final k = s.shortestSide / 512;
+    canvas.save();
+    canvas.scale(k);
+    canvas.drawCircle(const Offset(150, 120), 170, Paint()..color = Colors.white.withAlpha(26));
+    final bubble = Path()
+      ..moveTo(256, 96)
+      ..cubicTo(168, 96, 100, 158, 100, 240)
+      ..cubicTo(100, 280, 116, 316, 144, 342)
+      ..lineTo(128, 408)
+      ..cubicTo(126, 416, 134, 422, 141, 418)
+      ..lineTo(211, 380)
+      ..cubicTo(225, 384, 240, 386, 256, 386)
+      ..cubicTo(344, 386, 412, 324, 412, 240)
+      ..cubicTo(412, 156, 344, 96, 256, 96)
+      ..close();
+    canvas.drawPath(bubble, Paint()..color = Colors.white);
+    final t = Paint()..shader = const LinearGradient(colors: [Color(0xFFF2557E), Color(0xFF6C4BE0)], begin: Alignment.topLeft, end: Alignment.bottomRight).createShader(const Rect.fromLTWH(178, 170, 156, 150));
+    canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(178, 170, 156, 44), const Radius.circular(22)), t);
+    canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(234, 170, 44, 150), const Radius.circular(22)), t);
+    canvas.drawCircle(const Offset(372, 128), 16, Paint()..color = Colors.white);
+    canvas.drawCircle(const Offset(404, 98), 8, Paint()..color = Colors.white.withAlpha(204));
+    canvas.restore();
   }
 
   @override

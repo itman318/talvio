@@ -127,6 +127,38 @@ class MyProfileScreen extends StatelessWidget {
         ]),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true),
         _completeCard(context, me, () => go(const EditProfileScreen())),
+        if (link != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Material(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: link));
+                  if (context.mounted) showInfo(context, 'Profile link copied');
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                  child: Row(children: [
+                    const BrandMark(size: 38),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Your Talvio link', style: TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text(link.replaceFirst(RegExp(r'^https?://'), ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: Brand.primary)),
+                      ]),
+                    ),
+                    IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded), onPressed: () => go(const MyQrScreen())),
+                    const Icon(Icons.copy_rounded, size: 20, color: Brand.muted),
+                    const SizedBox(width: 6),
+                  ]),
+                ),
+              ),
+            ),
+          ),
         SettingsGroup(title: 'About me', children: [
           SettingsTile(
             icon: Icons.notes_rounded,
