@@ -34,6 +34,8 @@ jobs:
           done
           echo "--- local endpoint timings"
           node /root/diagnose.js
+          echo "--- push notifications"
+          journalctl -u talvio --since "-2d" --no-pager | grep -i "push notifications" | tail -3
           echo "--- recent server errors"
           journalctl -u talvio --since "-6h" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT" | grep -v OTP_DEV_MODE | tail -25 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
           echo "--- nginx slow / failed requests"
