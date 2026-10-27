@@ -65,6 +65,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _search = TextEditingController();
   String _q = '';
+  bool _searchOpen = false;
 
   @override
   void dispose() {
@@ -132,6 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: TextField(
         controller: _search,
+        autofocus: true,
         onChanged: (v) => setState(() => _q = v),
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
@@ -153,10 +155,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    if (q.isNotEmpty) {
+    if (q.isNotEmpty || _searchOpen) {
       final hits = items.where((i) => i.matches(q)).toList();
       return Scaffold(
-        appBar: AppBar(title: const Text('Settings')),
+        appBar: AppBar(
+          title: const Text('Search settings'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => setState(() {
+              _searchOpen = false;
+              _search.clear();
+              _q = '';
+            }),
+          ),
+        ),
         body: ListView(children: [
           searchField,
           if (hits.isEmpty)
@@ -182,118 +194,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!sections.contains(i.section)) sections.add(i.section);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(actions: [
+        IconButton(tooltip: 'Search settings', icon: const Icon(Icons.search_rounded), onPressed: () => setState(() => _searchOpen = true)),
+      ]),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          // profile card: the person's own colours, like the cover on their profile
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(26),
-                onTap: () => go(UserProfileScreen(userId: me.id)),
-                child: Ink(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(26),
-                    gradient: LinearGradient(
-                      colors: [gradientForId(me.id)[0], gradientForId(me.id)[1], Color.lerp(gradientForId(me.id)[1], Brand.ink, 0.5)!],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [BoxShadow(color: gradientForId(me.id)[1].withValues(alpha: dark ? 0.25 : 0.3), blurRadius: 20, offset: const Offset(0, 8))],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(26),
-                    child: Stack(children: [
-                      Positioned(right: -30, top: -40, child: Container(width: 140, height: 140, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.12)))),
-                      Positioned(left: 90, bottom: -50, child: Container(width: 110, height: 110, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.08)))),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(children: [
-                          Container(
-                            padding: const EdgeInsets.all(2.5),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(67 * 0.34),
-                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))],
-                            ),
-                            child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 62),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Row(children: [
-                                Flexible(
-                                  child: Text(me.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4, color: Colors.white)),
-                                ),
-                                if (plus) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFE3A3), size: 20)),
-                              ]),
-                              const SizedBox(height: 2),
-                              for (final line in [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((s) => s.isNotEmpty))
-                                Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withValues(alpha: 0.82), fontSize: 13.5)),
-                              const SizedBox(height: 6),
-                              Text('View profile ›', style: TextStyle(color: Colors.white.withValues(alpha: 0.95), fontWeight: FontWeight.w700, fontSize: 12.5)),
-                            ]),
-                          ),
-                          Column(mainAxisSize: MainAxisSize.min, children: [
-                            _glassIcon(Icons.qr_code_2_rounded, 'My QR code', () => go(const MyQrScreen())),
-                            const SizedBox(height: 8),
-                            _glassIcon(Icons.edit_rounded, 'Edit profile', () => go(const EditProfileScreen())),
-                          ]),
-                        ]),
-                      ),
-                    ]),
+          // centred profile header: big photo with a camera badge, name, number · @username, quick actions
+          const SizedBox(height: 4),
+          Center(
+            child: GestureDetector(
+              onTap: () => go(const EditProfileScreen()),
+              child: Stack(clipBehavior: Clip.none, children: [
+                Container(
+                  padding: const EdgeInsets.all(3.5),
+                  decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, boxShadow: [
+                    BoxShadow(color: Brand.rose.withValues(alpha: 0.3), blurRadius: 22, offset: const Offset(0, 8)),
+                  ]),
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, shape: BoxShape.circle),
+                    child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 104)),
                   ),
                 ),
-              ),
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
+                    child: const Icon(Icons.photo_camera_rounded, size: 17, color: Colors.white),
+                  ),
+                ),
+              ]),
             ),
           ),
-          searchField,
-          // quick shortcuts
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5))),
+            if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified_rounded, color: Brand.sky, size: 22)),
+            if (plus) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22)),
+          ]),
+          const SizedBox(height: 3),
+          Text(
+            [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  •  '),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Brand.muted, fontSize: 14.5),
+          ),
+          const SizedBox(height: 14),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
-              Expanded(
-                child: QuickTile(
-                  icon: Icons.bookmark_rounded,
-                  label: 'My Notes',
-                  color: Brand.sky,
-                  onTap: () async {
-                    try {
-                      final chat = await context.read<ChatStore>().openPrivateWith(me.id);
-                      if (context.mounted) go(ChatScreen(chatId: chat.id, initial: chat));
-                    } catch (e) {
-                      if (context.mounted) showError(context, e);
-                    }
-                  },
+              for (final (icon, label, page) in [
+                (Icons.edit_rounded, 'Edit', const EditProfileScreen() as Widget),
+                (Icons.qr_code_2_rounded, 'QR code', const MyQrScreen() as Widget),
+                (Icons.notifications_rounded, 'Alerts', const NotificationsScreen() as Widget),
+                (Icons.palette_rounded, 'Theme', const AppearanceScreen() as Widget),
+              ])
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () => go(page),
+                        child: SizedBox(
+                          height: 64,
+                          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Icon(icon, color: Brand.primary, size: 23),
+                            const SizedBox(height: 4),
+                            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: QuickTile(icon: Icons.notifications_rounded, label: 'Alerts', color: const Color(0xFFE5484D), onTap: () => go(const NotificationsScreen()))),
-              const SizedBox(width: 10),
-              Expanded(child: QuickTile(icon: Icons.palette_rounded, label: 'Theme', color: Brand.rose, onTap: () => go(const AppearanceScreen()))),
-              const SizedBox(width: 10),
-              Expanded(child: QuickTile(icon: Icons.devices_rounded, label: 'Devices', color: Brand.green, onTap: () => go(const SessionsScreen()))),
             ]),
           ),
-          if (auth.otherAccounts.isNotEmpty)
-            SettingsGroup(title: 'Switch account', children: [
-              ...auth.otherAccounts.map((a) => ListTile(
-                    leading: Avatar(id: a.id, name: a.name, url: a.avatarUrl == null ? null : AppConfig.absolute(a.avatarUrl!), size: 36),
-                    title: Text(a.name),
-                    subtitle: Text(a.phone ?? 'Tap to switch'),
-                    trailing: const Icon(Icons.swap_horiz),
-                    onTap: () {
-                      Navigator.of(context).popUntil((r) => r.isFirst);
-                      auth.switchTo(a.id);
-                    },
-                  )),
-            ]),
+          const SizedBox(height: 6),
+          // all accounts on this phone, switch in one tap
+          SettingsGroup(title: 'Accounts', children: [
+            ListTile(
+              leading: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 40),
+              title: Text(me.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('Using now'),
+              trailing: const Icon(Icons.check_circle_rounded, color: Brand.green),
+            ),
+            ...auth.otherAccounts.map((a) => ListTile(
+                  leading: Avatar(id: a.id, name: a.name, url: a.avatarUrl == null ? null : AppConfig.absolute(a.avatarUrl!), size: 40),
+                  title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(a.phone ?? 'Tap to switch'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.of(context).popUntil((r) => r.isFirst);
+                    auth.switchTo(a.id);
+                  },
+                )),
+          ]),
           if (auth.feature('premium'))
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
@@ -388,16 +388,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 }
-
-/// Small frosted round button on the coloured profile card.
-Widget _glassIcon(IconData icon, String tooltip, VoidCallback onTap) => Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.2),
-        shape: const CircleBorder(),
-        child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: Padding(padding: const EdgeInsets.all(9), child: Icon(icon, color: Colors.white, size: 21))),
-      ),
-    );
 
 // ------------------------------------------------------------------ edit profile
 class EditProfileScreen extends StatefulWidget {
