@@ -1,0 +1,150 @@
+  type: 'test'
+  ...
+# Subtest: groups: create, privacy skip, roles, ownership transfer, invites
+ok 122 - groups: create, privacy skip, roles, ownership transfer, invites
+  ---
+  duration_ms: 130.613765
+  type: 'test'
+  ...
+# Subtest: per-user chat settings: mute, pin limit, archive, clear
+ok 123 - per-user chat settings: mute, pin limit, archive, clear
+  ---
+  duration_ms: 48.267876
+  type: 'test'
+  ...
+# Subtest: media: upload rules, access control, image message, forward
+ok 124 - media: upload rules, access control, image message, forward
+  ---
+  duration_ms: 49.547988
+  type: 'test'
+  ...
+# Subtest: reports: create with snapshot, dedupe
+ok 125 - reports: create with snapshot, dedupe
+  ---
+  duration_ms: 15.15671
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000001 → 526006
+# [OTP dev mode] +923001000001 → 988211
+# Subtest: admin: login, dashboard, users, ban, reports, settings, logs
+ok 126 - admin: login, dashboard, users, ban, reports, settings, logs
+  ---
+  duration_ms: 321.567404
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000004 → 253535
+# Subtest: account deletion frees phone, leaves groups, keeps history as Deleted Account
+ok 127 - account deletion frees phone, leaves groups, keeps history as Deleted Account
+  ---
+  duration_ms: 25.964109
+  type: 'test'
+  ...
+# Subtest: saved messages (chat with yourself)
+ok 128 - saved messages (chat with yourself)
+  ---
+  duration_ms: 24.141495
+  type: 'test'
+  ...
+# Subtest: markAllDelivered on reconnect
+ok 129 - markAllDelivered on reconnect
+  ---
+  duration_ms: 20.391479
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000001 → 211249
+# [OTP dev mode] +923781000002 → 722898
+# [OTP dev mode] +923781000003 → 584004
+# [OTP dev mode] +923781000004 → 445368
+# Subtest: call links skip calls privacy but not blocks; second call waits, third is busy
+ok 130 - call links skip calls privacy but not blocks; second call waits, third is busy
+  ---
+  duration_ms: 517.392384
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000005 → 612639
+# [OTP dev mode] +923781000005 → 936847
+# Subtest: new login tells the other devices
+ok 131 - new login tells the other devices
+  ---
+  duration_ms: 66.70889
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000006 → 719933
+# [OTP dev mode] +923781000007 → 835760
+# [OTP dev mode] +923781000008 → 462605
+# Subtest: birthday: shown by privacy + exceptions, upcoming list
+ok 132 - birthday: shown by privacy + exceptions, upcoming list
+  ---
+  duration_ms: 53.714483
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000009 → 871474
+# [OTP dev mode] +923781000010 → 337200
+# Subtest: last seen / avatar exceptions: never share with
+ok 133 - last seen / avatar exceptions: never share with
+  ---
+  duration_ms: 58.670121
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000011 → 289214
+# [OTP dev mode] +923781000012 → 551470
+# Subtest: read receipts off: no blue ticks either way in private chats
+ok 134 - read receipts off: no blue ticks either way in private chats
+  ---
+  duration_ms: 66.909096
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000013 → 204655
+# [OTP dev mode] +923781000014 → 068055
+# [OTP dev mode] +923781000015 → 821104
+# Subtest: story reactions go to the chat; highlights keep expired stories on the profile
+ok 135 - story reactions go to the chat; highlights keep expired stories on the profile
+  ---
+  duration_ms: 87.782746
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000016 → 638865
+# [OTP dev mode] +923781000017 → 095157
+# [OTP dev mode] +923781000018 → 093895
+# [OTP dev mode] +923781000019 → 602295
+# Subtest: poll deadline: closes by itself; story mentions; live locations of a chat
+ok 136 - poll deadline: closes by itself; story mentions; live locations of a chat
+  ---
+  duration_ms: 123.665058
+  type: 'test'
+  ...
+# [OTP dev mode] asad1@talvio.test → 017444
+# [OTP dev mode] bina2@talvio.test → 904429
+# Subtest: official pack is installed once and everyone has it
+ok 137 - official pack is installed once and everyone has it
+  ---
+  duration_ms: 420.265918
+  type: 'test'
+  ...
+# Subtest: send a sticker; the other person can see it
+ok 138 - send a sticker; the other person can see it
+  ---
+  duration_ms: 22.349859
+  type: 'test'
+  ...
+# Subtest: own pack: create, add sticker (only sticker uploads), share, install, delete
+ok 139 - own pack: create, add sticker (only sticker uploads), share, install, delete
+  ---
+  duration_ms: 29.032012
+  type: 'test'
+  ...
+# Subtest: GIF messages only from Tenor
+ok 140 - GIF messages only from Tenor
+  ---
+  duration_ms: 19.429631
+  type: 'test'
+  ...
+1..140
+# tests 140
+# suites 0
+# pass 139
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 28913.187924

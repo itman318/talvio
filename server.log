@@ -1,0 +1,10 @@
+Talvio API listening on http://localhost:4000  (admin panel: /admin)
+OTP dev mode is ON — codes are returned in the API response
+[OTP dev mode] e2e.user@example.com → 402333
+[OTP dev mode] +923001110001 → 549975
+[OTP dev mode] +923001110002 → 359222
+[OTP dev mode] +923001110003 → 671699
+[OTP dev mode] +923007770001 → 100059
+[OTP dev mode] +923007770002 → 941222
+[OTP dev mode] +923007770003 → 890649
+[OTP dev mode] web.mail@talvio.test → 558616

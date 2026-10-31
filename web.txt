@@ -1,0 +1,1 @@
+PASS web client: QR login, open chat, send, live receive (socket.io: true), sticker/contact/live location/disappearing, message requests, email-code login + profile
