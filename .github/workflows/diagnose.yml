@@ -38,6 +38,10 @@ jobs:
           journalctl -u talvio --since "-2d" --no-pager | grep -i "push notifications" | tail -3
           echo "--- recent server errors"
           journalctl -u talvio --since "-6h" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT" | grep -v OTP_DEV_MODE | tail -25 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
+          echo "--- recent sessions (no tokens)"
+          sudo -u postgres psql -d talvio -tAc "SELECT id, user_id, to_char(created_at,'MM-DD HH24:MI:SS') c, to_char(revoked_at,'MM-DD HH24:MI:SS') r, to_char(last_active_at,'MM-DD HH24:MI') a, to_char(expires_at,'MM-DD') e, (fcm_token IS NOT NULL) push FROM sessions ORDER BY id DESC LIMIT 15"
+          echo "--- auth requests (last 2h)"
+          awk '$7 ~ /auth|logout|sessions/' /var/log/nginx/access.log 2>/dev/null | tail -30 | awk '{print $4, $6, $7, $9}'
           echo "--- nginx slow / failed requests"
           awk '$9>=500' /var/log/nginx/access.log 2>/dev/null | tail -10
           tail -5 /var/log/nginx/error.log 2>/dev/null
