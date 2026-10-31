@@ -15,9 +15,18 @@ const TAU = Math.PI * 2;
 const sin = (x) => Math.sin(x);
 const ease = (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, x)));
 
+// colour themes for Pebo (PAL=…); "brand" follows the Talvio logo gradient
+const PALETTES = {
+  mint: { b: ['#D4FFF0', '#7EF0CC', '#2EC4A6', '#169985'], l: ['#B9FBE5', '#4AD8B6', '#22A992'], line: '#0F7E70', arm: '#47D3B2', shade: '#0E7F70' },
+  brand: { b: ['#FFE3D6', '#FF9F8A', '#F2557E', '#8B45D6'], l: ['#FFD2C4', '#FF7E8E', '#C94AA8'], line: '#7A2A7E', arm: '#FF7D93', shade: '#5B1E7A' },
+  sunset: { b: ['#FFF4D6', '#FFC870', '#FF8A4C', '#E2513A'], l: ['#FFE6B0', '#FFAA5C', '#E2683E'], line: '#9A3A1E', arm: '#FFAF66', shade: '#8A2A10' },
+  lavender: { b: ['#F3EAFF', '#C3A6FF', '#8E6BF0', '#5B3FC4'], l: ['#E4D6FF', '#A88AF8', '#6E50D6'], line: '#3E2A94', arm: '#B096FF', shade: '#2E1E7A' },
+  ocean: { b: ['#E0F6FF', '#86D6FF', '#3B9BF0', '#2A5FD0'], l: ['#C8EEFF', '#5DB8F7', '#3474DC'], line: '#1C3F96', arm: '#73C4FA', shade: '#14307A' },
+};
+const C = PALETTES[process.env.PAL || 'mint'];
 const defs = `<defs>
-<radialGradient id="body" cx="36%" cy="26%" r="85%"><stop offset="0" stop-color="#D4FFF0"/><stop offset=".32" stop-color="#7EF0CC"/><stop offset=".78" stop-color="#2EC4A6"/><stop offset="1" stop-color="#169985"/></radialGradient>
-<radialGradient id="limb" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#B9FBE5"/><stop offset=".6" stop-color="#4AD8B6"/><stop offset="1" stop-color="#22A992"/></radialGradient>
+<radialGradient id="body" cx="36%" cy="26%" r="85%"><stop offset="0" stop-color="${C.b[0]}"/><stop offset=".32" stop-color="${C.b[1]}"/><stop offset=".78" stop-color="${C.b[2]}"/><stop offset="1" stop-color="${C.b[3]}"/></radialGradient>
+<radialGradient id="limb" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="${C.l[0]}"/><stop offset=".6" stop-color="${C.l[1]}"/><stop offset="1" stop-color="${C.l[2]}"/></radialGradient>
 <radialGradient id="iris" cx="38%" cy="34%" r="70%"><stop offset="0" stop-color="#3D4F8F"/><stop offset=".55" stop-color="#1E2A55"/><stop offset="1" stop-color="#0F1530"/></radialGradient>
 <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C8FF8A"/><stop offset="1" stop-color="#3FBF5C"/></linearGradient>
 <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE7A0"/><stop offset=".5" stop-color="#F6B532"/><stop offset="1" stop-color="#C7861A"/></linearGradient>
@@ -36,7 +45,7 @@ function bodyPath() {
   return 'M256 150 C 352 150 408 222 410 306 C 412 380 372 432 256 432 C 140 432 100 380 102 306 C 104 222 160 150 256 150 Z';
 }
 
-const LINE = '#0F7E70';
+const LINE = C.line;
 const INK = '#14203F';
 
 function eye(x, y, o = {}) {
@@ -77,7 +86,7 @@ function hand(x, y, r = 30, rot = 0) {
 
 function arm(sx, sy, ex, ey) {
   return `<path d="M${sx} ${sy} Q ${(sx + ex) / 2} ${(sy + ey) / 2 + 10} ${ex} ${ey}" stroke="${LINE}" stroke-width="42" stroke-linecap="round" fill="none"/>
-  <path d="M${sx} ${sy} Q ${(sx + ex) / 2} ${(sy + ey) / 2 + 10} ${ex} ${ey}" stroke="#47D3B2" stroke-width="30" stroke-linecap="round" fill="none"/>`;
+  <path d="M${sx} ${sy} Q ${(sx + ex) / 2} ${(sy + ey) / 2 + 10} ${ex} ${ey}" stroke="${C.arm}" stroke-width="30" stroke-linecap="round" fill="none"/>`;
 }
 
 function sprout(t) {
@@ -96,7 +105,7 @@ function body(o = {}) {
   <path d="${bodyPath()}" fill="url(#body)"/>
   ${tint ? `<path d="${bodyPath()}" fill="${tint}"/>` : ''}
   <g clip-path="url(#bodyClip)">
-    <ellipse cx="256" cy="452" rx="190" ry="70" fill="#0E7F70" opacity=".28" filter="url(#soft)"/>
+    <ellipse cx="256" cy="452" rx="190" ry="70" fill="${C.shade}" opacity=".28" filter="url(#soft)"/>
     <ellipse cx="256" cy="392" rx="96" ry="44" fill="#fff" opacity=".18"/>
     <ellipse cx="190" cy="208" rx="54" ry="30" fill="#fff" opacity=".55" transform="rotate(-24 190 208)" filter="url(#blur4)"/>
     <ellipse cx="176" cy="200" rx="18" ry="10" fill="#fff" opacity=".9" transform="rotate(-24 176 200)"/>
