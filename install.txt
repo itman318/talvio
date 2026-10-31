@@ -1,0 +1,18 @@
+Performing Streamed Install
+Success
+package=com.talvio.app
+  bash arg: -p
+  bash arg: com.talvio.app
+  bash arg: -c
+  bash arg: android.intent.category.LAUNCHER
+  bash arg: 1
+args: [-p, com.talvio.app, -c, android.intent.category.LAUNCHER, 1]
+ arg: "-p"
+ arg: "com.talvio.app"
+ arg: "-c"
+ arg: "android.intent.category.LAUNCHER"
+ arg: "1"
+data="com.talvio.app"
+data="android.intent.category.LAUNCHER"
+Events injected: 1
+## Network stats: elapsed time=75ms (0ms mobile, 0ms wifi, 75ms not connected)

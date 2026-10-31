@@ -1,0 +1,138 @@
+10-31 14:30:26.518  1875  2183 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-31 14:30:26.518  1875  2183 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-31 14:30:26.830  4707  4707 W GrowthKit: java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+10-31 14:30:26.830  4707  4707 W Notifications: java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+10-31 14:30:26.939  3691  3788 W ConnectionTracker: Exception thrown while unbinding
+10-31 14:30:26.939  3691  3788 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: lm@ec1f384
+10-31 14:30:27.058  1574  1596 W ModernMediaScanner: Failed to visit /data/data/com.android.providers.downloads/cache/params_expdate_c45e5b7.dat: java.nio.file.NoSuchFileException: /data/data/com.android.providers.downloads/cache/params_expdate_c45e5b7.dat
+10-31 14:30:27.160  1132  4781 I PTCommittedOperation: Receive new configuration for com.google.android.client_error_logging
+10-31 14:30:27.213  1875  2139 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-31 14:30:27.213  1875  2139 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-31 14:30:27.338  4707  4707 W GrowthKit: java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+10-31 14:30:27.339  4707  4707 W Notifications: java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+10-31 14:30:27.457  3850  3883 W ConnectionTracker: Exception thrown while unbinding
+10-31 14:30:27.457  3850  3883 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: lbw@faf2b6
+10-31 14:30:27.496  3850  4611 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:27.496  3850  4611 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:27.667  4445  4792 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:27.667  4445  4792 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:28.785  4445  4792 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:28.785  4445  4792 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:28.792  1132  3193 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+10-31 14:30:29.075   428   512 V installd: DexInv: --- END '/data/app/~~ZI65H7qnS67JS3weS_XEeg==/com.talvio.app-MYvAh3xUjUAgSMQufKy2Ww==/base.apk' (success) ---
+10-31 14:30:29.090   497   554 V BackupManagerService: [UserID:0] restoreAtInstall pkg=com.talvio.app token=1 restoreSet=0
+10-31 14:30:29.240   736  4843 E BackupHelper: java.io.FileNotFoundException: /data/user_de/0/com.google.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
+10-31 14:30:29.240   736  4843 E BackupHelper: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-31 14:30:29.341  1132  3193 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+10-31 14:30:29.542  1574  1574 I MediaProvider: Invalidating LocalCallingIdentity cache for package com.talvio.app. Reason: package android.intent.action.PACKAGE_ADDED
+10-31 14:30:29.545  1607  1607 I GsaVoiceInteractionSrv: O received Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) }
+10-31 14:30:29.551   694   694 D AvrcpMediaPlayerList: Name of package changed: com.talvio.app
+10-31 14:30:29.572   912   943 D ModelWriter: java.lang.Exception
+10-31 14:30:29.768  1132  1883 W Auth    : java.io.IOException: Couldn't create ClientAuthInfo
+10-31 14:30:29.820  1132  1883 W Auth    : java.io.IOException: Couldn't create ClientAuthInfo
+10-31 14:30:29.924  2979  3003 E BugleRcsEngine: [52] xdj.a: File not found.: java.io.FileNotFoundException: /data/user/0/com.google.android.apps.messaging/files/httpft_pending: open failed: ENOENT (No such file or directory)
+10-31 14:30:29.924  2979  3003 E BugleRcsEngine: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.chatsession.IChatSession: Service not registered: aeed@978f925
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@978f925
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.events.IEvent: Service not registered: aeed@7947b08
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@7947b08
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.contacts.IContactsManagement: Service not registered: aeed@cd55cc6
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@cd55cc6
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.filetransfer.IFileTransfer: Service not registered: aeed@27a3fb4
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@27a3fb4
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.locationsharing.ILocationSharing: Service not registered: aeed@a3a7f52
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@a3a7f52
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.ims.IImsConnectionTracker: Service not registered: aeed@c55a320
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@c55a320
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.profile.IRcsProfile: Service not registered: aeed@15d3e9e
+10-31 14:30:29.938  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@15d3e9e
+10-31 14:30:29.938  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.businessinfo.IBusinessInfo: Service not registered: aeed@6c1d14c
+10-31 14:30:29.939  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@6c1d14c
+10-31 14:30:29.939  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.rcs.client.messaging.IMessaging: Service not registered: aeed@b5aa6aa
+10-31 14:30:29.939  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@b5aa6aa
+10-31 14:30:29.939  2979  3188 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.transportcontrol.ITransportControl: Service not registered: aeed@fe0b638
+10-31 14:30:29.939  2979  3188 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@fe0b638
+10-31 14:30:30.016  4445  4543 W ConnectionTracker: Exception thrown while unbinding
+10-31 14:30:30.016  4445  4543 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: tel@37a397f
+10-31 14:30:30.059   497  2005 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) } to com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver
+10-31 14:30:30.060   497   538 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+10-31 14:30:30.060   497   538 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) } to com.google.android.gms/.gass.chimera.PackageChangeBroadcastReceiver
+10-31 14:30:30.060   497   538 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+10-31 14:30:30.060   497   538 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+10-31 14:30:30.060   497   538 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 (has extras) } to com.google.android.ims/.receivers.RcsAutoStartReceiver
+10-31 14:30:30.107  1875  2136 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:2318)
+10-31 14:30:30.107  1875  2136 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+10-31 14:30:30.231  1132  4288 W GCM     : Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+10-31 14:30:30.234  1502  4766 I ChromeSync: [Sync,SyncIntentOperation] Handling the intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 cmp=com.google.android.gms/.chimera.GmsIntentOperationService (has extras) }.
+10-31 14:30:30.239  1502  4766 I ChromeSync: [Persistence,AffiliationManager] One of affiliation or grouping data for android://3hJeKCoYfqPnfCrPc0EcxSmobV0tYQB397rELAcX0n1nsQ4olaQxxeyOUh5kLMmizqwX1b_FJ5ZOEKZIiYrYcw==@com.talvio.app/ was not found. Marking affiliation data as stale...
+10-31 14:30:30.247  1132  4286 W GCM     : Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.talvio.app flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+10-31 14:30:30.377   912   943 D ModelWriter: java.lang.Exception
+10-31 14:30:30.432  1132  2191 E angh    : Phenotype API error. Event # caox@c650633, EventCode: 5 [CONTEXT service_id=51 ]
+10-31 14:30:30.432  1132  2190 E angh    : Phenotype API error. Event # caox@13452f59, EventCode: 5 [CONTEXT service_id=51 ]
+10-31 14:30:30.432  1132  2191 E AsyncOperation: OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-31 14:30:30.432  1132  2190 E AsyncOperation: OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-31 14:30:30.489  1132  2191 E angh    : Phenotype API error. Event # caox@224a7b84, EventCode: 5 [CONTEXT service_id=51 ]
+10-31 14:30:30.489  1132  2191 E AsyncOperation: OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-31 14:30:30.514  4897  4897 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+10-31 14:30:30.521  3850  4611 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:30.521  3850  4611 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:30.522  4897  4897 I AndroidRuntime: Using default boot image
+10-31 14:30:30.522  4897  4897 I AndroidRuntime: Leaving lock profiling enabled
+10-31 14:30:30.720  4897  4897 D AndroidRuntime: Calling main entry com.android.commands.monkey.Monkey
+10-31 14:30:30.721  4897  4897 W Monkey  : args: [-p, com.talvio.app, -c, android.intent.category.LAUNCHER, 1]
+10-31 14:30:30.721  4897  4897 W Monkey  :  arg: "com.talvio.app"
+10-31 14:30:30.721  4897  4897 W Monkey  : data="com.talvio.app"
+10-31 14:30:30.797   497  2525 I ActivityTaskManager: START u0 {act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10200000 cmp=com.talvio.app/com.talvio.chatapp.MainActivity} from uid 2000
+10-31 14:30:30.823   912   943 D ModelWriter: java.lang.Exception
+10-31 14:30:30.914   497   539 I ActivityManager: Start proc 4946:com.talvio.app/u0a167 for pre-top-activity {com.talvio.app/com.talvio.chatapp.MainActivity}
+10-31 14:30:30.916  4897  4897 I AndroidRuntime: VM exiting with result code 0.
+10-31 14:30:30.952  4946  4946 W com.talvio.app: Unexpected CPU variant for X86 using defaults: x86_64
+10-31 14:30:30.971  4946  4946 I com.talvio.app: The ClassLoaderContext is a special shared library.
+10-31 14:30:31.043  4946  4975 I TetheringManager: registerTetheringEventCallback:com.talvio.app
+10-31 14:30:31.116  4946  4982 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+10-31 14:30:31.116  4946  4982 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+10-31 14:30:31.133  4946  4982 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+10-31 14:30:31.092  4946  4946 W com.talvio.app: type=1400 audit(0.0:50): avc: denied { read } for name="max_map_count" dev="proc" ino=102771 scontext=u:r:untrusted_app:s0:c167,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.talvio.app
+10-31 14:30:31.268  4946  4946 D com.llfbandit.app_links: Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10200000 cmp=com.talvio.app/com.talvio.chatapp.MainActivity }
+10-31 14:30:31.280  1875  2183 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-31 14:30:31.280  1875  2183 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-31 14:30:31.293  4946  4946 W com.talvio.app: Accessing hidden method Landroid/view/SurfaceControl$Builder;->setHidden(Z)Landroid/view/SurfaceControl$Builder; (blacklist, linking, denied)
+10-31 14:30:31.601  1574  3258 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-31 14:30:31.603  1574  3258 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-31 14:30:31.753  1875  2183 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-31 14:30:31.753  1875  2183 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-31 14:30:31.815  4946  4946 D FlutterGeolocator: Creating service.
+10-31 14:30:31.815  4946  4946 D FlutterGeolocator: Binding to location service.
+10-31 14:30:31.816  4946  4946 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+10-31 14:30:31.832  4946  4946 D FlutterGeolocator: Flutter engine connected. Connected engine count 1
+10-31 14:30:31.865   431   431 I keystore: del USRPKEY_com.talvio.app.FlutterSecureStoragePluginKey 10167
+10-31 14:30:31.865   431   431 I keystore: del USRSKEY_com.talvio.app.FlutterSecureStoragePluginKey 10167
+10-31 14:30:31.865   431   431 I keystore: del USRCERT_com.talvio.app.FlutterSecureStoragePluginKey 10167
+10-31 14:30:31.865   431   431 I keystore: del CACERT_com.talvio.app.FlutterSecureStoragePluginKey 10167
+10-31 14:30:32.091  4946  4946 I FLTFireBGExecutor: Creating background FlutterEngine instance, with args: []
+10-31 14:30:32.218  4946  4946 D FlutterGeolocator: Flutter engine connected. Connected engine count 2
+10-31 14:30:32.218  4946  4946 I FLTFireMsgService: FlutterFirebaseMessagingBackgroundService started!
+10-31 14:30:32.218  4946  4946 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+10-31 14:30:32.270  4946  5015 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+10-31 14:30:32.272  4946  5015 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+10-31 14:30:32.289  4946  5015 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+10-31 14:30:32.343  4445  4792 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:32.343  4445  4792 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:32.461   497   537 D ArtManagerInternalImpl: /data/misc/iorapd/com.talvio.app/4147/com.talvio.chatapp.MainActivity/compiled_traces/compiled_trace.pb doesn't exist
+10-31 14:30:32.491   497   537 I ActivityTaskManager: Displayed com.talvio.app/com.talvio.chatapp.MainActivity: +1s642ms
+10-31 14:30:32.687  1403  1403 I AndroidIME: AbstractIme.onActivate():84 DummyIme.onActivate() : EditorInfo = Package = com.talvio.app : Type = PhoneNumber : Learning = Disable : Suggestion = Hide : AutoCorrection = Disable : Microphone = Hide : NoPersonalizedLearning = Disable : AutoStartVoiceInput = Disable, IncognitoMode = false
+10-31 14:30:33.061  4946  4958 I com.talvio.app: Background young concurrent copying GC freed 60571(4417KB) AllocSpace objects, 27(1356KB) LOS objects, 88% free, 3109KB/27MB, paused 21us total 106.949ms
+10-31 14:30:37.159  4946  5041 D ProfileInstaller: Installing profile for com.talvio.app
+10-31 14:30:38.133  4445  4792 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:38.133  4445  4792 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:38.612  3850  4611 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:38.612  3850  4611 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:46.728  3850  4611 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:46.728  3850  4611 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-31 14:30:51.293  4445  4792 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:51.293  4445  4792 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-31 14:30:59.197  4255  4693 W GH.DelegateICarSupplier: java.lang.IllegalArgumentException: Service not registered: bdx@6f94dd1
+10-31 14:31:07.236  1502  1999 W ChimeraConfigurator: Error syncing flags: qiy: COMMIT_TIMEOUT
+10-31 14:31:13.543  5097  5157 E AwarenessRouterSyncMgr: Exception while syncing fences
+10-31 14:31:13.543  5097  5157 E AwarenessRouterSyncMgr: java.util.concurrent.ExecutionException: java.lang.IllegalStateException: Account associated with identity was null
+10-31 14:31:13.543  5097  5157 E AwarenessRouterSyncMgr: Caused by: java.lang.IllegalStateException: Account associated with identity was null
