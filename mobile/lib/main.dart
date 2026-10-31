@@ -2,6 +2,7 @@ import 'screens/notices_screen.dart';
 import 'screens/login_activity_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'config.dart';
@@ -329,10 +330,19 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
         final mq = MediaQuery.of(context);
         final scaled = MediaQuery(data: mq.copyWith(textScaler: TextScaler.linear(prefs.textScale)), child: child ?? const SizedBox());
         final showLock = _locked && prefs.lockEnabled && auth.status == AuthStatus.loggedIn;
-        return Stack(textDirection: TextDirection.ltr, children: [
-          scaled,
-          if (showLock) Positioned.fill(child: LockScreen(onUnlocked: () => setState(() => _locked = false))),
-        ]);
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        // system buttons bar at the bottom: same colour as the app (never the splash pink)
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            systemNavigationBarColor: dark ? const Color(0xFF151A2E) : Colors.white,
+            systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+            systemNavigationBarDividerColor: Colors.transparent,
+          ),
+          child: Stack(textDirection: TextDirection.ltr, children: [
+            scaled,
+            if (showLock) Positioned.fill(child: LockScreen(onUnlocked: () => setState(() => _locked = false))),
+          ]),
+        );
       },
       // Rebuilding the key resets navigation when the login state changes.
       home: KeyedSubtree(key: ValueKey(auth.status), child: home),

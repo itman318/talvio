@@ -36,14 +36,16 @@ class StickerView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tavi = taviPoseByName('${(message.meta?['sticker'] as Map?)?['tavi'] ?? ''}');
-    if (tavi != null) return TaviMascot(pose: tavi, size: size + 10);
+    // tap → the whole pack, to send more from it (or add it)
+    if (tavi != null) return GestureDetector(onTap: () => showStickerPackSheet(context, message), child: TaviMascot(pose: tavi, size: size + 10));
     final pebo = peboPoseByName('${(message.meta?['sticker'] as Map?)?['anim'] ?? ''}');
-    if (pebo != null) return PeboSticker(pose: pebo, size: size + 10);
+    if (pebo != null) return GestureDetector(onTap: () => showStickerPackSheet(context, message), child: PeboSticker(pose: pebo, size: size + 10));
     final url = stickerUrl(message);
     final emoji = '${(message.meta?['sticker'] as Map?)?['emoji'] ?? '🙂'}';
     // picture stickers come alive too: they pop in, then gently breathe
     return _AliveSticker(
       size: size,
+      onTap: () => showStickerPackSheet(context, message),
       child: url.isEmpty
           ? Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))
           : netImage(url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))),
@@ -53,9 +55,10 @@ class StickerView extends StatelessWidget {
 
 /// Pop-in, a little wobble, then a soft "breathing" loop; tap replays the bounce.
 class _AliveSticker extends StatefulWidget {
-  const _AliveSticker({required this.size, required this.child});
+  const _AliveSticker({required this.size, required this.child, this.onTap});
   final double size;
   final Widget child;
+  final VoidCallback? onTap;
 
   @override
   State<_AliveSticker> createState() => _AliveStickerState();
@@ -75,7 +78,10 @@ class _AliveStickerState extends State<_AliveSticker> with TickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => _pop.forward(from: 0),
+      onTap: () {
+        _pop.forward(from: 0);
+        widget.onTap?.call();
+      },
       child: RepaintBoundary(
         child: AnimatedBuilder(
           animation: Listenable.merge([_pop, _breath]),
@@ -100,6 +106,133 @@ class _AliveStickerState extends State<_AliveSticker> with TickerProviderStateMi
         ),
       ),
     );
+  }
+}
+
+/// Tapped a sticker in a chat: its pack slides up — tap one to send it here, or add the pack.
+Future<void> showStickerPackSheet(BuildContext context, Message message) {
+  HapticFeedback.selectionClick();
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => SizedBox(height: MediaQuery.of(context).size.height * 0.55, child: _PackSheet(message: message)),
+  );
+}
+
+class _PackSheet extends StatefulWidget {
+  const _PackSheet({required this.message});
+  final Message message;
+
+  @override
+  State<_PackSheet> createState() => _PackSheetState();
+}
+
+class _PackSheetState extends State<_PackSheet> {
+  Map<String, dynamic>? _pack;
+  String? _error;
+  bool _busy = false;
+
+  Map get _st => (widget.message.meta?['sticker'] as Map?) ?? const {};
+  bool get _pebo => _st['anim'] != null;
+  bool get _tavi => _st['tavi'] != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_pebo && !_tavi) _load();
+  }
+
+  Future<void> _load() async {
+    final id = _st['pack_id'];
+    if (id == null) {
+      setState(() => _error = 'This sticker isn’t part of a shared pack');
+      return;
+    }
+    try {
+      final p = Map<String, dynamic>.from(await context.read<AppServices>().api.get('/stickers/packs/$id') as Map);
+      if (mounted) setState(() => _pack = p);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'This pack is private');
+    }
+  }
+
+  Future<void> _toggleInstall() async {
+    final p = _pack!;
+    final add = p['installed'] != true;
+    setState(() => _busy = true);
+    try {
+      await context.read<AppServices>().api.post('/stickers/packs/${p['id']}/${add ? 'install' : 'uninstall'}');
+      EmojiStickerSuggestions._cache = null;
+      if (mounted) {
+        setState(() => p['installed'] = add);
+        showInfo(context, add ? 'Pack added to your stickers' : 'Pack removed');
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _sent() => Navigator.pop(context);
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<ChatStore>();
+    final chatId = widget.message.chatId;
+    final String title;
+    final Widget body;
+    Widget? action;
+    Widget grid(int count, Widget Function(int) cell, VoidCallback Function(int) tap) => GridView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 92, mainAxisSpacing: 6, crossAxisSpacing: 6),
+          itemCount: count,
+          itemBuilder: (_, i) => InkWell(borderRadius: BorderRadius.circular(14), onTap: tap(i), child: Center(child: cell(i))),
+        );
+    if (_pebo) {
+      title = 'Pebo — animated';
+      body = grid(peboStickers.length, (i) => PeboSticker(pose: peboStickers[i].$1, size: 78), (i) => () {
+            store.sendPebo(chatId, peboStickers[i].$1.name, peboStickers[i].$2);
+            _sent();
+          });
+    } else if (_tavi) {
+      final plus = context.read<AuthState>().me?.limits?['exclusive_stickers'] == true;
+      final list = taviStickers.where((t) => !t.$3 || plus).toList();
+      title = 'Tavi — animated';
+      body = grid(list.length, (i) => TaviMascot(pose: list[i].$1, size: 78), (i) => () {
+            store.sendTavi(chatId, list[i].$1.name, list[i].$2);
+            _sent();
+          });
+    } else if (_pack != null) {
+      final p = _pack!;
+      final list = ((p['stickers'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      title = '${p['title']}';
+      body = grid(list.length, (i) => netImage(AppConfig.absolute('${list[i]['url']}'), fit: BoxFit.contain), (i) => () {
+            store.sendSticker(chatId, {...list[i], 'pack_id': list[i]['pack_id'] ?? p['id']});
+            _sent();
+          });
+      if (p['is_official'] != true && p['owner_id'] != context.read<AuthState>().me?.id) {
+        action = p['installed'] == true
+            ? OutlinedButton(onPressed: _busy ? null : _toggleInstall, child: const Text('Remove'))
+            : FilledButton.icon(onPressed: _busy ? null : _toggleInstall, icon: const Icon(Icons.add_rounded, size: 18), label: Text('Add ${list.length} stickers'));
+      }
+    } else {
+      title = 'Sticker pack';
+      body = _error == null
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
+          : Center(child: Text(_error!, style: const TextStyle(color: Brand.muted)));
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 14, 8),
+        child: Row(children: [
+          Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+          if (action != null) action,
+        ]),
+      ),
+      Expanded(child: body),
+    ]);
   }
 }
 

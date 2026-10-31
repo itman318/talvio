@@ -422,7 +422,9 @@ class AuthState extends ChangeNotifier {
     onSessionCleared?.call();
     services.socket.disconnect();
     await services.push.unregister();
+    final leaving = me?.id;
     chats.stop();
+    if (leaving != null) await chats.forgetCache(leaving);
     me = null;
     await api.clearTokens();
     await _storage.delete(key: 'me');

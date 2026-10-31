@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../core/api_client.dart';
 import '../core/live_location.dart';
@@ -115,6 +117,7 @@ class ChatStore extends ChangeNotifier {
       if (c) _resync();
     });
     _typingTimer = Timer.periodic(const Duration(seconds: 2), (_) => _expireTyping());
+    unawaited(_showCachedChats(meId)); // the last list from disk: the screen is ready at once, the server updates it
     loadChats().catchError((_) {});
     loadFolders().catchError((_) {});
     loadStories().catchError((_) {});
@@ -164,10 +167,51 @@ class ChatStore extends ChangeNotifier {
 
   int get totalUnread => chats.where((c) => !c.isMuted).fold(0, (s, c) => s + c.unreadCount);
 
+  Future<File?> _chatCacheFile(int meId) async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      return File('${dir.path}/chats_$meId.json');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _showCachedChats(int meId) async {
+    final gen = _session;
+    try {
+      final f = await _chatCacheFile(meId);
+      if (f == null || !await f.exists()) return;
+      final raw = await f.readAsString();
+      final data = await compute(_decodeList, raw);
+      if (gen != _session || chatsLoaded) return; // the server answered first
+      chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+      for (final c in chats) {
+        if (c.peer != null) userCache[c.peer!.id] = c.peer!;
+      }
+      _sortChats();
+      chatsLoaded = true;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Logged out: the saved chat list goes too.
+  Future<void> forgetCache(int meId) async {
+    try {
+      final f = await _chatCacheFile(meId);
+      if (f != null && await f.exists()) await f.delete();
+    } catch (_) {}
+  }
+
+  static List<dynamic> _decodeList(String raw) => jsonDecode(raw) as List;
+
   Future<void> loadChats() async {
     final gen = _session;
     final data = await api.get('/chats') as List;
     if (gen != _session) return;
+    final me = myId;
+    if (me != null) {
+      unawaited(_chatCacheFile(me).then((f) => f?.writeAsString(jsonEncode(data))).catchError((_) => null));
+    }
     unawaited(refreshNoticeCount());
     chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     for (final c in chats) {
