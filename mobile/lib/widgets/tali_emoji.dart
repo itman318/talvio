@@ -135,12 +135,3 @@ class TaliEmojiStrip extends StatelessWidget {
     );
   }
 }
-
-
-/// Message text without the formatting marks (for reply quotes, previews and notifications).
-String stripFormatting(String t) => t
-    .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*', dotAll: true), (m) => m[1]!)
-    .replaceAllMapped(RegExp(r'\|\|(.+?)\|\|', dotAll: true), (m) => m[1]!)
-    .replaceAllMapped(RegExp(r'`([^`\n]+?)`'), (m) => m[1]!)
-    .replaceAllMapped(RegExp(r'~([^~\n]+?)~'), (m) => m[1]!)
-    .replaceAllMapped(RegExp(r'(?<![\w_])_([^_\n]+?)_(?![\w_])'), (m) => m[1]!);
