@@ -31,14 +31,19 @@ const defs = `<defs>
 <linearGradient id="g-beakTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC27A"/><stop offset=".6" stop-color="#FF8A2E"/><stop offset="1" stop-color="#E9621A"/></linearGradient>
 <linearGradient id="g-beakBot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0732A"/><stop offset="1" stop-color="#C9481A"/></linearGradient>
 <radialGradient id="g-eye" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#5B4A70"/><stop offset=".45" stop-color="#2A1F3D"/><stop offset="1" stop-color="#0D0818"/></radialGradient>
-<linearGradient id="g-cap" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C6CFF"/><stop offset=".45" stop-color="#4C38E6"/><stop offset="1" stop-color="#2A1A9E"/></linearGradient>
-<linearGradient id="g-capSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2A1A9E" stop-opacity=".0"/><stop offset="1" stop-color="#1A0F6E" stop-opacity=".55"/></linearGradient>
-<linearGradient id="g-brim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5C49F2"/><stop offset="1" stop-color="#2B1CA6"/></linearGradient>
+<linearGradient id="g-cap" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A57BFF"/><stop offset=".45" stop-color="#7436F0"/><stop offset="1" stop-color="#4A169E"/></linearGradient>
+<linearGradient id="g-capSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4A169E" stop-opacity=".0"/><stop offset="1" stop-color="#2E0B70" stop-opacity=".55"/></linearGradient>
+<linearGradient id="g-brim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8A4DFF"/><stop offset="1" stop-color="#4A169E"/></linearGradient>
 <linearGradient id="g-brimUnder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A1060"/><stop offset="1" stop-color="#2C1E8A"/></linearGradient>
 <linearGradient id="g-hood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#F1F0FB"/><stop offset="1" stop-color="#D3D0EE"/></linearGradient>
 <linearGradient id="g-brand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF9A62"/><stop offset=".5" stop-color="#F2557E"/><stop offset="1" stop-color="#6C4BE0"/></linearGradient>
 <linearGradient id="g-field" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF0FB"/></linearGradient>
 <linearGradient id="g-lock" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C6CFF"/><stop offset="1" stop-color="#3A26C8"/></linearGradient>
+<linearGradient id="g-handle" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#B0703F"/><stop offset=".5" stop-color="#8A4E26"/><stop offset="1" stop-color="#5E3216"/></linearGradient>
+<radialGradient id="g-glass" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#E4F6FF"/><stop offset="1" stop-color="#A8DDFB"/></radialGradient>
+<radialGradient id="g-glassTint" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".25"/><stop offset=".7" stop-color="#9AD7FF" stop-opacity=".18"/><stop offset="1" stop-color="#3C9BEA" stop-opacity=".35"/></radialGradient>
+<linearGradient id="g-rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE7A0"/><stop offset=".5" stop-color="#F6B532"/><stop offset="1" stop-color="#C7861A"/></linearGradient>
+<clipPath id="c-lens"><circle r="60"/></clipPath>
 <filter id="f-blur2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>
 <filter id="f-blur5" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
 <filter id="f-blur10" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
@@ -68,10 +73,10 @@ function cap(t, lag) {
     <!-- crown -->
     <path d="M150 186 C 146 122 194 92 256 92 C 318 92 366 122 362 186 C 296 172 216 172 150 186 Z" fill="url(#g-cap)"/>
     <path d="M300 98 C 346 114 366 150 362 186 C 346 180 330 177 314 176 C 324 146 320 120 300 98 Z" fill="url(#g-capSide)"/>
-    <path d="M256 94 C 253 124 253 150 256 176 M200 106 C 192 132 192 160 196 180 M312 106 C 320 132 320 160 316 180" stroke="#2A1A9E" stroke-width="3" fill="none" opacity=".55"/>
-    <path d="M184 122 C 200 106 224 98 248 97" stroke="#B3A8FF" stroke-width="9" stroke-linecap="round" fill="none" opacity=".7"/>
+    <path d="M256 94 C 253 124 253 150 256 176 M200 106 C 192 132 192 160 196 180 M312 106 C 320 132 320 160 316 180" stroke="#3E1290" stroke-width="3" fill="none" opacity=".55"/>
+    <path d="M184 122 C 200 106 224 98 248 97" stroke="#D2B8FF" stroke-width="9" stroke-linecap="round" fill="none" opacity=".7"/>
     <path d="M150 186 C 146 122 194 92 256 92 C 318 92 366 122 362 186 C 296 172 216 172 150 186 Z" fill="none" stroke="${OL}" stroke-width="${OW}" stroke-linejoin="round"/>
-    <ellipse cx="256" cy="${94 - btn}" rx="13" ry="6" fill="#5C49F2" stroke="${OL}" stroke-width="4"/>
+    <ellipse cx="256" cy="${94 - btn}" rx="13" ry="6" fill="#8A4DFF" stroke="${OL}" stroke-width="4"/>
     <!-- front badge: Talvio T on a brand bubble -->
     <g transform="translate(256 138) scale(.78)">
       <path d="M0 -30 c -22 0 -36 14 -36 31 c 0 9 4 16 10 22 l -4 14 c -.6 2 1.4 3.4 3 2.4 l 16 -9 c 3.5 1 7 1.4 11 1.4 c 22 0 36 -13 36 -31 S 22 -30 0 -30 z" fill="url(#g-brand)" stroke="${OL}" stroke-width="4"/>
@@ -80,7 +85,7 @@ function cap(t, lag) {
     </g>
     <!-- brim -->
     <path d="M136 184 C 200 162 312 162 376 182 C 390 188 392 204 378 206 C 318 190 196 190 134 208 C 120 206 122 190 136 184 Z" fill="url(#g-brim)" stroke="${OL}" stroke-width="${OW}" stroke-linejoin="round"/>
-    <path d="M156 184 C 214 172 298 172 356 182" stroke="#8E80FF" stroke-width="5" stroke-linecap="round" fill="none" opacity=".75"/>
+    <path d="M156 184 C 214 172 298 172 356 182" stroke="#C3A2FF" stroke-width="5" stroke-linecap="round" fill="none" opacity=".75"/>
   </g>`;
 }
 
@@ -116,8 +121,8 @@ function beak(open = 0) {
 }
 
 function head(p, t) {
-  const { eyes = {}, beakOpen = 0, blush = 0.6, browRaise = 0, lag = 0 } = p;
-  return `<g>
+  const { eyes = {}, beakOpen = 0, blush = 0.6, browRaise = 0, lag = 0, rot = 0, dx = 0, extra = '' } = p;
+  return `<g transform="translate(${dx} 0) rotate(${rot} 256 330)">
     ${tuft(t, lag)}
     <ellipse cx="256" cy="234" rx="124" ry="114" fill="url(#g-head)"/>
     <g clip-path="url(#c-head)">
@@ -132,6 +137,7 @@ function head(p, t) {
     ${brow(210, 198, browRaise, -6)}${brow(302, 198, browRaise, 6)}
     ${beak(beakOpen)}
     ${cap(t, lag)}
+    ${extra}
   </g>`;
 }
 
@@ -249,6 +255,81 @@ SCENES.hide = (t) => {
     front: wing(...LS, ...L, 0, 1) + wing(...RS, ...R, 0, -1),
     field,
     fx,
+  };
+};
+
+
+// ------------------------------------------------------------------ scene: no contacts / search
+// idle → lifts a big magnifier to one eye (it looks huge) → scans left and right → "?" pops → lowers it,
+// shrugs with both paws out → the empty contact card shakes → back to idle
+SCENES.search = (t) => {
+  const LS = [176, 360], RS = [336, 360];
+  const lift = backOut(seg(t, 0.08, 0.2));
+  const lower = easeInOut(seg(t, 0.62, 0.72));
+  const hold = clamp(lift) * (1 - lower);
+  const scan = seg(t, 0.2, 0.56);
+  const sweep = hold > 0.5 ? sin(scan * TAU * 1.5) : 0;            // −1..1 left/right
+  const shrug = sin(seg(t, 0.7, 0.92) * Math.PI);
+  const q = spring(seg(t, 0.56, 0.7)) * (1 - easeInOut(seg(t, 0.88, 0.96)));
+
+  // magnifier: lens over the right eye while searching, resting at the side otherwise
+  const lens = [lerp(394, 302 + sweep * 10, hold), lerp(318, 236, hold)];
+  const lensRot = lerp(-14 + 10 * shrug, -24 + sweep * 6, hold);
+  const handPos = [lens[0] + 18 + 22 * hold, lens[1] + 92 - 6 * hold];
+
+  const headRot = sweep * 7 * hold - shrug * 4;
+  const look = [sweep * 7 * hold, 0];
+  const blink = sin(seg(t, 0.02, 0.07) * Math.PI) + sin(seg(t, 0.95, 1.0) * Math.PI);
+
+  const glass = `<g transform="translate(${lens[0]} ${lens[1]}) rotate(${lensRot})">
+      <rect x="-12" y="58" width="24" height="88" rx="12" fill="url(#g-handle)" stroke="${OL}" stroke-width="${OW}"/>
+      <rect x="-6" y="66" width="6" height="70" rx="3" fill="#C98A5A" opacity=".7"/>
+      <circle r="62" fill="url(#g-glass)"/>
+      <g transform="rotate(${-lensRot})">${hold > 0.6 ? `<g clip-path="url(#c-lens)">${eye(0, 2, { scale: 1.9, look: [look[0] * 1.6, 0], open: 1 - clamp(blink) })}</g>` : ''}</g>
+      <circle r="62" fill="url(#g-glassTint)"/>
+      <circle r="62" fill="none" stroke="url(#g-rim)" stroke-width="16"/>
+      <circle r="62" fill="none" stroke="${OL}" stroke-width="${OW}"/><circle r="70" fill="none" stroke="${OL}" stroke-width="3" opacity=".5"/>
+      <path d="M-40 -18 A 44 44 0 0 1 -14 -42" stroke="#fff" stroke-width="9" stroke-linecap="round" fill="none" opacity=".9"/>
+      <path d="M28 34 A 44 44 0 0 1 10 44" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity=".5"/>
+    </g>`;
+
+  // paws: right one holds the handle; both swing out for the shrug
+  const shrugL = [lerp(150, 112, shrug), lerp(430, 318, shrug)];
+  const shrugR = [lerp(344, 400, shrug), lerp(430, 318, shrug)];
+  void shrugR;
+  const front = wing(...LS, ...shrugL, shrug * 40, 1) + glass + wing(...RS, ...handPos, 0, -1);
+
+  // empty contact card that shakes "no one here"
+  const shake = 6 * sin(seg(t, 0.6, 0.78) * TAU * 3) * sin(seg(t, 0.6, 0.78) * Math.PI);
+  const card = `<g transform="translate(${256 + shake} 476)">
+      <rect x="-128" y="-34" width="256" height="68" rx="22" fill="url(#g-field)" stroke="${OL}" stroke-width="${OW}"/>
+      <circle cx="-88" cy="0" r="20" fill="none" stroke="#B8A6F2" stroke-width="5" stroke-dasharray="7 6"/>
+      <circle cx="-88" cy="-5" r="6" fill="#CFC3F7"/><path d="M-99 11 c 3 -10 19 -10 22 0" fill="#CFC3F7"/>
+      <rect x="-52" y="-14" width="${110 - 40 * sin(seg(t, 0.2, 0.56) * Math.PI)}" height="10" rx="5" fill="#E0D8FA"/>
+      <rect x="-52" y="6" width="${70 + 30 * sin(seg(t, 0.2, 0.56) * Math.PI)}" height="10" rx="5" fill="#EDE8FC"/>
+      <g transform="translate(96 0) scale(${0.8 + 0.25 * q})"><circle r="17" fill="#FF5577" stroke="${OL}" stroke-width="4"/><path d="M-6 -6 L 6 6 M6 -6 L -6 6" stroke="#fff" stroke-width="5" stroke-linecap="round"/></g>
+    </g>`;
+
+  const qmark = q > 0.02 ? `<g transform="translate(${392} ${118 - 10 * q}) scale(${q}) rotate(${8 * sin(t * TAU * 4)})">
+      <circle r="34" fill="url(#g-brand)" stroke="${OL}" stroke-width="${OW}"/>
+      <text x="0" y="16" text-anchor="middle" font-family="Jakarta" font-weight="800" font-size="46" fill="#fff">?</text></g>` : '';
+  const sweat = shrug > 0.3 ? `<path d="M${338} ${178 + 14 * shrug} q 10 14 0 22 q -10 -8 0 -22 z" fill="#7CCBFF" stroke="${OL}" stroke-width="3" opacity="${shrug}"/>` : '';
+  const sparks = sparkle(110, 168, 14 * sin(seg(t, 0.25, 0.4) * Math.PI), '#FFD232', 12) + sparkle(418, 300, 12 * sin(seg(t, 0.4, 0.55) * Math.PI), '#A57BFF', -10);
+
+  return {
+    pose: { sq: 0.03 * sin(seg(t, 0.06, 0.14) * Math.PI) - 0.03 * shrug, dy: -6 * shrug, rot: sweep * 2 * hold },
+    headP: {
+      rot: headRot,
+      eyes: { l: { open: 1 - clamp(blink), look, scale: 1 }, r: { open: 1 - clamp(blink), look } },
+      blush: 0.55,
+      beakOpen: hold > 0.5 ? 0.35 : 0.2 + 0.5 * shrug,
+      browRaise: 8 * q + 6 * shrug,
+      lag: -sweep * 0.6 * hold + shrug * 0.6,
+      extra: sweat,
+    },
+    front,
+    field: card,
+    fx: qmark + sparks,
   };
 };
 
