@@ -230,7 +230,7 @@ class EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TaviMascot(pose: pose ?? taviPoseByName(const {'hello': 'wave', 'think': 'think', 'cool': 'cool'}[tali]) ?? TaviPose.idle, size: 150),
+          AppMascot(pose: pose ?? taviPoseByName(const {'hello': 'wave', 'think': 'think', 'cool': 'cool'}[tali]) ?? TaviPose.idle, size: 150),
           const SizedBox(height: 12),
           Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
           if (subtitle != null) ...[

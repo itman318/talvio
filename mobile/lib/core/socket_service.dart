@@ -65,6 +65,7 @@ class SocketService {
   ];
 
   bool get wanted => _wantConnected;
+  int _recheck = 0;
 
   void connect() {
     _wantConnected = true;
@@ -79,12 +80,15 @@ class SocketService {
           // ignore: deprecated_member_use
           .setHttpClientAdapter(_FreshClientAdapter())
           .setAuth({'token': token})
+          // a brand-new connection every time: a cached one would keep the token of an earlier (logged-out) session
+          .enableForceNew()
           .disableAutoConnect()
           .enableReconnection()
           .build(),
     );
     s.onConnect((_) {
       _setConnected(true);
+      _recheck = 0;
       if (!_foreground) s.emit('app:state', {'active': false}); // reconnected while hidden: keep pushes coming
     });
     s.onDisconnect((_) => _setConnected(false));
@@ -100,7 +104,19 @@ class SocketService {
         }
         if (_wantConnected) connect();
       } else if (text.contains('session_revoked') || text.contains('account_banned') || text.contains('account_deleted')) {
-        _events.add(SocketEvent('session:revoked', {'reason': text}));
+        // Double-check with the server before logging out: the socket may have tried a token from before a re-login.
+        if (s != _socket || token != api.accessToken) {
+          if (_wantConnected && s == _socket) connect();
+          return;
+        }
+        try {
+          await api.get('/me');
+          if (_wantConnected && s == _socket && _recheck++ < 3) connect(); // the session is fine
+        } catch (e) {
+          if (e is ApiException && (e.status == 401 || e.status == 403)) {
+            _events.add(SocketEvent('session:revoked', {'reason': text}));
+          }
+        }
       }
     });
     for (final name in _serverEvents) {

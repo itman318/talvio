@@ -1173,7 +1173,7 @@ class _TwoStepScreenState extends State<TwoStepScreen> {
         title: Text(change ? 'Change password' : 'Set a password'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const TaviMascot(pose: TaviPose.hideEyes, size: 110),
+            const AppMascot(pose: TaviPose.hideEyes, size: 110),
             if (change) TextField(controller: cur, obscureText: true, decoration: const InputDecoration(labelText: 'Current password')),
             TextField(controller: pw, obscureText: true, autofocus: !change, decoration: const InputDecoration(labelText: 'New password', helperText: 'At least 6 characters')),
             TextField(controller: pw2, obscureText: true, decoration: const InputDecoration(labelText: 'Repeat new password')),
@@ -1254,7 +1254,7 @@ class _TwoStepScreenState extends State<TwoStepScreen> {
                   color: (on ? Brand.accent : Brand.amber).withValues(alpha: 0.14),
                 ),
                 child: Row(children: [
-                  TaviMascot(pose: on ? TaviPose.cool : TaviPose.hideEyes, size: 76),
+                  AppMascot(pose: on ? TaviPose.cool : TaviPose.hideEyes, size: 76),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

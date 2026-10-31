@@ -150,7 +150,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   boxShadow: [BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10))],
                 ),
                 child: Column(children: [
-                  const TaviMascot(pose: TaviPose.celebrate, size: 120),
+                  const AppMascot(pose: TaviPose.celebrate, size: 120),
                   const SizedBox(height: 6),
                   Text('${AppConfig.appName} Plus', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                   const SizedBox(height: 4),

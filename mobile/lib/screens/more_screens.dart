@@ -19,6 +19,7 @@ import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
+import '../widgets/mascot.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
 import '../theme/brand.dart';
@@ -552,7 +553,7 @@ class _LockScreenState extends State<LockScreen> {
     return Scaffold(
       body: SafeArea(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.lock_outline, size: 48, color: Brand.primary),
+          const AppMascot(pose: TaviPose.hideEyes, size: 120),
           const SizedBox(height: 12),
           Text(_wrong ? 'Wrong PIN, try again' : 'Enter your PIN', style: TextStyle(fontSize: 18, color: _wrong ? Colors.red : null)),
           const SizedBox(height: 16),

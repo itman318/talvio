@@ -105,11 +105,8 @@ class _MessageMenu extends StatelessWidget {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => Navigator.pop(context),
-          // dim everything except the tapped message, which stays where it is
-          child: FadeTransition(
-            opacity: curved,
-            child: CustomPaint(painter: _Spotlight(anchor.inflate(2), Colors.black.withValues(alpha: dark ? 0.42 : 0.2))),
-          ),
+          // no dimming or highlighted box: the chat stays as it is, only the menu floats above it
+          child: const SizedBox.expand(),
         ),
       ),
       Positioned(
@@ -247,23 +244,4 @@ class _Reaction extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Spotlight extends CustomPainter {
-  _Spotlight(this.hole, this.color);
-  final Rect hole;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path.combine(
-      PathOperation.difference,
-      Path()..addRect(Offset.zero & size),
-      Path()..addRRect(RRect.fromRectAndRadius(hole, const Radius.circular(18))),
-    );
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_Spotlight old) => old.hole != hole || old.color != color;
 }

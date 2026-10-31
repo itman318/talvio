@@ -387,7 +387,7 @@ class _OtpScreenState extends State<OtpScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Center(child: TaviMascot(pose: TaviPose.mail, size: 112)),
+          const Center(child: AppMascot(pose: TaviPose.mail, size: 112)),
           const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
@@ -648,7 +648,7 @@ class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
       appBar: AppBar(),
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.all(24), children: [
-          Center(child: TaviMascot(pose: _pose, size: 150)),
+          Center(child: AppMascot(pose: _pose, size: 150)),
           const SizedBox(height: 8),
           Text('Two-step verification', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),

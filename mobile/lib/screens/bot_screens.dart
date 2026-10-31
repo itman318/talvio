@@ -97,7 +97,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(22)),
               child: Row(children: [
-                const TaviMascot(pose: TaviPose.think, size: 64),
+                const AppMascot(pose: TaviPose.think, size: 64),
                 const SizedBox(width: 14),
                 const Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

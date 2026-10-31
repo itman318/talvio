@@ -871,7 +871,7 @@ class TaviEmptyState extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TaviMascot(pose: pose, size: size),
+          AppMascot(pose: pose, size: size),
           const SizedBox(height: 14),
           Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
           if (text != null) ...[
@@ -880,6 +880,48 @@ class TaviEmptyState extends StatelessWidget {
           ],
           if (action != null) ...[const SizedBox(height: 18), action!],
         ]),
+      ),
+    );
+  }
+}
+
+/// Pebo, the app's illustrated mascot (animated WebP art in assets/mascot) for screens:
+/// password, empty lists, code sent, success… Tavi stays for the stickers people send.
+class AppMascot extends StatelessWidget {
+  const AppMascot({super.key, required this.pose, this.size = 150});
+  final TaviPose pose;
+  final double size;
+
+  static String assetFor(TaviPose p) => switch (p) {
+        TaviPose.hideEyes => 'hide',
+        TaviPose.peek => 'peek',
+        TaviPose.search || TaviPose.shocked => 'search',
+        TaviPose.mail => 'mail',
+        TaviPose.think || TaviPose.sad || TaviPose.angry => 'think',
+        TaviPose.sleep => 'sleep',
+        TaviPose.celebrate || TaviPose.laugh => 'celebrate',
+        TaviPose.cool || TaviPose.thumbsUp || TaviPose.music => 'cool',
+        TaviPose.coffee => 'coffee',
+        _ => 'wave',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final name = assetFor(pose);
+    return SizedBox.square(
+      dimension: size,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        transitionBuilder: (c, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.92, end: 1.0).animate(a), child: c)),
+        child: Image.asset(
+          'assets/mascot/$name.webp',
+          key: ValueKey(name),
+          width: size,
+          height: size,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, __, ___) => TaviMascot(pose: pose, size: size),
+        ),
       ),
     );
   }

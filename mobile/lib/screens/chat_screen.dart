@@ -401,7 +401,7 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Center(child: TaviMascot(pose: TaviPose.think, size: 96)),
+              const Center(child: AppMascot(pose: TaviPose.think, size: 96)),
               Text('Rules of ${chat.title}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
               const SizedBox(height: 12),
               ConstrainedBox(
@@ -2275,7 +2275,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           GestureDetector(
             onTap: canSend && !chat.isSavedMessages ? () => _store.sendTavi(chatId, TaviPose.wave.name, '👋') : null,
-            child: TaviMascot(pose: chat.isSavedMessages ? TaviPose.think : (chat.isBot ? TaviPose.coffee : TaviPose.wave), size: 130),
+            child: AppMascot(pose: chat.isSavedMessages ? TaviPose.think : (chat.isBot ? TaviPose.coffee : TaviPose.wave), size: 130),
           ),
           if (canSend && !chat.isSavedMessages)
             const Text('Tap Tavi to say hi', style: TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),

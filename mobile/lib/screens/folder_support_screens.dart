@@ -315,7 +315,7 @@ class _SupportListScreenState extends State<SupportListScreen> {
                   decoration: BoxDecoration(gradient: Brand.auroraSoft(dark), borderRadius: BorderRadius.circular(24)),
                   child: Column(children: [
                     Row(children: [
-                      const TaviMascot(pose: TaviPose.wave, size: 74),
+                      const AppMascot(pose: TaviPose.wave, size: 74),
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
