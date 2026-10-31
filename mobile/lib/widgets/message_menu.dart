@@ -12,8 +12,7 @@ class MessageMenuItem {
   final bool danger;
 }
 
-/// Talvio's message menu: tap a message → one card next to it with reactions, the main actions as
-/// icon tiles and a short list of the rest. The message itself is not copied or re-drawn. Returns the chosen value ("react:👍", "reply", …) or null.
+/// Talvio's message menu: tap a message → a reactions pill and a compact list of actions right next to it. The message itself is not copied or re-drawn. Returns the chosen value ("react:👍", "reply", …) or null.
 Future<String?> showMessageMenu(
   BuildContext context, {
   required Rect anchor,
@@ -29,7 +28,7 @@ Future<String?> showMessageMenu(
     barrierDismissible: true,
     barrierLabel: 'Close',
     barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 200),
+    transitionDuration: const Duration(milliseconds: 140),
     pageBuilder: (ctx, a, __) => _MessageMenu(
       anchor: anchor,
       alignRight: alignRight,
@@ -60,10 +59,10 @@ class _MessageMenu extends StatelessWidget {
   final List<MessageMenuItem> items;
   final Animation<double> animation;
 
-  static const _cardWidth = 268.0;
-  static const _rowH = 42.0;
-  // the most used actions sit as big icon tiles on top; the rest are a short list
-  static const _quickKeys = ['reply', 'copy', 'forward', 'edit', 'pin', 'unpin'];
+  static const _listWidth = 232.0;
+  static const _rowH = 44.0;
+  static const _pillH = 50.0;
+  static const _gap = 6.0;
 
   @override
   Widget build(BuildContext context) {
@@ -71,145 +70,134 @@ class _MessageMenu extends StatelessWidget {
     final size = mq.size;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final card = dark ? const Color(0xFF1C2036) : Colors.white;
-    final tile = dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFF3F4FA);
     final fg = dark ? Colors.white : const Color(0xFF1B1F33);
-    final topLimit = mq.padding.top + 10;
-    final bottomLimit = size.height - mq.padding.bottom - 10;
+    final topLimit = mq.padding.top + 8;
+    final bottomLimit = size.height - mq.padding.bottom - mq.viewInsets.bottom - 8;
 
-    final quick = items.where((i) => _quickKeys.contains(i.value)).take(4).toList();
-    final rest = items.where((i) => !quick.contains(i)).toList();
-
-    const reactH = 52.0;
-    const quickH = 70.0;
     final hasReact = reactions.isNotEmpty;
-    final headerH = header == null ? 0.0 : 30.0;
-    final cardH = (hasReact ? reactH + 1 : 0) + (quick.isEmpty ? 0 : quickH) + rest.length * _rowH + headerH + 12;
-    final width = _cardWidth.clamp(0.0, size.width - 24);
+    final pillW = (reactions.length * 44.0 + 12).clamp(0.0, size.width - 24);
+    final listH = items.length * _rowH + (header == null ? 0 : 30) + 10;
+    final blockH = (hasReact ? _pillH + _gap : 0) + listH;
 
-    // Show the card under the message when it fits, otherwise above it, otherwise as high as needed.
+    // Right next to the message: below it if there's room, else above it, else on the roomier side
+    // (the list then scrolls) — never far away from the message that was tapped.
+    final visTop = anchor.top.clamp(topLimit, bottomLimit);
+    final visBottom = anchor.bottom.clamp(topLimit, bottomLimit);
+    final below = bottomLimit - visBottom - 8;
+    final above = visTop - topLimit - 8;
     double top;
-    if (anchor.bottom + 8 + cardH <= bottomLimit) {
-      top = anchor.bottom + 8;
-    } else if (anchor.top - 8 - cardH >= topLimit) {
-      top = anchor.top - 8 - cardH;
+    double maxBlock;
+    if (blockH <= below) {
+      top = visBottom + 8;
+      maxBlock = below;
+    } else if (blockH <= above) {
+      top = visTop - 8 - blockH;
+      maxBlock = above;
+    } else if (below >= 220 || above >= 220) {
+      final useBelow = below >= above;
+      maxBlock = useBelow ? below : above;
+      top = useBelow ? visBottom + 8 : visTop - 8 - maxBlock;
     } else {
-      top = (bottomLimit - cardH).clamp(topLimit, bottomLimit);
+      // a very tall message fills the screen: float the menu over its middle
+      maxBlock = (bottomLimit - topLimit) * 0.8;
+      top = ((visTop + visBottom) / 2 - blockH.clamp(0, maxBlock) / 2).clamp(topLimit, bottomLimit - blockH.clamp(0, maxBlock));
     }
-    final maxH = bottomLimit - top;
-    final left = alignRight ? (anchor.right - width).clamp(12.0, size.width - width - 12) : anchor.left.clamp(12.0, size.width - width - 12);
-    final fromBottom = top < anchor.top;
+    final listMax = (maxBlock - (hasReact ? _pillH + _gap : 0)).clamp(_rowH * 2.5, listH);
+    final opensDown = top >= visBottom;
+
+    double sideX(double w) {
+      final x = alignRight ? anchor.right - w : anchor.left;
+      return x.clamp(10.0, size.width - w - 10);
+    }
 
     final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+    Widget appear(Widget child, Alignment origin) => FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(scale: Tween(begin: 0.94, end: 1.0).animate(curved), alignment: origin, child: child),
+        );
+    final origin = Alignment(alignRight ? 0.9 : -0.9, opensDown ? -1 : 1);
+
+    final pill = Material(
+      color: card,
+      elevation: 8,
+      shadowColor: Colors.black.withValues(alpha: 0.25),
+      borderRadius: BorderRadius.circular(_pillH / 2),
+      child: SizedBox(
+        height: _pillH,
+        width: pillW,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          children: [
+            for (var i = 0; i < reactions.length; i++) _Reaction(emoji: reactions[i], selected: reactions[i] == myReaction, delay: i, animation: animation),
+          ],
+        ),
+      ),
+    );
+
+    final list = Material(
+      color: card,
+      elevation: 10,
+      shadowColor: Colors.black.withValues(alpha: 0.28),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: listMax, minWidth: _listWidth, maxWidth: _listWidth),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final it in items)
+              InkWell(
+                onTap: () => Navigator.pop(context, it.value),
+                child: SizedBox(
+                  height: _rowH,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(children: [
+                      Icon(it.icon, size: 20, color: it.danger ? const Color(0xFFE5484D) : fg.withValues(alpha: 0.62)),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(it.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.15),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: it.danger ? const Color(0xFFE5484D) : fg)),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            if (header != null) ...[
+              Divider(height: 9, thickness: 1, color: fg.withValues(alpha: 0.07)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+                child: Text(header!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Brand.muted)),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
+
     return Stack(children: [
       Positioned.fill(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => Navigator.pop(context),
-          // no dimming or highlighted box: the chat stays as it is, only the menu floats above it
           child: const SizedBox.expand(),
         ),
       ),
       Positioned(
         top: top,
-        left: left.toDouble(),
-        width: width,
-        child: ScaleTransition(
-          scale: Tween(begin: 0.92, end: 1.0).animate(curved),
-          alignment: Alignment(alignRight ? 0.8 : -0.8, fromBottom ? 1 : -1),
-          child: FadeTransition(
-            opacity: curved,
-            child: Material(
-              color: card,
-              elevation: 14,
-              shadowColor: Colors.black.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(20),
-              clipBehavior: Clip.antiAlias,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxH),
-                child: SingleChildScrollView(
-                  child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    if (hasReact) ...[
-                      SizedBox(
-                        height: reactH,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                          children: [
-                            for (var i = 0; i < reactions.length; i++)
-                              _Reaction(emoji: reactions[i], selected: reactions[i] == myReaction, delay: i, animation: animation),
-                          ],
-                        ),
-                      ),
-                      Divider(height: 1, thickness: 1, color: fg.withValues(alpha: 0.07)),
-                    ],
-                    if (quick.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                        child: Row(children: [
-                          for (final it in quick)
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 3),
-                                child: Material(
-                                  color: tile,
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(14),
-                                    onTap: () => Navigator.pop(context, it.value),
-                                    child: SizedBox(
-                                      height: 56,
-                                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                        Icon(it.icon, size: 21, color: Brand.primary),
-                                        const SizedBox(height: 4),
-                                        Text(it.label,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.1),
-                                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.85))),
-                                      ]),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ]),
-                      ),
-                    for (final it in rest)
-                      InkWell(
-                        onTap: () => Navigator.pop(context, it.value),
-                        child: SizedBox(
-                          height: _rowH,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(children: [
-                              Icon(it.icon, size: 19, color: it.danger ? const Color(0xFFE5484D) : fg.withValues(alpha: 0.7)),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(it.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: it.danger ? const Color(0xFFE5484D) : fg)),
-                              ),
-                            ]),
-                          ),
-                        ),
-                      ),
-                    if (header != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                        child: Row(children: [
-                          const Icon(Icons.schedule_rounded, size: 13, color: Brand.muted),
-                          const SizedBox(width: 6),
-                          Expanded(child: Text(header!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: Brand.muted))),
-                        ]),
-                      ),
-                    const SizedBox(height: 4),
-                  ]),
-                ),
-              ),
-            ),
-          ),
-        ),
+        left: 0,
+        right: 0,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (hasReact) ...[
+            Padding(padding: EdgeInsets.only(left: sideX(pillW)), child: appear(pill, origin)),
+            const SizedBox(height: _gap),
+          ],
+          Padding(padding: EdgeInsets.only(left: sideX(_listWidth)), child: appear(list, origin)),
+        ]),
       ),
     ]);
   }
@@ -225,7 +213,7 @@ class _Reaction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // the emoji pop in one after another
-    final start = (delay * 0.06).clamp(0.0, 0.6);
+    final start = (delay * 0.04).clamp(0.0, 0.4);
     final a = CurvedAnimation(parent: animation, curve: Interval(start, (start + 0.4).clamp(0.0, 1.0), curve: Curves.easeOutBack));
     return ScaleTransition(
       scale: a,
@@ -234,6 +222,7 @@ class _Reaction extends StatelessWidget {
         onTap: () => Navigator.pop(context, 'react:$emoji'),
         child: Container(
           width: 42,
+          height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
