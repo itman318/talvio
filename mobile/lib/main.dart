@@ -65,7 +65,7 @@ Future<void> _start() async {
   try {
     await prefs.load().timeout(const Duration(seconds: 5));
     await NotifPrefs.instance.load();
-    await KeepAlive.load();
+    await BackgroundKeepAlive.load();
     await ChatPasscode.load();
   } catch (e) {
     debugPrint('Prefs not loaded: $e');

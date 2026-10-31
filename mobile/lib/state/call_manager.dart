@@ -313,9 +313,9 @@ class CallManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _startProjectionService() => KeepAlive.setSharing(true);
+  Future<void> _startProjectionService() => BackgroundKeepAlive.setSharing(true);
 
-  Future<void> _stopProjectionService() => KeepAlive.setSharing(false);
+  Future<void> _stopProjectionService() => BackgroundKeepAlive.setSharing(false);
 
   Future<void> toggleSpeaker() async {
     speaker = !speaker;

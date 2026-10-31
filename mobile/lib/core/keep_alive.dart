@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Settings → Notifications → Keep-Alive: a quiet foreground service that keeps Talvio running, so phones
 /// that kill apps in the background (Xiaomi, Oppo, Vivo, Realme…) still deliver every message on time.
 /// The same service also carries screen sharing in calls, so both go through [apply].
-class KeepAlive {
+class BackgroundKeepAlive {
   static bool enabled = false;
   static bool _sharing = false;
 

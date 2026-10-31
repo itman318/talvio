@@ -220,12 +220,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   icon: Icons.bolt_rounded,
                   color: Brand.amber,
                   title: 'Keep-Alive',
-                  subtitle: KeepAlive.enabled
+                  subtitle: BackgroundKeepAlive.enabled
                       ? 'On — Talvio stays connected (a small “Talvio” note stays in the status bar)'
                       : 'Turn on if messages arrive late or only when you open the app',
-                  value: KeepAlive.enabled,
+                  value: BackgroundKeepAlive.enabled,
                   onChanged: (v) async {
-                    await KeepAlive.setEnabled(v);
+                    await BackgroundKeepAlive.setEnabled(v);
                     if (v && await BatteryGuard.restricted()) await BatteryGuard.ask();
                     if (mounted) setState(() {});
                   },

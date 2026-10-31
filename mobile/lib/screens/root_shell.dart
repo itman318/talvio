@@ -66,7 +66,7 @@ class _RootShellState extends State<RootShell> {
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) BatteryGuard.maybePrompt(context);
     });
-    if (KeepAlive.enabled) KeepAlive.apply();
+    if (BackgroundKeepAlive.enabled) BackgroundKeepAlive.apply();
     // talvio://u/<id> links (profile QR codes scanned with the phone camera)
     try {
       _links = AppLinks().uriLinkStream.listen((uri) {
