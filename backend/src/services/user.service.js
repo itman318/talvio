@@ -196,6 +196,7 @@ async function updateProfile(userId, body) {
     add('username', name);
   }
   if (sets.length === 0) return getMe(userId);
+  const before = await db.one('SELECT first_name, phone FROM users WHERE id = $1', [userId]);
   try {
     await db.query(`UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, params);
   } catch (err) {
@@ -203,6 +204,10 @@ async function updateProfile(userId, body) {
     throw err;
   }
   bus.emit('user:updated', { userId });
+  // first time the profile gets a name: tell people who have this number saved
+  if (before && !before.first_name && body.first_name && before.phone) {
+    await contactJoined(userId, before.phone, String(body.first_name).trim()).catch(() => {});
+  }
   return getMe(userId);
 }
 
@@ -216,7 +221,7 @@ async function checkUsername(userId, username) {
   return { username: name, available: !taken };
 }
 
-const NOTIFY_DEFAULTS = { private: true, groups: true, channels: true, preview: true };
+const NOTIFY_DEFAULTS = { private: true, groups: true, channels: true, preview: true, reactions: true, pinned: true, contact_joined: true };
 
 /** Settings → Notifications (applied by the server when it sends pushes). */
 async function getNotifySettings(userId) {
@@ -514,6 +519,22 @@ async function setFcmToken(userId, sessionId, token) {
 }
 
 // ------------------------------------------------------------------ contacts
+/** Someone signed up: people who had their number saved get them as a contact and a "joined Talvio" push. */
+async function contactJoined(userId, phone, name) {
+  const hash = require('crypto').createHash('sha256').update(String(phone)).digest('hex'); // eslint-disable-line global-require
+  const owners = await db.many('DELETE FROM contact_hints WHERE phone_hash = $1 RETURNING owner_id', [hash]);
+  const ids = owners.map((r) => r.owner_id).filter((id) => Number(id) !== Number(userId));
+  if (!ids.length) return;
+  await db.query('INSERT INTO contacts (owner_id, contact_id) SELECT x, $2 FROM unnest($1::bigint[]) AS x ON CONFLICT DO NOTHING', [ids, userId]);
+  const rows = await db.many('SELECT id, notify_settings AS ns FROM users WHERE id = ANY($1::bigint[])', [ids]);
+  const to = rows.filter((r) => (r.ns || {}).contact_joined !== false).map((r) => r.id);
+  if (to.length) {
+    require('./push.service') // eslint-disable-line global-require
+      .sendToUsers(to, { title: 'Talvio', body: `${name} joined Talvio 🎉 Say hello!` }, { type: 'user', user_id: userId })
+      .catch(() => {});
+  }
+}
+
 async function syncContacts(userId, phones) {
   if (!Array.isArray(phones)) throw badRequest('invalid_input', 'phones must be an array');
   if (phones.length > 2000) throw badRequest('invalid_input', 'At most 2000 phone numbers per request');
@@ -525,6 +546,19 @@ async function syncContacts(userId, phones) {
     [normalized, userId],
   );
   const ids = found.map((r) => r.id);
+  // remember (hashed) numbers that aren't here yet, to say "X joined Talvio" later
+  try {
+    const foundPhones = new Set((await db.many('SELECT phone FROM users WHERE id = ANY($1::bigint[])', [ids])).map((r) => r.phone));
+    const missing = normalized.filter((p) => !foundPhones.has(p)).map((p) => require('crypto').createHash('sha256').update(p).digest('hex')); // eslint-disable-line global-require
+    if (missing.length) {
+      await db.query(
+        `INSERT INTO contact_hints (owner_id, phone_hash) SELECT $1, x FROM unnest($2::text[]) AS x ON CONFLICT DO NOTHING`,
+        [userId, missing.slice(0, 2000)],
+      );
+    }
+  } catch (_) {
+    /* best-effort */
+  }
   if (ids.length) {
     await db.query(
       `INSERT INTO contacts (owner_id, contact_id) SELECT $1, x FROM unnest($2::bigint[]) AS x ON CONFLICT DO NOTHING`,

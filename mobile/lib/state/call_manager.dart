@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/api_client.dart';
+import '../core/notif_prefs.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
 import '../models/models.dart';
@@ -444,6 +446,8 @@ class CallManager extends ChangeNotifier {
 
   bool _isMine(dynamic id) => call != null && '${call!.id}' == '$id';
 
+  Timer? _buzz;
+
   void _ring(CallInfo c) {
     _resetState();
     call = c;
@@ -452,7 +456,13 @@ class CallManager extends ChangeNotifier {
     speaker = c.video;
     phase = CallPhase.incoming;
     _ringing = true;
-    FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false).catchError((_) {});
+    final np = NotifPrefs.instance;
+    if (np.callRing) FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false).catchError((_) {});
+    if (np.callVibrate) {
+      _buzz?.cancel();
+      HapticFeedback.vibrate();
+      _buzz = Timer.periodic(const Duration(milliseconds: 1400), (_) => HapticFeedback.vibrate());
+    }
     notifyListeners();
     _showScreen();
   }
@@ -460,6 +470,8 @@ class CallManager extends ChangeNotifier {
   void _stopRing() {
     if (!_ringing) return;
     _ringing = false;
+    _buzz?.cancel();
+    _buzz = null;
     FlutterRingtonePlayer().stop().catchError((_) {});
   }
 

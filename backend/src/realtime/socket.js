@@ -271,6 +271,50 @@ function wireBus() {
         .catch(() => {});
     }
   });
+  // --- extra pushes, each behind its own switch in Settings → Notifications
+  async function wantPush(userIds, key, chatId) {
+    const ids = [...new Set(userIds.map(Number))].filter((id) => id && !presence.isActive(id));
+    if (!ids.length) return [];
+    const rows = await db.many(
+      chatId
+        ? `SELECT u.id, u.notify_settings AS ns FROM users u JOIN chat_members m ON m.user_id = u.id AND m.chat_id = $2
+           WHERE u.id = ANY($1::bigint[]) AND NOT m.is_locked AND (m.muted_until IS NULL OR m.muted_until < now())`
+        : 'SELECT u.id, u.notify_settings AS ns FROM users u WHERE u.id = ANY($1::bigint[])',
+      chatId ? [ids, chatId] : [ids],
+    );
+    return rows.filter((r) => (r.ns || {})[key] !== false).map((r) => r.id);
+  }
+  const nameOf = async (id) => {
+    const u = await db.one('SELECT first_name, last_name FROM users WHERE id = $1', [id]);
+    return u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Someone' : 'Someone';
+  };
+  bus.on('message:reactions', async (e) => {
+    try {
+      if (!e.emoji || !e.authorId || Number(e.authorId) === Number(e.userId)) return;
+      const to = await wantPush([e.authorId], 'reactions', e.chatId);
+      if (!to.length) return;
+      const who = await nameOf(e.userId);
+      const m = await db.one('SELECT type, text FROM messages WHERE id = $1', [e.messageId]);
+      const what = m && m.text ? `“${String(m.text).slice(0, 60)}”` : 'your message';
+      await push.sendToUsers(to, { title: who, body: `Reacted ${e.emoji} to ${what}` }, { type: 'message', chat_id: e.chatId, message_id: e.messageId }, { tag: `r${e.chatId}` });
+    } catch (_) {
+      /* best-effort */
+    }
+  });
+  bus.on('message:pinned', async (e) => {
+    try {
+      const members = await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1 AND user_id <> $2 AND NOT is_request', [e.chatId, e.userId]);
+      const to = await wantPush(members.map((r) => r.user_id), 'pinned', e.chatId);
+      if (!to.length) return;
+      const chat = await db.one('SELECT title FROM chats WHERE id = $1', [e.chatId]);
+      const m = await db.one('SELECT type, text, meta FROM messages WHERE id = $1', [e.messageId]);
+      const who = await nameOf(e.userId);
+      const body = `${who} pinned ${m && m.text ? `“${String(m.text).slice(0, 80)}”` : 'a message'}`;
+      await push.sendToUsers(to, { title: (chat && chat.title) || 'Talvio', body }, { type: 'message', chat_id: e.chatId, message_id: e.messageId });
+    } catch (_) {
+      /* best-effort */
+    }
+  });
   bus.on('user:updated', async ({ userId }) => {
     try {
       const rows = await db.many(

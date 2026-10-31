@@ -22,6 +22,7 @@ class PushService {
   /// Called when the user taps a support-reply notification.
   void Function()? onOpenSupport;
   void Function()? onOpenNotices;
+  void Function(int userId)? onOpenUser;
 
   /// Called when the user taps an incoming-call notification.
   void Function()? onOpenCall;
@@ -84,6 +85,11 @@ class PushService {
     }
     if (m.data['type'] == 'call') {
       onOpenCall?.call();
+      return;
+    }
+    if (m.data['type'] == 'user') {
+      final uid = int.tryParse('${m.data['user_id']}');
+      if (uid != null) onOpenUser?.call(uid);
       return;
     }
     if (m.data['type'] == 'notice') {

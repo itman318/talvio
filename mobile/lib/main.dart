@@ -1,4 +1,5 @@
 import 'screens/notices_screen.dart';
+import 'screens/user_profile_screen.dart';
 import 'screens/login_activity_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -29,6 +30,8 @@ import 'state/secret_store.dart';
 import 'state/voice_chat_manager.dart';
 import 'theme/brand.dart';
 import 'widgets/in_app_banner.dart';
+import 'core/notif_prefs.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -60,6 +63,7 @@ Future<void> _start() async {
   final prefs = AppPrefs();
   try {
     await prefs.load().timeout(const Duration(seconds: 5));
+    await NotifPrefs.instance.load();
     await ChatPasscode.load();
   } catch (e) {
     debugPrint('Prefs not loaded: $e');
@@ -162,6 +166,10 @@ Future<void> _start() async {
   chats.onInAppMessage = (chat, m) {
     final overlay = navigatorKey.currentState?.overlay;
     if (overlay == null || auth.status != AuthStatus.loggedIn) return;
+    final np = NotifPrefs.instance;
+    if (np.inAppSound) FlutterRingtonePlayer().playNotification().catchError((_) {});
+    if (np.inAppVibrate) HapticFeedback.mediumImpact();
+    if (!np.inAppBanner) return;
     InAppBanner.show(overlay, chat: chat, message: m, onTap: () {
       navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
     });
@@ -196,6 +204,10 @@ Future<void> _start() async {
       ),
     );
   };
+  services.push.onOpenUser = (uid) {
+    if (auth.status != AuthStatus.loggedIn) return;
+    navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => UserProfileScreen(userId: uid)));
+  };
   services.push.onOpenNotices = () {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const NoticesScreen()));
@@ -212,6 +224,7 @@ Future<void> _start() async {
         Provider<AppServices>.value(value: services),
         ChangeNotifierProvider<AppPrefs>.value(value: prefs),
         ChangeNotifierProvider<ProxyManager>.value(value: ProxyManager.instance),
+        ChangeNotifierProvider<NotifPrefs>.value(value: NotifPrefs.instance),
         ChangeNotifierProvider<ChatStore>.value(value: chats),
         ChangeNotifierProvider<AuthState>.value(value: auth),
         ChangeNotifierProvider<CallManager>.value(value: calls),

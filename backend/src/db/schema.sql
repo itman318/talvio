@@ -1028,3 +1028,12 @@ CREATE TABLE IF NOT EXISTS notices (
   created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS notices_user_idx ON notices (user_id, id DESC);
+
+-- numbers from people's phone books that aren't on Talvio yet (only a hash) → "contact joined Talvio"
+CREATE TABLE IF NOT EXISTS contact_hints (
+  owner_id   BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phone_hash CHAR(64)    NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, phone_hash)
+);
+CREATE INDEX IF NOT EXISTS contact_hints_hash_idx ON contact_hints (phone_hash);

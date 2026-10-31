@@ -256,7 +256,7 @@ test('Talvio Bot API v2: own names, Talvio events, buttons, signed hooks', async
 
 test('notification settings: defaults, update, validation', async () => {
   const d = await users.getNotifySettings(A.id);
-  assert.deepEqual(d, { private: true, groups: true, channels: true, preview: true });
+  assert.deepEqual(d, { private: true, groups: true, channels: true, preview: true, reactions: true, pinned: true, contact_joined: true });
   const s = await users.setNotifySettings(A.id, { groups: false, preview: false, junk: true });
   assert.equal(s.groups, false);
   assert.equal(s.preview, false);
@@ -406,4 +406,20 @@ test('in-app notifications: new login, added to a group, admin rights, read all'
   assert.equal((await notices.unreadCount(E.id)).unread, 0);
   await notices.clear(E.id);
   assert.equal((await notices.list(E.id)).items.length, 0);
+});
+
+test('contact joined: a synced number that later signs up becomes a contact', async () => {
+  const bus = require('../src/bus');
+  const db = require('../src/db');
+  const phone = '+447700900123';
+  await users.syncContacts(A.id, [phone]);
+  const hint = await db.one('SELECT count(*)::int AS n FROM contact_hints WHERE owner_id = $1', [A.id]);
+  assert.ok(hint.n >= 1);
+  const u = await db.one('INSERT INTO users (phone) VALUES ($1) RETURNING id', [phone]);
+  const done = new Promise((r) => setTimeout(r, 300));
+  await users.updateProfile(u.id, { first_name: 'Newbie' });
+  await done;
+  const c = await db.one('SELECT 1 AS ok FROM contacts WHERE owner_id = $1 AND contact_id = $2', [A.id, u.id]);
+  assert.ok(c, 'added to contacts');
+  void bus;
 });

@@ -1245,6 +1245,8 @@ async function react(userId, messageIdRaw, emoji) {
   bus.emit('message:reactions', {
     chatId: chat.id,
     messageId: m.id,
+    authorId: m.sender_id,
+    emoji: emoji || null,
     reactions: summary.list,
     memberIds: await chatService.memberIds(chat.id),
     userId,
@@ -1448,6 +1450,7 @@ async function pinMessage(userId, chatIdRaw, messageIdRaw) {
   );
   if (r.inserted && chat.type === 'group') await createSystemMessage(chat.id, userId, { event: 'message_pinned', message_id: m.id });
   if (r.inserted && chatService.isMulti(chat)) await chatService.logEvent(chat.id, userId, 'message_pinned', null, { message_id: m.id });
+  if (r.inserted && chat.type !== 'private') bus.emit('message:pinned', { chatId: chat.id, messageId: m.id, userId });
   await chatService.emitUpdated(chat.id);
   return listPins(userId, chat.id);
 }

@@ -1,5 +1,6 @@
 import 'voice_chat_screen.dart';
 import '../core/battery.dart';
+import '../core/notif_prefs.dart';
 import '../theme/brand.dart';
 import '../widgets/avatar.dart';
 import '../state/auth_state.dart';
@@ -88,7 +89,11 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    final unread = context.select<ChatStore, int>((s) => s.chats.where((c) => !c.isMuted && !c.isRequest && !c.isLocked).fold<int>(0, (a, c) => a + c.unreadCount));
+    final np = context.watch<NotifPrefs>();
+    final unread = context.select<ChatStore, int>((s) {
+      final list = s.chats.where((c) => (np.badgeMuted || !c.isMuted) && !c.isRequest && !c.isLocked && c.unreadCount > 0);
+      return np.badgeChats ? list.length : list.fold<int>(0, (a, c) => a + c.unreadCount);
+    });
     Widget page(int i) {
       if (!_built.contains(i)) return const SizedBox.shrink();
       return switch (i) { 0 => const HomeScreen(), 1 => const CallsScreen(), 2 => const SettingsScreen(), _ => const MyProfileScreen() };

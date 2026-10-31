@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/battery.dart';
+import '../core/notif_prefs.dart';
 import '../core/services.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
@@ -42,7 +43,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) setState(() => _s = r.map((k, v) => MapEntry(k, v != false)));
     } catch (e) {
       if (mounted) {
-        setState(() => _s = {'private': true, 'groups': true, 'channels': true, 'preview': true});
+        setState(() => _s = {'private': true, 'groups': true, 'channels': true, 'preview': true, 'reactions': true, 'pinned': true, 'contact_joined': true});
         showError(context, e);
       }
     }
@@ -73,6 +74,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final s = _s;
+    final np = context.watch<NotifPrefs>();
+    bool on(String k) => s?[k] ?? true;
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
       body: s == null
@@ -103,6 +106,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   value: s['channels']!,
                   onChanged: (v) => _set('channels', v),
                 ),
+                SettingsSwitchTile(
+                  icon: Icons.favorite_rounded,
+                  color: Brand.rose,
+                  title: 'Reactions',
+                  subtitle: 'When someone reacts to your message',
+                  value: on('reactions'),
+                  onChanged: (v) => _set('reactions', v),
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.push_pin_rounded,
+                  color: Brand.violet,
+                  title: 'Pinned messages',
+                  subtitle: 'When an admin pins something in your groups',
+                  value: on('pinned'),
+                  onChanged: (v) => _set('pinned', v),
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.person_add_alt_1_rounded,
+                  color: Brand.green,
+                  title: 'Contact joined Talvio',
+                  subtitle: 'Someone from your phone book signs up',
+                  value: on('contact_joined'),
+                  onChanged: (v) => _set('contact_joined', v),
+                ),
               ]),
               SettingsGroup(title: 'On the lock screen', children: [
                 SettingsSwitchTile(
@@ -129,7 +156,65 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     },
                   ),
                 ]),
-              SettingsGroup(title: 'This phone', children: [
+              SettingsGroup(title: 'While Talvio is open', children: [
+                SettingsSwitchTile(
+                  icon: Icons.web_asset_rounded,
+                  color: Brand.sky,
+                  title: 'Pop-up banner',
+                  subtitle: 'Small card on top for messages in other chats',
+                  value: np.inAppBanner,
+                  onChanged: (v) => np.set('inapp_banner', v),
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.music_note_rounded,
+                  color: Brand.rose,
+                  title: 'In-app sound',
+                  value: np.inAppSound,
+                  onChanged: (v) => np.set('inapp_sound', v),
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.vibration_rounded,
+                  color: Brand.primary,
+                  title: 'In-app vibrate',
+                  value: np.inAppVibrate,
+                  onChanged: (v) => np.set('inapp_vibrate', v),
+                ),
+              ]),
+              SettingsGroup(title: 'Calls', children: [
+                SettingsSwitchTile(
+                  icon: Icons.ring_volume_rounded,
+                  color: Brand.green,
+                  title: 'Ringtone',
+                  subtitle: np.callRing ? 'Your phone’s ringtone' : 'Silent — the call screen still shows',
+                  value: np.callRing,
+                  onChanged: (v) => np.set('call_ring', v),
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.vibration_rounded,
+                  color: Brand.amber,
+                  title: 'Vibrate on calls',
+                  value: np.callVibrate,
+                  onChanged: (v) => np.set('call_vibrate', v),
+                ),
+              ]),
+              SettingsGroup(title: 'Unread badge', children: [
+                SettingsSwitchTile(
+                  icon: Icons.notifications_off_rounded,
+                  color: Brand.muted,
+                  title: 'Include muted chats',
+                  value: np.badgeMuted,
+                  onChanged: (v) => np.set('badge_muted', v),
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.forum_rounded,
+                  color: Brand.violet,
+                  title: 'Count chats, not messages',
+                  subtitle: np.badgeChats ? '3 chats with new messages → 3' : 'Every unread message is counted',
+                  value: np.badgeChats,
+                  onChanged: (v) => np.set('badge_chats', v),
+                ),
+              ]),
+              SettingsGroup(title: 'Notification sound', children: [
                 SettingsSwitchTile(
                   icon: Icons.volume_up_rounded,
                   color: Brand.rose,

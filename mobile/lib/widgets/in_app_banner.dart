@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/models.dart';
 import 'avatar.dart';
@@ -14,7 +13,6 @@ class InAppBanner {
 
   static void show(OverlayState overlay, {required Chat chat, required Message message, required VoidCallback onTap}) {
     hide();
-    HapticFeedback.lightImpact();
     final who = chat.isMulti && message.sender != null ? '${message.sender!.name}: ' : '';
     final entry = OverlayEntry(
       builder: (ctx) => _BannerCard(
