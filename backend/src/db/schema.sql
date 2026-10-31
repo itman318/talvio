@@ -1066,3 +1066,86 @@ CREATE TABLE IF NOT EXISTS quick_replies (
   created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
   UNIQUE (user_id, shortcut)
 );
+
+-- ---------------------------------------------------------------- public-looking IDs
+-- New accounts get 10-digit IDs (from 5 000 000 000) with small random gaps, so an ID says nothing
+-- about how many people use Talvio; new chats start at 1 000 000 000 (bots see groups as -100<id>).
+CREATE TABLE IF NOT EXISTS talvio_migrations (name VARCHAR(64) PRIMARY KEY, ran_at TIMESTAMPTZ NOT NULL DEFAULT now());
+
+CREATE OR REPLACE FUNCTION talvio_next_user_id() RETURNS trigger AS $$
+DECLARE nid BIGINT;
+BEGIN
+  PERFORM pg_advisory_xact_lock(731100);
+  nid := nextval('users_id_seq');
+  IF nid < 5000000000 THEN nid := 5000000000 + floor(random() * 900)::bigint; END IF;
+  PERFORM setval('users_id_seq', nid + 1 + floor(random() * 37)::bigint, false);
+  NEW.id := nid;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS users_public_id ON users;
+CREATE TRIGGER users_public_id BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION talvio_next_user_id();
+
+DO $$
+BEGIN
+  IF (SELECT last_value FROM chats_id_seq) < 1000000000 THEN
+    PERFORM setval('chats_id_seq', 1000000000 + floor(random() * 5000)::bigint, false);
+  END IF;
+END $$;
+
+-- one-time: give the accounts made before this the new kind of ID (keeps every chat, message and link)
+DO $$
+DECLARE r RECORD; def TEXT; nxt BIGINT := 5000000000;
+BEGIN
+  IF EXISTS (SELECT 1 FROM talvio_migrations WHERE name = 'user_ids_v1') THEN RETURN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM users WHERE id < 5000000000) THEN
+    INSERT INTO talvio_migrations (name) VALUES ('user_ids_v1');
+    RETURN;
+  END IF;
+
+  -- every foreign key to users(id) follows the change
+  FOR r IN
+    SELECT c.conname, c.conrelid::regclass AS tbl, pg_get_constraintdef(c.oid) AS d
+    FROM pg_constraint c WHERE c.contype = 'f' AND c.confrelid = 'users'::regclass
+  LOOP
+    IF position('ON UPDATE' IN r.d) = 0 THEN
+      EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.tbl, r.conname);
+      EXECUTE format('ALTER TABLE %s ADD CONSTRAINT %I %s ON UPDATE CASCADE', r.tbl, r.conname, r.d);
+    END IF;
+  END LOOP;
+
+  CREATE TEMP TABLE id_map (old_id BIGINT PRIMARY KEY, new_id BIGINT UNIQUE) ON COMMIT DROP;
+  FOR r IN SELECT id FROM users WHERE id < 5000000000 ORDER BY id LOOP
+    nxt := nxt + 1 + floor(random() * 37)::bigint;
+    INSERT INTO id_map VALUES (r.id, nxt);
+  END LOOP;
+
+  -- columns that hold user IDs without a foreign key
+  UPDATE reports t SET target_id = m.new_id FROM id_map m WHERE t.target_type = 'user' AND t.target_id = m.old_id;
+  UPDATE admin_logs t SET target_id = m.new_id FROM id_map m WHERE t.target_type = 'user' AND t.target_id = m.old_id;
+  UPDATE chat_events t SET target_id = m.new_id FROM id_map m WHERE t.target_id = m.old_id;
+  UPDATE calls t SET ended_by = m.new_id FROM id_map m WHERE t.ended_by = m.old_id;
+  UPDATE secret_chats t SET closed_by = m.new_id FROM id_map m WHERE t.closed_by = m.old_id;
+  UPDATE client_errors t SET last_user_id = m.new_id FROM id_map m WHERE t.last_user_id = m.old_id;
+  UPDATE client_error_users t SET user_id = m.new_id FROM id_map m WHERE t.user_id = m.old_id;
+  UPDATE chat_members t SET promoted_by = m.new_id FROM id_map m WHERE t.promoted_by = m.old_id;
+  UPDATE messages t SET via_bot_id = m.new_id FROM id_map m WHERE t.via_bot_id = m.old_id;
+  UPDATE stories t SET mentions = ARRAY(SELECT COALESCE(m.new_id, x) FROM unnest(t.mentions) x LEFT JOIN id_map m ON m.old_id = x)
+    WHERE cardinality(t.mentions) > 0;
+  -- system messages that name a person
+  UPDATE messages t SET meta = jsonb_set(t.meta, '{user_id}', to_jsonb(m.new_id)) FROM id_map m
+    WHERE t.meta ? 'user_id' AND jsonb_typeof(t.meta->'user_id') = 'number' AND (t.meta->>'user_id')::bigint = m.old_id;
+  DELETE FROM bot_updates;
+  DELETE FROM botfather_state;
+
+  -- the IDs themselves (foreign keys cascade)
+  UPDATE users u SET id = m.new_id FROM id_map m WHERE u.id = m.old_id;
+
+  -- private chats are keyed "smallerId:biggerId"
+  UPDATE chats c SET private_key = k.key FROM (
+    SELECT cm.chat_id, min(cm.user_id)::text || ':' || max(cm.user_id)::text AS key
+    FROM chat_members cm JOIN chats c2 ON c2.id = cm.chat_id AND c2.type = 'private' GROUP BY cm.chat_id
+  ) k WHERE c.id = k.chat_id AND c.type = 'private';
+
+  PERFORM setval('users_id_seq', nxt + 1 + floor(random() * 37)::bigint, false);
+  INSERT INTO talvio_migrations (name) VALUES ('user_ids_v1');
+END $$;

@@ -303,10 +303,12 @@ async function authenticate(accessToken) {
   const row = await db.one(
     `SELECT u.*, s.id AS session_id, s.revoked_at AS session_revoked_at
      FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.id = $1 AND s.user_id = $2`,
-    [p.sid, p.sub],
+     WHERE s.id = $1`,
+    [p.sid],
   );
   if (!row || row.session_revoked_at) throw unauthorized('session_revoked', 'This session has ended. Please log in again.');
+  // the account got a new ID (one-time ID upgrade): the app refreshes its token, no logout
+  if (Number(row.id) !== Number(p.sub)) throw unauthorized('invalid_token', 'Invalid or expired token');
   if (row.status === 'deleted') throw unauthorized('account_deleted', 'This account was deleted');
   const user = await liftExpiredBan(row);
   if (userService.isBanned(user)) throw banError(user);

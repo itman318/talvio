@@ -194,6 +194,13 @@ function common(p) {
 }
 
 // ------------------------------------------------------------------ IDs the classic way
+const GROUP_BASE = 1000000000000;
+/** Group/channel chat → the ID bots use: "-100" followed by the chat number (e.g. -1001000004321). */
+const toGroupId = (chatId) => -(GROUP_BASE + Math.abs(Number(chatId)));
+const fromGroupId = (n) => {
+  const m = Math.abs(Number(n));
+  return m > GROUP_BASE ? m - GROUP_BASE : m; // a plain -<id> still works
+};
 // Private chats are addressed by the other person's user ID; groups and channels by a negative ID.
 // (Inside Talvio every chat has its own positive ID — this maps between the two.)
 async function resolveChatId(raw, botId) {
@@ -205,7 +212,7 @@ async function resolveChatId(raw, botId) {
   }
   const n = Number(s);
   if (!Number.isSafeInteger(n) || n === 0) throw badRequest('chat_not_found', 'chat not found');
-  if (n < 0) return String(-n);
+  if (n < 0) return String(fromGroupId(n));
   const r = await db.one(
     `SELECT c.id FROM chats c
      JOIN chat_members a ON a.chat_id = c.id AND a.user_id = $1
@@ -232,7 +239,7 @@ async function classicChat(chat, botId, cache) {
       ? { id: Number(peer.id), type: 'private', first_name: peer.first_name || '', ...(peer.last_name ? { last_name: peer.last_name } : {}), ...(peer.username ? { username: peer.username } : {}) }
       : chat;
   } else {
-    out = { ...chat, id: -Math.abs(Number(chat.id)), type: chat.type === 'group' ? 'supergroup' : chat.type };
+    out = { ...chat, id: toGroupId(chat.id), type: chat.type === 'group' ? 'supergroup' : chat.type };
   }
   cache.set(key, out);
   return out;
@@ -313,7 +320,7 @@ const MAP = {
   pinChatMessage: (t, p) => bot.callMethod(t, 'messages.pin', p),
   unpinChatMessage: (t, p) => bot.callMethod(t, 'messages.unpin', p),
   getChat: async (t, p) => ({
-    ...(await bot.callMethod(t, 'chats.get', p).then(async (c) => (c.type === 'private' ? { ...c, ...(await classicChat(c, botIdOf(t), new Map())) } : { ...c, id: -c.id, type: c.type === 'group' ? 'supergroup' : c.type }))),
+    ...(await bot.callMethod(t, 'chats.get', p).then(async (c) => (c.type === 'private' ? { ...c, ...(await classicChat(c, botIdOf(t), new Map())) } : { ...c, id: toGroupId(c.id), type: c.type === 'group' ? 'supergroup' : c.type }))),
     accent_color_id: 0,
     max_reaction_count: 11,
     accepted_gift_types: { unlimited_gifts: false, limited_gifts: false, unique_gifts: false, premium_subscription: false, gifts_from_channels: false },
@@ -375,4 +382,4 @@ function errorBody(err) {
   return { status, body };
 }
 
-module.exports = { call, fileFor, errorBody, update, message, formatText, toTalvioToken, toClassicToken, tmpDir: os.tmpdir(), v };
+module.exports = { toGroupId, fromGroupId, call, fileFor, errorBody, update, message, formatText, toTalvioToken, toClassicToken, tmpDir: os.tmpdir(), v };

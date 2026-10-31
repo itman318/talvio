@@ -118,6 +118,11 @@ mv /opt/talvio/new "$APP_DIR"
 chown -R talvio:talvio /opt/talvio
 
 # (the settings from the env file are already exported in this shell)
+log "Database backup"
+mkdir -p /var/backups/talvio && chmod 700 /var/backups/talvio
+sudo -u postgres pg_dump talvio 2>/dev/null | gzip > "/var/backups/talvio/before-deploy-$(date +%Y%m%d-%H%M%S).sql.gz" && echo "backup: saved" || echo "backup: skipped"
+ls -1t /var/backups/talvio/before-deploy-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f   # keep the last 10
+
 log "Database migration"
 (cd "$APP_DIR" && node scripts/migrate.js)
 

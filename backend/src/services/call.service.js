@@ -161,7 +161,7 @@ async function startCall(userId, sessionId, body = {}) {
   const row = await db.tx(async (c) => {
     // Lock both users (in id order) so simultaneous calls can't double-book anyone.
     for (const id of [userId, calleeId].sort((a, b) => a - b)) {
-      await c.query('SELECT pg_advisory_xact_lock(7311, $1::int)', [id]);
+      await c.query('SELECT pg_advisory_xact_lock(7311, ($1::bigint % 2147483647)::int)', [id]);
     }
     const mine = await activeCallOf(userId, c);
     if (mine) {

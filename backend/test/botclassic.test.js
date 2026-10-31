@@ -189,9 +189,10 @@ test('groups use negative IDs; an unknown user is "chat not found"', async () =>
   await flush();
   const ups = await classic.call(TOKEN, 'getUpdates', {});
   const m = ups.map((u) => u.message).filter(Boolean).find((x) => x.text === '/signal');
-  assert.equal(m.chat.id, -g.id);
-  const sent = await classic.call(TOKEN, 'sendMessage', { chat_id: String(-g.id), text: 'Gold BUY 2350' });
-  assert.equal(sent.chat.id, -g.id);
+  assert.equal(m.chat.id, classic.toGroupId(g.id));
+  assert.match(String(m.chat.id), /^-100\d{10}$/);
+  const sent = await classic.call(TOKEN, 'sendMessage', { chat_id: String(classic.toGroupId(g.id)), text: 'Gold BUY 2350' });
+  assert.equal(sent.chat.id, classic.toGroupId(g.id));
   await assert.rejects(classic.call(TOKEN, 'sendMessage', { chat_id: '999999', text: 'x' }), /chat not found/);
 });
 

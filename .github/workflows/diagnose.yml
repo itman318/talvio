@@ -43,6 +43,10 @@ jobs:
           curl -s -X POST -F chat_id=1 -F text=hi "http://127.0.0.1/api/classic/bot1:aaaaaaaaaaaaaaaaaaaaaaaa/sendMessage"; echo
           echo "--- built-in bots"
           sudo -u postgres psql -d talvio -tAc "SELECT u.id, u.username, b.status FROM bots b JOIN users u ON u.id = b.user_id WHERE u.username IN ('BotForge','TalvioIDBot')"
+          echo "--- ids"
+          sudo -u postgres psql -d talvio -tAc "SELECT 'users', min(id), max(id), count(*) FROM users UNION ALL SELECT 'chats', min(id), max(id), count(*) FROM chats"
+          sudo -u postgres psql -d talvio -tAc "SELECT name, ran_at FROM talvio_migrations"
+          ls -la /var/backups/talvio 2>/dev/null | tail -3
           echo "--- recent sessions (no tokens)"
           sudo -u postgres psql -d talvio -tAc "SELECT id, user_id, to_char(created_at,'MM-DD HH24:MI:SS') c, to_char(revoked_at,'MM-DD HH24:MI:SS') r, to_char(last_active_at,'MM-DD HH24:MI') a, to_char(expires_at,'MM-DD') e, (fcm_token IS NOT NULL) push FROM sessions ORDER BY id DESC LIMIT 15"
           echo "--- auth requests (last 2h)"

@@ -61,6 +61,7 @@ async function say(chatId, text, buttons = []) {
 }
 
 const fullName = (u) => `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'No name';
+const gid = (id) => require('./botclassic.service').toGroupId(id); // eslint-disable-line global-require
 const kindOf = (c) => ({ group: 'Group', channel: 'Channel' }[c.type] || 'Chat');
 
 async function describeUser(u, title) {
@@ -82,7 +83,7 @@ const HELP = [
   '• Send @username → the ID of that person, bot, group or channel',
   '• Add me to a group and send /id → the group’s ID',
   '',
-  'Group and channel IDs start with a minus sign (−) — that’s how bots use them.',
+  'Group and channel IDs start with −100 — that’s how bots use them.',
 ].join('\n');
 
 async function onMessage(userId, chatId, row) {
@@ -94,10 +95,10 @@ async function onMessage(userId, chatId, row) {
   if (chat.type !== 'private') {
     await say(chatId, [
       `👥 ${chat.title}`,
-      `🆔 Group ID: \`-${chat.id}\``,
+      `🆔 Group ID: \`${gid(chat.id)}\``,
       '',
       `👤 ${fullName(me)} — your ID: \`${me.id}\``,
-    ].join('\n'), [copyBtn('Copy group ID', `-${chat.id}`), copyBtn('Copy my ID', me.id)]);
+    ].join('\n'), [copyBtn('Copy group ID', gid(chat.id)), copyBtn('Copy my ID', me.id)]);
     return;
   }
 
@@ -112,7 +113,7 @@ async function onMessage(userId, chatId, row) {
     if (row.forward_source_id) {
       const src = await db.one('SELECT c.id, c.type, c.title FROM messages m JOIN chats c ON c.id = m.chat_id WHERE m.id = $1', [row.forward_source_id]);
       if (src && src.type !== 'private') {
-        return say(chatId, [`↪️ Forwarded from a ${kindOf(src).toLowerCase()}`, '', `📣 ${src.title}`, `🆔 ${kindOf(src)} ID: \`-${src.id}\``].join('\n'), [copyBtn(`Copy ${kindOf(src).toLowerCase()} ID`, `-${src.id}`)]);
+        return say(chatId, [`↪️ Forwarded from a ${kindOf(src).toLowerCase()}`, '', `📣 ${src.title}`, `🆔 ${kindOf(src)} ID: \`${gid(src.id)}\``].join('\n'), [copyBtn(`Copy ${kindOf(src).toLowerCase()} ID`, gid(src.id))]);
       }
     }
     return say(chatId, `↪️ Forwarded from ${row.forwarded_from_name || 'someone'}\n\n🔒 They hide their account in forwarded messages, so I can’t see their ID. Ask them to send /id to @${USERNAME}.`);
@@ -124,7 +125,7 @@ async function onMessage(userId, chatId, row) {
     const u = await db.one(`SELECT * FROM users WHERE lower(username) = lower($1) AND status <> 'deleted'`, [at[1]]);
     if (u) return say(chatId, await describeUser(u, `🔎 @${u.username}`), [copyBtn('Copy ID', u.id)]);
     const c = await db.one(`SELECT id, type, title FROM chats WHERE lower(username) = lower($1)`, [at[1]]).catch(() => null);
-    if (c) return say(chatId, [`🔎 @${at[1]}`, '', `📣 ${c.title}`, `🆔 ${kindOf(c)} ID: \`-${c.id}\``].join('\n'), [copyBtn('Copy ID', `-${c.id}`)]);
+    if (c) return say(chatId, [`🔎 @${at[1]}`, '', `📣 ${c.title}`, `🆔 ${kindOf(c)} ID: \`${gid(c.id)}\``].join('\n'), [copyBtn('Copy ID', gid(c.id))]);
     return say(chatId, `I couldn’t find @${at[1]} on Talvio.`);
   }
 
