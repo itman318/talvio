@@ -117,6 +117,7 @@ class _UserSearchState extends State<UserSearch> {
                   padding: EdgeInsets.only(top: 12),
                   child: TaviEmptyState(
                     pose: TaviPose.search,
+                    art: 'nocontacts',
                     title: 'No contacts yet',
                     text: 'Search for people by their @username above, or let Talvio find friends from your phone contacts.',
                     size: 140,

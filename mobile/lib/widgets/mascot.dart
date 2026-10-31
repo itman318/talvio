@@ -857,8 +857,9 @@ class _TaviPainter extends CustomPainter {
 
 /// An empty state with Tavi: big animated mascot, title, text and an optional button.
 class TaviEmptyState extends StatelessWidget {
-  const TaviEmptyState({super.key, required this.pose, required this.title, this.text, this.action, this.size = 150});
+  const TaviEmptyState({super.key, required this.pose, required this.title, this.text, this.action, this.size = 150, this.art});
   final TaviPose pose;
+  final String? art;
   final String title;
   final String? text;
   final Widget? action;
@@ -871,7 +872,7 @@ class TaviEmptyState extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          AppMascot(pose: pose, size: size),
+          AppMascot(pose: pose, size: size, art: art),
           const SizedBox(height: 14),
           Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
           if (text != null) ...[
@@ -885,29 +886,30 @@ class TaviEmptyState extends StatelessWidget {
   }
 }
 
-/// Pandu, the app's illustrated panda mascot (animated WebP art in assets/mascot) for screens:
+/// The Talvio duck, the app's illustrated mascot (animated WebP art in assets/mascot) for screens:
 /// password, empty lists, code sent, success… Tavi stays for the stickers people send.
 class AppMascot extends StatelessWidget {
-  const AppMascot({super.key, required this.pose, this.size = 150});
+  const AppMascot({super.key, required this.pose, this.size = 150, this.art});
   final TaviPose pose;
   final double size;
 
+  /// A specific picture instead of the pose's default: hide, wave, nocontacts, search, cool, sleep,
+  /// delete, contacts, settings, secure.
+  final String? art;
+
   static String assetFor(TaviPose p) => switch (p) {
         TaviPose.hideEyes => 'hide',
-        TaviPose.peek => 'peek',
-        TaviPose.search || TaviPose.shocked => 'search',
-        TaviPose.mail => 'mail',
-        TaviPose.think || TaviPose.sad || TaviPose.angry => 'think',
+        TaviPose.peek || TaviPose.search || TaviPose.shocked => 'search',
+        TaviPose.mail || TaviPose.wave || TaviPose.idle || TaviPose.love => 'wave',
+        TaviPose.think || TaviPose.sad || TaviPose.angry || TaviPose.coffee => 'settings',
         TaviPose.sleep => 'sleep',
-        TaviPose.celebrate || TaviPose.laugh => 'celebrate',
-        TaviPose.cool || TaviPose.thumbsUp || TaviPose.music => 'cool',
-        TaviPose.coffee => 'coffee',
-        _ => 'wave',
+        TaviPose.celebrate || TaviPose.laugh || TaviPose.thumbsUp || TaviPose.music => 'cool',
+        TaviPose.cool => 'secure',
       };
 
   @override
   Widget build(BuildContext context) {
-    final name = assetFor(pose);
+    final name = art ?? assetFor(pose);
     return SizedBox.square(
       dimension: size,
       child: AnimatedSwitcher(
