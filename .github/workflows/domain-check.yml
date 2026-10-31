@@ -1,0 +1,33 @@
+# Checks whether <name>.com is registered (RDAP at the .com registry). Result → ci-domains branch (domains.txt).
+name: Domain check
+
+on:
+  workflow_dispatch:
+    inputs:
+      names:
+        description: 'Names, comma separated (without .com)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look up each name
+        env:
+          NAMES: ${{ github.event.inputs.names }}
+        run: |
+          mkdir -p out
+          echo "$NAMES" | tr ',' '\n' | sed 's/[^a-zA-Z0-9-]//g' | grep -v '^$' | while read n; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://rdap.verisign.com/com/v1/domain/${n}.com")
+            case "$code" in 404) s=AVAILABLE;; 200) s=taken;; *) s="unknown($code)";; esac
+            echo "${n}.com $s" | tee -a out/domains.txt
+            sleep 0.4
+          done
+          echo "sha=${{ github.sha }}" > out/status.txt
+      - name: Save result
+        run: |
+          cd out && git init -q -b ci-domains && git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "domains" && git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-domains
