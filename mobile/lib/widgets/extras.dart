@@ -38,13 +38,16 @@ class ChatColors {
   }
 }
 
-final _mentionRe = RegExp(r'(@[A-Za-z][A-Za-z0-9_]{3,31}|@all\b)|(https?://\S+)|(#[\p{L}\p{N}_]{2,32})', unicode: true);
+final _mentionRe = RegExp(r'(@[A-Za-z][A-Za-z0-9_]{3,31}|@all\b)|(https?://\S+)|(#[\p{L}\p{N}_]{2,32})|((?<![\w/:.])/[A-Za-z][A-Za-z0-9_]{0,31}(?:@[A-Za-z][A-Za-z0-9_]{2,31})?(?![\w/]))', unicode: true);
 
 /// Message text: formatting, highlighted @mentions / #tags, tappable links, Tali emoji, spoilers.
 class MessageText extends StatefulWidget {
-  const MessageText(this.text, {super.key, this.style});
+  const MessageText(this.text, {super.key, this.style, this.onCommand});
   final String text;
   final TextStyle? style;
+
+  /// Bot commands (/start, /help@some_bot) become tappable and are sent again when tapped.
+  final void Function(String command)? onCommand;
 
   @override
   State<MessageText> createState() => _MessageTextState();
@@ -74,6 +77,16 @@ class _MessageTextState extends State<MessageText> {
     for (final m in _mentionRe.allMatches(text)) {
       if (m.start > last) spans.addAll(taliSpans(text.substring(last, m.start), style));
       final token = m.group(0)!;
+      if (m.group(4) != null) {
+        final send = widget.onCommand;
+        spans.add(TextSpan(
+          text: token,
+          style: send == null ? style : style.copyWith(color: accent, fontWeight: FontWeight.w600),
+          recognizer: send == null ? null : _tap(() => send(token)),
+        ));
+        last = m.end;
+        continue;
+      }
       if (m.group(2) != null) {
         spans.add(TextSpan(
           text: token,

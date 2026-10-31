@@ -35,6 +35,7 @@ class MessageBubble extends StatelessWidget {
     this.onLongPress,
     this.onTap,
     this.onReplyTap,
+    this.onCommand,
     this.commentMode = false,
     this.firstInGroup = true,
     this.lastInGroup = true,
@@ -63,6 +64,7 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onTap;
   final VoidCallback? onReplyTap;
+  final void Function(String command)? onCommand;
 
   /// Rendering a comment under a channel post (shows real authors, no channel header).
   final bool commentMode;
@@ -273,7 +275,7 @@ class MessageBubble extends StatelessWidget {
         if (m.type == 'text' && hasChecklist(m.text))
           ChecklistText(message: m, canTick: isMine && !m.isLocal, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor))
         else
-          MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor)),
+          MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor), onCommand: onCommand),
       if (m.linkPreview != null && m.type == 'text') LinkPreviewCard(data: m.linkPreview!, accent: accent),
       ReactionChips(message: m),
       if (m.inlineKeyboard.isNotEmpty) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),

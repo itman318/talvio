@@ -2127,6 +2127,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: MessageBubble(
                 key: ValueKey(m.isLocal ? m.clientId : m.id),
                 onReplyTap: m.replyTo == null ? null : () => _jumpToMessage(m.replyTo!.id),
+                        onCommand: (chat.isBot || chat.isGroup) && chat.canPost ? (c) { HapticFeedback.selectionClick(); _store.sendText(chatId, c); } : null,
                 message: m,
                 chat: chat,
                 isMine: mine,
