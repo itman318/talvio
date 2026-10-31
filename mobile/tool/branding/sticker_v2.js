@@ -22,20 +22,20 @@ const easeOut = (x) => 1 - (1 - x) ** 3;
 const backOut = (x, s = 1.9) => 1 + (s + 1) * (x - 1) ** 3 + s * (x - 1) ** 2;
 const spring = (x, f = 3, d = 5) => 1 - Math.exp(-d * x) * cos(f * TAU * x); // settles at 1 with a wobble
 
-const OL = '#2A1B3D'; // outline
+const OL = '#2A1050'; // outline (deep purple, reads richer than black)
 const OW = 6;
 
 const defs = `<defs>
-<radialGradient id="g-head" cx="36%" cy="28%" r="80%"><stop offset="0" stop-color="#FFF8C4"/><stop offset=".28" stop-color="#FFE45C"/><stop offset=".7" stop-color="#FFC21F"/><stop offset="1" stop-color="#F09A0A"/></radialGradient>
-<radialGradient id="g-wing" cx="30%" cy="25%" r="90%"><stop offset="0" stop-color="#FFF3A8"/><stop offset=".5" stop-color="#FFD232"/><stop offset="1" stop-color="#EE9608"/></radialGradient>
-<linearGradient id="g-beakTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC27A"/><stop offset=".6" stop-color="#FF8A2E"/><stop offset="1" stop-color="#E9621A"/></linearGradient>
+<radialGradient id="g-head" cx="36%" cy="26%" r="82%"><stop offset="0" stop-color="#FFFBD1"/><stop offset=".22" stop-color="#FFEC3D"/><stop offset=".62" stop-color="#FFCC00"/><stop offset=".9" stop-color="#FFA300"/><stop offset="1" stop-color="#FF8A00"/></radialGradient>
+<radialGradient id="g-wing" cx="30%" cy="22%" r="92%"><stop offset="0" stop-color="#FFF8B8"/><stop offset=".45" stop-color="#FFDA1A"/><stop offset="1" stop-color="#FF9500"/></radialGradient>
+<linearGradient id="g-beakTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB86B"/><stop offset=".55" stop-color="#FF7A12"/><stop offset="1" stop-color="#F25500"/></linearGradient>
 <linearGradient id="g-beakBot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0732A"/><stop offset="1" stop-color="#C9481A"/></linearGradient>
 <radialGradient id="g-eye" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#5B4A70"/><stop offset=".45" stop-color="#2A1F3D"/><stop offset="1" stop-color="#0D0818"/></radialGradient>
-<linearGradient id="g-cap" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A57BFF"/><stop offset=".45" stop-color="#7436F0"/><stop offset="1" stop-color="#4A169E"/></linearGradient>
+<linearGradient id="g-cap" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B07CFF"/><stop offset=".4" stop-color="#8236FF"/><stop offset="1" stop-color="#5A0FD6"/></linearGradient>
 <linearGradient id="g-capSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4A169E" stop-opacity=".0"/><stop offset="1" stop-color="#2E0B70" stop-opacity=".55"/></linearGradient>
-<linearGradient id="g-brim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8A4DFF"/><stop offset="1" stop-color="#4A169E"/></linearGradient>
+<linearGradient id="g-brim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9450FF"/><stop offset="1" stop-color="#5208C9"/></linearGradient>
 <linearGradient id="g-brimUnder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A1060"/><stop offset="1" stop-color="#2C1E8A"/></linearGradient>
-<linearGradient id="g-hood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#F1F0FB"/><stop offset="1" stop-color="#D3D0EE"/></linearGradient>
+<linearGradient id="g-hood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#F4EEFF"/><stop offset="1" stop-color="#D9C9FF"/></linearGradient>
 <linearGradient id="g-brand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF9A62"/><stop offset=".5" stop-color="#F2557E"/><stop offset="1" stop-color="#6C4BE0"/></linearGradient>
 <linearGradient id="g-field" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF0FB"/></linearGradient>
 <linearGradient id="g-lock" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C6CFF"/><stop offset="1" stop-color="#3A26C8"/></linearGradient>
@@ -48,7 +48,7 @@ const defs = `<defs>
 <filter id="f-blur5" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
 <filter id="f-blur10" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
 <filter id="f-sticker" x="-25%" y="-25%" width="150%" height="150%">
-  <feMorphology in="SourceAlpha" operator="dilate" radius="9" result="d"/>
+  <feMorphology in="SourceAlpha" operator="dilate" radius="11" result="d"/>
   <feGaussianBlur in="d" stdDeviation="6" result="db"/><feOffset in="db" dy="5" result="ds"/>
   <feFlood flood-color="#24164A" flood-opacity=".28"/><feComposite in2="ds" operator="in" result="shadow"/>
   <feFlood flood-color="#FFFFFF"/><feComposite in2="d" operator="in" result="white"/>
@@ -131,8 +131,8 @@ function head(p, t) {
       <ellipse cx="166" cy="250" rx="22" ry="40" fill="#FFF8D0" opacity=".55" filter="url(#f-blur5)"/>
     </g>
     <ellipse cx="256" cy="234" rx="124" ry="114" fill="none" stroke="${OL}" stroke-width="${OW}"/>
-    <ellipse cx="178" cy="276" rx="24" ry="14" fill="#FF6E8E" opacity="${blush}" filter="url(#f-blur5)"/>
-    <ellipse cx="334" cy="276" rx="24" ry="14" fill="#FF6E8E" opacity="${blush}" filter="url(#f-blur5)"/>
+    <ellipse cx="178" cy="276" rx="24" ry="14" fill="#FF4F86" opacity="${blush}" filter="url(#f-blur5)"/>
+    <ellipse cx="334" cy="276" rx="24" ry="14" fill="#FF4F86" opacity="${blush}" filter="url(#f-blur5)"/>
     ${eye(210, 236, { scale: 1.12, ...(eyes.l || {}) })}${eye(302, 236, { scale: 1.12, ...(eyes.r || {}) })}
     ${brow(210, 198, browRaise, -6)}${brow(302, 198, browRaise, 6)}
     ${beak(beakOpen)}
@@ -368,6 +368,19 @@ function frame(name, t) {
     await p.evaluate(() => document.fonts.ready);
     await p.screenshot({ path: process.env.PREVIEW });
     await b.close();
+    return;
+  }
+  if (process.env.FRAMES_DIR) {
+    // one screenshot per frame (for big sizes like 1080 px)
+    fs.mkdirSync(process.env.FRAMES_DIR, { recursive: true });
+    const p = await b.newPage({ viewport: { width: SIZE, height: H } });
+    for (let i = 0; i < FRAMES; i++) {
+      await p.setContent(`<html><head><style>${font}html,body{margin:0;background:${process.env.BG || 'transparent'}}svg{display:block}</style></head><body>${frame(name, i / FRAMES)}</body></html>`);
+      if (i === 0) await p.evaluate(() => document.fonts.ready);
+      await p.screenshot({ path: path.join(process.env.FRAMES_DIR, `f${String(i).padStart(3, '0')}.png`), omitBackground: !process.env.BG });
+    }
+    await b.close();
+    console.log('✓ frames', FRAMES, SIZE);
     return;
   }
   const COLS = 8;
