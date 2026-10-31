@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/api_client.dart';
+import '../core/keep_alive.dart';
 import '../core/notif_prefs.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
@@ -313,30 +313,9 @@ class CallManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _startProjectionService() async {
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'screen_share',
-        channelName: 'Screen sharing',
-        channelDescription: 'Shown while you share your screen in a call',
-        onlyAlertOnce: true,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(showNotification: false),
-      foregroundTaskOptions: ForegroundTaskOptions(eventAction: ForegroundTaskEventAction.nothing()),
-    );
-    if (await FlutterForegroundTask.isRunningService) return;
-    await FlutterForegroundTask.startService(
-      notificationTitle: 'Talvio',
-      notificationText: 'You are sharing your screen',
-    );
-  }
+  Future<void> _startProjectionService() => KeepAlive.setSharing(true);
 
-  Future<void> _stopProjectionService() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
-    try {
-      if (await FlutterForegroundTask.isRunningService) await FlutterForegroundTask.stopService();
-    } catch (_) {}
-  }
+  Future<void> _stopProjectionService() => KeepAlive.setSharing(false);
 
   Future<void> toggleSpeaker() async {
     speaker = !speaker;

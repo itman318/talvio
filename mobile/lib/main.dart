@@ -31,6 +31,7 @@ import 'state/voice_chat_manager.dart';
 import 'theme/brand.dart';
 import 'widgets/in_app_banner.dart';
 import 'core/notif_prefs.dart';
+import 'core/keep_alive.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -64,6 +65,7 @@ Future<void> _start() async {
   try {
     await prefs.load().timeout(const Duration(seconds: 5));
     await NotifPrefs.instance.load();
+    await KeepAlive.load();
     await ChatPasscode.load();
   } catch (e) {
     debugPrint('Prefs not loaded: $e');

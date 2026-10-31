@@ -68,7 +68,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.10.0
   sensors_plus: ^6.1.1
-  flutter_foreground_task: ^8.17.0
+  flutter_foreground_task: ^9.2.2
   emoji_picker_flutter: ^4.3.0
   camera: ^0.11.0+2
   qr_flutter: ^4.1.0

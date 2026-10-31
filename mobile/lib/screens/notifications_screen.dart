@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/battery.dart';
 import '../core/notif_prefs.dart';
+import '../core/keep_alive.dart';
 import '../core/services.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
@@ -212,6 +213,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   subtitle: np.badgeChats ? '3 chats with new messages → 3' : 'Every unread message is counted',
                   value: np.badgeChats,
                   onChanged: (v) => np.set('badge_chats', v),
+                ),
+              ]),
+              SettingsGroup(title: 'Reliability', children: [
+                SettingsSwitchTile(
+                  icon: Icons.bolt_rounded,
+                  color: Brand.amber,
+                  title: 'Keep-Alive',
+                  subtitle: KeepAlive.enabled
+                      ? 'On — Talvio stays connected (a small “Talvio” note stays in the status bar)'
+                      : 'Turn on if messages arrive late or only when you open the app',
+                  value: KeepAlive.enabled,
+                  onChanged: (v) async {
+                    await KeepAlive.setEnabled(v);
+                    if (v && await BatteryGuard.restricted()) await BatteryGuard.ask();
+                    if (mounted) setState(() {});
+                  },
                 ),
               ]),
               SettingsGroup(title: 'Notification sound', children: [

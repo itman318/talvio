@@ -1,6 +1,7 @@
 import 'voice_chat_screen.dart';
 import '../core/battery.dart';
 import '../core/notif_prefs.dart';
+import '../core/keep_alive.dart';
 import '../theme/brand.dart';
 import '../widgets/avatar.dart';
 import '../state/auth_state.dart';
@@ -65,6 +66,7 @@ class _RootShellState extends State<RootShell> {
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) BatteryGuard.maybePrompt(context);
     });
+    if (KeepAlive.enabled) KeepAlive.apply();
     // talvio://u/<id> links (profile QR codes scanned with the phone camera)
     try {
       _links = AppLinks().uriLinkStream.listen((uri) {

@@ -44,6 +44,7 @@ void _android() {
     'android.permission.RECEIVE_BOOT_COMPLETED',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
+    'android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
   ];
   for (final p in perms) {
@@ -79,7 +80,7 @@ void _android() {
             </intent-filter>
         </receiver>
         <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-            android:foregroundServiceType="mediaProjection" android:exported="false" />
+            android:foregroundServiceType="mediaProjection|remoteMessaging" android:exported="false" />
     ''';
     xml = xml.replaceFirst('</application>', '$comps</application>');
   }
