@@ -210,7 +210,11 @@ class ChatStore extends ChangeNotifier {
     if (gen != _session) return;
     final me = myId;
     if (me != null) {
-      unawaited(_chatCacheFile(me).then((f) => f?.writeAsString(jsonEncode(data))).catchError((_) => null));
+      unawaited(() async {
+        try {
+          await (await _chatCacheFile(me))?.writeAsString(jsonEncode(data));
+        } catch (_) {}
+      }());
     }
     unawaited(refreshNoticeCount());
     chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
