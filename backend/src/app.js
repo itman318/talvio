@@ -32,6 +32,11 @@ function createApp() {
   // Talvio Bot API v2 (own naming, Talvio events, signed hooks): /api/bots/v2/<method>, key in "X-Bot-Key"
   app.all('/api/bots/v2/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botv2'));
 
+  // Talvio Bot API — Classic: existing bot libraries work by pointing them at /api/classic
+  const classicRoutes = require('./http/routes.botclassic');
+  app.get(/^\/api\/classic\/file\/bot([^/]+)\/(.+)$/, classicRoutes.file);
+  app.all(/^\/api\/classic\/bot([^/]+)\/([A-Za-z]+)$/, express.urlencoded({ extended: false, limit: '1mb' }), classicRoutes.method);
+
   // Payment pages for JazzCash / Easypaisa hosted checkout
   app.use('/pay', require('./http/routes.pay'));
 

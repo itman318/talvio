@@ -67,7 +67,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
         'username': username.text.trim().replaceFirst('@', ''),
       }) as Map);
       if (!mounted) return;
-      await showTokenDialog(context, '${r['token']}');
+      await showTokenDialog(context, '${r['token']}', classic: r['classic_token'] as String?);
       _load();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -154,31 +154,50 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
   }
 }
 
-Future<void> showTokenDialog(BuildContext context, String token) {
+Future<void> showTokenDialog(BuildContext context, String token, {String? classic}) {
+  final tm = RegExp(r'^tlv_(\d+)_([A-Za-z0-9]+)$').firstMatch(token);
+  final classicToken = classic ?? (tm == null ? null : '${tm[1]}:${tm[2]}');
+  Future<void> copy(BuildContext ctx, String text, String what) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (ctx.mounted) showInfo(ctx, '$what copied');
+  }
+
+  Widget box(BuildContext ctx, String label, String value, String what) => Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(color: Brand.primary.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Brand.muted)),
+              const SizedBox(height: 2),
+              SelectableText(value, style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5)),
+            ]),
+          ),
+          IconButton(tooltip: 'Copy', icon: const Icon(Icons.copy_rounded, size: 18), onPressed: () => copy(ctx, value, what)),
+        ]),
+      );
+
   return showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Bot key'),
-      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Keep it secret — anyone with the key controls your bot. It is shown only now, copy it.'),
-        const SizedBox(height: 10),
-        SelectableText(token, style: const TextStyle(fontFamily: 'monospace')),
-        const SizedBox(height: 10),
-        Text('Talvio Bot API v2: POST ${AppConfig.serverUrl}/api/bots/v2/profile.get\nHeader: X-Bot-Key: <key>', style: const TextStyle(fontSize: 12)),
-      ]),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Keep it secret — anyone with the key controls your bot. It is shown only now, copy it.'),
+          box(ctx, 'TALVIO KEY', token, 'Key'),
+          Text('Talvio Bot API v2: ${AppConfig.serverUrl}/api/bots/v2/<method>, header X-Bot-Key', style: const TextStyle(fontSize: 11.5, color: Brand.muted)),
+          if (classicToken != null) ...[
+            const SizedBox(height: 14),
+            const Text('Already have a bot?', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text('Bots built with popular bot libraries run on Talvio by changing only the server address. Use these two values:', style: TextStyle(fontSize: 12.5)),
+            box(ctx, 'SERVER ADDRESS', '${AppConfig.serverUrl}/api/classic', 'Address'),
+            box(ctx, 'CLASSIC TOKEN', classicToken, 'Token'),
+          ],
+        ]),
+      ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
-        FilledButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: token));
-            if (ctx.mounted) {
-              Navigator.pop(ctx);
-              showInfo(context, 'Key copied');
-            }
-          },
-          icon: const Icon(Icons.copy_rounded, size: 18),
-          label: const Text('Copy key'),
-        ),
+        FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
       ],
     ),
   );
@@ -296,7 +315,7 @@ class _BotEditScreenState extends State<BotEditScreen> {
     if (!mounted) return;
     try {
       final r = await context.read<AppServices>().api.post('/bots/${_bot.id}/token') as Map;
-      if (mounted) await showTokenDialog(context, '${r['token']}');
+      if (mounted) await showTokenDialog(context, '${r['token']}', classic: r['classic_token'] as String?);
     } catch (e) {
       if (mounted) showError(context, e);
     }

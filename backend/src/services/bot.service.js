@@ -62,6 +62,12 @@ function serializeBot(u, b, { pending = 0 } = {}) {
   };
 }
 
+/** The same token written "<id>:<secret>" — what classic bot libraries expect (Talvio Bot API — Classic). */
+function classicToken(token) {
+  const m = /^tlv_(\d+)_([A-Za-z0-9]+)$/.exec(String(token || ''));
+  return m ? `${m[1]}:${m[2]}` : null;
+}
+
 function newToken(botId) {
   return `tlv_${botId}_${randomToken(24).replace(/[^A-Za-z0-9]/g, '').slice(0, 32)}`;
 }
@@ -93,7 +99,7 @@ async function createBot(ownerId, body = {}) {
     return { user: u, token: t };
   });
   const b = await db.one('SELECT * FROM bots WHERE user_id = $1', [user.id]);
-  return { bot: serializeBot(user, b), token };
+  return { bot: serializeBot(user, b), token, classic_token: classicToken(token) };
 }
 
 async function ownedBot(ownerId, botIdRaw) {
@@ -181,7 +187,7 @@ async function regenerateToken(ownerId, botIdRaw) {
   const bot = await ownedBot(ownerId, botIdRaw);
   const token = newToken(bot.user_id);
   await db.query('UPDATE bots SET token_hash = $2 WHERE user_id = $1', [bot.user_id, sha256(token)]);
-  return { token };
+  return { token, classic_token: classicToken(token) };
 }
 
 async function deleteBot(ownerId, botIdRaw) {
@@ -246,13 +252,18 @@ async function deliverWebhook(botId) {
         const update = { update_id: Number(u.id), ...u.payload };
         // v2 bots get Talvio events, signed with their hook secret
         const v2 = b.api_version === 'v2' ? require('./botv2.service').hookRequest({ ...update }, b.webhook_secret) : null; // eslint-disable-line global-require
+        // Classic bots get the classic update shape; the secret goes in the header their libraries check
+        const cls = b.api_version === 'cls' ? await require('./botclassic.service').update(update) : null; // eslint-disable-line global-require
+        const secretHeaders = b.webhook_secret
+          ? { 'X-Talvio-Webhook-Secret': b.webhook_secret, ...(cls ? { 'X-Telegram-Bot-Api-Secret-Token': b.webhook_secret } : {}) }
+          : {};
         const res = await fetch(b.webhook_url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(v2 ? v2.headers : b.webhook_secret ? { 'X-Talvio-Webhook-Secret': b.webhook_secret } : {}),
+            ...(v2 ? v2.headers : secretHeaders),
           },
-          body: v2 ? v2.body : JSON.stringify(update),
+          body: v2 ? v2.body : JSON.stringify(cls || update),
           signal: AbortSignal.timeout(10000),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -540,6 +551,18 @@ async function sendMessage(bot, p, kind = 'text', file = null) {
   return toBotMessage(row, chat);
 }
 
+/** Sends a file the bot already has (by media id) — used for "send again by file_id". */
+async function sendMessageWithMedia(bot, p, kind, mediaId) {
+  const messageService = require('./message.service');
+  const chat = await botChat(bot, p.chat_id);
+  const body = { type: kind, text: p.caption || '', media_id: mediaId };
+  if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
+  if (p.message_thread_id) body.topic_id = p.message_thread_id;
+  if (p.disable_notification === true || p.disable_notification === 'true') body.silent = true;
+  const msg = await messageService.sendMessage(bot.user_id, chat.id, body, { replyMarkup: parseReplyMarkup(p.reply_markup) });
+  return toBotMessage(await db.one('SELECT * FROM messages WHERE id = $1', [msg.id]), chat);
+}
+
 async function botMessage(bot, p) {
   const chat = await botChat(bot, p.chat_id);
   const m = await db.one('SELECT * FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [v.id(p.message_id, 'message_id'), chat.id]);
@@ -604,7 +627,7 @@ async function setWebhook(bot, p) {
   if (secret && !/^[A-Za-z0-9_-]{1,256}$/.test(secret)) throw badRequest('invalid_secret', 'secret_token: 1–256 characters A-Z a-z 0-9 _ -');
   // which event format the hook gets: v1 updates, or (set through API v2) signed Talvio events
   await db.query(`UPDATE bots SET webhook_url = $2, webhook_secret = $3, webhook_error = NULL, api_version = $4 WHERE user_id = $1`, [
-    bot.user_id, url, secret, p.api_version === 'v2' ? 'v2' : 'v1',
+    bot.user_id, url, secret, ['v2', 'cls'].includes(p.api_version) ? p.api_version : 'v1',
   ]);
   if (url) deliverWebhook(bot.user_id).catch(() => {});
   return true;
@@ -926,6 +949,7 @@ module.exports = {
   deleteBot,
   authenticate,
   callMethod,
+  sendMessageWithMedia,
   parseReplyMarkup,
   pressButton,
   webAppInit,
