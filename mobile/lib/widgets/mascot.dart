@@ -885,7 +885,7 @@ class TaviEmptyState extends StatelessWidget {
   }
 }
 
-/// Pingo, the app's illustrated penguin mascot (animated WebP art in assets/mascot) for screens:
+/// Pandu, the app's illustrated panda mascot (animated WebP art in assets/mascot) for screens:
 /// password, empty lists, code sent, success… Tavi stays for the stickers people send.
 class AppMascot extends StatelessWidget {
   const AppMascot({super.key, required this.pose, this.size = 150});
