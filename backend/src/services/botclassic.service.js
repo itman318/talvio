@@ -112,7 +112,7 @@ async function message(m) {
   return out;
 }
 
-async function update(u) {
+async function updateShape(u) {
   const out = { ...u };
   if (out.message) out.message = await message(out.message);
   if (out.edited_message) out.edited_message = await message(out.edited_message);
@@ -193,12 +193,65 @@ function common(p) {
   return out;
 }
 
-async function resolveChatId(raw) {
-  const s = String(raw || '');
-  if (!s.startsWith('@')) return s;
-  const r = await db.one('SELECT id FROM chats WHERE lower(username) = lower($1)', [s.slice(1)]).catch(() => null);
-  if (!r) throw badRequest('chat_not_found', 'chat not found');
+// ------------------------------------------------------------------ IDs the classic way
+// Private chats are addressed by the other person's user ID; groups and channels by a negative ID.
+// (Inside Talvio every chat has its own positive ID — this maps between the two.)
+async function resolveChatId(raw, botId) {
+  const s = String(raw || '').trim();
+  if (s.startsWith('@')) {
+    const r = await db.one('SELECT id FROM chats WHERE lower(username) = lower($1)', [s.slice(1)]).catch(() => null);
+    if (!r) throw badRequest('chat_not_found', 'chat not found');
+    return String(r.id);
+  }
+  const n = Number(s);
+  if (!Number.isSafeInteger(n) || n === 0) throw badRequest('chat_not_found', 'chat not found');
+  if (n < 0) return String(-n);
+  const r = await db.one(
+    `SELECT c.id FROM chats c
+     JOIN chat_members a ON a.chat_id = c.id AND a.user_id = $1
+     JOIN chat_members b ON b.chat_id = c.id AND b.user_id = $2
+     WHERE c.type = 'private' LIMIT 1`,
+    [botId, n],
+  );
+  if (!r) throw badRequest('chat_not_found', 'chat not found (the user has to start the bot first)');
   return String(r.id);
+}
+
+async function classicChat(chat, botId, cache) {
+  if (!chat || chat.id === undefined || !chat.type) return chat;
+  const key = `${chat.id}`;
+  if (cache.has(key)) return cache.get(key);
+  let out;
+  if (chat.type === 'private') {
+    const peer = await db.one(
+      `SELECT u.id, u.first_name, u.last_name, u.username FROM chat_members m JOIN users u ON u.id = m.user_id
+       WHERE m.chat_id = $1 AND m.user_id <> $2 LIMIT 1`,
+      [Number(chat.id), botId],
+    );
+    out = peer
+      ? { id: Number(peer.id), type: 'private', first_name: peer.first_name || '', ...(peer.last_name ? { last_name: peer.last_name } : {}), ...(peer.username ? { username: peer.username } : {}) }
+      : chat;
+  } else {
+    out = { ...chat, id: -Math.abs(Number(chat.id)), type: chat.type === 'group' ? 'supergroup' : chat.type };
+  }
+  cache.set(key, out);
+  return out;
+}
+
+/** Walks a result and rewrites every chat object (and top-level chat results) to classic IDs. */
+async function mapIds(x, botId, cache = new Map()) {
+  if (Array.isArray(x)) return Promise.all(x.map((y) => mapIds(y, botId, cache)));
+  if (!x || typeof x !== 'object') return x;
+  const out = {};
+  for (const [k, val] of Object.entries(x)) {
+    out[k] = k === 'chat' && val && typeof val === 'object' && val.type ? await classicChat(val, botId, cache) : await mapIds(val, botId, cache);
+  }
+  return out;
+}
+
+async function update(u, botId) {
+  const shaped = await updateShape(u);
+  return botId ? mapIds(shaped, botId) : shaped;
 }
 
 // ------------------------------------------------------------------ methods
@@ -218,7 +271,7 @@ const MAP = {
   getMe: (t) => bot.callMethod(t, 'me', {}),
   logOut: async () => true,
   close: async () => true,
-  getUpdates: async (t, p) => Promise.all((await bot.callMethod(t, 'updates', p)).map(update)),
+  getUpdates: async (t, p) => Promise.all((await bot.callMethod(t, 'updates', p)).map((u) => updateShape(u))),
   setWebhook: (t, p) => bot.callMethod(t, 'webhook.set', { ...p, api_version: 'cls' }),
   deleteWebhook: (t, p) => bot.callMethod(t, 'webhook.delete', p),
   getWebhookInfo: async (t) => ({ has_custom_certificate: false, max_connections: 40, ...(await bot.callMethod(t, 'webhook.info', {})) }),
@@ -260,7 +313,7 @@ const MAP = {
   pinChatMessage: (t, p) => bot.callMethod(t, 'messages.pin', p),
   unpinChatMessage: (t, p) => bot.callMethod(t, 'messages.unpin', p),
   getChat: async (t, p) => ({
-    ...(await bot.callMethod(t, 'chats.get', p)),
+    ...(await bot.callMethod(t, 'chats.get', p).then(async (c) => (c.type === 'private' ? { ...c, ...(await classicChat(c, botIdOf(t), new Map())) } : { ...c, id: -c.id, type: c.type === 'group' ? 'supergroup' : c.type }))),
     accent_color_id: 0,
     max_reaction_count: 11,
     accepted_gift_types: { unlimited_gifts: false, limited_gifts: false, unique_gifts: false, premium_subscription: false, gifts_from_channels: false },
@@ -288,14 +341,19 @@ const MAP = {
   },
 };
 
+const botIdOf = (token) => Number((/^tlv_(\d+)_/.exec(token) || [])[1] || 0);
+
 async function call(rawToken, method, params = {}, files = {}) {
   const token = toTalvioToken(rawToken);
   const fn = MAP[method];
   if (!fn) throw new AppError(404, 'method_not_found', `Not Found: method ${method} is not available on Talvio yet`);
+  const botId = botIdOf(token);
+  await bot.authenticate(token); // a bad token is "Unauthorized" before anything else
   const p = common(params);
-  if (p.chat_id !== undefined) p.chat_id = await resolveChatId(p.chat_id);
-  if (p.from_chat_id !== undefined) p.from_chat_id = await resolveChatId(p.from_chat_id);
-  return fn(token, p, files || {});
+  if (p.chat_id !== undefined) p.chat_id = await resolveChatId(p.chat_id, botId);
+  if (p.from_chat_id !== undefined) p.from_chat_id = await resolveChatId(p.from_chat_id, botId);
+  const result = await fn(token, p, files || {});
+  return method === 'getChat' ? result : mapIds(result, botId);
 }
 
 /** For GET {base}/file/bot<token>/media/<id>/<name>: the media row the bot may download. */

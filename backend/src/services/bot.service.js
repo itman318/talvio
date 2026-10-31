@@ -253,7 +253,7 @@ async function deliverWebhook(botId) {
         // v2 bots get Talvio events, signed with their hook secret
         const v2 = b.api_version === 'v2' ? require('./botv2.service').hookRequest({ ...update }, b.webhook_secret) : null; // eslint-disable-line global-require
         // Classic bots get the classic update shape; the secret goes in the header their libraries check
-        const cls = b.api_version === 'cls' ? await require('./botclassic.service').update(update) : null; // eslint-disable-line global-require
+        const cls = b.api_version === 'cls' ? await require('./botclassic.service').update(update, botId) : null; // eslint-disable-line global-require
         const secretHeaders = b.webhook_secret
           ? { 'X-Talvio-Webhook-Secret': b.webhook_secret, ...(cls ? { 'X-Telegram-Bot-Api-Secret-Token': b.webhook_secret } : {}) }
           : {};
@@ -333,9 +333,15 @@ async function onNewMessage({ chatId, message, memberIds, senderId }) {
   const row = await db.one('SELECT * FROM messages WHERE id = $1', [message.id]);
   const text = String(row.text || '');
   const botfather = require('./botforge.service'); // eslint-disable-line global-require
+  const idbot = require('./idbot.service'); // eslint-disable-line global-require
   for (const b of bots) {
     if (botfather.isBotForge(b.id)) {
       if (chat.type === 'private' && senderId) await botfather.onMessage(senderId, chat.id, row);
+      continue;
+    }
+    if (idbot.isIdBot(b.id)) {
+      const asked = chat.type === 'private' || /^\/id\b/i.test(text) || text.toLowerCase().includes(`@${idbot.USERNAME.toLowerCase()}`);
+      if (senderId && asked) await idbot.onMessage(senderId, chat.id, row);
       continue;
     }
     if (chat.type === 'group' && b.group_privacy) {

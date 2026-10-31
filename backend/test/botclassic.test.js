@@ -109,14 +109,15 @@ test('updates: a user message arrives in the classic shape', async () => {
   const m = ups[ups.length - 1].message;
   checkMessage(m);
   assert.equal(m.text, '/start');
-  assert.equal(m.chat.id, CHAT.id);
+  assert.equal(m.chat.id, U.id); // private chats are addressed by the user's ID
+  assert.equal(m.chat.first_name, 'Usman');
   await classic.call(TOKEN, 'getUpdates', { offset: String(ups[ups.length - 1].update_id + 1) });
 });
 
 test('sendMessage: form-style params, HTML, inline keyboard, reply_parameters', async () => {
   const first = await db.one('SELECT id FROM messages WHERE chat_id = $1 ORDER BY id DESC LIMIT 1', [CHAT.id]);
   const res = await classic.call(TOKEN, 'sendMessage', {
-    chat_id: String(CHAT.id),
+    chat_id: String(U.id),
     text: '<b>Gold</b> signal: <i>BUY</i>',
     parse_mode: 'HTML',
     reply_markup: JSON.stringify({ inline_keyboard: [[{ text: 'Join VIP', callback_data: 'vip' }]] }),
@@ -138,7 +139,7 @@ test('buttons: callback_query has chat_instance; answer + edit with MarkdownV2',
   checkMessage(cq.message);
   assert.equal(cq.data, 'vip');
   assert.equal(await classic.call(TOKEN, 'answerCallbackQuery', { callback_query_id: cq.id, text: 'Welcome!' }), true);
-  const ed = await classic.call(TOKEN, 'editMessageText', { chat_id: CHAT.id, message_id: msg.id, text: '*VIP* unlocked \\!', parse_mode: 'MarkdownV2' });
+  const ed = await classic.call(TOKEN, 'editMessageText', { chat_id: U.id, message_id: msg.id, text: '*VIP* unlocked \\!', parse_mode: 'MarkdownV2' });
   assert.equal(ed.text, '**VIP** unlocked !');
   await classic.call(TOKEN, 'getUpdates', { offset: String(ups[ups.length - 1].update_id + 1) });
 });
@@ -148,7 +149,7 @@ test('files: upload a document, getFile, then resend a photo by file_id', async 
   fs.mkdirSync(dir, { recursive: true });
   const f = path.join(dir, `chart-${Date.now()}.pdf`);
   fs.writeFileSync(f, '%PDF-1.4 test');
-  const doc = await classic.call(TOKEN, 'sendDocument', { chat_id: CHAT.id, caption: '<b>Report</b>', parse_mode: 'HTML' }, {
+  const doc = await classic.call(TOKEN, 'sendDocument', { chat_id: U.id, caption: '<b>Report</b>', parse_mode: 'HTML' }, {
     document: { path: f, size: 13, mimetype: 'application/pdf', originalname: 'report.pdf' },
   });
   checkMessage(doc);
@@ -160,9 +161,9 @@ test('files: upload a document, getFile, then resend a photo by file_id', async 
 
   const png = path.join(dir, `p-${Date.now()}.png`);
   fs.writeFileSync(png, Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8ff1f0003030200ef9a4f1e0000000049454e44ae426082', 'hex'));
-  const ph = await classic.call(TOKEN, 'sendPhoto', { chat_id: CHAT.id }, { photo: { path: png, size: 70, mimetype: 'image/png', originalname: 'p.png' } });
+  const ph = await classic.call(TOKEN, 'sendPhoto', { chat_id: U.id }, { photo: { path: png, size: 70, mimetype: 'image/png', originalname: 'p.png' } });
   checkMessage(ph);
-  const again = await classic.call(TOKEN, 'sendPhoto', { chat_id: CHAT.id, photo: ph.photo[0].file_id, caption: 'again' });
+  const again = await classic.call(TOKEN, 'sendPhoto', { chat_id: U.id, photo: ph.photo[0].file_id, caption: 'again' });
   checkMessage(again);
   assert.equal(again.photo[0].file_id, ph.photo[0].file_id);
 });
@@ -171,12 +172,47 @@ test('commands, chat info, members, webhook info', async () => {
   assert.equal(await classic.call(TOKEN, 'setMyCommands', { commands: JSON.stringify([{ command: 'start', description: 'Start the bot' }, { command: 'vip', description: 'VIP signals' }]) }), true);
   const cmds = await classic.call(TOKEN, 'getMyCommands', {});
   assert.equal(cmds.length, 2);
-  const chat = await classic.call(TOKEN, 'getChat', { chat_id: CHAT.id });
+  const chat = await classic.call(TOKEN, 'getChat', { chat_id: U.id });
   for (const k of ['id', 'type', 'accent_color_id', 'max_reaction_count', 'accepted_gift_types']) assert.ok(chat[k] !== undefined, k);
-  const mem = await classic.call(TOKEN, 'getChatMember', { chat_id: CHAT.id, user_id: U.id });
+  assert.equal(chat.id, U.id);
+  const mem = await classic.call(TOKEN, 'getChatMember', { chat_id: U.id, user_id: U.id });
   assert.equal(mem.status, 'member');
   assert.equal(mem.user.id, U.id);
   const wh = await classic.call(TOKEN, 'getWebhookInfo', {});
   for (const k of ['url', 'has_custom_certificate', 'pending_update_count']) assert.ok(wh[k] !== undefined, k);
-  assert.equal(await classic.call(TOKEN, 'sendChatAction', { chat_id: CHAT.id, action: 'typing' }), true);
+  assert.equal(await classic.call(TOKEN, 'sendChatAction', { chat_id: U.id, action: 'typing' }), true);
+});
+
+test('groups use negative IDs; an unknown user is "chat not found"', async () => {
+  const g = (await chats.createGroup(OWNER.id, { title: 'VIP Gold', member_ids: [U.id, BOT_ID] })).chat;
+  await messages.sendMessage(U.id, g.id, { text: '/signal' });
+  await flush();
+  const ups = await classic.call(TOKEN, 'getUpdates', {});
+  const m = ups.map((u) => u.message).filter(Boolean).find((x) => x.text === '/signal');
+  assert.equal(m.chat.id, -g.id);
+  const sent = await classic.call(TOKEN, 'sendMessage', { chat_id: String(-g.id), text: 'Gold BUY 2350' });
+  assert.equal(sent.chat.id, -g.id);
+  await assert.rejects(classic.call(TOKEN, 'sendMessage', { chat_id: '999999', text: 'x' }), /chat not found/);
+});
+
+test('ID bot: your ID, a forwarded sender, @username', async () => {
+  const idbot = require('../src/services/idbot.service');
+  const id = await idbot.ensure();
+  const c = await chats.getOrCreatePrivate(U.id, id);
+  const last = async () => (await db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [c.id, id]));
+  await messages.sendMessage(U.id, c.id, { text: 'hi' });
+  await flush(400);
+  let r = await last();
+  assert.match(r.text, new RegExp(`ID: \`${U.id}\``));
+  assert.equal(r.reply_markup.inline_keyboard[0][0].copy_text.text, String(U.id));
+  await messages.sendMessage(U.id, c.id, { text: '@xau_signals_bot' });
+  await flush(400);
+  r = await last();
+  assert.match(r.text, new RegExp(`ID: \`${BOT_ID}\``));
+  const own = await chats.getOrCreatePrivate(U.id, OWNER.id);
+  const src = await messages.sendMessage(OWNER.id, own.id, { text: 'forward me' });
+  await messages.forwardMessages(U.id, { from_chat_id: own.id, message_ids: [src.id], to_chat_ids: [c.id] });
+  await flush(400);
+  r = await last();
+  assert.match(r.text, /Forwarded from/);
 });

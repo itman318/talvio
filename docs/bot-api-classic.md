@@ -43,6 +43,13 @@ const bot = new Bot('<classic token>', { client: { apiRoot: 'http://<server>/api
 
 Everything else in your bot stays the same.
 
+## IDs
+
+- A private chat is addressed by the **user's ID** (what `message.chat.id` and `message.from.id` show).
+- Groups and channels use a **negative ID** (for example `-42`).
+- Need an ID for your bot's settings (admin ID, VIP group ID…)? Message **@TalvioIDBot**: it shows your ID,
+  the ID of anyone whose message you forward to it, and — added to a group and sent `/id` — the group's ID.
+
 ## Request and response
 
 - `POST {address}/bot<token>/<method>` — JSON, form or multipart (files in any field).
