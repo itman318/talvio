@@ -23,6 +23,7 @@ import 'more_screens.dart';
 import 'premium_screens.dart';
 import 'bot_screens.dart';
 import 'link_device_screen.dart';
+import 'business_screen.dart';
 import 'prayer_screen.dart';
 import 'backup_screen.dart';
 import 'qr_screens.dart';
@@ -104,6 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _Item(data, Icons.data_usage_rounded, Brand.green, 'Data & storage', subtitle: 'Auto-download, data saver, storage', keywords: 'download cache space', onTap: () => go(const StorageScreen())),
       _Item(data, Icons.cloud_upload_rounded, Brand.violet, 'Chat backup', subtitle: 'Save a copy to Google Drive or your phone', keywords: 'backup restore drive', onTap: () => go(const BackupScreen())),
       _Item(data, Icons.vpn_lock_rounded, const Color(0xFF3C83DE), 'Proxy', trailing: context.watch<ProxyManager>().enabled ? 'On' : 'Off', keywords: 'socks vpn blocked', onTap: () => go(const ProxySettingsScreen())),
+      _Item(extra, Icons.storefront_rounded, const Color(0xFFF2557E), 'Talvio Business', subtitle: 'Greeting, away message, hours, quick replies', keywords: 'business shop customers auto reply away greeting quick replies hours', onTap: () => go(const BusinessScreen())),
       _Item(extra, Icons.mosque_rounded, const Color(0xFF13A07E), 'Prayer times', subtitle: 'Qibla, Suhoor & Iftar reminders', keywords: 'namaz salah qibla ramadan', onTap: () => go(const PrayerScreen())),
       if (auth.feature('bots')) _Item(extra, Icons.smart_toy_rounded, const Color(0xFF5B49D6), 'My bots', subtitle: 'Create bots and get their keys', keywords: 'bot api botforge', onTap: () => go(const MyBotsScreen())),
       _Item(help, Icons.support_agent_rounded, Brand.sky, 'Help & support', subtitle: support.isNotEmpty ? 'Or message @$support' : null, keywords: 'contact', onTap: () => go(const SupportListScreen())),

@@ -19,6 +19,7 @@ import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'shared_media_screen.dart';
+import 'business_screen.dart' show QuickReplies;
 import 'chat_theme_screen.dart';
 import '../theme/chat_theme.dart';
 import '../widgets/video_note.dart';
@@ -95,6 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _emojiOpen = false;
   final _msgKeys = <int, GlobalKey>{};
   int? _flashId; // briefly highlighted after jumping to it
+  bool _slashShown = false; // quick replies panel was showing
 
   /// Tap on a reply: scroll to the original message (loading older ones if needed) and light it up.
   Future<void> _jumpToMessage(int id) async {
@@ -215,6 +217,34 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _inlineKey; // "<bot>|<query>" of the last request
   Map<String, dynamic>? _inline; // {bot, query_id, results}
   bool _inlineLoading = false;
+
+  Widget _quickRepliesPanel() {
+    final list = QuickReplies.match(_text.text);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+      constraints: const BoxConstraints(maxHeight: 220),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1C2036) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.3 : 0.08), blurRadius: 14, offset: const Offset(0, 4))],
+      ),
+      child: ListView(shrinkWrap: true, padding: const EdgeInsets.symmetric(vertical: 4), children: [
+        for (final r in list)
+          ListTile(
+            dense: true,
+            leading: const CircleAvatar(radius: 16, backgroundColor: Color(0x1FF2557E), child: Icon(Icons.bolt_rounded, size: 18, color: Brand.primary)),
+            title: Text('/${r['shortcut']}', style: const TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: Text('${r['text']}', maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: () {
+              final t = '${r['text']}';
+              _text.value = TextEditingValue(text: t, selection: TextSelection.collapsed(offset: t.length));
+              setState(() {});
+            },
+          ),
+      ]),
+    );
+  }
 
   void _onInlineText() {
     final m = _inlineRe.firstMatch(_text.text);
@@ -439,10 +469,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _chat = widget.initial;
     _text.text = _prefs.draft(widget.chatId) ?? '';
     _text.addListener(_onInlineText);
+    QuickReplies.load(context.read<AppServices>());
     _text.addListener(() {
       final t = _text.text.trim();
       final one = t.isNotEmpty && t.length <= 16 && bigEmojiCount(t) == 1 ? t : null;
       if (one != _emojiOnly && mounted) setState(() => _emojiOnly = one);
+      final slash = _text.text.startsWith('/') && QuickReplies.list.isNotEmpty;
+      if ((slash || _slashShown) && mounted) setState(() => _slashShown = slash);
       if (_formatOpen && (!_text.selection.isValid || _text.selection.isCollapsed) && mounted) setState(() => _formatOpen = false);
     });
     _scroll.addListener(() {
@@ -2856,6 +2889,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
             ),
             if ((_inline != null || _inlineLoading) && !_recording && _reviewPath == null) _inlinePanel(),
+            // quick replies: "/" + shortcut (not in bot chats — "/" there means a bot command)
+            if (!_recording && _reviewPath == null && _editing == null && !chat.isBot && chat.canPost && QuickReplies.match(_text.text).isNotEmpty)
+              _quickRepliesPanel(),
             if (_formatOpen && _text.selection.isValid && !_text.selection.isCollapsed && !_recording && _reviewPath == null) _formatBar(),
             // one emoji typed → matching stickers above the box
             if (!_recording && _reviewPath == null && _editing == null && _emojiOnly != null && chat.canPost)

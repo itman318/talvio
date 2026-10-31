@@ -1037,3 +1037,32 @@ CREATE TABLE IF NOT EXISTS contact_hints (
   PRIMARY KEY (owner_id, phone_hash)
 );
 CREATE INDEX IF NOT EXISTS contact_hints_hash_idx ON contact_hints (phone_hash);
+
+-- Talvio Business: greeting, away message, working hours, quick replies
+CREATE TABLE IF NOT EXISTS business_settings (
+  user_id          BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  greeting_on      BOOLEAN      NOT NULL DEFAULT false,
+  greeting_text    VARCHAR(1000) NOT NULL DEFAULT '',
+  greeting_days    SMALLINT     NOT NULL DEFAULT 7,
+  away_on          BOOLEAN      NOT NULL DEFAULT false,
+  away_text        VARCHAR(1000) NOT NULL DEFAULT '',
+  away_mode        VARCHAR(16)  NOT NULL DEFAULT 'outside_hours',
+  hours            JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  tz_offset_min    SMALLINT     NOT NULL DEFAULT 0,
+  updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS business_auto_log (
+  owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  peer_id  BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind     VARCHAR(10) NOT NULL,
+  sent_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, peer_id, kind)
+);
+CREATE TABLE IF NOT EXISTS quick_replies (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  shortcut   VARCHAR(32)  NOT NULL,
+  text       VARCHAR(4000) NOT NULL,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  UNIQUE (user_id, shortcut)
+);
