@@ -108,7 +108,7 @@ class _MessageMenu extends StatelessWidget {
           // dim everything except the tapped message, which stays where it is
           child: FadeTransition(
             opacity: curved,
-            child: CustomPaint(painter: _Spotlight(anchor.inflate(2), Colors.black.withValues(alpha: dark ? 0.5 : 0.32))),
+            child: CustomPaint(painter: _Spotlight(anchor.inflate(2), Colors.black.withValues(alpha: dark ? 0.42 : 0.2))),
           ),
         ),
       ),

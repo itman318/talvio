@@ -47,12 +47,18 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
             color: Brand.primary,
             title: 'Use proxy',
             subtitle: pm.servers.isEmpty
-                ? 'Add a proxy first'
+                ? 'Tap to add a proxy'
                 : pm.enabled
                     ? 'Connected through ${pm.active?.label ?? 'a proxy'}'
                     : 'Talvio connects directly',
             value: pm.enabled,
-            onChanged: pm.servers.isEmpty ? null : (v) => pm.setEnabled(v),
+            onChanged: (v) async {
+              if (pm.servers.isEmpty) {
+                if (v) await editProxy(context); // nothing to use yet: add one (it turns on when saved)
+                return;
+              }
+              await pm.setEnabled(v);
+            },
           ),
         ]),
         SettingsGroup(title: 'Proxies', children: [

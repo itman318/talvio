@@ -166,7 +166,7 @@ function previewRaw(message) {
 
 async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   if (message.type === 'system' || message.silent || message.thread_id) return;
-  const offline = memberIds.filter((id) => id !== senderId && !presence.isOnline(id));
+  const offline = memberIds.filter((id) => id !== senderId && !presence.isActive(id));
   if (offline.length === 0) return;
   // muted chats still notify people who were @mentioned / replied to
   const rows = await db.many(
@@ -265,7 +265,7 @@ function wireBus() {
   bus.on('message:poll', (e) => emitToUsers(e.memberIds, 'message:poll', { chat_id: e.chatId, message_id: e.messageId, poll: e.poll }));
   bus.on('support:reply', (e) => {
     emitToUsers([e.userId], 'support:updated', { ticket_id: e.ticketId });
-    if (!presence.isOnline(e.userId)) {
+    if (!presence.isActive(e.userId)) {
       push
         .sendToUsers([e.userId], { title: `Support: ${e.subject}`, body: e.text }, { type: 'support', ticket_id: e.ticketId })
         .catch(() => {});
@@ -334,6 +334,9 @@ function init(httpServer) {
     socket.join(userRoom(uid));
     socket.join(sessionRoom(socket.data.sessionId));
     if (presence.add(uid)) broadcastPresence(uid, true).catch(() => {});
+    presence.socketUp(uid);
+    // the app tells us when it goes to the background / comes back, so pushes aren't skipped while it's hidden
+    socket.on('app:state', (p) => presence.setForeground(socket.id, uid, !(p && p.active === false)));
     messageService.markAllDelivered(uid).catch(() => {});
     db.query('UPDATE sessions SET last_active_at = now() WHERE id = $1', [socket.data.sessionId]).catch(() => {});
 
@@ -410,6 +413,7 @@ function init(httpServer) {
 
     socket.on('disconnect', () => {
       if (presence.remove(uid)) broadcastPresence(uid, false).catch(() => {});
+      presence.socketDown(socket.id, uid);
       // Give a flaky mobile connection a moment to come back before dropping this device's call.
       const t = setTimeout(async () => {
         try {

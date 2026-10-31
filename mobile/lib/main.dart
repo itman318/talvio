@@ -1,3 +1,4 @@
+import 'screens/notices_screen.dart';
 import 'screens/login_activity_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -26,6 +27,7 @@ import 'state/chat_store.dart';
 import 'state/secret_store.dart';
 import 'state/voice_chat_manager.dart';
 import 'theme/brand.dart';
+import 'widgets/in_app_banner.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -155,6 +157,14 @@ Future<void> _start() async {
       ),
     );
   };
+  // message in another chat while the app is open → small banner on top
+  chats.onInAppMessage = (chat, m) {
+    final overlay = navigatorKey.currentState?.overlay;
+    if (overlay == null || auth.status != AuthStatus.loggedIn) return;
+    InAppBanner.show(overlay, chat: chat, message: m, onTap: () {
+      navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+    });
+  };
   // "New login — was this you?" on my other devices
   chats.onNewLogin = (s) {
     final ctx = navigatorKey.currentContext;
@@ -184,6 +194,10 @@ Future<void> _start() async {
         ],
       ),
     );
+  };
+  services.push.onOpenNotices = () {
+    if (auth.status != AuthStatus.loggedIn) return;
+    navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const NoticesScreen()));
   };
   services.push.onOpenSupport = () {
     if (auth.status != AuthStatus.loggedIn) return;
@@ -251,6 +265,7 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
         setState(() => _locked = true);
       }
       store.setForeground(true);
+      services.socket.setForeground(true);
       if (auth.status == AuthStatus.loggedIn && !services.socket.isConnected) {
         services.api.refreshTokens().then((_) => services.socket.connect()).catchError((_) {});
       }
@@ -261,6 +276,7 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.paused) {
       store.setForeground(false);
+      services.socket.setForeground(false);
       // Not while the lock screen is up: the fingerprint prompt itself pauses the app on some phones.
       if (!_locked) _pausedAt = DateTime.now();
     }

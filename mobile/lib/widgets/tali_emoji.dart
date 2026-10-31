@@ -55,10 +55,47 @@ List<InlineSpan> taliSpans(String text, TextStyle? style, {double scale = 1.3}) 
 class EmojiTextController extends TextEditingController {
   EmojiTextController({super.text});
 
+  /// **bold**, _italic_, ~strike~, `code`, ||spoiler||: what you see in the box is already formatted —
+  /// the marker characters are kept (that's how the message is sent) but drawn invisible.
+  static final _fmt = RegExp(r'(\*\*)(.+?)(\*\*)|(\|\|)(.+?)(\|\|)|(`)([^`\n]+?)(`)|(~)([^~\n]+?)(~)|(?<![\w_])(_)([^_\n]+?)(_)(?![\w_])', dotAll: true);
+
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
-    if (!hasTali(text)) return super.buildTextSpan(context: context, style: style, withComposing: withComposing);
-    return TextSpan(style: style, children: taliSpans(text, style, scale: 1.25));
+    final hasFmt = _fmt.hasMatch(text);
+    if (!hasFmt && !hasTali(text)) return super.buildTextSpan(context: context, style: style, withComposing: withComposing);
+    if (!hasFmt) return TextSpan(style: style, children: taliSpans(text, style, scale: 1.25));
+    final base = style ?? const TextStyle();
+    final hidden = base.copyWith(color: Colors.transparent, fontSize: 0.1, letterSpacing: 0);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final spans = <InlineSpan>[];
+    var last = 0;
+    for (final m in _fmt.allMatches(text)) {
+      if (m.start > last) spans.add(TextSpan(text: text.substring(last, m.start), style: base));
+      String open, body, close;
+      TextStyle st;
+      if (m[1] != null) {
+        (open, body, close) = (m[1]!, m[2]!, m[3]!);
+        st = base.copyWith(fontWeight: FontWeight.w800);
+      } else if (m[4] != null) {
+        (open, body, close) = (m[4]!, m[5]!, m[6]!);
+        st = base.copyWith(backgroundColor: dark ? Colors.white24 : const Color(0x332B2F45));
+      } else if (m[7] != null) {
+        (open, body, close) = (m[7]!, m[8]!, m[9]!);
+        st = base.copyWith(fontFamily: 'monospace', backgroundColor: dark ? Colors.white12 : const Color(0x14000000));
+      } else if (m[10] != null) {
+        (open, body, close) = (m[10]!, m[11]!, m[12]!);
+        st = base.copyWith(decoration: TextDecoration.lineThrough);
+      } else {
+        (open, body, close) = (m[13]!, m[14]!, m[15]!);
+        st = base.copyWith(fontStyle: FontStyle.italic);
+      }
+      spans.add(TextSpan(text: open, style: hidden));
+      spans.add(TextSpan(text: body, style: st));
+      spans.add(TextSpan(text: close, style: hidden));
+      last = m.end;
+    }
+    if (last < text.length) spans.add(TextSpan(text: text.substring(last), style: base));
+    return TextSpan(style: base, children: spans);
   }
 
   /// Inserts [s] at the cursor (or at the end).
@@ -98,3 +135,12 @@ class TaliEmojiStrip extends StatelessWidget {
     );
   }
 }
+
+
+/// Message text without the formatting marks (for reply quotes, previews and notifications).
+String stripFormatting(String t) => t
+    .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*', dotAll: true), (m) => m[1]!)
+    .replaceAllMapped(RegExp(r'\|\|(.+?)\|\|', dotAll: true), (m) => m[1]!)
+    .replaceAllMapped(RegExp(r'`([^`\n]+?)`'), (m) => m[1]!)
+    .replaceAllMapped(RegExp(r'~([^~\n]+?)~'), (m) => m[1]!)
+    .replaceAllMapped(RegExp(r'(?<![\w_])_([^_\n]+?)_(?![\w_])'), (m) => m[1]!);

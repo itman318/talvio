@@ -404,6 +404,13 @@ async function prepareMessage(userId, chat, body) {
     if (chat.type === 'private') throw badRequest('invalid_poll', 'Polls can be sent in groups and channels');
     out.poll = parsePoll(body.poll);
     out.text = out.poll.question;
+  } else if (type === 'sticker' && body.anim) {
+    // Pebo, our free animated pack: drawn by the app, so no file is needed
+    const PEBO = ['hi', 'love', 'laugh', 'cry', 'angry', 'cool', 'thumbsUp', 'party', 'sleep', 'think', 'wow', 'ok', 'kiss', 'facepalm', 'run', 'gift'];
+    const pose = String(body.anim);
+    if (!PEBO.includes(pose)) throw badRequest('invalid_sticker', 'Unknown sticker');
+    out.meta = { sticker: { anim: pose, emoji: v.str(String(body.emoji || ''), { field: 'emoji', max: 8 }) || '🙂' } };
+    out.text = '';
   } else if (type === 'sticker' && body.tavi) {
     // Tavi, our animated mascot: drawn by the app, so no file is needed
     const FREE = ['wave', 'love', 'sleep', 'think', 'laugh', 'thumbsUp', 'coffee'];

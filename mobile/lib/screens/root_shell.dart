@@ -1,4 +1,5 @@
 import 'voice_chat_screen.dart';
+import '../core/battery.dart';
 import '../theme/brand.dart';
 import '../widgets/avatar.dart';
 import '../state/auth_state.dart';
@@ -59,6 +60,10 @@ class _RootShellState extends State<RootShell> {
   void initState() {
     super.initState();
     _store.lastNotice.addListener(_onNotice);
+    // battery optimisation can delay notifications: explain once and offer to allow background running
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) BatteryGuard.maybePrompt(context);
+    });
     // talvio://u/<id> links (profile QR codes scanned with the phone camera)
     try {
       _links = AppLinks().uriLinkStream.listen((uri) {

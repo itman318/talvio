@@ -44,6 +44,18 @@ async function notify(userId, kind, title, body = '', data = {}) {
       [userId],
     );
     bus.emit('rt:emit', { event: 'notice:new', payload: serialize(n), userIds: [userId] });
+    // not looking at the app → a phone notification too (support replies already push on their own)
+    if (kind !== 'support') {
+      try {
+        const presence = require('./presence'); // eslint-disable-line global-require
+        if (!presence.isActive(userId)) {
+          const push = require('./push.service'); // eslint-disable-line global-require
+          push.sendToUsers([userId], { title: String(title).slice(0, 120), body: String(body || '').slice(0, 200) }, { type: 'notice', notice_id: Number(n.id), kind: n.kind }).catch(() => {});
+        }
+      } catch (_) {
+        /* best-effort */
+      }
+    }
     return serialize(n);
   } catch (e) {
     return null;

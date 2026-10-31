@@ -158,13 +158,15 @@ class ProxyManager extends ChangeNotifier {
   Future<void> use(ProxyServer s) async {
     activeId = s.id;
     enabled = true;
+    notifyListeners();
     await _save();
     await _apply();
   }
 
   Future<void> setEnabled(bool on) async {
     enabled = on && servers.isNotEmpty;
-    activeId ??= servers.isEmpty ? null : servers.first.id;
+    if (servers.isNotEmpty && !servers.any((x) => x.id == activeId)) activeId = servers.first.id;
+    notifyListeners(); // flip the switch right away; the DNS lookup below can take a moment
     await _save();
     await _apply();
   }

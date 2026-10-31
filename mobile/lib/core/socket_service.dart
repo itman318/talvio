@@ -83,7 +83,10 @@ class SocketService {
           .enableReconnection()
           .build(),
     );
-    s.onConnect((_) => _setConnected(true));
+    s.onConnect((_) {
+      _setConnected(true);
+      if (!_foreground) s.emit('app:state', {'active': false}); // reconnected while hidden: keep pushes coming
+    });
     s.onDisconnect((_) => _setConnected(false));
     s.onConnectError((err) async {
       _setConnected(false);
@@ -126,6 +129,14 @@ class SocketService {
     if (isConnected == v) return;
     isConnected = v;
     _connected.add(v);
+  }
+
+  bool _foreground = true;
+
+  /// Tells the server whether the app is on screen; while it's hidden, messages also arrive as notifications.
+  void setForeground(bool on) {
+    _foreground = on;
+    emit('app:state', {'active': on});
   }
 
   void emit(String event, Map<String, dynamic> data) {

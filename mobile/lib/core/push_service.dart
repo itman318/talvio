@@ -21,6 +21,7 @@ class PushService {
 
   /// Called when the user taps a support-reply notification.
   void Function()? onOpenSupport;
+  void Function()? onOpenNotices;
 
   /// Called when the user taps an incoming-call notification.
   void Function()? onOpenCall;
@@ -83,6 +84,10 @@ class PushService {
     }
     if (m.data['type'] == 'call') {
       onOpenCall?.call();
+      return;
+    }
+    if (m.data['type'] == 'notice') {
+      onOpenNotices?.call();
       return;
     }
     if (m.data['type'] == 'new_login') {

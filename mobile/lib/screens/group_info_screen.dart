@@ -312,41 +312,30 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         const SizedBox(height: 10),
         Row(children: [
           tile(Icons.insights_rounded, Brand.green, 'Stats', () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat)))),
-          const SizedBox(width: 8),
-          if (chat.isChannel)
-            tile(Icons.pending_actions_rounded, Brand.amber, 'Drafts', () => Navigator.push(context, MaterialPageRoute(builder: (_) => PostQueueScreen(chat: chat))), badge: waiting)
-          else
-            tile(Icons.person_search_rounded, Brand.amber, 'Requests', () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))), badge: waiting),
+
           const SizedBox(width: 8),
           tile(Icons.history_rounded, Brand.sky, 'Activity', () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecentActionsScreen(chat: chat)))),
+          const SizedBox(width: 8),
+          tile(Icons.tune_rounded, Brand.violet, 'Manage', () => _openManage(chat), badge: waiting),
         ]),
-        const SizedBox(height: 4),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-          leading: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(gradient: Brand.aurora, borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.tune_rounded, color: Colors.white, size: 21),
-          ),
-          title: Text('Manage $what', style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text(chat.isChannel ? 'Posts, links, reactions, discussion' : 'Members, protection, links, permissions', maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Consumer<ChatStore>(builder: (ctx, store, _) {
-                final c = store.chatById(chat.id);
-                if (c == null || !c.isAdmin) return Scaffold(appBar: AppBar(), body: const Center(child: Text('You are no longer an admin here')));
-                return Scaffold(
-                  appBar: AppBar(title: Text('Manage $what')),
-                  body: ListView(padding: const EdgeInsets.only(bottom: 28), children: _manageGroups(c)),
-                );
-              }),
-            ),
-          ),
-        ),
       ]),
+    );
+  }
+
+  void _openManage(Chat chat) {
+    final what = chat.isChannel ? 'channel' : 'group';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Consumer<ChatStore>(builder: (ctx, store, _) {
+          final c = store.chatById(chat.id);
+          if (c == null || !c.isAdmin) return Scaffold(appBar: AppBar(), body: const Center(child: Text('You are no longer an admin here')));
+          return Scaffold(
+            appBar: AppBar(title: Text('Manage $what')),
+            body: ListView(padding: const EdgeInsets.only(bottom: 28), children: _manageGroups(c)),
+          );
+        }),
+      ),
     );
   }
 
@@ -400,7 +389,112 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       return on >= total ? 'All rights' : '$on of $total rights';
     }
 
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final invite = chat.inviteCode != null && chat.can('invite_users') ? inviteChatLink(chat.inviteCode!) : null;
+    final shareLink = chat.username != null ? publicChatLink(chat.username!) : invite;
     return [
+      // who it is: photo, name and description, each one tap to change
+      Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+        decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(24)),
+        child: Column(children: [
+          GestureDetector(
+            onTap: info ? () => _changePhoto(chat) : null,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Avatar(id: chat.id, name: chat.title, url: chat.avatarAbsolute, size: 88),
+              if (info)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).colorScheme.surface, width: 3)),
+                    child: const Icon(Icons.photo_camera_rounded, size: 15, color: Colors.white),
+                  ),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: info ? () => _editText(chat, title: true) : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(child: Text(chat.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
+                if (info) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.edit_rounded, size: 16, color: Brand.muted)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 6),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: info ? () => _editText(chat, title: false) : null,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF4F5FA), borderRadius: BorderRadius.circular(14)),
+              child: Text(
+                chat.description.isEmpty ? (info ? 'Add a description — tell people what this ${chat.isChannel ? 'channel' : 'group'} is about' : 'No description') : chat.description,
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: chat.description.isEmpty ? Brand.muted : null, height: 1.4),
+              ),
+            ),
+          ),
+        ]),
+      ),
+      if (shareLink != null)
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(22)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(chat.username != null ? 'PUBLIC LINK' : 'INVITE LINK', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Brand.muted)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(color: Brand.primary.withValues(alpha: dark ? 0.16 : 0.07), borderRadius: BorderRadius.circular(12)),
+              child: Text(shareLink.replaceFirst(RegExp(r'^https?://'), ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: Brand.primary)),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: shareLink));
+                    if (mounted) showInfo(context, 'Link copied');
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  label: const Text('Copy'),
+                ),
+              ),
+              if (chat.username == null && invite != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _run(() => _store.regenerateInvite(chat.id), 'New link made — the old one stopped working'),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('New'),
+                  ),
+                ),
+              ],
+              if (chat.can('invite_users')) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InviteLinksScreen(chat: chat))),
+                    icon: const Icon(Icons.add_link_rounded, size: 18),
+                    label: const Text('More'),
+                  ),
+                ),
+              ],
+            ]),
+          ]),
+        ),
       SettingsGroup(title: 'Admins & moderators', children: [
         for (final m in admins)
           ListTile(
@@ -426,21 +520,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       ]),
       if (info)
         SettingsGroup(title: chat.isChannel ? 'Channel' : 'Group', children: [
-          SettingsTile(icon: Icons.badge_rounded, color: Brand.primary, title: 'Name', trailing: chat.title, onTap: () => _editText(chat, title: true)),
-          SettingsTile(
-            icon: Icons.info_rounded,
-            color: Brand.violet,
-            title: 'Description',
-            subtitle: chat.description.isEmpty ? 'Add a description' : chat.description,
-            maxSubtitleLines: 1,
-            onTap: () => _editText(chat, title: false),
-          ),
-          SettingsTile(
-            icon: Icons.photo_camera_rounded,
-            color: Brand.rose,
-            title: 'Photo',
-            onTap: () => _changePhoto(chat),
-          ),
           if (chat.isOwner)
             SettingsTile(
               icon: Icons.alternate_email_rounded,
@@ -550,14 +629,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               trailingWidget: chat.pendingRequests > 0 ? CountBadge(chat.pendingRequests) : null,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JoinRequestsScreen(chat: chat))),
             ),
-          if (chat.linkedChannelId != null)
-            SettingsTile(
-              icon: Icons.campaign_rounded,
-              color: Brand.sky,
-              title: 'Linked channel',
-              subtitle: 'Posts from the channel appear here',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.linkedChannelId!, initial: _store.chatById(chat.linkedChannelId!)))),
-            ),
         ]),
       if (info)
         SettingsGroup(title: 'Safety', children: [
@@ -594,47 +665,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             onTap: () => editAllowedReactions(context, chat),
           ),
         ]),
-      if (chat.inviteCode != null && chat.can('invite_users'))
-        SettingsGroup(title: 'Invites', children: [
-          SettingsTile(
-            icon: Icons.link_rounded,
-            color: Brand.sky,
-            title: 'Invite link',
-            subtitle: inviteChatLink(chat.inviteCode!),
-            trailingWidget: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded),
-              onSelected: (v) async {
-                if (v == 'copy') {
-                  await Clipboard.setData(ClipboardData(text: inviteChatLink(chat.inviteCode!)));
-                  if (mounted) showInfo(context, 'Invite link copied');
-                } else {
-                  await _run(() => _store.regenerateInvite(chat.id), 'New invite link created — the old one no longer works');
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'copy', child: Text('Copy link')),
-                PopupMenuItem(value: 'reset', child: Text('Reset link')),
-              ],
-            ),
-          ),
-          SettingsTile(
-            icon: Icons.add_link_rounded,
-            color: Brand.rose,
-            title: 'More invite links',
-            subtitle: 'With an expiry date or a member limit',
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InviteLinksScreen(chat: chat))),
-          ),
-        ]),
-      SettingsGroup(title: 'Activity', children: [
-        SettingsTile(icon: Icons.insights_rounded, color: Brand.green, title: 'Statistics', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatStatsScreen(chat: chat)))),
-        SettingsTile(
-          icon: Icons.history_rounded,
-          color: const Color(0xFF5E6B8C),
-          title: 'Recent actions',
-          subtitle: 'What admins and members did',
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecentActionsScreen(chat: chat))),
-        ),
-      ]),
     ];
   }
 
@@ -767,13 +797,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 subtitle: 'Posts from the channel appear here',
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.linkedChannelId!, initial: store.chatById(chat.linkedChannelId!)))),
               ),
-            SettingsSwitchTile(
-              icon: Icons.notifications_rounded,
-              color: Brand.rose,
-              title: 'Notifications',
-              value: !chat.isMuted,
-              onChanged: (on) => _run(() => _store.updateChatSettings(chat.id, {'muted_until': on ? null : 'forever'})),
-            ),
           ]),
           if (chat.isAdmin) _adminCard(chat),
           SettingsGroup(

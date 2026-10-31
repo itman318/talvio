@@ -241,7 +241,7 @@ async function send(userId, sessionId, body = {}) {
   await db.query('UPDATE secret_chats SET last_message_at = now() WHERE id = $1', [row.id]);
   const other = otherSide(row, role);
   emit('secret:message', { message: serializeMessage(m) }, { sessionIds: [other.sessionId] });
-  if (!presence.isOnline(other.userId)) {
+  if (!presence.isActive(other.userId)) {
     push
       .sendToUsers([other.userId], { title: userService.displayName(me), body: '🔒 New secret message' }, { type: 'secret', secret_chat_id: row.id })
       .catch(() => {});

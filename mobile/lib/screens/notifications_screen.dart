@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/battery.dart';
 import '../core/services.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
@@ -20,11 +21,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Map<String, bool>? _s;
   bool _sound = true;
   bool _vibrate = true;
+  bool _batteryRestricted = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    BatteryGuard.restricted().then((v) {
+      if (mounted) setState(() => _batteryRestricted = v);
+    });
   }
 
   Future<void> _load() async {
@@ -109,6 +114,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   onChanged: (v) => _set('preview', v),
                 ),
               ]),
+              if (_batteryRestricted)
+                SettingsGroup(children: [
+                  SettingsTile(
+                    icon: Icons.battery_alert_rounded,
+                    color: Brand.amber,
+                    title: 'Notifications may be delayed',
+                    subtitle: 'Tap to let Talvio run in the background',
+                    onTap: () async {
+                      await BatteryGuard.ask();
+                      await Future<void>.delayed(const Duration(seconds: 2));
+                      final v = await BatteryGuard.restricted();
+                      if (mounted) setState(() => _batteryRestricted = v);
+                    },
+                  ),
+                ]),
               SettingsGroup(title: 'This phone', children: [
                 SettingsSwitchTile(
                   icon: Icons.volume_up_rounded,

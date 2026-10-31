@@ -16,6 +16,7 @@ import '../core/api_client.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
+import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
@@ -244,14 +245,23 @@ class _ContactsSyncScreenState extends State<ContactsSyncScreen> {
     _sync();
   }
 
-  /// "0300 1234567" → "+923001234567" (uses the default country code for local numbers).
-  static String? _normalize(String raw) {
+  /// Local numbers ("07400 123456") get the country code of my own number (or the app default).
+  String get _myCode {
+    final mine = context.read<AuthState>().me?.phone ?? '';
+    for (final c in const ['+971', '+966', '+880', '+92', '+44', '+91', '+90', '+49', '+33', '+61', '+1']) {
+      if (mine.startsWith(c)) return c;
+    }
+    return AppConfig.defaultCountryCode;
+  }
+
+  /// "0300 1234567" → "+923001234567".
+  String? _normalize(String raw) {
     var p = raw.replaceAll(RegExp(r'[^0-9+]'), '');
     if (p.startsWith('00')) p = '+${p.substring(2)}';
     if (p.startsWith('+')) return p.length >= 9 ? p : null;
     if (p.startsWith('0')) p = p.substring(1);
     if (p.length < 7) return null;
-    return '${AppConfig.defaultCountryCode}$p';
+    return '$_myCode$p';
   }
 
   Future<void> _sync() async {

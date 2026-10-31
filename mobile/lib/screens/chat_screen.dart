@@ -93,6 +93,43 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
+  final _msgKeys = <int, GlobalKey>{};
+  int? _flashId; // briefly highlighted after jumping to it
+
+  /// Tap on a reply: scroll to the original message (loading older ones if needed) and light it up.
+  Future<void> _jumpToMessage(int id) async {
+    var list = _store.messagesOf(chatId);
+    var tries = 0;
+    while (!list.any((x) => x.id == id) && _store.hasMore(chatId) && tries < 15) {
+      tries++;
+      await _store.loadMore(chatId);
+      list = _store.messagesOf(chatId);
+    }
+    if (!mounted) return;
+    final index = list.indexWhere((x) => x.id == id);
+    if (index < 0) {
+      showInfo(context, 'The original message is no longer available');
+      return;
+    }
+    // the list is built lazily: move towards it until it is on screen, then centre it
+    for (var step = 0; step < 60 && _msgKeys[id]?.currentContext == null; step++) {
+      if (!_scroll.hasClients) break;
+      final pos = _scroll.position;
+      final target = (pos.pixels + pos.viewportDimension * 0.9).clamp(0.0, pos.maxScrollExtent);
+      if (target == pos.pixels) break;
+      _scroll.jumpTo(target);
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    final ctx = _msgKeys[id]?.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+    await Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+    if (!mounted) return;
+    setState(() => _flashId = id);
+    HapticFeedback.selectionClick();
+    Future<void>.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted && _flashId == id) setState(() => _flashId = null);
+    });
+  }
   String? _emojiOnly; // the message box holds exactly one emoji
   bool _unlocked = ChatLock.isOpen; // locked chats: fingerprint first
   final Set<int> _selected = {}; // multi-select (message ids)
@@ -1367,7 +1404,9 @@ class _ChatScreenState extends State<ChatScreen> {
         final myId = _store.myId;
         final allMine = list.every((m) => m.senderId == myId);
         final canAll = !chat.isSavedMessages && (allMine || chat.type == 'private' || chat.can('delete_messages'));
-        final choice = await showDialog<String>(
+        final String? choice = chat.isMulti && canAll
+            ? (await confirm(context, 'Delete ${list.length} message${list.length == 1 ? '' : 's'}?', 'They will be removed for everyone.', ok: 'Delete', danger: true) ? 'all' : null)
+            : await showDialog<String>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text('Delete ${list.length} message${list.length == 1 ? '' : 's'}?'),
@@ -1405,6 +1444,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _delete(Message m, Chat chat, bool mine) async {
     final canForEveryone = mine || (chat.type == 'private' && !chat.isSavedMessages) || chat.can('delete_messages');
+    // groups & channels: whoever may delete removes it for everyone, no "for me / for everyone" question
+    if (chat.isMulti && canForEveryone) {
+      if (!await confirm(context, 'Delete this message?', 'It will be removed for everyone in “${chat.title}”.', ok: 'Delete', danger: true)) return;
+      try {
+        await _store.deleteMessages(chatId, [m.id], forEveryone: true);
+      } catch (e) {
+        if (mounted) showError(context, e);
+      }
+      return;
+    }
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1448,6 +1497,32 @@ class _ChatScreenState extends State<ChatScreen> {
           Navigator.push(context, MaterialPageRoute(builder: (_) => LiveMapScreen(chat: chat)));
           break;
         case 'lock':
+          // one place for both kinds of lock: fingerprint/screen lock, or a passcode just for this chat
+          final how = await showModalBottomSheet<String>(
+            context: context,
+            showDragHandle: true,
+            builder: (ctx) => SafeArea(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                ListTile(
+                  leading: const Icon(Icons.fingerprint_rounded),
+                  title: Text(chat.isLocked ? 'Turn off fingerprint lock' : 'Lock with fingerprint'),
+                  subtitle: const Text('The chat moves to “Locked chats”'),
+                  onTap: () => Navigator.pop(ctx, 'bio'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.pin_rounded),
+                  title: Text(ChatPasscode.has(chat.id) ? 'Passcode settings' : 'Lock with a passcode'),
+                  subtitle: const Text('A PIN only for this chat'),
+                  onTap: () => Navigator.pop(ctx, 'pin'),
+                ),
+              ]),
+            ),
+          );
+          if (how == 'pin') {
+            await _passcodeMenu(chat);
+            break;
+          }
+          if (how != 'bio' || !mounted) break;
           if (!await ChatLock.unlock(context, reason: chat.isLocked ? 'Unlock this chat' : 'Lock this chat')) return;
           await _store.setLocked(chat.id, !chat.isLocked);
           if (mounted) showInfo(context, chat.isLocked ? 'Chat unlocked' : 'Chat locked — it now lives in “Locked chats”');
@@ -1686,17 +1761,18 @@ class _ChatScreenState extends State<ChatScreen> {
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
               if (!chat.isChannel && !chat.isSavedMessages) _mi('live', Icons.share_location_rounded, 'Live locations'),
               _mi('theme', Icons.palette_outlined, 'Theme & wallpaper'),
-              if (!chat.isRequest) _mi('lock', chat.isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded, chat.isLocked ? 'Unlock chat' : 'Lock chat'),
-              _mi('passcode', Icons.pin_outlined, ChatPasscode.has(chat.id) ? 'Passcode' : 'Set a passcode'),
+              if (!chat.isRequest)
+                _mi('lock', chat.isLocked || ChatPasscode.has(chat.id) ? Icons.lock_rounded : Icons.lock_outline_rounded,
+                    chat.isLocked || ChatPasscode.has(chat.id) ? 'Chat lock' : 'Lock chat'),
               if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
                 _mi('disappearing', Icons.timer_outlined, chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages'),
               if (chat.canPost) _mi('scheduled', Icons.schedule_send_outlined, 'Scheduled messages'),
-              if (chat.isMulti && chat.isAdmin) _mi('stats', Icons.insights_outlined, 'Statistics'),
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('secret_chats'))
                 _mi('secret', Icons.lock_outline_rounded, 'Start vault chat'),
               _mi('export', Icons.ios_share_rounded, 'Export chat'),
               const PopupMenuDivider(),
-              _mi('clear', Icons.cleaning_services_outlined, 'Clear history'),
+              // in groups and channels only admins who may delete messages see this
+              if (!chat.isMulti || chat.can('delete_messages')) _mi('clear', Icons.cleaning_services_outlined, 'Clear history'),
               if (chat.peer != null) _mi('block', Icons.block_rounded, chat.peer!.blocked ? 'Unblock user' : 'Block user', danger: !chat.peer!.blocked),
               if (!chat.isSavedMessages) _mi('report', Icons.flag_outlined, 'Report'),
               _mi('leave', Icons.logout_rounded, chat.isChannel ? 'Leave channel' : (chat.isGroup ? 'Leave group' : 'Delete chat'), danger: true),
@@ -2011,8 +2087,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: SwipeReply(
                 onReply: selecting || m.isLocal || !chat.canPost ? null : () => _startReply(m),
                 onDoubleTap: null, // one tap opens the menu right away (❤️ is the first reaction there)
-                child: Builder(builder: (bctx) => MessageBubble(
+                child: Builder(builder: (bctx) => AnimatedContainer(
+                key: _msgKeys.putIfAbsent(m.id, () => GlobalKey()),
+                duration: const Duration(milliseconds: 400),
+                color: _flashId == m.id ? Brand.primary.withValues(alpha: 0.16) : Colors.transparent,
+                child: MessageBubble(
                 key: ValueKey(m.isLocal ? m.clientId : m.id),
+                onReplyTap: m.replyTo == null ? null : () => _jumpToMessage(m.replyTo!.id),
                 message: m,
                 chat: chat,
                 isMine: mine,
@@ -2027,7 +2108,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onForward: chat.isChannel && !chat.noForwards && !selecting
                     ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
                     : null,
-              )),
+              ))),
               ),
               ),
           ],

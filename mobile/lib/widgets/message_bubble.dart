@@ -20,6 +20,7 @@ import 'bot_widgets.dart';
 import '../theme/brand.dart';
 import 'link_preview.dart';
 import 'sticker_widgets.dart';
+import 'tali_emoji.dart';
 import 'contact_card.dart';
 import 'view_once.dart';
 import 'package:provider/provider.dart';
@@ -237,7 +238,7 @@ class MessageBubble extends StatelessWidget {
                 Text(
                   m.replyTo!.deleted
                       ? 'Deleted message'
-                      : (m.replyTo!.text.isNotEmpty ? m.replyTo!.text : _typeLabel(m.replyTo!.type)),
+                      : (m.replyTo!.text.isNotEmpty ? stripFormatting(m.replyTo!.text) : _typeLabel(m.replyTo!.type)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 13, color: textColor.withAlpha(210)),

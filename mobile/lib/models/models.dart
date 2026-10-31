@@ -433,7 +433,17 @@ class Message {
       meta != null && meta!['call'] is Map ? Map<String, dynamic>.from(meta!['call'] as Map) : null;
 
   /// Short text used in the chat list and notifications.
-  String get preview {
+  String get preview => _plainMarks(_preview);
+
+  /// Without **bold** / _italic_ / ~strike~ / `code` / ||spoiler|| marks.
+  static String _plainMarks(String t) => t
+      .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*', dotAll: true), (m) => m[1]!)
+      .replaceAllMapped(RegExp(r'\|\|(.+?)\|\|', dotAll: true), (m) => m[1]!)
+      .replaceAllMapped(RegExp(r'`([^`\n]+?)`'), (m) => m[1]!)
+      .replaceAllMapped(RegExp(r'~([^~\n]+?)~'), (m) => m[1]!)
+      .replaceAllMapped(RegExp(r'(?<![\w_])_([^_\n]+?)_(?![\w_])'), (m) => m[1]!);
+
+  String get _preview {
     if (viewOnce) return type == 'voice' ? '🎤 View once voice message' : (type == 'video' ? '🎬 View once video' : '📷 View once photo');
     switch (type) {
       case 'image':

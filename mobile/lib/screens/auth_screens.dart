@@ -201,7 +201,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                       autofillHints: const [AutofillHints.telephoneNumberNational],
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]'))],
                       style: const TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
-                      decoration: deco('Phone number', hint: '300 1234567'),
+                      decoration: deco('Phone number', hint: '7400 123456'),
                       onSubmitted: (_) => _submit(false),
                     ),
                   ),

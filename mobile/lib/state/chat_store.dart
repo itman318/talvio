@@ -71,6 +71,9 @@ class ChatStore extends ChangeNotifier {
   /// Another device just logged in to this account (to ask "was this you?").
   void Function(Map<String, dynamic> session)? onNewLogin;
 
+  /// A message came in for a chat that isn't on screen while the app is open (→ in-app banner).
+  void Function(Chat chat, Message m)? onInAppMessage;
+
   /// A blocked login attempt (wrong two-step password / code used elsewhere).
   void Function(Map<String, dynamic> alert)? onSecurityAlert;
 
@@ -457,6 +460,10 @@ class ChatStore extends ChangeNotifier {
   /// An animated Tavi sticker (drawn by the app — nothing to upload).
   Future<void> sendTavi(int chatId, String pose, String emoji) =>
       sendSpecial(chatId, 'sticker', {'tavi': pose, 'emoji': emoji}, meta: {'sticker': {'tavi': pose, 'emoji': emoji}});
+
+  /// A Pebo sticker (Talvio's animated pack, drawn by the app).
+  Future<void> sendPebo(int chatId, String pose, String emoji) =>
+      sendSpecial(chatId, 'sticker', {'anim': pose, 'emoji': emoji}, meta: {'sticker': {'anim': pose, 'emoji': emoji}});
 
   Future<void> sendGif(int chatId, Map<String, dynamic> gif) => sendSpecial(chatId, 'gif', {'gif': gif}, meta: {'gif': gif});
 
@@ -1537,6 +1544,11 @@ class ChatStore extends ChangeNotifier {
         if (!viewing) {
           chat.unreadCount += 1;
           if (m.mentions.contains(myId)) chat.unreadMentions += 1;
+          // banner inside the app — only while looking at another chat (the list shows it already)
+          final mentioned = m.mentions.contains(myId);
+          if (appInForeground && activeChatId != null && !m.isSystem && !m.silent && (!chat.isMuted || mentioned) && (!chat.isChannel || mentioned) && !chat.isArchived) {
+            onInAppMessage?.call(chat, m);
+          }
         }
         _typing[m.chatId]?.remove(m.senderId);
       }

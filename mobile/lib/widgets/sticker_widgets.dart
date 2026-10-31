@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,7 @@ import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
 import 'mascot.dart';
+import 'pebo_stickers.dart';
 import 'sticker_maker.dart';
 
 String stickerUrl(Message m) {
@@ -35,14 +37,68 @@ class StickerView extends StatelessWidget {
   Widget build(BuildContext context) {
     final tavi = taviPoseByName('${(message.meta?['sticker'] as Map?)?['tavi'] ?? ''}');
     if (tavi != null) return TaviMascot(pose: tavi, size: size + 10);
+    final pebo = peboPoseByName('${(message.meta?['sticker'] as Map?)?['anim'] ?? ''}');
+    if (pebo != null) return PeboSticker(pose: pebo, size: size + 10);
     final url = stickerUrl(message);
     final emoji = '${(message.meta?['sticker'] as Map?)?['emoji'] ?? '🙂'}';
-    return SizedBox(
-      width: size,
-      height: size,
+    // picture stickers come alive too: they pop in, then gently breathe
+    return _AliveSticker(
+      size: size,
       child: url.isEmpty
           ? Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))
           : netImage(url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Center(child: Text(emoji, style: TextStyle(fontSize: size * 0.5)))),
+    );
+  }
+}
+
+/// Pop-in, a little wobble, then a soft "breathing" loop; tap replays the bounce.
+class _AliveSticker extends StatefulWidget {
+  const _AliveSticker({required this.size, required this.child});
+  final double size;
+  final Widget child;
+
+  @override
+  State<_AliveSticker> createState() => _AliveStickerState();
+}
+
+class _AliveStickerState extends State<_AliveSticker> with TickerProviderStateMixin {
+  late final AnimationController _pop = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+  late final AnimationController _breath = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..repeat();
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _pop.forward(from: 0),
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_pop, _breath]),
+          builder: (_, child) {
+            final p = _pop.value;
+            // elastic pop (0 → overshoot → 1) plus a small wobble while it settles
+            final pop = Curves.elasticOut.transform(p.clamp(0.0, 1.0));
+            final wobble = (1 - p) * 0.12 * math.sin(p * math.pi * 6);
+            final b = math.sin(_breath.value * 2 * math.pi);
+            final sx = (0.6 + 0.4 * pop) * (1 + 0.025 * b);
+            final sy = (0.6 + 0.4 * pop) * (1 - 0.025 * b);
+            return Transform(
+              alignment: Alignment.bottomCenter,
+              transform: Matrix4.identity()
+                ..translate(0.0, -2.0 * b.abs())
+                ..rotateZ(wobble + 0.02 * b)
+                ..scale(sx, sy),
+              child: child,
+            );
+          },
+          child: SizedBox(width: widget.size, height: widget.size, child: widget.child),
+        ),
+      ),
     );
   }
 }
@@ -317,7 +373,7 @@ class _StickerPanelState extends State<StickerPanel> {
   List<Map<String, dynamic>>? _packs;
   List<Map<String, dynamic>> _recent = [];
   List<Map<String, dynamic>> _favs = [];
-  int _sel = 0; // -2 = Tavi, -1 = favorites, 0 = recent (when there are recents), otherwise pack index + 1
+  int _sel = -3; // -3 = Pebo, -2 = Tavi, -1 = favorites, 0 = recent (when there are recents), otherwise pack index + 1
 
   @override
   void initState() {
@@ -337,14 +393,14 @@ class _StickerPanelState extends State<StickerPanel> {
       setState(() {
         _recent = recent;
         _packs = r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        _sel = recent.isEmpty ? 1 : 0;
+        _sel = recent.isEmpty ? -3 : 0;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _recent = recent;
         _packs = [];
-        _sel = 0;
+        _sel = recent.isEmpty ? -3 : 0;
       });
       if (recent.isEmpty) showError(context, e);
     }
@@ -412,7 +468,10 @@ class _StickerPanelState extends State<StickerPanel> {
     final hasRecent = _recent.isNotEmpty;
     final List<Map<String, dynamic>> stickers;
     String title;
-    if (_sel == -2) {
+    if (_sel == -3) {
+      stickers = const [];
+      title = 'Pebo — animated';
+    } else if (_sel == -2) {
       stickers = const [];
       title = 'Tavi — animated';
     } else if (_sel == -1 && _favs.isNotEmpty) {
@@ -459,6 +518,12 @@ class _StickerPanelState extends State<StickerPanel> {
               if (await makeStickerFromPhoto(context) && mounted) _load();
             },
             child: const Icon(Icons.auto_fix_high_rounded, color: Brand.primary),
+          ),
+          packButton(
+            selected: _sel == -3,
+            tooltip: 'Pebo (animated)',
+            onTap: () => setState(() => _sel = -3),
+            child: const PeboSticker(pose: PeboPose.hi, size: 36, animate: false),
           ),
           packButton(
             selected: _sel == -2,
@@ -508,7 +573,9 @@ class _StickerPanelState extends State<StickerPanel> {
         ),
       ),
       Expanded(
-        child: _sel == -2
+        child: _sel == -3
+            ? _peboGrid(context)
+            : _sel == -2
             ? _taviGrid(context)
             : stickers.isEmpty
             ? const Center(child: Text('No stickers here yet', style: TextStyle(color: Brand.muted)))
@@ -528,6 +595,31 @@ class _StickerPanelState extends State<StickerPanel> {
 }
 
 extension on _StickerPanelState {
+  Widget _peboGrid(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 96, mainAxisSpacing: 6, crossAxisSpacing: 6),
+      itemCount: peboStickers.length,
+      itemBuilder: (_, i) {
+        final (pose, emoji) = peboStickers[i];
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            widget.onSent?.call();
+            context.read<ChatStore>().sendPebo(widget.chatId, pose.name, emoji);
+          },
+          onLongPress: () => showDialog<void>(
+            context: context,
+            barrierColor: Colors.black54,
+            builder: (d) => GestureDetector(onTap: () => Navigator.pop(d), child: Center(child: PeboSticker(pose: pose, size: 240))),
+          ),
+          child: Center(child: PeboSticker(pose: pose, size: 84)),
+        );
+      },
+    );
+  }
+
   Widget _taviGrid(BuildContext context) {
     final plus = context.watch<AuthState>().me?.limits?['exclusive_stickers'] == true;
     return GridView.builder(
@@ -1064,8 +1156,9 @@ class _EmojiStickerSuggestionsState extends State<EmojiStickerSuggestions> {
     bool hit(String e) => want.any((w) => e.replaceAll('️', '').contains(w));
     final plus = context.read<AuthState>().me?.isPremium == true;
     final tavi = taviStickers.where((t) => hit(t.$2) && (!t.$3 || plus)).toList();
+    final pebo = peboStickers.where((t) => hit(t.$2)).toList();
     final packs = (EmojiStickerSuggestions._cache ?? []).where((s) => hit('${s['emoji'] ?? ''}')).take(12).toList();
-    if (tavi.isEmpty && packs.isEmpty) return const SizedBox.shrink();
+    if (tavi.isEmpty && pebo.isEmpty && packs.isEmpty) return const SizedBox.shrink();
     final dark = Theme.of(context).brightness == Brightness.dark;
     final store = context.read<ChatStore>();
     Widget item(Widget child, VoidCallback onTap) => TweenAnimationBuilder<double>(
@@ -1094,6 +1187,7 @@ class _EmojiStickerSuggestionsState extends State<EmojiStickerSuggestions> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
         children: [
+          for (final t in pebo) item(PeboSticker(pose: t.$1, size: 78), () => store.sendPebo(widget.chatId, t.$1.name, t.$2)),
           for (final t in tavi) item(TaviMascot(pose: t.$1, size: 78), () => store.sendTavi(widget.chatId, t.$1.name, t.$2)),
           for (final s in packs)
             item(

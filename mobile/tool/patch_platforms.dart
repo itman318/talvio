@@ -44,6 +44,7 @@ void _android() {
     'android.permission.RECEIVE_BOOT_COMPLETED',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
+    'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
   ];
   for (final p in perms) {
     if (!xml.contains(p)) {
@@ -114,6 +115,55 @@ void _android() {
       final n = f.path.split(Platform.pathSeparator).last;
       if (n != 'MainActivity.kt' && n != 'MainActivity.java') continue;
       var code = f.readAsStringSync();
+      if (n == 'MainActivity.kt' && !code.contains('talvio/system')) {
+        // FlutterFragmentActivity + a small channel for "don't let the phone put Talvio to sleep" (battery optimisation)
+        final pkg = RegExp(r'^package\s+[\w.]+', multiLine: true).firstMatch(code)?.group(0) ?? 'package com.talvio.chatapp';
+        f.writeAsStringSync('''$pkg
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
+class MainActivity : FlutterFragmentActivity() {
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "talvio/system").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "batteryRestricted" -> {
+                    if (Build.VERSION.SDK_INT < 23) {
+                        result.success(false)
+                    } else {
+                        val pm = getSystemService(POWER_SERVICE) as PowerManager
+                        result.success(!pm.isIgnoringBatteryOptimizations(packageName))
+                    }
+                }
+                "askBattery" -> {
+                    try {
+                        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + packageName)))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.success(false)
+                        }
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+}
+''');
+        stdout.writeln('✓ ${f.path}: FlutterFragmentActivity + battery channel');
+        continue;
+      }
       if (code.contains('FlutterFragmentActivity')) continue;
       code = code
           .replaceAll('io.flutter.embedding.android.FlutterActivity', 'io.flutter.embedding.android.FlutterFragmentActivity')
@@ -300,6 +350,7 @@ void _androidBranding() {
   write('values/talvio_colors.xml', '''<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="talvio_ink">#F2557E</color>
+    <color name="talvio_window">#F3F4F9</color>
 </resources>
 ''');
   const launch = '''<?xml version="1.0" encoding="utf-8"?>
@@ -319,12 +370,14 @@ void _androidBranding() {
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@color/talvio_ink</item>
+        <item name="android:windowBackground">@color/talvio_window</item>
     </style>
 </resources>
 ''';
   write('values-v31/styles.xml', v31);
-  write('values-night-v31/styles.xml', v31);
+  // after the splash, the window behind the app (and the system navigation bar) is calm, not brand pink
+  write('values-night-v31/styles.xml', v31.replaceAll('@color/talvio_window', '#0D1122'));
+  write('values-night/talvio_window.xml', '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="talvio_window">#0D1122</color>\n</resources>\n');
   stdout.writeln('✓ Android: Talvio launcher icons + splash screen');
 }
 
