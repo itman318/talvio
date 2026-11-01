@@ -1,0 +1,117 @@
+# Runs a person's own Telegram-style bot (kept private: it arrives encrypted on the ci-botpayload branch)
+# against a fresh Talvio server in this runner, plays with it like a user would, and sends back an
+# encrypted transcript (ci-botrun branch). The payload branch is deleted afterwards.
+name: Bot run (private)
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_presses:
+        description: Buttons to try per user
+        default: '60'
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: chatapp
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chat" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://chat:chat@localhost:5432/chatapp
+      OTP_DEV_MODE: 'true'
+      JWT_SECRET: botrun-user-secret-0123456789abcdef
+      ADMIN_JWT_SECRET: botrun-admin-secret-0123456789abcdef
+      OTP_SECRET: botrun-otp-secret-0123456789abcdef
+      PUBLIC_URL: http://localhost:4000
+      PORT: '4000'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Open the private payload
+        env:
+          PASS: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          mkdir -p /tmp/p /tmp/report
+          git fetch -q origin ci-keys ci-botpayload
+          git show origin/ci-keys:priv.enc > /tmp/p/priv.enc
+          for f in bot.enc key.enc report_pub.pem; do git show origin/ci-botpayload:$f > /tmp/p/$f; done
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in /tmp/p/priv.enc -out /tmp/p/priv.pem -pass env:PASS
+          openssl pkeyutl -decrypt -inkey /tmp/p/priv.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/p/key.enc -out /tmp/p/k
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in /tmp/p/bot.enc -out /tmp/p/bot.py -pass file:/tmp/p/k
+          rm /tmp/p/priv.pem /tmp/p/priv.enc /tmp/p/k
+          wc -l /tmp/p/bot.py
+
+      - name: Start a fresh Talvio server
+        working-directory: backend
+        run: |
+          npm install --no-audit --no-fund 2>&1 | tail -2
+          node scripts/migrate.js >/dev/null
+          nohup node src/server.js > /tmp/report/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:4000/health >/dev/null && break; sleep 1; done
+          OUT=/tmp/report node test/e2e/classic_bot_drive.js setup | grep -E '^[A-Z_]+=' > /tmp/p/env
+          sed 's/BOT_TOKEN=.*/BOT_TOKEN=***/' /tmp/p/env
+
+      - name: Start the bot (only the server address changed)
+        run: |
+          pip install -q "aiogram>=3.4,<4" aiosqlite 2>&1 | tail -2
+          mkdir -p /tmp/bot && cd /tmp/bot
+          python - <<'PY'
+          import re
+          s = open('/tmp/p/bot.py', encoding='utf-8').read()
+          n0 = s.count('bot = Bot(token=_bot_token)')
+          s = s.replace('bot = Bot(token=_bot_token)',
+              'from aiogram.client.session.aiohttp import AiohttpSession\n'
+              'from aiogram.client.telegram import TelegramAPIServer\n'
+              'bot = Bot(token=_bot_token, session=AiohttpSession(api=TelegramAPIServer.from_base("http://localhost:4000/api/classic")))', 1)
+          s = s.replace('"/data/trading_bot.db"', '"/tmp/bot/trading_bot.db"')
+          open('/tmp/bot/bot.py', 'w', encoding='utf-8').write(s)
+          print('server address lines changed:', n0)
+          PY
+          set -a; . /tmp/p/env; set +a
+          nohup python -u bot.py > /tmp/report/bot.log 2>&1 &
+          sleep 25
+          tail -5 /tmp/report/bot.log | sed -E 's/[0-9]{8,}:[A-Za-z0-9_-]{20,}/***/g'
+
+      - name: Use the bot like a person
+        working-directory: backend
+        continue-on-error: true
+        run: |
+          MAX_PRESSES=${{ inputs.max_presses }} OUT=/tmp/report timeout 900 node test/e2e/classic_bot_drive.js drive > /dev/null 2>&1
+          tail -3 /tmp/report/transcript.txt || true
+          grep -c '' /tmp/report/bot.log || true
+
+      - name: Send back the report (encrypted)
+        if: always()
+        run: |
+          cd /tmp/report && rm -f drive-state.json
+          grep -E "classic|botclassic" server.log > classic-errors.log || true
+          tar -czf /tmp/r.tgz .
+          openssl rand -hex 32 > /tmp/k2
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -in /tmp/r.tgz -out /tmp/report.enc -pass file:/tmp/k2
+          openssl pkeyutl -encrypt -pubin -inkey /tmp/p/report_pub.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k2 -out /tmp/key2.enc
+          mkdir /tmp/out && cp /tmp/report.enc /tmp/key2.enc /tmp/out/ && cd /tmp/out
+          git init -q -b ci-botrun
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "bot run ${{ github.run_id }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-botrun
+
+      - name: Delete the payload branch
+        if: always()
+        run: git push -q origin --delete ci-botpayload || true
