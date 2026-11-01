@@ -15,7 +15,6 @@ import 'chat_screen.dart';
 import 'premium_screens.dart';
 import 'qr_screens.dart';
 import 'settings_screens.dart';
-import 'notifications_screen.dart';
 import 'story_screens.dart' show HighlightsRow, MyHighlightsScreen;
 import '../widgets/emoji_status.dart';
 
@@ -133,38 +132,6 @@ class MyProfileScreen extends StatelessWidget {
         ]),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true),
         _completeCard(context, me, () => go(const EditProfileScreen())),
-        if (link != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Material(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () async {
-                  await Clipboard.setData(ClipboardData(text: link));
-                  if (context.mounted) showInfo(context, 'Profile link copied');
-                },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-                  child: Row(children: [
-                    const BrandMark(size: 38),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Your Talvio link', style: TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 2),
-                        Text(link.replaceFirst(RegExp(r'^https?://'), ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: Brand.primary)),
-                      ]),
-                    ),
-                    IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded), onPressed: () => go(const MyQrScreen())),
-                    const Icon(Icons.copy_rounded, size: 20, color: Brand.muted),
-                    const SizedBox(width: 6),
-                  ]),
-                ),
-              ),
-            ),
-          ),
         SettingsGroup(title: 'About me', children: [
           SettingsTile(
             icon: Icons.notes_rounded,
@@ -179,7 +146,13 @@ class MyProfileScreen extends StatelessWidget {
               icon: Icons.alternate_email_rounded,
               color: Brand.primary,
               title: '@${me.username}',
-              subtitle: 'Username · tap to copy link',
+              subtitle: 'Username · tap to copy your link',
+              trailingWidget: IconButton(
+                tooltip: 'QR code',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.qr_code_2_rounded, color: Brand.primary),
+                onPressed: () => go(const MyQrScreen()),
+              ),
               onTap: () async {
                 await Clipboard.setData(ClipboardData(text: link!));
                 if (context.mounted) showInfo(context, 'Profile link copied');
@@ -236,11 +209,8 @@ class MyProfileScreen extends StatelessWidget {
             onTap: () => go(const PremiumScreen()),
           ),
         ]),
-        SettingsGroup(title: 'Account', children: [
-          SettingsTile(icon: Icons.lock_rounded, color: Brand.green, title: 'Privacy', subtitle: 'Who sees your phone, photo and last seen', onTap: () => go(const PrivacyScreen())),
-          SettingsTile(icon: Icons.notifications_rounded, color: const Color(0xFFE5484D), title: 'Notifications', onTap: () => go(const NotificationsScreen())),
-          SettingsTile(icon: Icons.devices_rounded, color: Brand.sky, title: 'Devices', subtitle: 'Where you are logged in', onTap: () => go(const SessionsScreen())),
-          SettingsTile(icon: Icons.settings_rounded, color: const Color(0xFF5E6B8C), title: 'All settings', onTap: () => go(const SettingsScreen())),
+        SettingsGroup(children: [
+          SettingsTile(icon: Icons.settings_rounded, color: const Color(0xFF5E6B8C), title: 'Settings', subtitle: 'Privacy, notifications, devices, theme and more', onTap: () => go(const SettingsScreen())),
         ]),
         const SizedBox(height: 24),
         ]),

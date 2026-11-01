@@ -136,9 +136,8 @@ class SettingsGroup extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: dark ? null : [BoxShadow(color: Brand.ink.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, 4))],
-            border: dark ? Border.all(color: Colors.white.withValues(alpha: 0.05)) : null,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(children: rows),
@@ -178,21 +177,20 @@ class SettingsTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(11),
-              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: 8, offset: const Offset(0, 3))],
+              borderRadius: BorderRadius.circular(10),
               gradient: LinearGradient(
                 colors: [Color.lerp(color, Colors.white, 0.18)!, color],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
-            child: Icon(icon, color: Colors.white, size: 19),
+            child: Icon(icon, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -205,7 +203,7 @@ class SettingsTile extends StatelessWidget {
                 ),
             ]),
           ),
-          if (trailing != null) Text(trailing!, style: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant)),
+          if (trailing != null) Padding(padding: const EdgeInsets.only(left: 8), child: Text(trailing!, style: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant))),
           if (trailingWidget != null) Padding(padding: const EdgeInsets.only(left: 8), child: trailingWidget!),
           if (onTap != null && !danger && trailingWidget == null) Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant.withValues(alpha: 0.6)),
         ]),
@@ -323,8 +321,11 @@ class ProfileHero extends StatelessWidget {
         ),
         if (url != null)
           ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 30, sigmaY: 30, tileMode: TileMode.decal),
-            child: Opacity(opacity: 0.85, child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
+            imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18, tileMode: TileMode.decal),
+            child: Opacity(
+              opacity: 0.85,
+              child: Image.network(url, fit: BoxFit.cover, cacheWidth: 48, filterQuality: FilterQuality.low, errorBuilder: (_, __, ___) => const SizedBox()),
+            ),
           ),
         Positioned(right: -40, top: -30, child: _blob(170, 0.16)),
         Positioned(left: -50, bottom: -60, child: _blob(190, 0.10)),
@@ -345,7 +346,7 @@ class ProfileHero extends StatelessWidget {
       SizedBox(
         height: bannerH + avatarSize / 2,
         child: Stack(clipBehavior: Clip.none, children: [
-          Positioned(left: 0, right: 0, top: 0, height: bannerH, child: banner),
+          Positioned(left: 0, right: 0, top: 0, height: bannerH, child: RepaintBoundary(child: banner)),
           Positioned(
             left: 0,
             right: 0,

@@ -702,7 +702,9 @@ class HighlightsRow extends StatefulWidget {
 }
 
 class _HighlightsRowState extends State<HighlightsRow> {
-  List<StoryHighlight>? _list;
+  /// Last list per person: the row shows at once on the next visit, then refreshes quietly.
+  static final Map<int, List<StoryHighlight>> _cache = {};
+  late List<StoryHighlight>? _list = _cache[widget.userId];
 
   @override
   void initState() {
@@ -713,6 +715,7 @@ class _HighlightsRowState extends State<HighlightsRow> {
   Future<void> _load() async {
     try {
       final l = await context.read<ChatStore>().highlightsOf(widget.userId);
+      _cache[widget.userId] = l;
       if (mounted) setState(() => _list = l);
     } catch (_) {
       if (mounted) setState(() => _list = const []);

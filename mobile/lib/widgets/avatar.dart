@@ -39,13 +39,16 @@ class Avatar extends StatelessWidget {
           : Text(_initials, style: TextStyle(color: Colors.white, fontSize: size * 0.38, fontWeight: FontWeight.w600)),
     );
     if (url == null) return fallback;
+    final px = (size * MediaQuery.devicePixelRatioOf(context)).round();
     return ClipRRect(
       borderRadius: BorderRadius.circular(size * 0.34),
       child: Image.network(
         url!,
         width: size,
         height: size,
+        cacheWidth: px, // decode only as many pixels as shown: far less memory and work
         fit: BoxFit.cover,
+        gaplessPlayback: true,
         errorBuilder: (_, __, ___) => fallback,
         loadingBuilder: (ctx, child, progress) => progress == null ? child : fallback,
       ),
