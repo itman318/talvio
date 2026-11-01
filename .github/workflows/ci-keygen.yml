@@ -1,0 +1,28 @@
+# One-time: makes a key pair for private test files. The private key is stored only encrypted with a
+# repo secret, so files encrypted to ci-keys/pub.pem can be opened by CI and by nobody else.
+name: CI keys
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keys:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make keys
+        env:
+          PASS: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          [ -n "$PASS" ] || { echo "no secret"; exit 1; }
+          mkdir k && cd k
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out priv.pem 2>/dev/null
+          openssl pkey -in priv.pem -pubout -out pub.pem
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in priv.pem -out priv.enc -pass env:PASS
+          rm priv.pem
+          git init -q -b ci-keys
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm keys
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-keys
