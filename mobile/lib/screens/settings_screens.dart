@@ -639,6 +639,7 @@ class PrivacyScreen extends StatefulWidget {
     'forwards': 'Forwarded messages',
     'group_add': 'Who can add me to groups',
     'calls': 'Who can call me',
+    'voice': 'Voice & video messages',
     'phone_search': 'Who can find me by my number',
   };
 
@@ -655,6 +656,7 @@ class PrivacyScreen extends StatefulWidget {
     'forwards': 'When someone forwards your messages, the name links to your profile only for the people you allow.',
     'group_add': 'Choose who can add you to groups and channels.',
     'calls': 'Choose who can call you.',
+    'voice': 'Choose who can send you voice messages and round video messages in private chats. Others can still send text.',
     'phone_search': 'Choose who can find you when they search your number or sync their contacts.',
   };
   static const icons = {
@@ -664,6 +666,7 @@ class PrivacyScreen extends StatefulWidget {
     'birthday': (Icons.cake_rounded, Brand.rose),
     'group_add': (Icons.group_add_rounded, Brand.amber),
     'calls': (Icons.call_rounded, Brand.primary),
+    'voice': (Icons.mic_rounded, Color(0xFF8E54E9)),
     'bio': (Icons.notes_rounded, Color(0xFF3C83DE)),
     'messages': (Icons.chat_bubble_rounded, Color(0xFF0FA3A3)),
     'forwards': (Icons.forward_rounded, Color(0xFFE07A2E)),
@@ -855,7 +858,44 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
               value: p['message_requests'] != 'off',
               onChanged: (v) => _setBool('message_requests', v),
             ),
+            SettingsSwitchTile(
+              icon: Icons.keyboard_rounded,
+              color: const Color(0xFF0FA3A3),
+              title: 'Show when I’m typing',
+              subtitle: 'Turn off and nobody sees “typing…” or “recording…” from you',
+              value: p['typing'] != 'off',
+              onChanged: (v) => _setBool('typing', v),
+            ),
           ]),
+          Builder(builder: (context) {
+            final prefs = context.watch<AppPrefs>();
+            return SettingsGroup(title: 'On this phone', children: [
+              SettingsSwitchTile(
+                icon: Icons.vpn_lock_rounded,
+                color: Brand.green,
+                title: 'Hide my IP in calls',
+                subtitle: 'Calls go through Talvio’s server, so the other person can’t see your IP address. Quality may drop a little.',
+                value: prefs.relayCalls,
+                onChanged: prefs.setRelayCalls,
+              ),
+              SettingsSwitchTile(
+                icon: Icons.screenshot_monitor_rounded,
+                color: const Color(0xFFE5484D),
+                title: 'Block screenshots',
+                subtitle: 'No screenshots or screen recording anywhere in Talvio, and chats are hidden in the recent apps view',
+                value: prefs.blockScreenshots,
+                onChanged: prefs.setBlockScreenshots,
+              ),
+              SettingsSwitchTile(
+                icon: Icons.keyboard_hide_rounded,
+                color: Brand.violet,
+                title: 'Incognito keyboard',
+                subtitle: 'Asks your keyboard not to learn or remember what you type in chats',
+                value: prefs.incognitoKeyboard,
+                onChanged: prefs.setIncognitoKeyboard,
+              ),
+            ]);
+          }),
         ],
       ),
     );

@@ -28,6 +28,11 @@ class AppPrefs extends ChangeNotifier {
   /// no link-preview pictures, lower call video quality.
   bool dataSaver = false;
 
+  // privacy on this phone
+  bool relayCalls = false; // calls always through Talvio's server: the other person never sees my IP
+  bool blockScreenshots = false; // no screenshots / screen recording anywhere in the app
+  bool incognitoKeyboard = false; // ask the keyboard not to learn or remember what I type
+
   // prayer times
   double? prayerLat;
   double? prayerLng;
@@ -67,6 +72,9 @@ class AppPrefs extends ChangeNotifier {
       }
     }
     dataSaver = p.getBool('data_saver') ?? false;
+    relayCalls = p.getBool('relay_calls') ?? false;
+    blockScreenshots = p.getBool('block_screenshots') ?? false;
+    incognitoKeyboard = p.getBool('incognito_keyboard') ?? false;
     prayerLat = p.getDouble('prayer_lat');
     prayerLng = p.getDouble('prayer_lng');
     prayerPlace = p.getString('prayer_place') ?? '';
@@ -138,6 +146,24 @@ class AppPrefs extends ChangeNotifier {
     } else {
       _p?.setString(key, look.toJson());
     }
+    notifyListeners();
+  }
+
+  void setRelayCalls(bool v) {
+    relayCalls = v;
+    _p?.setBool('relay_calls', v);
+    notifyListeners();
+  }
+
+  void setBlockScreenshots(bool v) {
+    blockScreenshots = v;
+    _p?.setBool('block_screenshots', v);
+    notifyListeners();
+  }
+
+  void setIncognitoKeyboard(bool v) {
+    incognitoKeyboard = v;
+    _p?.setBool('incognito_keyboard', v);
     notifyListeners();
   }
 

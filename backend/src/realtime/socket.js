@@ -416,6 +416,11 @@ function init(httpServer) {
         const action = TYPING_ACTIONS.includes(p && p.action) ? p.action : 'typing';
         if (!rateLimit.hit(`typing:${socket.id}:${chatId}:${action}`, 1, 2500).allowed) return;
         if (!(await isMember(chatId))) return;
+        // "Show when I'm typing" off: nobody sees it (cancel still goes out, so nothing gets stuck)
+        if (action !== 'cancel') {
+          const me = await db.one('SELECT show_typing FROM users WHERE id = $1', [uid]);
+          if (me && me.show_typing === false) return;
+        }
         const ids = (await chatService.memberIds(chatId)).filter((id) => id !== uid);
         emitToUsers(ids, 'typing', { chat_id: chatId, user_id: uid, action });
       } catch (_) {

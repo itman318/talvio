@@ -33,6 +33,7 @@ import 'widgets/in_app_banner.dart';
 import 'core/notif_prefs.dart';
 import 'core/keep_alive.dart';
 import 'core/pip.dart';
+import 'core/screen_guard.dart';
 import 'widgets/call_bubble.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
@@ -86,9 +87,15 @@ Future<void> _start() async {
   final auth = AuthState(services, chats)..prefs = prefs;
   final calls = CallManager(services);
   calls.lowData = prefs.dataSaver;
+  calls.relayOnly = prefs.relayCalls;
+  ScreenGuard.setAlways(prefs.blockScreenshots);
   // keeps the 7-day window of prayer reminders topped up
   if (prefs.prayerReminders || prefs.ramadanReminders) unawaited(PrayerReminders.reschedule(prefs));
-  prefs.addListener(() => calls.lowData = prefs.dataSaver);
+  prefs.addListener(() {
+    calls.lowData = prefs.dataSaver;
+    calls.relayOnly = prefs.relayCalls;
+    ScreenGuard.setAlways(prefs.blockScreenshots);
+  });
   // video calls go to a small floating window when you leave the app (Android)
   Pip.init();
   calls.addListener(() => Pip.setAuto(calls.video && (calls.phase == CallPhase.connected || calls.phase == CallPhase.reconnecting)));
@@ -96,7 +103,10 @@ Future<void> _start() async {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
   final secrets = SecretStore(services);
-  final voiceChats = VoiceChatManager(services)..myId = (() => chats.myId);
+  final voiceChats = VoiceChatManager(services)
+    ..myId = (() => chats.myId)
+    ..relayOnly = prefs.relayCalls;
+  prefs.addListener(() => voiceChats.relayOnly = prefs.relayCalls);
   // drafts follow me to my other devices
   chats.onDraftSynced = (chatId, text, live) {
     final local = prefs.draft(chatId) ?? '';

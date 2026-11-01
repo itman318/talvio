@@ -141,6 +141,8 @@ function serialize(u, viewerId, rel) {
       message_requests: u.message_requests !== false ? 'on' : 'off',
       birthday: u.privacy_birthday || 'contacts',
       read_receipts: u.read_receipts !== false ? 'on' : 'off',
+      typing: u.show_typing !== false ? 'on' : 'off',
+      voice: u.privacy_voice || 'everyone',
       bio: u.privacy_bio || 'everyone',
       forwards: u.privacy_forwards || 'everyone',
       messages: u.privacy_messages || 'everyone',
@@ -292,7 +294,7 @@ function parseBirthday(raw) {
   return d.toISOString().slice(0, 10);
 }
 
-const EXCEPTION_SETTINGS = ['last_seen', 'avatar', 'phone', 'group_add', 'calls', 'birthday', 'bio', 'forwards', 'messages'];
+const EXCEPTION_SETTINGS = ['last_seen', 'avatar', 'phone', 'group_add', 'calls', 'birthday', 'bio', 'forwards', 'messages', 'voice'];
 
 /** { setting: { allow: [users], deny: [users] } } */
 async function getPrivacyExceptions(userId) {
@@ -397,6 +399,7 @@ async function updatePrivacy(userId, body) {
     birthday: 'privacy_birthday',
     bio: 'privacy_bio',
     forwards: 'privacy_forwards',
+    voice: 'privacy_voice',
   };
   const sets = [];
   const params = [userId];
@@ -434,6 +437,10 @@ async function updatePrivacy(userId, body) {
   if (body.read_receipts !== undefined) {
     params.push(v.bool(body.read_receipts, 'read_receipts'));
     sets.push(`read_receipts = $${params.length}`);
+  }
+  if (body.typing !== undefined) {
+    params.push(v.bool(body.typing, 'typing'));
+    sets.push(`show_typing = $${params.length}`);
   }
   if (sets.length) await db.query(`UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, params);
   return getMe(userId);

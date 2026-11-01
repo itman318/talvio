@@ -47,6 +47,9 @@ class VoiceChatManager extends ChangeNotifier {
 
   int maxVideo = 8;
 
+  /// Privacy → Hide my IP in calls (also for group voice / video chats).
+  bool relayOnly = false;
+
   // ---- video (cameras are optional: every connection carries an empty video slot we fill when the camera goes on)
   MediaStream? _camStream;
   MediaStreamTrack? get _cam => _camStream?.getVideoTracks().firstOrNull;
@@ -338,7 +341,13 @@ class VoiceChatManager extends ChangeNotifier {
   Future<RTCPeerConnection> _peer(int userId, {bool offerer = false}) async {
     final existing = _peers[userId];
     if (existing != null) return existing;
-    final pc = await createPeerConnection({'iceServers': _ice, 'sdpSemantics': 'unified-plan', 'bundlePolicy': 'max-bundle', 'rtcpMuxPolicy': 'require'});
+    final pc = await createPeerConnection({
+      'iceServers': _ice,
+      'sdpSemantics': 'unified-plan',
+      'bundlePolicy': 'max-bundle',
+      'rtcpMuxPolicy': 'require',
+      if (relayOnly) 'iceTransportPolicy': 'relay',
+    });
     _peers[userId] = pc;
     for (final t in _local?.getTracks() ?? <MediaStreamTrack>[]) {
       await pc.addTrack(t, _local!);

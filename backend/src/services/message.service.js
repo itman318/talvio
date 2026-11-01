@@ -760,10 +760,27 @@ async function assertGroupRules(userId, chat, prepared) {
   }
 }
 
+/** Voice and round video messages in private chats: only from the people the receiver allows. */
+async function assertCanSendVoice(userId, chat) {
+  if (chat.type !== 'private') return;
+  const peerId = await chatService.privatePeerId(chat.id, userId);
+  if (!peerId || peerId === userId) return;
+  const peer = await db.one('SELECT id, first_name, privacy_voice FROM users WHERE id = $1', [peerId]);
+  if (!peer || !peer.privacy_voice || peer.privacy_voice === 'everyone') {
+    const deny = await db.one("SELECT 1 FROM privacy_exceptions WHERE owner_id = $1 AND target_id = $2 AND setting = 'voice' AND NOT allow", [peerId, userId]);
+    if (!deny) return;
+  } else {
+    const rel = await userService.relations(userId, [peerId]);
+    if (userService.allowedFor(rel, peerId, 'voice', peer.privacy_voice)) return;
+  }
+  throw forbidden('privacy_voice', `${(peer && peer.first_name) || 'This user'} doesn’t accept voice and video messages from you`);
+}
+
 async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
   if (!internal.skipRateLimit) rateLimit.enforce(`msg:${userId}`, 30, 10 * 1000, 'You are sending messages too fast');
   const chat = await chatService.requireMember(chatIdRaw, userId);
   await assertCanSend(userId, chat, { comment: !!body.thread_id });
+  if (body.type === 'voice' || body.type === 'video_note') await assertCanSendVoice(userId, chat);
   const sender = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
   if (chat.slow_mode_sec > 0 && chat.type === 'group' && !chatService.ADMIN_ROLES.includes(chat.my_role) && !body.schedule_at) {
     const last = await db.one(

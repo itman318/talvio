@@ -469,3 +469,24 @@ test('hashtag search: my chats and public channels, whole tags only', async () =
   assert.ok(onlyChannels.results.every((x) => x.chat.type === 'channel'));
   assert.equal((await messages.searchHashtag(B.id, { tag: 'x' })).results.length, 0);
 });
+
+test('more privacy: voice messages (with exceptions) and hiding "typing…"', async () => {
+  const chat = await chats.getOrCreatePrivate(A.id, C.id);
+  const media = await db.one(`INSERT INTO media (uploader_id, kind, mime, size_bytes, storage_path, original_name) VALUES ($1, 'voice', 'audio/mp4', 100, $2, 'x') RETURNING id`, [A.id, `t/${Math.random()}`]);
+  const me = await users.updatePrivacy(C.id, { voice: 'nobody', typing: false });
+  assert.equal(me.privacy.voice, 'nobody');
+  assert.equal(me.privacy.typing, 'off');
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'voice', media_id: media.id }), 'privacy_voice');
+  await messages.sendMessage(A.id, chat.id, { text: 'text still works' });
+  // C allows A anyway
+  await users.setPrivacyExceptions(C.id, 'voice', { allow: [A.id] });
+  const m = await messages.sendMessage(A.id, chat.id, { type: 'voice', media_id: media.id });
+  assert.equal(m.type, 'voice');
+  // everyone, but never A
+  await users.updatePrivacy(C.id, { voice: 'everyone' });
+  await users.setPrivacyExceptions(C.id, 'voice', { deny: [A.id] });
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'voice', media_id: media.id }), 'privacy_voice');
+  await users.setPrivacyExceptions(C.id, 'voice', {});
+  await users.updatePrivacy(C.id, { typing: true });
+  assert.equal((await users.getMe(C.id)).privacy.typing, 'on');
+});

@@ -1154,3 +1154,7 @@ END $$;
 -- ---------------------------------------------------------------- emoji status (an emoji next to your name, optionally for a while)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS emoji_status TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS emoji_status_until TIMESTAMPTZ;
+
+-- ---------------------------------------------------------------- more privacy: typing, voice messages
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_typing BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_voice TEXT NOT NULL DEFAULT 'everyone';

@@ -2492,6 +2492,8 @@ class _ChatScreenState extends State<ChatScreen> {
             child: TextField(
               controller: _text,
               focusNode: _focus,
+              enableIMEPersonalizedLearning: !context.watch<AppPrefs>().incognitoKeyboard,
+              enableSuggestions: !context.watch<AppPrefs>().incognitoKeyboard,
               minLines: 1,
               maxLines: 6,
               maxLength: 4096,

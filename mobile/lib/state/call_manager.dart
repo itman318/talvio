@@ -31,6 +31,9 @@ class CallManager extends ChangeNotifier {
   /// Set from the data-saver preference (lower video resolution and frame rate).
   bool lowData = false;
 
+  /// Privacy → Hide my IP in calls: media always goes through the TURN server.
+  bool relayOnly = false;
+
   CallPhase phase = CallPhase.idle;
   CallInfo? call;
   AppUser? peer;
@@ -545,6 +548,7 @@ class CallManager extends ChangeNotifier {
       'bundlePolicy': 'max-bundle', // one connection for audio + video: fewer checks, faster start
       'rtcpMuxPolicy': 'require',
       'iceCandidatePoolSize': 2, // start gathering network paths before the offer is made
+      if (relayOnly) 'iceTransportPolicy': 'relay',
     });
     _pc = pc;
     for (final t in _local?.getTracks() ?? <MediaStreamTrack>[]) {
