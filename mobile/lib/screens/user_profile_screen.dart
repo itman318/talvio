@@ -18,6 +18,7 @@ import '../theme/brand.dart';
 import '../widgets/premium.dart';
 import 'shared_media_screen.dart';
 import 'story_screens.dart' show HighlightsRow;
+import '../widgets/emoji_status.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key, required this.userId});
@@ -147,7 +148,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   statusColor: u.online ? Brand.accent : null,
                   badges: [
                     if (u.isVerified) const Icon(Icons.verified_rounded, color: Brand.sky, size: 22),
-                    if (u.isPremium) const Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22),
+                    if (u.statusEmoji != null)
+                      EmojiStatusBadge(u, size: 21, padLeft: 0)
+                    else if (u.isPremium)
+                      const Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22),
                   ],
                   actions: [
                     if (other) ...[

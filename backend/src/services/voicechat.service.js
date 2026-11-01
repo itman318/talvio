@@ -17,6 +17,7 @@ const chatService = require('./chat.service');
 const userService = require('./user.service');
 
 const MAX_PARTICIPANTS = 30; // mesh audio: fine for small rooms
+const MAX_VIDEO = 8; // cameras on at once (each one is sent to everyone)
 
 const lazyMessages = () => require('./message.service'); // eslint-disable-line global-require
 const iceServers = (uid) => require('./call.service').iceServers(uid); // eslint-disable-line global-require
@@ -27,7 +28,7 @@ async function active(chatId) {
 
 async function participants(vcId) {
   return db.many(
-    `SELECT user_id, muted, can_speak, hand_raised, joined_at FROM voice_chat_participants
+    `SELECT user_id, muted, can_speak, hand_raised, video, joined_at FROM voice_chat_participants
      WHERE voice_chat_id = $1 AND left_at IS NULL ORDER BY joined_at`,
     [vcId],
   );
@@ -41,10 +42,11 @@ async function serialize(vc, viewerId) {
     id: vc.id,
     chat_id: vc.chat_id,
     title: vc.title || '',
+    max_video: MAX_VIDEO,
     started_at: new Date(vc.started_at).toISOString(),
     participants: list
       .filter((p) => users.has(p.user_id))
-      .map((p) => ({ user: users.get(p.user_id), muted: p.muted, can_speak: p.can_speak, hand_raised: p.hand_raised })),
+      .map((p) => ({ user: users.get(p.user_id), muted: p.muted, can_speak: p.can_speak, hand_raised: p.hand_raised, video: !!p.video })),
   };
 }
 
@@ -87,7 +89,7 @@ async function join(userId, chatIdRaw, body = {}, sessionId = null) {
   await db.query(
     `INSERT INTO voice_chat_participants (voice_chat_id, user_id, session_id, muted, can_speak)
      VALUES ($1, $2, $3, TRUE, $4)
-     ON CONFLICT (voice_chat_id, user_id) DO UPDATE SET left_at = NULL, joined_at = now(), session_id = $3, muted = TRUE, hand_raised = FALSE`,
+     ON CONFLICT (voice_chat_id, user_id) DO UPDATE SET left_at = NULL, joined_at = now(), session_id = $3, muted = TRUE, hand_raised = FALSE, video = FALSE`,
     [vc.id, userId, sessionId || (body && body.session_id) || null, canSpeak],
   );
   await broadcast(vc, { joined: userId });
@@ -98,7 +100,7 @@ async function leave(userId, chatIdRaw) {
   const chatId = v.id(chatIdRaw, 'chat_id');
   const vc = await active(chatId);
   if (!vc) return { ok: true };
-  await db.query('UPDATE voice_chat_participants SET left_at = now(), hand_raised = FALSE WHERE voice_chat_id = $1 AND user_id = $2 AND left_at IS NULL', [vc.id, userId]);
+  await db.query('UPDATE voice_chat_participants SET left_at = now(), hand_raised = FALSE, video = FALSE WHERE voice_chat_id = $1 AND user_id = $2 AND left_at IS NULL', [vc.id, userId]);
   const left = await participants(vc.id);
   if (!left.length) return endVc(vc, userId); // the last one out closes the room
   await broadcast(vc, { left: userId });
@@ -152,12 +154,25 @@ async function update(userId, chatIdRaw, body = {}) {
     if (targetId !== userId && !muted) throw forbidden('not_allowed', 'Only they can unmute themselves');
     set('muted', muted);
   }
+  if (body.video !== undefined) {
+    const on = v.bool(body.video, 'video');
+    if (targetId !== userId && on) throw forbidden('not_allowed', 'Only they can turn their camera on');
+    if (on && targetId === userId) {
+      if (!target.can_speak) throw forbidden('cannot_speak', 'Raise your hand — an admin will let you speak');
+      const n = await db.one('SELECT count(*)::int AS n FROM voice_chat_participants WHERE voice_chat_id = $1 AND left_at IS NULL AND video AND user_id <> $2', [vc.id, userId]);
+      if (n.n >= MAX_VIDEO) throw forbidden('video_full', `Up to ${MAX_VIDEO} cameras can be on at once`);
+    }
+    set('video', on);
+  }
   if (body.hand_raised !== undefined && targetId === userId) set('hand_raised', v.bool(body.hand_raised, 'hand_raised'));
   if (body.can_speak !== undefined && admin && targetId !== userId) {
     const cs = v.bool(body.can_speak, 'can_speak');
     set('can_speak', cs);
     if (cs) set('hand_raised', false);
-    else set('muted', true);
+    else {
+      set('muted', true);
+      set('video', false);
+    }
   }
   if (sets.length) await db.query(`UPDATE voice_chat_participants SET ${sets.join(', ')} WHERE voice_chat_id = $1 AND user_id = $2`, params);
   await broadcast(vc);
@@ -207,4 +222,4 @@ async function leaveBySession(sessionId) {
   for (const r of rows) await leave(r.user_id, r.chat_id).catch(() => {});
 }
 
-module.exports = { start, join, leave, end, update, get, relay, speaking, leaveBySession, MAX_PARTICIPANTS };
+module.exports = { MAX_VIDEO, start, join, leave, end, update, get, relay, speaking, leaveBySession, MAX_PARTICIPANTS };

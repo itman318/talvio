@@ -36,6 +36,7 @@ import '../widgets/sticker_widgets.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
 import '../widgets/message_extras.dart';
+import '../widgets/emoji_status.dart';
 
 /// One row of Settings (also what the settings search looks through).
 class _Item {
@@ -231,7 +232,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5))),
             if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified_rounded, color: Brand.sky, size: 22)),
-            if (plus) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22)),
+            if (me.statusEmoji != null)
+              EmojiStatusBadge(me, size: 21)
+            else if (plus)
+              const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22)),
           ]),
           const SizedBox(height: 3),
           Text(

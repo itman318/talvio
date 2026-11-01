@@ -17,6 +17,7 @@ import 'qr_screens.dart';
 import 'settings_screens.dart';
 import 'notifications_screen.dart';
 import 'story_screens.dart' show HighlightsRow, MyHighlightsScreen;
+import '../widgets/emoji_status.dart';
 
 /// "Finish your profile": shown until photo, username, bio and birthday are set.
 Widget _completeCard(BuildContext context, AppUser me, VoidCallback edit) {
@@ -95,7 +96,12 @@ class MyProfileScreen extends StatelessWidget {
             status: me.username != null ? '@${me.username}' : 'Add a username so people can find you',
             badges: [
               if (me.isVerified) const Icon(Icons.verified_rounded, color: Brand.primary, size: 22),
-              if (me.isPremium) const Icon(Icons.star_rounded, color: Brand.premium, size: 22),
+              GestureDetector(
+                onTap: () => showEmojiStatusPicker(context),
+                child: me.statusEmoji != null
+                    ? EmojiStatusBadge(me, size: 21, padLeft: 0)
+                    : Icon(me.isPremium ? Icons.star_rounded : Icons.add_reaction_outlined, color: me.isPremium ? Brand.premium : Colors.white70, size: 22),
+              ),
             ],
             onAvatarTap: () => go(const EditProfileScreen()),
             actions: [
@@ -213,6 +219,13 @@ class MyProfileScreen extends StatelessWidget {
           ),
           SettingsTile(icon: Icons.bookmarks_rounded, color: const Color(0xFF3C83DE), title: 'Read later', subtitle: 'Saved messages to come back to', onTap: () => go(const ReadLaterScreen())),
           SettingsTile(icon: Icons.auto_awesome_rounded, color: Brand.amber, title: 'Story highlights', onTap: () => go(const MyHighlightsScreen())),
+          SettingsTile(
+            icon: Icons.emoji_emotions_rounded,
+            color: const Color(0xFFF2557E),
+            title: 'Emoji status',
+            subtitle: me.statusEmoji != null ? 'Now: ${me.statusEmoji}' : 'An emoji next to your name',
+            onTap: () => showEmojiStatusPicker(context),
+          ),
           SettingsTile(
             icon: Icons.star_rounded,
             color: Brand.premium,

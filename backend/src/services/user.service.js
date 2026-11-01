@@ -69,6 +69,26 @@ function allowedFor(rel, ownerId, key, setting) {
   return allowedBy(setting, rel.theyHaveMe.has(ownerId));
 }
 
+/** The emoji next to someone's name, while it lasts. */
+function emojiStatus(u) {
+  if (!u.emoji_status) return null;
+  if (u.emoji_status_until && new Date(u.emoji_status_until) <= new Date()) return null;
+  return { emoji: u.emoji_status, until: u.emoji_status_until ? new Date(u.emoji_status_until).toISOString() : null };
+}
+
+/** `{ emoji, duration_sec? }` → [emoji, until] ; null / '' clears it. */
+function parseEmojiStatus(raw) {
+  if (raw === null || raw === '' || (raw && raw.emoji === null)) return [null, null];
+  const emoji = String((raw && typeof raw === 'object' ? raw.emoji : raw) || '').trim();
+  const leftover = emoji.replace(/[\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Modifier}\u200D\uFE0F]/gu, '');
+  if (!emoji || [...emoji].length > 10 || leftover || !/[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(emoji)) {
+    throw badRequest('invalid_input', 'Pick an emoji');
+  }
+  const sec = raw && typeof raw === 'object' && raw.duration_sec ? Math.round(Number(raw.duration_sec)) : 0;
+  if (!Number.isFinite(sec) || sec < 0 || sec > 366 * 86400) throw badRequest('invalid_input', 'Invalid duration');
+  return [emoji, sec ? new Date(Date.now() + sec * 1000) : null];
+}
+
 /** Public representation of a user, as seen by `viewerId`. */
 function serialize(u, viewerId, rel) {
   const self = u.id === viewerId;
@@ -103,6 +123,7 @@ function serialize(u, viewerId, rel) {
     is_verified: u.is_verified,
     is_bot: !!u.is_bot,
     is_premium: !!(u.premium_until && new Date(u.premium_until) > new Date()),
+    emoji_status: emojiStatus(u),
     avatar_url: can('avatar', u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
     phone: can('phone', u.privacy_phone) ? u.phone : null,
     birthday: bday ? { day: bday[2], month: bday[1], ...(self && bday[0] !== 1904 ? { year: bday[0] } : {}) } : null,
@@ -183,6 +204,11 @@ async function updateProfile(userId, body) {
     add('bio', v.str(body.bio, { field: 'bio', max }));
   }
   if (body.birthday !== undefined) add('birthday', parseBirthday(body.birthday));
+  if (body.emoji_status !== undefined) {
+    const [emoji, until] = parseEmojiStatus(body.emoji_status);
+    add('emoji_status', emoji);
+    add('emoji_status_until', until);
+  }
   if (body.username !== undefined) {
     const raw = typeof body.username === 'string' ? body.username.trim().replace(/^@/, '') : body.username;
     const name = v.validateUsername(raw);

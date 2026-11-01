@@ -1521,6 +1521,65 @@ async function searchMessages(userId, query = {}) {
   };
 }
 
+/**
+ * #hashtag search: my chats and every public channel (like Telegram's "Public posts").
+ * scope: 'all' (default) | 'mine' | 'channels'.
+ */
+async function searchHashtag(userId, query = {}) {
+  const tag = String(query.tag || query.q || '').trim().replace(/^#+/, '').toLowerCase();
+  if (!/^[\p{L}\p{N}_]{2,64}$/u.test(tag)) return { tag, results: [], has_more: false };
+  rateLimit.enforce(`hsearch:${userId}`, 30, 60 * 1000, 'Searching too fast, wait a moment');
+  const scope = query.scope ? v.oneOf(query.scope, ['all', 'mine', 'channels'], 'scope') : 'all';
+  const lim = v.limit(query.limit, 30, 50);
+  const tq = (tag.match(/[\p{L}\p{N}]+/gu) || []).join(' & ');
+  const params = [userId, tq, `(^|[^[:alnum:]_])#${tag.replace(/[^\p{L}\p{N}_]/gu, '')}($|[^[:alnum:]_])`];
+  let before = '';
+  if (query.before) {
+    params.push(v.id(query.before, 'before'));
+    before = ` AND m.id < $${params.length}`;
+  }
+  const where = {
+    mine: 'cm.user_id IS NOT NULL AND m.id > cm.cleared_before_id',
+    channels: "c.type = 'channel' AND c.is_public AND NOT c.is_suspended",
+    all: "((cm.user_id IS NOT NULL AND m.id > cm.cleared_before_id) OR (c.type = 'channel' AND c.is_public AND NOT c.is_suspended))",
+  }[scope];
+  params.push(lim);
+  const rows = await db.many(
+    `SELECT m.* FROM messages m
+     JOIN chats c ON c.id = m.chat_id
+     LEFT JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1
+     WHERE to_tsvector('simple', m.text) @@ to_tsquery('simple', $2)
+       AND m.text ~* $3
+       AND m.deleted_at IS NULL AND m.type <> 'system'
+       AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $1 AND h.message_id = m.id)
+       AND ${where}${before}
+     ORDER BY m.id DESC LIMIT $${params.length}`,
+    params,
+  );
+  const messages = await serializeRows(userId, rows);
+  const chatIds = [...new Set(rows.map((r) => r.chat_id))];
+  const chats = chatIds.length
+    ? await db.many(
+      `SELECT c.*, (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id) AS n,
+              EXISTS (SELECT 1 FROM chat_members me WHERE me.chat_id = c.id AND me.user_id = $2) AS me
+       FROM chats c WHERE c.id = ANY($1::bigint[])`,
+      [chatIds, userId],
+    )
+    : [];
+  const mine = new Map((await chatService.getChatsByIds(userId, chats.filter((c) => c.me).map((c) => c.id))).map((c) => [c.id, c]));
+  const chatMap = new Map(chats.map((c) => {
+    const my = mine.get(c.id);
+    return [c.id, my
+      ? { id: c.id, type: my.type, title: my.title, avatar_url: my.avatar_url, username: c.username || null, is_member: true }
+      : { id: c.id, type: c.type, title: c.title, avatar_url: chatService.publicSummary(c, Number(c.n), false).avatar_url, username: c.username, is_member: false, member_count: Number(c.n) }];
+  }));
+  return {
+    tag,
+    results: messages.map((m) => ({ chat: chatMap.get(m.chat_id), message: m })),
+    has_more: rows.length === lim,
+  };
+}
+
 // ------------------------------------------------------------------ receipts
 async function chatMaxMessageId(chatId) {
   const r = await db.one('SELECT COALESCE(max(id), 0) AS id FROM messages WHERE chat_id = $1', [chatId]);
@@ -1605,6 +1664,7 @@ module.exports = {
   unpinMessage,
   listPins,
   searchMessages,
+  searchHashtag,
   serializeRows,
   serializeByIds,
   listMessages,

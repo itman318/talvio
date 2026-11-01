@@ -87,7 +87,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(systemNavigationBarColor: const Color(0xFF0B0E1E)),
       child: PopScope(
-        canPop: c.phase == CallPhase.idle || c.phase == CallPhase.ended,
+        canPop: c.phase != CallPhase.incoming, // back = minimize; the call keeps going in a floating window
         child: Scaffold(
           backgroundColor: const Color(0xFF0B0E1E),
           body: GestureDetector(
@@ -133,6 +133,19 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                     child: Row(children: [
+                      if (c.inProgress) ...[
+                        _Glass(
+                          radius: 20,
+                          child: InkWell(
+                            onTap: () => Navigator.of(context).maybePop(),
+                            child: const Padding(
+                              padding: EdgeInsets.all(6),
+                              child: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 24),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       const _Glass(
                         radius: 16,
                         padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),

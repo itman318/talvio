@@ -166,6 +166,13 @@ test('voice chats: start, join, mute, raise hand in channels, signalling, end', 
   await vcs.update(B.id, g.id, { muted: false });
   await rejects(vcs.update(B.id, g.id, { user_id: A.id, muted: true }), 'not_admin');
   await vcs.update(A.id, g.id, { user_id: B.id, muted: true });
+  // group video: cameras on/off, others can't turn mine on
+  const cam = await vcs.update(B.id, g.id, { video: true });
+  assert.equal(cam.voice_chat.participants.find((p) => p.user.id === B.id).video, true);
+  assert.equal(cam.voice_chat.max_video, vcs.MAX_VIDEO);
+  await rejects(vcs.update(A.id, g.id, { user_id: B.id, video: true }), 'not_allowed');
+  await vcs.update(A.id, g.id, { user_id: B.id, video: false });
+  assert.equal((await vcs.get(B.id, g.id)).voice_chat.participants.find((p) => p.user.id === B.id).video, false);
   const sig = [];
   const on = (e) => e.event === 'vc:signal' && sig.push(e);
   bus.on('rt:emit', on);
@@ -185,6 +192,7 @@ test('voice chats: start, join, mute, raise hand in channels, signalling, end', 
   await vcs.start(A.id, ch.id);
   await vcs.join(B.id, ch.id);
   await rejects(vcs.update(B.id, ch.id, { muted: false }), 'cannot_speak');
+  await rejects(vcs.update(B.id, ch.id, { video: true }), 'cannot_speak');
   await vcs.update(B.id, ch.id, { hand_raised: true });
   await vcs.update(A.id, ch.id, { user_id: B.id, can_speak: true });
   const after = await vcs.update(B.id, ch.id, { muted: false });
@@ -422,4 +430,42 @@ test('contact joined: a synced number that later signs up becomes a contact', as
   const c = await db.one('SELECT 1 AS ok FROM contacts WHERE owner_id = $1 AND contact_id = $2', [A.id, u.id]);
   assert.ok(c, 'added to contacts');
   void bus;
+});
+
+test('emoji status: set, shown to others, expires, cleared, only emoji', async () => {
+  await users.updateProfile(A.id, { emoji_status: { emoji: '🔥' } });
+  assert.equal((await users.getUser(B.id, A.id)).emoji_status.emoji, '🔥');
+  await users.updateProfile(A.id, { emoji_status: { emoji: '🇵🇰', duration_sec: 3600 } });
+  const s = (await users.getMe(A.id)).emoji_status;
+  assert.equal(s.emoji, '🇵🇰');
+  assert.ok(new Date(s.until) > new Date());
+  await db.query("UPDATE users SET emoji_status_until = now() - interval '1 minute' WHERE id = $1", [A.id]);
+  assert.equal((await users.getUser(B.id, A.id)).emoji_status, null); // expired
+  await users.updateProfile(A.id, { emoji_status: '👨‍💻' });
+  assert.equal((await users.getUser(B.id, A.id)).emoji_status.emoji, '👨‍💻');
+  await rejects(users.updateProfile(A.id, { emoji_status: 'hello' }), 'invalid_input');
+  await rejects(users.updateProfile(A.id, { emoji_status: '🔥abc' }), 'invalid_input');
+  await users.updateProfile(A.id, { emoji_status: null });
+  assert.equal((await users.getMe(A.id)).emoji_status, null);
+});
+
+test('hashtag search: my chats and public channels, whole tags only', async () => {
+  const ch = await chats.createChannel(A.id, { title: 'Gold news', username: 'goldnews_h' });
+  await messages.sendMessage(A.id, ch.id, { text: 'Price up today #gold #xauusd' });
+  await messages.sendMessage(A.id, ch.id, { text: 'nothing here #golden' });
+  const priv = await chats.createChannel(A.id, { title: 'Private room', username: null });
+  await messages.sendMessage(A.id, priv.id, { text: 'secret #gold' });
+  const dm = await chats.getOrCreatePrivate(B.id, C.id);
+  await messages.sendMessage(B.id, dm.id, { text: 'see #gold' });
+  // B is not in the channel, but it is public
+  const r = await messages.searchHashtag(B.id, { tag: '#gold' });
+  const texts = r.results.map((x) => x.message.text);
+  assert.ok(texts.includes('Price up today #gold #xauusd'));
+  assert.ok(!texts.includes('nothing here #golden')); // whole tag only
+  assert.ok(!texts.includes('secret #gold')); // not public, not a member
+  assert.ok(texts.includes('see #gold')); // my own chat
+  assert.equal(r.results.find((x) => x.message.text.startsWith('Price')).chat.username, 'goldnews_h');
+  const onlyChannels = await messages.searchHashtag(B.id, { tag: 'gold', scope: 'channels' });
+  assert.ok(onlyChannels.results.every((x) => x.chat.type === 'channel'));
+  assert.equal((await messages.searchHashtag(B.id, { tag: 'x' })).results.length, 0);
 });

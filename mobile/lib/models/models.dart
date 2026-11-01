@@ -29,6 +29,8 @@ class AppUser {
   final Birthday? birthday; // when they share it with me
   final Map<String, dynamic>? security; // only for "me": default timer, auto-logout, account TTL, search
   final bool hasPassword; // only for "me": two-step verification is on
+  final String? emojiStatus; // the emoji next to their name
+  final DateTime? emojiStatusUntil;
 
   AppUser({
     required this.id,
@@ -55,6 +57,8 @@ class AppUser {
     this.birthday,
     this.security,
     this.hasPassword = false,
+    this.emojiStatus,
+    this.emojiStatusUntil,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
@@ -82,7 +86,18 @@ class AppUser {
         birthday: j['birthday'] is Map ? Birthday.fromJson(Map<String, dynamic>.from(j['birthday'] as Map)) : null,
         security: j['security'] is Map ? Map<String, dynamic>.from(j['security'] as Map) : null,
         hasPassword: j['has_password'] == true,
+        emojiStatus: j['emoji_status'] is Map ? (j['emoji_status'] as Map)['emoji'] as String? : null,
+        emojiStatusUntil: j['emoji_status'] is Map ? _date((j['emoji_status'] as Map)['until']) : null,
       );
+
+  /// The emoji status, while it lasts.
+  String? get statusEmoji {
+    final e = emojiStatus;
+    if (e == null || e.isEmpty) return null;
+    final until = emojiStatusUntil;
+    if (until != null && until.isBefore(DateTime.now())) return null;
+    return e;
+  }
 
   String get name {
     if (deleted) return 'Deleted Account';

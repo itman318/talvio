@@ -9,11 +9,12 @@ import '../models/models.dart';
 
 /// Someone in a live voice chat.
 class VcParticipant {
-  VcParticipant({required this.user, this.muted = true, this.canSpeak = true, this.handRaised = false});
+  VcParticipant({required this.user, this.muted = true, this.canSpeak = true, this.handRaised = false, this.video = false});
   final AppUser user;
   bool muted;
   bool canSpeak;
   bool handRaised;
+  bool video;
   bool speaking = false;
 
   factory VcParticipant.fromJson(Map<String, dynamic> j) => VcParticipant(
@@ -21,6 +22,7 @@ class VcParticipant {
         muted: j['muted'] != false,
         canSpeak: j['can_speak'] != false,
         handRaised: j['hand_raised'] == true,
+        video: j['video'] == true,
       );
 }
 
@@ -42,6 +44,18 @@ class VoiceChatManager extends ChangeNotifier {
   bool speaker = true;
   final List<VcParticipant> participants = [];
   int? Function()? myId;
+
+  int maxVideo = 8;
+
+  // ---- video (cameras are optional: every connection carries an empty video slot we fill when the camera goes on)
+  MediaStream? _camStream;
+  MediaStreamTrack? get _cam => _camStream?.getVideoTracks().firstOrNull;
+  final RTCVideoRenderer localRenderer = RTCVideoRenderer();
+  bool _localReady = false;
+  final Map<int, RTCVideoRenderer> renderers = {};
+  bool frontCamera = true;
+  bool get cameraOn => _camStream != null;
+  bool get anyVideo => participants.any((p) => p.video);
 
   MediaStream? _local;
   List<Map<String, dynamic>> _ice = [];
@@ -114,6 +128,12 @@ class VoiceChatManager extends ChangeNotifier {
 
   Future<void> _cleanup() async {
     _levelTimer?.cancel();
+    await _stopCamera();
+    for (final r in renderers.values) {
+      r.srcObject = null;
+      await r.dispose().catchError((_) {});
+    }
+    renderers.clear();
     for (final pc in _peers.values) {
       await pc.close().catchError((_) {});
     }
@@ -170,6 +190,90 @@ class VoiceChatManager extends ChangeNotifier {
     await services.api.patch('/chats/$id/voice-chat', {'user_id': userId, if (mute != null) 'muted': mute, if (canSpeak != null) 'can_speak': canSpeak});
   }
 
+  /// Camera on / off. The track goes into the video slot of every connection — no renegotiation needed.
+  Future<void> toggleCamera() async {
+    final id = chatId;
+    final m = me;
+    if (id == null || m == null) return;
+    if (cameraOn) {
+      await _stopCamera();
+      m.video = false;
+      notifyListeners();
+      await services.api.patch('/chats/$id/voice-chat', {'video': false}).catchError((_) => <String, dynamic>{});
+      return;
+    }
+    if (!m.canSpeak) throw Exception('Raise your hand — an admin will let you speak');
+    if (participants.where((p) => p.video).length >= maxVideo) throw Exception('Up to $maxVideo cameras can be on at once');
+    final stream = await navigator.mediaDevices.getUserMedia({
+      'audio': false,
+      'video': {'facingMode': frontCamera ? 'user' : 'environment', 'width': 640, 'height': 480, 'frameRate': 20},
+    });
+    _camStream = stream;
+    if (!_localReady) {
+      await localRenderer.initialize();
+      _localReady = true;
+    }
+    localRenderer.srcObject = stream;
+    for (final pc in _peers.values) {
+      await _fillVideo(pc);
+    }
+    m.video = true;
+    notifyListeners();
+    try {
+      await services.api.patch('/chats/$id/voice-chat', {'video': true});
+    } catch (_) {
+      await _stopCamera();
+      m.video = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> switchCamera() async {
+    final t = _cam;
+    if (t == null) return;
+    await Helper.switchCamera(t);
+    frontCamera = !frontCamera;
+    notifyListeners();
+  }
+
+  Future<void> _stopCamera() async {
+    final s = _camStream;
+    if (s == null) return;
+    _camStream = null;
+    for (final pc in _peers.values) {
+      for (final tr in await pc.getTransceivers().catchError((_) => <RTCRtpTransceiver>[])) {
+        if (_isVideo(tr)) await tr.sender.replaceTrack(null).catchError((_) {});
+      }
+    }
+    if (_localReady) localRenderer.srcObject = null;
+    for (final t in s.getTracks()) {
+      await t.stop().catchError((_) {});
+    }
+    await s.dispose().catchError((_) {});
+  }
+
+  bool _isVideo(RTCRtpTransceiver tr) => tr.receiver.track?.kind == 'video' || tr.sender.track?.kind == 'video';
+
+  /// Sends my camera (if on) through this connection's video slot, at a bitrate a mesh can afford.
+  Future<void> _fillVideo(RTCPeerConnection pc) async {
+    final cam = _cam;
+    for (final tr in await pc.getTransceivers()) {
+      if (!_isVideo(tr)) continue;
+      await tr.sender.replaceTrack(cam).catchError((_) {});
+      if (cam != null) {
+        try {
+          final params = tr.sender.parameters;
+          final enc = params.encodings;
+          if (enc != null && enc.isNotEmpty) {
+            enc.first.maxBitrate = participants.length > 4 ? 250000 : 450000;
+            await tr.sender.setParameters(params);
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
   void toggleSpeaker() {
     speaker = !speaker;
     Helper.setSpeakerphoneOn(speaker).catchError((_) {});
@@ -194,11 +298,19 @@ class VoiceChatManager extends ChangeNotifier {
     // my mic follows what the server says (an admin may have muted me)
     final m = me;
     if (m != null) _setMicEnabled(!m.muted && m.canSpeak);
+    if (raw['max_video'] is num) maxVideo = (raw['max_video'] as num).toInt();
+    // an admin made me a listener: my camera goes off too
+    if (m != null && !m.video && cameraOn) _stopCamera().then((_) => notifyListeners());
     // people who left: close their connection
     final ids = participants.map((p) => p.user.id).toSet();
     for (final gone in _peers.keys.where((k) => !ids.contains(k)).toList()) {
       _peers.remove(gone)?.close();
       _remoteSet.remove(gone);
+      final r = renderers.remove(gone);
+      if (r != null) {
+        r.srcObject = null;
+        r.dispose();
+      }
     }
     notifyListeners();
   }
@@ -223,14 +335,39 @@ class VoiceChatManager extends ChangeNotifier {
     }
   }
 
-  Future<RTCPeerConnection> _peer(int userId) async {
+  Future<RTCPeerConnection> _peer(int userId, {bool offerer = false}) async {
     final existing = _peers[userId];
     if (existing != null) return existing;
-    final pc = await createPeerConnection({'iceServers': _ice, 'sdpSemantics': 'unified-plan'});
+    final pc = await createPeerConnection({'iceServers': _ice, 'sdpSemantics': 'unified-plan', 'bundlePolicy': 'max-bundle', 'rtcpMuxPolicy': 'require'});
     _peers[userId] = pc;
     for (final t in _local?.getTracks() ?? <MediaStreamTrack>[]) {
       await pc.addTrack(t, _local!);
     }
+    // the video slot: whoever makes the offer opens it; it stays empty until a camera goes on
+    if (offerer) {
+      await pc.addTransceiver(
+        kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv, streams: [if (_local != null) _local!]),
+      );
+      await _fillVideo(pc);
+    }
+    pc.onTrack = (RTCTrackEvent e) async {
+      if (e.track.kind != 'video') return; // audio plays by itself
+      var r = renderers[userId];
+      if (r == null) {
+        r = RTCVideoRenderer();
+        await r.initialize();
+        renderers[userId] = r;
+      }
+      if (e.streams.isNotEmpty) {
+        r.srcObject = e.streams.first;
+      } else {
+        final s = await createLocalMediaStream('vc$userId');
+        await s.addTrack(e.track);
+        r.srcObject = s;
+      }
+      notifyListeners();
+    };
     pc.onIceCandidate = (c) {
       if (c.candidate == null) return;
       _send(userId, {'kind': 'ice', 'candidate': {'candidate': c.candidate, 'sdpMid': c.sdpMid, 'sdpMLineIndex': c.sdpMLineIndex}});
@@ -240,8 +377,8 @@ class VoiceChatManager extends ChangeNotifier {
   }
 
   Future<void> _offerTo(int userId) async {
-    final pc = await _peer(userId);
-    final offer = await pc.createOffer({'offerToReceiveAudio': true, 'offerToReceiveVideo': false});
+    final pc = await _peer(userId, offerer: true);
+    final offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     _send(userId, {'kind': 'offer', 'sdp': offer.sdp});
   }
@@ -253,7 +390,12 @@ class VoiceChatManager extends ChangeNotifier {
         await pc.setRemoteDescription(RTCSessionDescription('${data['sdp']}', 'offer'));
         _remoteSet[from] = true;
         await _flush(from);
-        final answer = await pc.createAnswer({'offerToReceiveAudio': true, 'offerToReceiveVideo': false});
+        // answer the video slot both ways, so my camera can go through it too
+        for (final tr in await pc.getTransceivers()) {
+          if (_isVideo(tr)) await tr.setDirection(TransceiverDirection.SendRecv).catchError((_) {});
+        }
+        await _fillVideo(pc);
+        final answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         _send(from, {'kind': 'answer', 'sdp': answer.sdp});
       case 'answer':
@@ -318,7 +460,9 @@ class VoiceChatManager extends ChangeNotifier {
   @override
   void dispose() {
     _sub.cancel();
-    _cleanup();
+    _cleanup().then((_) {
+      if (_localReady) localRenderer.dispose();
+    });
     super.dispose();
   }
 }

@@ -35,14 +35,20 @@ class MessageNotifications {
   static Future<void> init() async {
     if (_ready) return;
     _ready = true;
-    await plugin.initialize(
-      const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(requestAlertPermission: false, requestBadgePermission: false, requestSoundPermission: false),
-      ),
-      onDidReceiveNotificationResponse: _onResponse,
-      onDidReceiveBackgroundNotificationResponse: notificationActionInBackground,
-    );
+    try {
+      await plugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          iOS: DarwinInitializationSettings(requestAlertPermission: false, requestBadgePermission: false, requestSoundPermission: false),
+          macOS: DarwinInitializationSettings(requestAlertPermission: true, requestBadgePermission: true, requestSoundPermission: true),
+          linux: LinuxInitializationSettings(defaultActionName: 'Open'),
+        ),
+        onDidReceiveNotificationResponse: _onResponse,
+        onDidReceiveBackgroundNotificationResponse: notificationActionInBackground,
+      );
+    } catch (e) {
+      debugPrint('Local notifications unavailable: $e'); // e.g. Windows desktop
+    }
   }
 
   /// Tapped a notification that started the app.

@@ -15,6 +15,7 @@ import '../widgets/mascot.dart';
 import 'channel_screens.dart' show PublicChatPreviewScreen;
 import 'chat_screen.dart';
 import 'user_profile_screen.dart';
+import '../widgets/emoji_status.dart';
 
 /// One search for everything: my chats, people, bots, public groups, channels and messages.
 /// With an empty box it shows recent searches and popular channels, groups and bots.
@@ -104,7 +105,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       final wantMessages = q.length >= 2 && (_filter == 'all' || _filter == 'messages');
       final futures = <Future<dynamic>>[
         _filter == 'messages' && q.length >= 2 ? Future.value(null) : api.get('/search', query: {'q': q, if (_filter != 'all' && _filter != 'messages') 'type': _filter}),
-        wantMessages
+        wantMessages && _isTag(q) && widget.chatId == null
+            ? api.get('/search/hashtag', query: {'tag': q, 'limit': _filter == 'messages' ? '40' : '10'})
+            : wantMessages
             ? api.get('/search/messages', query: {'q': q, 'limit': _filter == 'messages' ? '40' : '6', if (widget.chatId != null) 'chat_id': '${widget.chatId}'})
             : Future.value(null),
       ];
@@ -120,6 +123,24 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       setState(() => _loading = false);
       if (q.length >= 2) showError(context, e);
     }
+  }
+
+  static bool _isTag(String q) => RegExp(r'^#[\p{L}\p{N}_]{2,64}$', unicode: true).hasMatch(q);
+
+  /// A hashtag result: my chat opens directly, a public channel I'm not in opens its preview.
+  Future<void> _openResultChat(Map<String, dynamic> chat) async {
+    if (chat['is_member'] == false) {
+      return _openPublic({
+        'chat_id': chat['id'],
+        'type': chat['type'],
+        'title': chat['title'],
+        'username': chat['username'],
+        'avatar_url': chat['avatar_url'],
+        'member_count': chat['member_count'],
+        'is_member': false,
+      });
+    }
+    return _openChat(Chat.fromJson(chat));
   }
 
   void _setFilter(String f) {
@@ -330,8 +351,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       section('Channels', 'channels', channels.length, [for (final c in channels) _PublicTile(info: c, query: q, onTap: () => _openPublic(c))]),
       section('Groups', 'groups', groups.length, [for (final g in groups) _PublicTile(info: g, query: q, onTap: () => _openPublic(g))]),
       section('Bots', 'bots', bots.length, [for (final b in bots) _UserTile(user: b.$1, about: b.$2, users: b.$3, query: q, onTap: () => _openUser(b.$1))]),
-      section('Messages', 'messages', _messages.length, [
-        for (final r in _messages) _MessageTile(result: r, query: q, onTap: () => _openChat(Chat.fromJson(Map<String, dynamic>.from(r['chat'] as Map)))),
+      section(_isTag(q) ? 'Posts with $q' : 'Messages', 'messages', _messages.length, [
+        for (final r in _messages) _MessageTile(result: r, query: _isTag(q) ? q.substring(1) : q, onTap: () => _openResultChat(Map<String, dynamic>.from(r['chat'] as Map))),
       ]),
     ]);
   }
@@ -483,7 +504,7 @@ class _UserTile extends StatelessWidget {
             ),
           ),
       ]),
-      title: Row(children: [Flexible(child: _Hl(user.name, query, style: _titleStyle)), _verified(user.isVerified), if (user.isPremium) const Padding(padding: EdgeInsets.only(left: 3), child: Icon(Icons.star_rounded, size: 16, color: Brand.premium))]),
+      title: Row(children: [Flexible(child: _Hl(user.name, query, style: _titleStyle)), _verified(user.isVerified), EmojiStatusBadge(user, size: 15), if (user.isPremium && user.statusEmoji == null) const Padding(padding: EdgeInsets.only(left: 3), child: Icon(Icons.star_rounded, size: 16, color: Brand.premium))]),
       subtitle: Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: user.isBot ? const _Pill('Start') : null,
     );

@@ -282,6 +282,7 @@ router.post('/secret-chats/:id/ack', h(async (req, res) => res.json(await secret
 router.post('/secret-chats/:id/read', h(async (req, res) => res.json(await secretService.markRead(req.userId, req.sessionId, { ...req.body, secret_chat_id: req.params.id }))));
 router.get('/search', h(async (req, res) => res.json(await require('../services/search.service').search(req.userId, req.query)))); // eslint-disable-line global-require
 router.get('/search/messages', h(async (req, res) => res.json(await messageService.searchMessages(req.userId, req.query))));
+router.get('/search/hashtag', h(async (req, res) => res.json(await messageService.searchHashtag(req.userId, req.query))));
 router.put('/chats/:id/username', h(async (req, res) => res.json(await chatService.setChatUsername(req.userId, req.params.id, req.body.username))));
 router.get('/chats/:id/stats', h(async (req, res) => res.json(await chatService.chatStats(req.userId, req.params.id))));
 router.post('/chats/:id/views', h(async (req, res) => res.json(await messageService.recordViews(req.userId, req.params.id, req.body.message_ids))));

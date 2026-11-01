@@ -32,6 +32,8 @@ import 'theme/brand.dart';
 import 'widgets/in_app_banner.dart';
 import 'core/notif_prefs.dart';
 import 'core/keep_alive.dart';
+import 'core/pip.dart';
+import 'widgets/call_bubble.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -87,6 +89,9 @@ Future<void> _start() async {
   // keeps the 7-day window of prayer reminders topped up
   if (prefs.prayerReminders || prefs.ramadanReminders) unawaited(PrayerReminders.reschedule(prefs));
   prefs.addListener(() => calls.lowData = prefs.dataSaver);
+  // video calls go to a small floating window when you leave the app (Android)
+  Pip.init();
+  calls.addListener(() => Pip.setAuto(calls.video && (calls.phase == CallPhase.connected || calls.phase == CallPhase.reconnecting)));
   calls.onShowCallScreen = () {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
@@ -355,7 +360,12 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
           ),
           child: Stack(textDirection: TextDirection.ltr, children: [
             scaled,
+            if (auth.status == AuthStatus.loggedIn) const CallBubble(),
             if (showLock) Positioned.fill(child: LockScreen(onUnlocked: () => setState(() => _locked = false))),
+            ValueListenableBuilder<bool>(
+              valueListenable: Pip.active,
+              builder: (_, pip, __) => pip && context.read<CallManager>().phase != CallPhase.idle ? const Positioned.fill(child: PipCallView()) : const SizedBox.shrink(),
+            ),
           ]),
         );
       },

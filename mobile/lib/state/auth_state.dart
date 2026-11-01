@@ -283,6 +283,14 @@ class AuthState extends ChangeNotifier {
     _enter();
   }
 
+  /// Emoji next to my name (null clears it). [duration] null = until I change it.
+  Future<void> setEmojiStatus(String? emoji, {Duration? duration}) async {
+    final u = await api.patch('/me', {
+      'emoji_status': emoji == null ? null : {'emoji': emoji, if (duration != null) 'duration_sec': duration.inSeconds},
+    });
+    setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+  }
+
   /// Completes sign-up (first name is required).
   Future<void> saveProfile({required String firstName, String lastName = '', String? avatarPath}) async {
     if (avatarPath != null) {

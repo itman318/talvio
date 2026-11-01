@@ -995,6 +995,7 @@ CREATE TABLE IF NOT EXISTS voice_chat_participants (
   hand_raised   BOOLEAN     NOT NULL DEFAULT FALSE,
   PRIMARY KEY (voice_chat_id, user_id)
 );
+ALTER TABLE voice_chat_participants ADD COLUMN IF NOT EXISTS video BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ---------------------------------------------------------------- Talvio Bot API v2 (own event shape, signed hooks)
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS api_version VARCHAR(4) NOT NULL DEFAULT 'v1';
@@ -1149,3 +1150,7 @@ BEGIN
   PERFORM setval('users_id_seq', nxt + 1 + floor(random() * 37)::bigint, false);
   INSERT INTO talvio_migrations (name) VALUES ('user_ids_v1');
 END $$;
+
+-- ---------------------------------------------------------------- emoji status (an emoji next to your name, optionally for a while)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS emoji_status TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS emoji_status_until TIMESTAMPTZ;

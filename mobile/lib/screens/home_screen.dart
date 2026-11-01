@@ -30,6 +30,7 @@ import '../theme/brand.dart';
 import '../widgets/premium.dart';
 import '../widgets/tali_emoji.dart';
 import '../core/chat_lock.dart';
+import '../widgets/emoji_status.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -505,6 +506,7 @@ class ChatTile extends StatelessWidget {
                     style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w600, fontSize: 15.5, letterSpacing: -0.2)),
               ),
               if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
+              EmojiStatusBadge(chat.peer, size: 15),
               if (chat.isMuted) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.volume_off_rounded, size: 15, color: Brand.faint)),
             ]),
           ),

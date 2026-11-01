@@ -56,8 +56,21 @@ class CallManager extends ChangeNotifier {
   /// Set by the app: shows the full-screen call UI.
   void Function()? onShowCallScreen;
 
-  /// True while CallScreen is on screen (so it isn't pushed twice).
-  bool screenVisible = false;
+  /// True while CallScreen is on screen (so it isn't pushed twice). When it's hidden, the app shows a
+  /// small floating call window instead.
+  bool _screenVisible = false;
+  bool get screenVisible => _screenVisible;
+  set screenVisible(bool v) {
+    if (_screenVisible == v) return;
+    _screenVisible = v;
+    Future.microtask(notifyListeners);
+  }
+
+  /// A call that is going on (or ringing out) — not idle, not just ended.
+  bool get inProgress => phase == CallPhase.outgoing || phase == CallPhase.connecting || phase == CallPhase.connected || phase == CallPhase.reconnecting;
+
+  /// Brings the full call screen back (from the floating window).
+  void showScreen() => _showScreen();
 
   final RTCVideoRenderer localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer remoteRenderer = RTCVideoRenderer();

@@ -70,6 +70,7 @@ import '../theme/brand.dart';
 import '../core/chat_export.dart';
 import '../widgets/sticker_widgets.dart';
 import '../widgets/contact_card.dart';
+import '../widgets/emoji_status.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.chatId, this.initial, this.quote});
@@ -1746,7 +1747,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     Row(children: [
                       Flexible(child: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2))),
                       if (chat.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
-                      if (chat.peer?.isPremium == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
+                      if (chat.peer?.statusEmoji != null)
+                        EmojiStatusBadge(chat.peer, size: 16)
+                      else if (chat.peer?.isPremium == true)
+                        const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star_rounded, size: 18, color: Brand.premium)),
                     ]),
                     if (typing != null)
                       Row(children: [

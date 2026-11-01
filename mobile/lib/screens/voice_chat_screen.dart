@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
@@ -21,7 +22,7 @@ Future<void> openVoiceChat(BuildContext context, Chat chat, {bool start = false}
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(chat.isChannel
                 ? 'Talk live with your subscribers. They listen and can raise a hand to speak.'
-                : 'Everyone in the group can join and talk.'),
+                : 'Everyone in the group can join, talk and turn on their camera.'),
             const SizedBox(height: 12),
             TextField(controller: c, maxLength: 64, decoration: const InputDecoration(labelText: 'Topic (optional)', hintText: 'Gold market live')),
           ]),
@@ -109,7 +110,7 @@ class VoiceChatScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(vc.title.isNotEmpty ? vc.title : 'Voice chat', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          Text(vc.title.isNotEmpty ? vc.title : (vc.anyVideo ? 'Video chat' : 'Voice chat'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
           Text('${vc.chatTitle} · ${vc.participants.length} ${vc.participants.length == 1 ? 'participant' : 'participants'}',
               style: const TextStyle(fontSize: 12.5, color: Colors.white60)),
         ]),
@@ -135,6 +136,10 @@ class VoiceChatScreen extends StatelessWidget {
           const Center(child: CircularProgressIndicator(color: Colors.white))
         else
           ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 200), children: [
+            if (vc.anyVideo) ...[
+              _videoGrid(context, vc),
+              const SizedBox(height: 18),
+            ],
             if (speakers.isNotEmpty) _section('Speakers'),
             Wrap(spacing: 14, runSpacing: 18, children: [for (final p in speakers) _tile(context, vc, p)]),
             if (listeners.isNotEmpty) ...[
@@ -150,8 +155,28 @@ class VoiceChatScreen extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  if (vc.cameraOn) ...[
+                    _round(icon: Icons.cameraswitch_rounded, label: 'Flip', onTap: vc.switchCamera),
+                    const SizedBox(height: 12),
+                  ],
+                  _round(
+                    icon: vc.cameraOn ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                    label: vc.cameraOn ? 'Camera on' : 'Camera',
+                    color: vc.cameraOn ? Colors.white.withValues(alpha: 0.28) : null,
+                    onTap: () async {
+                      try {
+                        await vc.toggleCamera();
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        final s = '$e'.toLowerCase();
+                        showInfo(context, s.contains('permission') || s.contains('notallowed') ? 'Allow camera access to turn on video' : '$e'.replaceFirst('Exception: ', ''));
+                      }
+                    },
+                  ),
+                ]),
                 _round(
                   icon: vc.speaker ? Icons.volume_up_rounded : Icons.hearing_rounded,
                   label: vc.speaker ? 'Speaker' : 'Earpiece',
@@ -172,6 +197,67 @@ class VoiceChatScreen extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+
+  /// Everyone whose camera is on, in a grid (one big, two side by side, then 2 columns).
+  Widget _videoGrid(BuildContext context, VoiceChatManager vc) {
+    final myId = vc.me?.user.id;
+    final list = vc.participants.where((p) => p.video).toList()
+      ..sort((a, b) => (b.speaking ? 1 : 0) - (a.speaking ? 1 : 0));
+    final cols = list.length == 1 ? 1 : 2;
+    return GridView.count(
+      crossAxisCount: cols,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: cols == 1 ? 4 / 3 : 3 / 4,
+      children: [
+        for (final p in list)
+          _videoTile(p, p.user.id == myId ? (vc.cameraOn ? vc.localRenderer : null) : vc.renderers[p.user.id], mirror: p.user.id == myId && vc.frontCamera, me: p.user.id == myId),
+      ],
+    );
+  }
+
+  Widget _videoTile(VcParticipant p, RTCVideoRenderer? r, {bool mirror = false, bool me = false}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: p.speaking ? const Color(0xFF7DF3DB) : Colors.white12, width: p.speaking ? 2.5 : 1),
+        color: const Color(0xFF1A1D33),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(17),
+        child: Stack(fit: StackFit.expand, children: [
+          if (r != null)
+            RTCVideoView(r, mirror: mirror, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+          else
+            Center(child: Avatar(id: p.user.id, name: p.user.name, url: p.user.avatarAbsolute, size: 64)),
+          Positioned(
+            left: 8,
+            bottom: 8,
+            right: 8,
+            child: Row(children: [
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(10)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(p.muted ? Icons.mic_off_rounded : Icons.mic_rounded, size: 13, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(me ? 'You' : p.user.firstName.isNotEmpty ? p.user.firstName : p.user.name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 

@@ -95,6 +95,11 @@ void _android() {
   }
   // Name under the icon on the home screen
   xml = xml.replaceFirst(RegExp(r'android:label="[^"]*"'), 'android:label="Talvio"');
+  // calls keep playing in a small floating window when you leave the app (picture-in-picture)
+  if (!xml.contains('supportsPictureInPicture')) {
+    xml = xml.replaceFirstMapped(RegExp(r'<activity(\s+)android:name="\.MainActivity"'),
+        (m) => '<activity${m[1]}android:name=".MainActivity"${m[1]}android:supportsPictureInPicture="true"${m[1]}android:resizeableActivity="true"');
+  }
   manifest.writeAsStringSync(xml);
   stdout.writeln('✓ AndroidManifest.xml: permissions added, label = Talvio');
 
@@ -121,8 +126,11 @@ void _android() {
         final pkg = RegExp(r'^package\s+[\w.]+', multiLine: true).firstMatch(code)?.group(0) ?? 'package com.talvio.chatapp';
         f.writeAsStringSync('''$pkg
 
+import android.app.PictureInPictureParams
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import android.util.Rational
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -131,10 +139,48 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
+    private var channel: MethodChannel? = null
+    private var autoPip = false
+    private var pipW = 9
+    private var pipH = 16
+
+    private fun pipParams(): PictureInPictureParams? {
+        if (Build.VERSION.SDK_INT < 26) return null
+        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(pipW, pipH))
+        if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(autoPip).setSeamlessResizeEnabled(true)
+        return b.build()
+    }
+
+    private fun enterPip(): Boolean {
+        if (Build.VERSION.SDK_INT < 26) return false
+        return try { enterPictureInPictureMode(pipParams()!!) } catch (e: Exception) { false }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Home button during a call: keep it going in a small window (Android 12+ does it by itself)
+        if (autoPip && Build.VERSION.SDK_INT in 26..30) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        channel?.invokeMethod("pipChanged", isInPictureInPictureMode)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "talvio/system").setMethodCallHandler { call, result ->
+        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "talvio/system")
+        channel = ch
+        ch.setMethodCallHandler { call, result ->
             when (call.method) {
+                "pipAuto" -> {
+                    autoPip = call.argument<Boolean>("on") ?: false
+                    pipW = call.argument<Int>("w") ?: 9
+                    pipH = call.argument<Int>("h") ?: 16
+                    if (Build.VERSION.SDK_INT >= 26) try { setPictureInPictureParams(pipParams()!!) } catch (e: Exception) {}
+                    result.success(true)
+                }
+                "pipEnter" -> result.success(enterPip())
                 "batteryRestricted" -> {
                     if (Build.VERSION.SDK_INT < 23) {
                         result.success(false)
