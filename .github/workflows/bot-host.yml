@@ -1,0 +1,132 @@
+# Hosts a person's own Telegram-style bot on the Talvio server (kept private: it arrives encrypted on the
+# ci-botpayload branch). Makes the Talvio bot account, installs Python + the bot as a service that restarts
+# by itself, and sends back an encrypted status report (ci-botrun). The payload branch is deleted afterwards.
+name: Bot host (private)
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service name
+        default: elitexauvault
+      username:
+        description: Bot username on Talvio
+        default: EliteXauVaultBot
+      name:
+        description: Bot display name
+        default: EliteXauVault
+
+permissions:
+  contents: write
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Open the private payload
+        env:
+          PASS: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          mkdir -p /tmp/p /tmp/report
+          git fetch -q origin ci-keys ci-botpayload
+          git show origin/ci-keys:priv.enc > /tmp/p/priv.enc
+          for f in bot.enc key.enc report_pub.pem; do git show origin/ci-botpayload:$f > /tmp/p/$f; done
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in /tmp/p/priv.enc -out /tmp/p/priv.pem -pass env:PASS
+          openssl pkeyutl -decrypt -inkey /tmp/p/priv.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/p/key.enc -out /tmp/p/k
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in /tmp/p/bot.enc -out /tmp/p/bot.py -pass file:/tmp/p/k
+          rm /tmp/p/priv.pem /tmp/p/priv.enc /tmp/p/k
+          python3 - <<'PY'
+          s = open('/tmp/p/bot.py', encoding='utf-8').read()
+          s = s.replace('bot = Bot(token=_bot_token)',
+              'from aiogram.client.session.aiohttp import AiohttpSession\n'
+              'from aiogram.client.telegram import TelegramAPIServer\n'
+              'bot = Bot(token=_bot_token, session=AiohttpSession(api=TelegramAPIServer.from_base(os.getenv("TALVIO_API", "http://127.0.0.1/api/classic"))))', 1)
+          s = s.replace('"/data/trading_bot.db"', 'os.path.join(os.getenv("BOT_DATA_DIR", "/data"), "trading_bot.db")')
+          open('/tmp/p/bot.py', 'w', encoding='utf-8').write(s)
+          PY
+
+      - name: Install on the server
+        env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          API_BASE: ${{ vars.API_BASE }}
+          SVC: ${{ inputs.service }}
+          BOTUSER: ${{ inputs.username }}
+          BOTNAME: ${{ inputs.name }}
+        run: |
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
+          if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
+          sudo apt-get install -y -qq sshpass >/dev/null
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
+          sshpass -e scp $SSH_OPTS /tmp/p/bot.py .github/scripts/bot-host.js root@"$HOST":/root/
+          sshpass -e ssh $SSH_OPTS root@"$HOST" "SVC=$SVC BOTUSER=$BOTUSER BOTNAME='$BOTNAME' bash -s" > /tmp/report/install.txt 2>&1 <<'REMOTE'
+          set -e
+          D=/opt/$SVC
+          id $SVC >/dev/null 2>&1 || useradd --system --home $D --shell /usr/sbin/nologin $SVC
+          mkdir -p $D/data
+          install -m 640 /root/bot.py $D/bot.py && rm -f /root/bot.py
+          echo "--- python"
+          python3 --version
+          python3 -m venv --help >/dev/null 2>&1 && [ -x "$D/venv/bin/python" ] || { DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-venv >/dev/null 2>&1 || true; python3 -m venv $D/venv; }
+          $D/venv/bin/pip install -q --upgrade pip >/dev/null 2>&1 || true
+          $D/venv/bin/pip install -q "aiogram>=3.4,<4" aiosqlite 2>&1 | tail -2
+          $D/venv/bin/python -c "import aiogram; print('aiogram', aiogram.__version__)"
+          echo "--- talvio bot account"
+          cd /opt/talvio/app && set -a && . /etc/talvio/talvio.env && set +a && node /root/bot-host.js "$BOTUSER" "$BOTNAME" $D/bot.env
+          rm -f /root/bot-host.js
+          printf 'TALVIO_API=http://127.0.0.1/api/classic\nBOT_DATA_DIR=%s/data\n' "$D" >> $D/bot.env
+          chown -R $SVC:$SVC $D && chmod 600 $D/bot.env
+          cat > /etc/systemd/system/$SVC.service <<UNIT
+          [Unit]
+          Description=$BOTNAME (Talvio bot)
+          After=network-online.target talvio.service
+          Wants=network-online.target
+
+          [Service]
+          User=$SVC
+          WorkingDirectory=$D
+          EnvironmentFile=$D/bot.env
+          ExecStart=$D/venv/bin/python -u $D/bot.py
+          Restart=always
+          RestartSec=5
+          NoNewPrivileges=true
+          ProtectSystem=full
+          PrivateTmp=true
+          MemoryMax=600M
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          systemctl daemon-reload
+          systemctl enable $SVC >/dev/null 2>&1
+          systemctl restart $SVC
+          sleep 25
+          echo "--- service"
+          systemctl is-active $SVC
+          systemctl show $SVC -p NRestarts
+          echo "--- log"
+          journalctl -u $SVC --since "-2min" --no-pager -o cat | tail -40
+          REMOTE
+          sed -i "s/${HOST//./\\.}/<server-ip>/g; s/[0-9]\{8,\}:[A-Za-z0-9_-]\{20,\}/***/g" /tmp/report/install.txt
+          grep -E "^(owner|bot|active|failed|aiogram|Python|NRestarts)" /tmp/report/install.txt | sed 's/owner: .*/owner: (in report)/' || true
+
+      - name: Send back the report (encrypted)
+        if: always()
+        run: |
+          cd /tmp/report
+          tar -czf /tmp/r.tgz .
+          openssl rand -hex 32 > /tmp/k2
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -in /tmp/r.tgz -out /tmp/report.enc -pass file:/tmp/k2
+          openssl pkeyutl -encrypt -pubin -inkey /tmp/p/report_pub.pem -pkeyopt rsa_padding_mode:oaep -in /tmp/k2 -out /tmp/key2.enc
+          mkdir /tmp/out && cp /tmp/report.enc /tmp/key2.enc /tmp/out/ && cd /tmp/out
+          git init -q -b ci-botrun
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "bot host ${{ github.run_id }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-botrun
+
+      - name: Delete the payload branch
+        if: always()
+        run: git push -q origin --delete ci-botpayload || true
