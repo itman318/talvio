@@ -18,13 +18,30 @@ const rateLimit = require('../../src/utils/rateLimit');
 const auth = require('../../src/services/auth.service');
 const users = require('../../src/services/user.service');
 const chats = require('../../src/services/chat.service');
-const messages = require('../../src/services/message.service');
 const bots = require('../../src/services/bot.service');
 
 const OUT = process.env.OUT || '.';
 const STATE = path.join(OUT, 'drive-state.json');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MAX_PRESSES = Number(process.env.MAX_PRESSES || 60);
+const BASE = process.env.BASE || 'http://localhost:4000';
+const tokens = {};
+
+/** Acts through the real server (like the app), so the bot hears about it right away. */
+async function api(who, method, url, body) {
+  const r = await fetch(`${BASE}/api${url}`, {
+    method,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${tokens[who]}` },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error((j.error && j.error.message) || j.message || `HTTP ${r.status}`);
+    e.code = (j.error && j.error.code) || j.code || r.status;
+    throw e;
+  }
+  return j;
+}
 
 let ip = 0;
 async function signup(phone, firstName, username) {
@@ -33,6 +50,7 @@ async function signup(phone, firstName, username) {
   const r = await auth.requestOtp(phone, addr);
   const s = await auth.verifyOtp(phone, r.dev_code, { platform: 'android', app_version: '1.0.0' }, addr);
   await users.updateProfile(s.user.id, { first_name: firstName, username });
+  tokens[s.user.id] = s.access_token;
   return s.user.id;
 }
 
@@ -40,7 +58,7 @@ async function setup() {
   const admin = await signup('+923001110001', 'Owner', 'vault_owner');
   const user = await signup('+923001110002', 'Ali', 'vault_tester');
   const r = await bots.createBot(admin, { name: 'EliteXauVault', username: 'elitexauvault_test_bot' });
-  fs.writeFileSync(STATE, JSON.stringify({ admin, user, botId: r.bot.id || r.bot.user_id }));
+  fs.writeFileSync(STATE, JSON.stringify({ admin, user, botId: r.bot.id || r.bot.user_id, tokens }));
   process.stdout.write(`BOT_TOKEN=${r.classic_token}\nADMIN_ID=${admin}\nTEST_USER_ID=${user}\n`);
 }
 
@@ -147,7 +165,7 @@ async function explore(name, who, botId) {
       }
     }
   };
-  push(await act('/start', who, chat.id, botId, () => messages.sendMessage(who, chat.id, { text: '/start' })));
+  push(await act('/start', who, chat.id, botId, () => api(who, 'POST', `/chats/${chat.id}/messages`, { text: '/start' })));
   let presses = 0;
   while (queue.length && presses < MAX_PRESSES) {
     const q = queue.shift();
@@ -160,9 +178,9 @@ async function explore(name, who, botId) {
         [chat.id, botId, JSON.stringify(q.data).slice(1, -1)],
       );
       const mid = latest ? latest.id : q.messageId;
-      push(await act(`tap “${q.text}”`, who, chat.id, botId, () => bots.pressButton(who, mid, { data: q.data })));
+      push(await act(`tap “${q.text}”`, who, chat.id, botId, () => api(who, 'POST', `/messages/${mid}/callback`, { data: q.data })));
     } else {
-      push(await act(`send “${q.text}”`, who, chat.id, botId, () => messages.sendMessage(who, chat.id, { text: q.text })));
+      push(await act(`send “${q.text}”`, who, chat.id, botId, () => api(who, 'POST', `/chats/${chat.id}/messages`, { text: q.text })));
     }
   }
   if (queue.length) log(`\n(${queue.length} more buttons not tried — limit ${MAX_PRESSES})`);
@@ -170,7 +188,9 @@ async function explore(name, who, botId) {
 }
 
 async function drive() {
-  const { admin, user, botId } = JSON.parse(fs.readFileSync(STATE, 'utf8'));
+  const st = JSON.parse(fs.readFileSync(STATE, 'utf8'));
+  const { admin, user, botId } = st;
+  Object.assign(tokens, st.tokens);
   // the bot writes to its admin first thing sometimes: open that chat so it can
   await chats.getOrCreatePrivate(admin, botId);
   await explore('A normal user', user, botId);

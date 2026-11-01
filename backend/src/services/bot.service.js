@@ -398,11 +398,13 @@ function parseReplyMarkup(raw) {
   if (m && m.remove_keyboard === true) return { remove_keyboard: true };
   if (m && Array.isArray(m.keyboard)) return parseReplyKeyboard(m);
   if (!m || !Array.isArray(m.inline_keyboard)) throw badRequest('invalid_markup', 'reply_markup needs inline_keyboard, keyboard or remove_keyboard');
-  if (m.inline_keyboard.length > 10) throw badRequest('invalid_markup', 'At most 10 rows of buttons');
-  const rows = m.inline_keyboard.map((row) => {
-    if (!Array.isArray(row) || row.length === 0 || row.length > 8) throw badRequest('invalid_markup', 'Each row needs 1–8 buttons');
+  // same limits as Telegram: up to 100 buttons, 8 in a row
+  const total = m.inline_keyboard.reduce((n, row) => n + (Array.isArray(row) ? row.length : 0), 0);
+  if (total > 100) throw badRequest('invalid_markup', 'At most 100 buttons');
+  const rows = m.inline_keyboard.filter((row) => !Array.isArray(row) || row.length > 0).map((row) => {
+    if (!Array.isArray(row) || row.length > 8) throw badRequest('invalid_markup', 'Each row needs 1–8 buttons');
     return row.map((btn) => {
-      const text = v.str(String((btn && btn.text) || ''), { field: 'button text', min: 1, max: 64 });
+      const text = v.str(String((btn && btn.text) || ''), { field: 'button text', min: 1, max: 128 });
       if (btn.callback_data !== undefined) {
         const data = String(btn.callback_data);
         if (!data || Buffer.byteLength(data) > 64) throw badRequest('invalid_markup', 'callback_data must be 1–64 bytes');
@@ -418,6 +420,12 @@ function parseReplyMarkup(raw) {
         if (!['http:', 'https:', 'tg:'].includes(u.protocol)) throw badRequest('invalid_markup', 'Button url must be http(s)');
         return { text, url: u.toString() };
       }
+      if (btn.login_url && btn.login_url.url) return { text, url: parseHttpsUrl(btn.login_url.url, 'login_url.url') };
+      if (btn.switch_inline_query !== undefined || btn.switch_inline_query_current_chat !== undefined) {
+        // "share via this bot": the app puts "@bot query" in the message box
+        const q = String(btn.switch_inline_query_current_chat ?? btn.switch_inline_query ?? '').slice(0, 256);
+        return { text, switch_inline_query: q, current_chat: btn.switch_inline_query_current_chat !== undefined };
+      }
       if (btn.web_app && btn.web_app.url) return { text, web_app: { url: parseHttpsUrl(btn.web_app.url, 'web_app.url') } };
       if (btn.copy_text && btn.copy_text.text !== undefined) {
         // tap → the text goes to the clipboard (like Telegram's CopyTextButton)
@@ -431,12 +439,13 @@ function parseReplyMarkup(raw) {
 
 /** Reply keyboard: big text buttons that replace the phone keyboard (like Telegram's ReplyKeyboardMarkup). */
 function parseReplyKeyboard(m) {
-  if (m.keyboard.length === 0 || m.keyboard.length > 12) throw badRequest('invalid_markup', 'A keyboard needs 1–12 rows');
-  const rows = m.keyboard.map((row) => {
-    if (!Array.isArray(row) || row.length === 0 || row.length > 8) throw badRequest('invalid_markup', 'Each row needs 1–8 buttons');
+  const rowsIn = m.keyboard.filter((row) => !Array.isArray(row) || row.length > 0);
+  if (rowsIn.length === 0 || rowsIn.length > 100) throw badRequest('invalid_markup', 'A keyboard needs 1–100 rows');
+  const rows = rowsIn.map((row) => {
+    if (!Array.isArray(row) || row.length > 12) throw badRequest('invalid_markup', 'Each row needs 1–12 buttons');
     return row.map((btn) => {
       const raw = typeof btn === 'string' ? { text: btn } : btn || {};
-      const text = v.str(String(raw.text || ''), { field: 'button text', min: 1, max: 64 });
+      const text = v.str(String(raw.text || ''), { field: 'button text', min: 1, max: 128 });
       const out = { text };
       if (raw.request_contact === true) out.request_contact = true;
       else if (raw.request_location === true) out.request_location = true;

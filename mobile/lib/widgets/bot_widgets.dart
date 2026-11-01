@@ -37,6 +37,12 @@ class InlineKeyboard extends StatelessWidget {
       Navigator.push(context, MaterialPageRoute(builder: (_) => MiniAppScreen(botId: botId!, url: '${web['url']}', title: botName)));
       return;
     }
+    if (b.containsKey('switch_inline_query')) {
+      // "share via the bot": hand the text over so it can be pasted into any chat
+      await Clipboard.setData(ClipboardData(text: '${b['switch_inline_query'] ?? ''}'));
+      if (context.mounted) showInfo(context, 'Copied — paste it in any chat');
+      return;
+    }
     final data = b['callback_data'];
     if (data == null) return;
     try {
