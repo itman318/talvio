@@ -76,8 +76,11 @@ function emit(event, payload, { userIds = [], sessionIds = [] }) {
 async function iceServers(userId) {
   const s = await settings.getAll();
   const servers = [];
-  if (s.stun_urls && s.stun_urls.length) servers.push({ urls: s.stun_urls });
   const turnUrls = [...new Set([...config.turn.urls, ...(s.turn_urls || [])])];
+  // our own TURN server answers STUN too — nearer than a public one, so it's tried first
+  const ownStun = [...new Set(turnUrls.map((u) => (/^turns?:([^?]+)/.exec(u) || [])[1]).filter(Boolean).map((h) => `stun:${h}`))];
+  const stun = [...ownStun, ...((s.stun_urls && s.stun_urls.length) ? s.stun_urls : [])];
+  if (stun.length) servers.push({ urls: stun });
   if (turnUrls.length) {
     if (config.turn.secret) {
       const expires = Math.floor(Date.now() / 1000) + config.turn.credentialTtlSec;
@@ -328,13 +331,21 @@ async function relaySignal(userId, sessionId, body = {}) {
   let s = live.get(callId);
   if (!s) {
     const row = await db.one('SELECT * FROM calls WHERE id = $1', [callId]);
-    if (!row || row.status !== 'accepted') throw conflict('call_not_active', 'This call is not active');
+    if (!row || !['ringing', 'accepted'].includes(row.status)) throw conflict('call_not_active', 'This call is not active');
     s = { callerId: row.caller_id, calleeId: row.callee_id, callerSession: row.caller_session_id, calleeSession: row.callee_session_id, status: row.status };
     live.set(callId, s);
   }
-  if (s.status !== 'accepted') throw conflict('call_not_active', 'This call is not connected yet');
   let target;
-  if (userId === s.callerId && (!s.callerSession || s.callerSession === sessionId)) target = { user: s.calleeId, session: s.calleeSession };
+  if (s.status === 'ringing') {
+    // Early setup: while it rings, the caller's offer and network candidates already go to the callee's
+    // devices, so the call connects the moment it's answered.
+    if (userId !== s.callerId || (s.callerSession && s.callerSession !== sessionId) || !['offer', 'ice'].includes(kind)) {
+      throw conflict('call_not_active', 'This call is not connected yet');
+    }
+    target = { user: s.calleeId, session: null };
+  } else if (s.status !== 'accepted') {
+    throw conflict('call_not_active', 'This call is not connected yet');
+  } else if (userId === s.callerId && (!s.callerSession || s.callerSession === sessionId)) target = { user: s.calleeId, session: s.calleeSession };
   else if (userId === s.calleeId && (!s.calleeSession || s.calleeSession === sessionId)) target = { user: s.callerId, session: s.callerSession };
   else throw forbidden('not_participant', 'You are not on this call');
 

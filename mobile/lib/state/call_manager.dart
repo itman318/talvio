@@ -68,6 +68,8 @@ class CallManager extends ChangeNotifier {
   List<Map<String, dynamic>> _iceServers = [];
   final List<RTCIceCandidate> _pendingCandidates = [];
   String? _pendingOffer;
+  String? _lastOffer;
+  bool _offerSent = false;
   bool _remoteSet = false;
   bool _restartTried = false;
   bool _cancelled = false;
@@ -76,6 +78,14 @@ class CallManager extends ChangeNotifier {
   Timer? _closeTimer;
   Timer? _failTimer;
   bool _ringing = false;
+  Timer? _statsTimer;
+  int _lostBefore = 0, _recvBefore = 0;
+
+  /// Connection quality while talking: 0 unknown, 1 weak, 2 fair, 3 good.
+  int quality = 0;
+
+  /// How loud the other person is right now (0..1) — drives the speaking glow on the call screen.
+  double remoteLevel = 0;
 
   /// Call waiting: someone else is calling while I'm on this call.
   CallInfo? waitingCall;
@@ -115,9 +125,20 @@ class CallManager extends ChangeNotifier {
     _showScreen();
     WakelockPlus.enable().catchError((_) {});
     try {
-      await _ensureRenderers();
-      await _openMedia();
-      final r = await services.socket.request('call:start', link != null ? {'link': link, 'video': video} : {'user_id': user.id, 'video': video});
+      // ask the server and open the microphone/camera at the same time
+      final req = services.socket.request('call:start', link != null ? {'link': link, 'video': video} : {'user_id': user.id, 'video': video});
+      try {
+        await _ensureRenderers();
+        await _openMedia();
+      } catch (e) {
+        final r = await req.catchError((_) => <String, dynamic>{});
+        if (r['call'] is Map) {
+          call = CallInfo.fromJson(Map<String, dynamic>.from(r['call'] as Map));
+          _sendHangup('failed');
+        }
+        rethrow;
+      }
+      final r = await req;
       call = CallInfo.fromJson(Map<String, dynamic>.from(r['call'] as Map));
       _iceServers = _parseIce(r['ice_servers']);
       if (_cancelled) {
@@ -140,6 +161,8 @@ class CallManager extends ChangeNotifier {
         return;
       }
       notifyListeners();
+      // Early setup: send the offer while it rings, so the call connects the moment they answer.
+      _createPeer().then((_) => _sendOffer()).then((_) => _offerSent = true).catchError((_) {});
     } on ApiException catch (e) {
       _finish(e.message);
     } catch (e) {
@@ -155,9 +178,10 @@ class CallManager extends ChangeNotifier {
     notifyListeners();
     WakelockPlus.enable().catchError((_) {});
     try {
+      final req = services.socket.request('call:accept', {'call_id': c.id});
       await _ensureRenderers();
       await _openMedia();
-      final r = await services.socket.request('call:accept', {'call_id': c.id});
+      final r = await req;
       _iceServers = _parseIce(r['ice_servers']);
       await _createPeer();
       final offer = _pendingOffer;
@@ -385,7 +409,16 @@ class CallManager extends ChangeNotifier {
         if (phase == CallPhase.outgoing) {
           phase = CallPhase.connecting;
           notifyListeners();
-          _startAsCaller();
+          if (!_offerSent) {
+            _startAsCaller();
+          } else {
+            // the answering device may not have seen the early offer (e.g. woken up by a notification)
+            Timer(const Duration(milliseconds: 1200), () async {
+              if (_remoteSet || _pc == null || phase != CallPhase.connecting) return;
+              final d = await _pc!.getLocalDescription();
+              if (d?.sdp != null) _signal({'kind': 'offer', 'sdp': d!.sdp});
+            });
+          }
         } else if (phase == CallPhase.incoming) {
           _stopRing();
           _finish('Answered on another device', closeAfter: const Duration(milliseconds: 800));
@@ -435,6 +468,7 @@ class CallManager extends ChangeNotifier {
     speaker = c.video;
     phase = CallPhase.incoming;
     _ringing = true;
+    _ensureRenderers().catchError((_) {}); // ready before they tap Accept
     final np = NotifPrefs.instance;
     if (np.callRing) FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false).catchError((_) {});
     if (np.callVibrate) {
@@ -489,6 +523,9 @@ class CallManager extends ChangeNotifier {
     final pc = await createPeerConnection({
       'iceServers': _iceServers,
       'sdpSemantics': 'unified-plan',
+      'bundlePolicy': 'max-bundle', // one connection for audio + video: fewer checks, faster start
+      'rtcpMuxPolicy': 'require',
+      'iceCandidatePoolSize': 2, // start gathering network paths before the offer is made
     });
     _pc = pc;
     for (final t in _local?.getTracks() ?? <MediaStreamTrack>[]) {
@@ -528,20 +565,24 @@ class CallManager extends ChangeNotifier {
       'offerToReceiveVideo': video,
       if (iceRestart) 'iceRestart': true,
     });
-    await pc.setLocalDescription(offer);
-    _signal({'kind': 'offer', 'sdp': offer.sdp, if (iceRestart) 'ice_restart': true});
+    final tuned = RTCSessionDescription(_tuneSdp(offer.sdp ?? ''), offer.type);
+    await pc.setLocalDescription(tuned);
+    _signal({'kind': 'offer', 'sdp': tuned.sdp, if (iceRestart) 'ice_restart': true});
   }
 
   Future<void> _handleOffer(String sdp) async {
     final pc = _pc;
     if (pc == null) {
-      _pendingOffer = sdp; // still opening the camera/microphone
+      _pendingOffer = sdp; // still ringing, or opening the camera/microphone
       return;
     }
+    if (_remoteSet && sdp == _lastOffer) return; // the same offer sent again: already answered
+    _lastOffer = sdp;
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
     _remoteSet = true;
     await _flushCandidates();
-    final answer = await pc.createAnswer({'offerToReceiveAudio': true, 'offerToReceiveVideo': video});
+    final raw = await pc.createAnswer({'offerToReceiveAudio': true, 'offerToReceiveVideo': video});
+    final answer = RTCSessionDescription(_tuneSdp(raw.sdp ?? ''), raw.type);
     await pc.setLocalDescription(answer);
     _signal({'kind': 'answer', 'sdp': answer.sdp});
   }
@@ -599,6 +640,8 @@ class CallManager extends ChangeNotifier {
             elapsed = DateTime.now().difference(_connectedAt!);
             notifyListeners();
           });
+          _statsTimer?.cancel();
+          _statsTimer = Timer.periodic(const Duration(milliseconds: 700), (_) => _readStats());
         }
         phase = CallPhase.connected;
         notifyListeners();
@@ -641,6 +684,40 @@ class CallManager extends ChangeNotifier {
     _finish('Connection lost', rate: _connectedAt != null);
   }
 
+  /// Round-trip time and packet loss → quality bars; the remote audio level → speaking glow.
+  Future<void> _readStats() async {
+    final pc = _pc;
+    if (pc == null || phase == CallPhase.ended) return;
+    try {
+      final reports = await pc.getStats();
+      double? rtt;
+      int lost = 0, recv = 0;
+      double level = 0;
+      for (final r in reports) {
+        final v = r.values;
+        if (r.type == 'candidate-pair' && v['state'] == 'succeeded' && v['currentRoundTripTime'] != null) {
+          rtt = (v['currentRoundTripTime'] as num).toDouble();
+        }
+        if (r.type == 'inbound-rtp' && (v['kind'] ?? v['mediaType']) == 'audio') {
+          lost += (v['packetsLost'] as num?)?.toInt() ?? 0;
+          recv += (v['packetsReceived'] as num?)?.toInt() ?? 0;
+          level = ((v['audioLevel'] as num?)?.toDouble() ?? level).clamp(0.0, 1.0);
+        }
+      }
+      final dl = (lost - _lostBefore).clamp(0, 1 << 30), dr = (recv - _recvBefore).clamp(0, 1 << 30);
+      _lostBefore = lost;
+      _recvBefore = recv;
+      final loss = dr + dl == 0 ? 0.0 : dl / (dr + dl);
+      final q = rtt == null ? quality : (rtt < 0.25 && loss < 0.02 ? 3 : (rtt < 0.5 && loss < 0.07 ? 2 : 1));
+      final lv = remoteMuted ? 0.0 : level;
+      if (q != quality || (lv - remoteLevel).abs() > 0.03) {
+        quality = q;
+        remoteLevel = lv;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
   void _signal(Map<String, dynamic> body) {
     final c = call;
     if (c == null) return;
@@ -670,6 +747,10 @@ class CallManager extends ChangeNotifier {
   }
 
   void _cleanupMedia() {
+    _statsTimer?.cancel();
+    _statsTimer = null;
+    _lostBefore = 0;
+    _recvBefore = 0;
     final screen = _screen;
     _screen = null;
     if (screen != null || sharingScreen) {
@@ -723,9 +804,29 @@ class CallManager extends ChangeNotifier {
     _connectedAt = null;
     _pendingCandidates.clear();
     _pendingOffer = null;
+    _lastOffer = null;
+    _offerSent = false;
+    quality = 0;
+    remoteLevel = 0;
     _remoteSet = false;
     _restartTried = false;
     _cancelled = false;
+  }
+
+  /// Voice that survives bad networks: Opus with forward error correction, silence suppression
+  /// and a sensible bitrate cap.
+  static String _tuneSdp(String sdp) {
+    final m = RegExp(r'a=rtpmap:(\d+) opus/48000').firstMatch(sdp);
+    if (m == null) return sdp;
+    final pt = m.group(1);
+    return sdp.replaceAllMapped(RegExp('a=fmtp:$pt ([^\r\n]*)'), (f) {
+      var params = f.group(1)!;
+      for (final kv in ['useinbandfec=1', 'usedtx=1', 'maxaveragebitrate=40000']) {
+        final key = kv.split('=').first;
+        if (!params.contains('$key=')) params = '$params;$kv';
+      }
+      return 'a=fmtp:$pt $params';
+    });
   }
 
   static List<Map<String, dynamic>> _parseIce(dynamic raw) {

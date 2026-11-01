@@ -82,8 +82,15 @@ test('voice call: ring → accept → signaling relay → hang up → call messa
   assert.equal(incoming.payload.call.direction, 'incoming');
   assert.equal(incoming.payload.call.peer.id, A.id);
 
-  // signaling before the call is answered is refused
-  await rejects(calls.relaySignal(A.id, A.sid, { call_id: start.call.id, kind: 'offer', sdp: 'v=0' }), 'call_not_active');
+  // while it rings: the caller may already send its offer and candidates (to all of B's devices) …
+  await calls.relaySignal(A.id, A.sid, { call_id: start.call.id, kind: 'offer', sdp: 'v=0 early' });
+  const early = take('call:signal').pop();
+  assert.deepEqual(early.userIds, [B.id]);
+  assert.equal(early.payload.sdp, 'v=0 early');
+  // … but nothing goes back before the call is answered
+  await rejects(calls.relaySignal(B.id, B.sid, { call_id: start.call.id, kind: 'answer', sdp: 'v=0' }), 'call_not_active');
+  await rejects(calls.relaySignal(A.id, A.sid, { call_id: start.call.id, kind: 'media', muted: true }), 'call_not_active');
+  events.length = 0;
 
   const acc = await calls.acceptCall(B.id, B.sid, start.call.id);
   assert.equal(acc.call.status, 'accepted');
