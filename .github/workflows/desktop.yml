@@ -100,7 +100,7 @@ jobs:
         continue-on-error: true
         env:
           CMAKE_POLICY_VERSION_MINIMUM: '3.5' # Firebase's Windows SDK still asks for an old CMake
-          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS # local_auth_windows (Windows Hello) on the newest Visual Studio
+          CL: -D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS # local_auth_windows (Windows Hello) on the newest Visual Studio
         run: |
           mkdir -p ../ci-report
           API="$(echo "$API_BASE_RAW" | tr -d '[:space:]' | sed -E 's#/[0-9]{1,3}$##; s#/+$##')"
