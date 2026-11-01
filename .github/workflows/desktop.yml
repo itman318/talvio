@@ -91,11 +91,15 @@ jobs:
             sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = 10.14;/MACOSX_DEPLOYMENT_TARGET = 10.15;/g' macos/Runner.xcodeproj/project.pbxproj || true
           fi
           flutter pub get
+          # phone-only plugins whose desktop part doesn't compile: hide that platform from Flutter
+          python3 tool/desktop_skip_plugins.py ${{ matrix.platform }} no_screenshot || python tool/desktop_skip_plugins.py ${{ matrix.platform }} no_screenshot
 
       - name: Build
         id: build
         if: steps.want.outputs.go == '1'
         continue-on-error: true
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: '3.5' # Firebase's Windows SDK still asks for an old CMake
         run: |
           mkdir -p ../ci-report
           API="$(echo "$API_BASE_RAW" | tr -d '[:space:]' | sed -E 's#/[0-9]{1,3}$##; s#/+$##')"
