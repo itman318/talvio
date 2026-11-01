@@ -66,6 +66,10 @@ jobs:
           flutter create . --org com.talvio --project-name chatapp --platforms=${{ matrix.platform }}
           rm -f test/widget_test.dart
           # window title and app name: Talvio
+          # the program is called Talvio(.exe), not chatapp
+          for c in windows/CMakeLists.txt linux/CMakeLists.txt; do
+            [ -f "$c" ] && sed -i 's/set(BINARY_NAME "chatapp")/set(BINARY_NAME "Talvio")/' "$c"
+          done
           if [ -f windows/runner/main.cpp ]; then
             sed -i 's/L"chatapp"/L"Talvio"/' windows/runner/main.cpp
             sed -i 's/Size size(1280, 720)/Size size(1100, 760)/' windows/runner/main.cpp
@@ -119,7 +123,7 @@ jobs:
           pactl load-module module-null-sink sink_name=fake >/dev/null 2>&1 || true
           pactl load-module module-virtual-source source_name=fakemic master=fake.monitor >/dev/null 2>&1 || true
           sleep 2
-          DISPLAY=:99 timeout 40 $B/chatapp > ../ci-report/run-linux.txt 2>&1 &
+          DISPLAY=:99 timeout 40 $B/Talvio > ../ci-report/run-linux.txt 2>&1 &
           sleep 30
           DISPLAY=:99 import -window root ../ci-report/linux-start.png || true
           sleep 12
@@ -149,7 +153,7 @@ jobs:
               gh release upload desktop-latest dist/* --clobber -R "$R" && exit 0
             else
               gh release create desktop-latest dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
-                --title "Talvio Desktop (test build)" --notes "Windows: unzip and run chatapp.exe. Linux: extract and run talvio/chatapp. macOS: unzip, right-click Talvio → Open (not signed yet)." && exit 0
+                --title "Talvio Desktop (test build)" --notes "Windows: unzip and run Talvio.exe. Linux: extract and run talvio/Talvio. macOS: unzip, right-click Talvio → Open (not signed yet)." && exit 0
             fi
             echo "retry $i"; sleep $((10 + i * 7))
           done
