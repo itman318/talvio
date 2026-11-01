@@ -45,4 +45,4 @@ jobs:
           REMOTE
       - name: Delete private bot reports
         if: always()
-        run: git push -q origin --delete ci-botrun ci-botpayload 2>/dev/null || true
+        run: for b in ci-botrun ci-botpayload; do git push -q origin --delete $b 2>/dev/null || true; done
