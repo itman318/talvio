@@ -1,0 +1,48 @@
+# Removes a hosted bot from the Talvio server: stops the service, deletes its files and its Talvio account.
+name: Bot remove
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service name
+        default: elitexauvault
+      username:
+        description: Bot username on Talvio
+        default: EliteXauVaultBot
+
+permissions:
+  contents: write
+
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Remove from the server
+        env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          API_BASE: ${{ vars.API_BASE }}
+          SVC: ${{ inputs.service }}
+          BOTUSER: ${{ inputs.username }}
+        run: |
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
+          if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
+          echo "$SVC" | grep -Eq '^[a-z][a-z0-9_-]{2,30}$' && [ "$SVC" != talvio ] || { echo "bad service name"; exit 1; }
+          sudo apt-get install -y -qq sshpass >/dev/null
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
+          sshpass -e scp $SSH_OPTS .github/scripts/bot-remove.js root@"$HOST":/root/
+          sshpass -e ssh $SSH_OPTS root@"$HOST" "SVC=$SVC BOTUSER=$BOTUSER bash -s" 2>&1 <<'REMOTE' | tee out.txt
+          systemctl disable --now $SVC >/dev/null 2>&1 && echo "service $SVC: stopped" || echo "service $SVC: was not running"
+          rm -f /etc/systemd/system/$SVC.service && systemctl daemon-reload
+          rm -rf /opt/$SVC && echo "files /opt/$SVC: deleted"
+          id $SVC >/dev/null 2>&1 && userdel $SVC && echo "system user $SVC: deleted"
+          cd /opt/talvio/app && set -a && . /etc/talvio/talvio.env && set +a && node /root/bot-remove.js "$BOTUSER" 2>&1 | grep -v OTP_DEV_MODE
+          rm -f /root/bot-remove.js
+          systemctl is-active $SVC 2>/dev/null || echo "check: $SVC is gone"
+          REMOTE
+      - name: Delete private bot reports
+        if: always()
+        run: git push -q origin --delete ci-botrun ci-botpayload 2>/dev/null || true
