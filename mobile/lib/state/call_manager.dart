@@ -162,7 +162,13 @@ class CallManager extends ChangeNotifier {
       }
       notifyListeners();
       // Early setup: send the offer while it rings, so the call connects the moment they answer.
-      _createPeer().then((_) => _sendOffer()).then((_) => _offerSent = true).catchError((_) {});
+      unawaited(() async {
+        try {
+          await _createPeer();
+          await _sendOffer();
+          _offerSent = true;
+        } catch (_) {}
+      }());
     } on ApiException catch (e) {
       _finish(e.message);
     } catch (e) {
