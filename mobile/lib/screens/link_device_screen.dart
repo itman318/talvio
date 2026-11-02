@@ -13,7 +13,7 @@ import 'user_profile_screen.dart';
 class LinkDeviceScreen extends StatefulWidget {
   const LinkDeviceScreen({super.key, this.anyCode = false});
 
-  /// Also accept profile QR codes (talvio://u/<id>) — the general "Scan QR code" screen.
+  /// Also accept profile QR codes (hushavia://u/<id>) — the general "Scan QR code" screen.
   final bool anyCode;
 
   @override
@@ -35,7 +35,7 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
     String? raw;
     for (final b in capture.barcodes) {
       final v = b.rawValue ?? '';
-      if (v.startsWith('talvio://login?token=')) raw = v;
+      if (v.startsWith('hushavia://login?token=') || v.startsWith('talvio://login?token=')) raw = v;
       final uid = widget.anyCode ? profileIdFromLink(v) : null;
       if (uid != null) {
         _busy = true;

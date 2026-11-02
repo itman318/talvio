@@ -73,7 +73,7 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
             icon: Icons.content_paste_rounded,
             color: Brand.sky,
             title: 'Paste proxy link',
-            subtitle: 'talvio://proxy?… or socks5://…',
+            subtitle: 'hushavia://proxy?… or socks5://…',
             onTap: _paste,
           ),
         ]),

@@ -1,4 +1,4 @@
-// Talvio duckling stickers: drawn from scratch as layered SVG (head, eyes, beak, cap, wings, props move
+// Hushavia duckling stickers: drawn from scratch as layered SVG (head, eyes, beak, cap, wings, props move
 // separately), with a white sticker border, rendered to looping animated WebP for the app's screens.
 // Usage: node mobile/tool/branding/duck_art.js                       → mobile/assets/mascot/*.webp
 //        PREVIEW=/tmp/x.png ONLY=hide,wave PICKS=0,.3,.6 node ...     → a contact sheet to look at
@@ -92,7 +92,7 @@ function cap(t, wiggle = 0) {
     <path d="M186 112 C 210 96 236 92 258 92" stroke="#9C92FF" stroke-width="8" stroke-linecap="round" fill="none" opacity=".75"/>
     <path d="M256 88 L 256 200" stroke="#2A20A8" stroke-width="3" opacity=".5"/>
     <path id="capText" d="M178 176 Q 258 140 340 172" fill="none"/>
-    <text font-family="Jakarta" font-weight="800" font-size="46" fill="#fff" stroke="${O}" stroke-width="2.5" paint-order="stroke"><textPath href="#capText" startOffset="50%" text-anchor="middle">Talvio</textPath></text>
+    <text font-family="Jakarta" font-weight="800" font-size="37" fill="#fff" stroke="${O}" stroke-width="2.5" paint-order="stroke"><textPath href="#capText" startOffset="50%" text-anchor="middle">Hushavia</textPath></text>
     <path d="M128 214 C 200 186 316 186 388 212 C 400 222 396 236 382 236 C 320 214 196 214 134 238 C 118 238 116 222 128 214 Z" fill="url(#brim)" stroke="${O}" stroke-width="${W}" stroke-linejoin="round"/>
   </g>`;
 }
@@ -112,7 +112,7 @@ function body(t, breathe = 0) {
   return `<path d="M170 330 C 140 360 138 432 150 452 L 362 452 C 374 432 372 360 342 330 Z" fill="url(#hood)" stroke="${O}" stroke-width="${W}" stroke-linejoin="round" transform="translate(256 452) scale(${1 + b} ${1 - b}) translate(-256 -452)"/>
     <path d="M196 350 C 220 364 292 364 316 350" stroke="#B9BEE8" stroke-width="7" fill="none" stroke-linecap="round"/>
     <path d="M236 352 l -4 30 M276 352 l 4 30" stroke="#9EA4DA" stroke-width="5" stroke-linecap="round"/>
-    <g transform="translate(256 410)"><rect x="-26" y="-20" width="52" height="12" rx="6" fill="url(#violet)"/><rect x="-6" y="-20" width="12" height="38" rx="6" fill="url(#violet)"/></g>`;
+    <g transform="translate(256 410) scale(0.62) translate(-50 -52.5)"><polygon points="27,29 73,29 73,61" fill="#7B5CFF" stroke="#7B5CFF" stroke-width="5" stroke-linejoin="round"/><polygon points="27,29 73,61 49,61 32,76 36,61 27,61" fill="#4E2FE0" stroke="#4E2FE0" stroke-width="5" stroke-linejoin="round"/></g>`;
 }
 
 // wing: a plump feathered oval from shoulder s reaching to tip p (tip end is rounder, with feather lines)
@@ -143,10 +143,12 @@ function sparkle(x, y, r, color = '#FFC21A') {
 }
 const dash = (x1, y1, x2, y2, c = '#7B4BE0', a = 1) => `<path d="M${x1} ${y1} L ${x2} ${y2}" stroke="${c}" stroke-width="9" stroke-linecap="round" opacity="${a}"/>`;
 
-// the Talvio speech-bubble mark (our own logo — never anyone else's)
-const talvioMark = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})">
-  <path d="M0 -20 c -14 0 -24 9 -24 21 c 0 6 3 11 7 15 l -3 10 c 0 1.4 1 2.2 2 1.5 l 11 -6 c 2 .6 4.4 1 7 1 c 14 0 24 -9 24 -22 s -10 -20.5 -24 -20.5 z" fill="#fff"/>
-  <rect x="-11" y="-11" width="22" height="6" rx="3" fill="url(#violet)"/><rect x="-3" y="-11" width="6" height="21" rx="3" fill="url(#violet)"/></g>`;
+// the Hushavia mark: a speech bubble folded from paper (our own logo — never anyone else's), ~48 px wide at s = 1
+const FOLD_UP = '27,29 73,29 73,61';
+const FOLD_LOW = '27,29 73,61 49,61 32,76 36,61 27,61';
+const hushMark = (x, y, s = 1, low = '#D6CBFF') => `<g transform="translate(${x} ${y}) scale(${s * 0.94}) translate(-50 -52.5)">
+  <polygon points="${FOLD_UP}" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+  <polygon points="${FOLD_LOW}" fill="${low}" stroke="${low}" stroke-width="5" stroke-linejoin="round"/></g>`;
 
 const face = (o = {}) => cheeks(o.cheeks ?? 0.7) + eye(212, 256, { ...o, ...(o.l || {}) }) + eye(300, 256, { ...o, ...(o.r || {}) }) + beak(o.beak || 'smile', o.t || 0);
 
@@ -167,7 +169,7 @@ const SCENES = {
       fx: dash(100, 140, 82, 120, '#7B4BE0', 0.6 + 0.4 * sin(t * TAU * 2)) + dash(118, 116, 108, 92, '#7B4BE0', 0.6 + 0.4 * sin(t * TAU * 2)),
     };
   },
-  // hello: big wave with a wink; "Message" pill with the Talvio send button pulsing
+  // hello: big wave with a wink; "Message" pill with the Hushavia send button pulsing
   wave(t) {
     const w = sin(t * TAU * 3);
     const press = pulse(t, 0.7, 0.85);
@@ -175,7 +177,7 @@ const SCENES = {
       head: { rot: 4 * sin(t * TAU), face: face({ t, r: { wink: true }, l: { lid: 0 }, beak: 'open' }) },
       front: wing(...LS, 160, 432, 54) + wing(...RS, 392 + 18 * w, 252 - 8 * abs(w), 64),
       pill: pill(`<text x="150" y="483" font-family="Jakarta" font-weight="800" font-size="36" fill="#fff">Message</text>`, { x: 96, w: 270, fill: 'url(#violet)', stroke: '#B79BFF' })
-        + `<g transform="translate(372 470) scale(${1 - 0.1 * press})"><circle r="42" fill="url(#blueBtn)" stroke="${O}" stroke-width="${W}"/>${talvioMark(0, 0, 1.25)}</g>`,
+        + `<g transform="translate(372 470) scale(${1 - 0.1 * press})"><circle r="42" fill="url(#blueBtn)" stroke="${O}" stroke-width="${W}"/>${hushMark(0, 0, 1.25)}</g>`,
       fx: `<path d="M440 160 q 14 14 8 32 M458 142 q 24 22 16 52" stroke="${O}" stroke-width="7" fill="none" stroke-linecap="round" opacity="${0.3 + 0.6 * abs(w)}"/>`,
     };
   },
@@ -216,7 +218,7 @@ const SCENES = {
       fx: `<path d="M400 112 l 14 -26 M428 126 l 26 -12 M386 96 l 0 -28" stroke="#FFC21A" stroke-width="8" stroke-linecap="round" opacity="${0.4 + 0.6 * abs(a)}"/>`,
     };
   },
-  // success: shades, double thumbs-up nodding to a beat, "Talvio" pill shines
+  // success: shades, double thumbs-up nodding to a beat, "Hushavia" pill shines
   cool(t) {
     const nod = abs(sin(t * TAU * 2));
     const g = (t * 1.1) % 1;
@@ -229,13 +231,13 @@ const SCENES = {
     return {
       head: { dy: 6 * nod, rot: 2 * sin(t * TAU), face: shadesFace },
       front: thumb(176, 396 - 6 * nod, -1) + thumb(336, 396 - 6 * nod, 1),
-      pill: `<g transform="translate(0 ${-4 * nod})">${pill(`<text x="256" y="484" text-anchor="middle" font-family="Jakarta" font-weight="800" font-size="40" fill="#fff">Talvio</text>
+      pill: `<g transform="translate(0 ${-4 * nod})">${pill(`<text x="256" y="484" text-anchor="middle" font-family="Jakarta" font-weight="800" font-size="34" fill="#fff">Hushavia</text>
           <path d="M196 494 Q 256 504 320 490" stroke="#FFC21A" stroke-width="5" fill="none" stroke-linecap="round"/>`, { x: 136, w: 240, fill: 'url(#violet)', stroke: '#B79BFF' })}
           <clipPath id="pc"><rect x="136" y="438" width="240" height="64" rx="32"/></clipPath><g clip-path="url(#pc)"><path d="M${100 + 340 * g} 510 L ${130 + 340 * g} 430" stroke="#fff" stroke-width="22" opacity=".35"/></g></g>`,
       fx: sparkle(110, 200, 16 * pulse(t, 0, 0.5)) + sparkle(412, 160, 18 * pulse(t, 0.3, 0.8)) + sparkle(430, 300, 12 * pulse(t, 0.55, 1)),
     };
   },
-  // all quiet: tucked in a blanket hugging a Talvio pillow, breathing, z's float
+  // all quiet: tucked in a blanket hugging a Hushavia pillow, breathing, z's float
   sleep(t) {
     const br = sin(t * TAU);
     const zs = [0, 1, 2].map((i) => { const p = (t + i / 3) % 1; return `<text x="${352 + 60 * p}" y="${150 - 90 * p}" font-family="Jakarta" font-weight="800" font-size="${30 + 30 * p}" fill="#3B5BF5" stroke="${O}" stroke-width="2.5" opacity="${(1 - p)}">z</text>`; }).join('');
@@ -246,7 +248,7 @@ const SCENES = {
         <path d="M130 400 C 200 380 320 380 400 404" stroke="#9CCBFF" stroke-width="8" fill="none" stroke-linecap="round" opacity=".7"/>
         <g transform="translate(244 ${418 + 3 * br}) rotate(-10)"><ellipse rx="120" ry="52" fill="url(#violet)" stroke="${O}" stroke-width="${W}"/>
           <ellipse cx="-50" cy="-20" rx="40" ry="12" fill="#B79BFF" opacity=".6"/>
-          <rect x="-28" y="-22" width="56" height="14" rx="7" fill="#fff"/><rect x="-7" y="-22" width="14" height="44" rx="7" fill="#fff"/></g>`,
+          ${hushMark(0, 0, 1.05)}</g>`,
       fx: zs,
     };
   },

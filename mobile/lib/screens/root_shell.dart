@@ -67,7 +67,7 @@ class _RootShellState extends State<RootShell> {
       if (mounted) BatteryGuard.maybePrompt(context);
     });
     if (BackgroundKeepAlive.enabled) BackgroundKeepAlive.apply();
-    // talvio://u/<id> links (profile QR codes scanned with the phone camera)
+    // hushavia://u/<id> links (profile QR codes scanned with the phone camera)
     try {
       _links = AppLinks().uriLinkStream.listen((uri) {
         if (!mounted) return;

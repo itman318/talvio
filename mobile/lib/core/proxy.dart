@@ -34,8 +34,8 @@ class ProxyServer {
         name: '${j['name'] ?? ''}',
       );
 
-  /// talvio://proxy?type=socks5&server=1.2.3.4&port=1080&user=a&pass=b
-  String get link => Uri(scheme: 'talvio', host: 'proxy', queryParameters: {
+  /// hushavia://proxy?type=socks5&server=1.2.3.4&port=1080&user=a&pass=b
+  String get link => Uri(scheme: 'hushavia', host: 'proxy', queryParameters: {
         'type': type,
         'server': host,
         'port': '$port',
@@ -44,11 +44,11 @@ class ProxyServer {
         if (name.isNotEmpty) 'name': name,
       }).toString();
 
-  /// Reads talvio://proxy?…, https://<our server>/proxy?…, and tg-style socks links.
+  /// Reads hushavia://proxy?… (and the old talvio://proxy?…), https://<our server>/proxy?…, and tg-style socks links.
   static ProxyServer? fromLink(String raw) {
     final uri = Uri.tryParse(raw.trim());
     if (uri == null) return null;
-    final talvio = uri.scheme == 'talvio' && uri.host == 'proxy';
+    final talvio = (uri.scheme == 'hushavia' || uri.scheme == 'talvio') && uri.host == 'proxy';
     final web = (uri.scheme == 'http' || uri.scheme == 'https') && uri.path.replaceAll('/', '') == 'proxy';
     if (!talvio && !web && uri.scheme != 'socks5') return null;
     if (uri.scheme == 'socks5') {
