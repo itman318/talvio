@@ -82,8 +82,13 @@ void main() {
     await pumpUntil(t, find.text('Hello! How is the app working for you?'), what: 'messages in chat');
     await snap(t, 'chat');
 
+    // the message box: typing hides the camera button; long text shows the full-screen editor button
+    await t.enterText(find.widgetWithText(TextField, 'Message'), 'Assalam o alaikum! Kal meeting 5 baje hai.\nPlease file saath le aana.\nShukriya 🙏\nAur report bhi check kar lena');
+    await settle(t, 600);
+    await snap(t, 'composer-long');
     await t.enterText(find.widgetWithText(TextField, 'Message'), 'Hello from the app ✅');
     await settle(t, 400);
+    await snap(t, 'composer-typing');
     await t.tap(find.byTooltip('Send (hold to schedule)'));
     await pumpUntil(t, find.text('Hello from the app ✅'), what: 'sent message');
     await settle(t, 2500);
@@ -97,7 +102,7 @@ void main() {
     await settle(t, 600);
     await snap(t, 'reply');
     // attach sheet and emoji panel (visual check)
-    await t.tap(find.byTooltip('Attach: gallery, camera, files…'));
+    await t.tap(find.byTooltip('Attach: gallery, files, location…'));
     await pumpUntil(t, find.text('Gallery'), what: 'attach sheet');
     await snap(t, 'attach');
     await t.tapAt(const Offset(20, 120));

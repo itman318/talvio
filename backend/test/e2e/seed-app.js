@@ -54,7 +54,7 @@ async function seed() {
   await call('POST', `/chats/${g.id}/messages`, { text: 'The build passed ✅' }, sana.token);
   await call('POST', `/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'When should we launch?', options: ['Today', 'Tomorrow', 'Next week'] } }, ali.token);
 
-  const ch = await call('POST', '/chats/channel', { title: 'Hushavia News', username: 'hushavia_news' }, ali.token);
+  const ch = await call('POST', '/chats/channel', { title: 'Hushavia News', username: 'daily_news_pk' }, ali.token);
   await call('POST', `/chats/${ch.id}/messages`, { text: 'The first Hushavia test build is here 🚀' }, ali.token);
   await call('POST', `/chats/${ch.id}/join`, {}, me.token);
 
