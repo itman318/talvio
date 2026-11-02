@@ -159,7 +159,7 @@ jobs:
                 # files with the app's old name: remove them so only Hushavia files remain
                 gh release view desktop-latest -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
                   gh release delete-asset desktop-latest "$old" -y -R "$R" || true
-                done
+                done || true
                 exit 0
               fi
             else

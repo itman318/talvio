@@ -2483,7 +2483,7 @@ class _ChatScreenState extends State<ChatScreen> {
       constraints: const BoxConstraints(minHeight: 50),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         SizedBox(
-          width: 46,
+          width: 44,
           height: 50,
           child: IconButton(
             tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
@@ -2540,21 +2540,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ),
-        // long text: open a full-screen editor with room to write
-        if ('\n'.allMatches(_text.text).length >= 3 || _text.text.length > 220)
-          SizedBox(
-            width: 38,
-            height: 50,
-            child: IconButton(
-              tooltip: 'Write in full screen',
-              padding: EdgeInsets.zero,
-              icon: Icon(Icons.open_in_full_rounded, color: iconColor, size: 19),
-              onPressed: _openFullEditor,
-            ),
-          ),
         if (_editing == null)
           SizedBox(
-            width: 40,
+            width: 38,
             height: 50,
             child: IconButton(
               tooltip: 'Attach: gallery, files, location…',
@@ -2566,7 +2554,7 @@ class _ChatScreenState extends State<ChatScreen> {
         // camera in one tap; hidden while typing so the text gets the room
         if (_editing == null && _text.text.isEmpty)
           SizedBox(
-            width: 40,
+            width: 38,
             height: 50,
             child: IconButton(
               tooltip: 'Camera',
@@ -2575,8 +2563,24 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: () => _attach('camera'),
             ),
           ),
-        // send / voice button sits inside the box, at its right end
-        Padding(padding: const EdgeInsets.fromLTRB(2, 4, 4, 4), child: _sendOrMic()),
+        // send / voice button sits inside the box, at its right end; long text adds "full screen" above it
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 4, 4, 4),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if ('\n'.allMatches(_text.text).length >= 3 || _text.text.length > 220)
+              SizedBox(
+                width: 42,
+                height: 40,
+                child: IconButton(
+                  tooltip: 'Write in full screen',
+                  padding: EdgeInsets.zero,
+                  icon: Icon(Icons.open_in_full_rounded, color: iconColor, size: 19),
+                  onPressed: _openFullEditor,
+                ),
+              ),
+            _sendOrMic(),
+          ]),
+        ),
       ]),
       ),
     );

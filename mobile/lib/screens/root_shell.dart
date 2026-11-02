@@ -64,7 +64,8 @@ class _RootShellState extends State<RootShell> {
     _store.lastNotice.addListener(_onNotice);
     // battery optimisation can delay notifications: explain once and offer to allow background running
     Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) BatteryGuard.maybePrompt(context);
+      // only on the main screen: never pop up over a chat the person is typing in
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true) && MediaQuery.viewInsetsOf(context).bottom == 0) BatteryGuard.maybePrompt(context);
     });
     if (BackgroundKeepAlive.enabled) BackgroundKeepAlive.apply();
     // hushavia://u/<id> links (profile QR codes scanned with the phone camera)

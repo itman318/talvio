@@ -154,7 +154,7 @@ jobs:
               # files with the app's old name: remove them so only Hushavia files remain
               gh release view android-latest -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
                 gh release delete-asset android-latest "$old" -y -R "$R" || true
-              done
+              done || true
               exit 0
             else
               gh release create android-latest $FILES -R "$R" --target "${{ github.sha }}" \
