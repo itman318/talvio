@@ -107,7 +107,7 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
   const clean = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
   app.get('/call/:code', (req, res) => {
     const code = clean(req.params.code);
-    landing(res, { emoji: '📞', title: 'Hushavia call', text: 'Someone shared a call link with you. Open it in the Hushavia app to start the call.', deep: `talvio://call/${code}` });
+    landing(res, { emoji: '📞', title: 'Hushavia call', text: 'Someone shared a call link with you. Open it in the Hushavia app to start the call.', deep: `hushavia://call/${code}` });
   });
   app.get(['/c/:username', '/c/:username/:post'], async (req, res) => {
     const name = clean(req.params.username);
@@ -139,11 +139,11 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
       /* the page still works without the details */
     }
     const start = /^[A-Za-z0-9_-]{1,64}$/.test(String(req.query.start || '')) ? `?start=${req.query.start}` : '';
-    landing(res, { emoji: '👥', title, text, deep: `talvio://c/${name}${start}` });
+    landing(res, { emoji: '👥', title, text, deep: `hushavia://c/${name}${start}` });
   });
   app.get('/join/:code', (req, res) => {
     const code = clean(req.params.code);
-    landing(res, { emoji: '✉️', title: 'You’re invited', text: 'You have an invite to a private group or channel on Hushavia.', deep: `talvio://join/${code}` });
+    landing(res, { emoji: '✉️', title: 'You’re invited', text: 'You have an invite to a private group or channel on Hushavia.', deep: `hushavia://join/${code}` });
   });
 
   app.use(notFoundHandler);

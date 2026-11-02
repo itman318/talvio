@@ -185,7 +185,7 @@ Future<void> showTokenDialog(BuildContext context, String token, {String? classi
       content: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Keep it secret — anyone with the key controls your bot. It is shown only now, copy it.'),
-          box(ctx, 'TALVIO KEY', token, 'Key'),
+          box(ctx, 'HUSHAVIA KEY', token, 'Key'),
           Text('Hushavia Bot API v2: ${AppConfig.serverUrl}/api/bots/v2/<method>, header X-Bot-Key', style: const TextStyle(fontSize: 11.5, color: Brand.muted)),
           if (classicToken != null) ...[
             const SizedBox(height: 14),

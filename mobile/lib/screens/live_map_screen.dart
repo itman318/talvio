@@ -123,7 +123,7 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
             mapController: _map,
             options: const MapOptions(initialCenter: LatLng(30.3753, 69.3451), initialZoom: 4),
             children: [
-              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.talvio.app'),
+              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.hushavia.app'),
               MarkerLayer(markers: markers),
               const RichAttributionWidget(attributions: [TextSourceAttribution('OpenStreetMap contributors')]),
             ],

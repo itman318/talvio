@@ -13,8 +13,8 @@
  * Updates: message (private chats; groups → commands, @mentions and replies unless privacy is off),
  * callback_query (inline buttons), web_app_data (mini app sent data).
  *
- * Mini apps: a web_app button opens the URL inside the app with `#talvioData=<init data>`.
- * Verify it on your server:  secret = HMAC_SHA256(key="TalvioMiniApp", msg=SHA256_HEX(bot_token))
+ * Mini apps: a web_app button opens the URL inside the app with `#hushaviaData=<init data>`.
+ * Verify it on your server:  secret = HMAC_SHA256(key="HushaviaMiniApp", msg=SHA256_HEX(bot_token))
  *                           hash   = HEX(HMAC_SHA256(key=secret, msg=data_check_string))
  * where data_check_string = all fields except hash, sorted, "key=value" joined by "\n".
  */
@@ -255,7 +255,7 @@ async function deliverWebhook(botId) {
         // Classic bots get the classic update shape; the secret goes in the header their libraries check
         const cls = b.api_version === 'cls' ? await require('./botclassic.service').update(update, botId) : null; // eslint-disable-line global-require
         const secretHeaders = b.webhook_secret
-          ? { 'X-Talvio-Webhook-Secret': b.webhook_secret, ...(cls ? { 'X-Telegram-Bot-Api-Secret-Token': b.webhook_secret } : {}) }
+          ? { 'X-Hushavia-Webhook-Secret': b.webhook_secret, ...(cls ? { 'X-Telegram-Bot-Api-Secret-Token': b.webhook_secret } : {}) }
           : {};
         const res = await fetch(b.webhook_url, {
           method: 'POST',
@@ -855,7 +855,7 @@ async function pressButton(userId, messageIdRaw, body = {}) {
 }
 
 function webAppSecret(tokenHash) {
-  return crypto.createHmac('sha256', 'TalvioMiniApp').update(tokenHash).digest();
+  return crypto.createHmac('sha256', 'HushaviaMiniApp').update(tokenHash).digest();
 }
 
 /** Signed launch data for a mini app (opened from a web_app button or the bot's menu). */

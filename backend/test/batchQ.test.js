@@ -200,7 +200,7 @@ test('voice chats: start, join, mute, raise hand in channels, signalling, end', 
   await vcs.end(A.id, ch.id);
 });
 
-test('Talvio Bot API v2: own names, Talvio events, buttons, signed hooks', async () => {
+test('Hushavia Bot API v2: own names, Hushavia events, buttons, signed hooks', async () => {
   const v2 = require('../src/services/botv2.service');
   const http = require('http');
   const crypto = require('crypto');
@@ -235,13 +235,13 @@ test('Talvio Bot API v2: own names, Talvio events, buttons, signed hooks', async
   assert.ok(kb.id);
   assert.deepEqual(await v2.call(key, 'conversation.size', { to: chat.id }), { members: 2 });
 
-  // hooks: Talvio events, signed with the secret
+  // hooks: Hushavia events, signed with the secret
   const got = [];
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
-      got.push({ sig: req.headers['x-talvio-signature'], id: req.headers['x-talvio-event-id'], body });
+      got.push({ sig: req.headers['x-hushavia-signature'], id: req.headers['x-hushavia-event-id'], body });
       res.end('ok');
     });
   });
@@ -302,7 +302,7 @@ test('clear history: only me, or both sides in a private chat; admins only in gr
 
 test('reserved names: a long list, look-alikes, shown as "taken"', async () => {
   const { isReservedName } = require('../src/utils/reserved_names');
-  for (const n of ['admin', 'Help', 'support_pk', 'official_news', 'talvio_team', 'mytalvio', 'help123', 'customercare', 'jazzcash', 'ali_admin']) {
+  for (const n of ['admin', 'Help', 'support_pk', 'official_news', 'hushavia_team', 'myhushavia', 'help123', 'customercare', 'jazzcash', 'ali_admin']) {
     assert.equal(isReservedName(n), true, n);
   }
   for (const n of ['amna_k', 'gul_trader', 'badminton_pk', 'helper_ali', 'signals_v2_bot', 'muhammad']) {

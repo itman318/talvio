@@ -34,8 +34,8 @@ async function loginEmail(email) {
 }
 
 async function seed() {
-  // the app logs in with the email code as muhammad@talvio.test; create it now (no profile) so others can message it
-  const me = await loginEmail('muhammad@talvio.test');
+  // the app logs in with the email code as muhammad@hushavia.test; create it now (no profile) so others can message it
+  const me = await loginEmail('muhammad@hushavia.test');
   const sana = await login('+923005550002', 'Sana', 'Ahmed');
   const ali = await login('+923005550003', 'Ali', 'Raza');
 
@@ -54,8 +54,8 @@ async function seed() {
   await call('POST', `/chats/${g.id}/messages`, { text: 'The build passed ✅' }, sana.token);
   await call('POST', `/chats/${g.id}/messages`, { type: 'poll', poll: { question: 'When should we launch?', options: ['Today', 'Tomorrow', 'Next week'] } }, ali.token);
 
-  const ch = await call('POST', '/chats/channel', { title: 'Talvio News', username: 'talvio_news' }, ali.token);
-  await call('POST', `/chats/${ch.id}/messages`, { text: 'The first Talvio test build is here 🚀' }, ali.token);
+  const ch = await call('POST', '/chats/channel', { title: 'Hushavia News', username: 'hushavia_news' }, ali.token);
+  await call('POST', `/chats/${ch.id}/messages`, { text: 'The first Hushavia test build is here 🚀' }, ali.token);
   await call('POST', `/chats/${ch.id}/join`, {}, me.token);
 
   fs.writeFileSync(STATE, JSON.stringify({ sana, privateChatId: pc.id }));

@@ -26,7 +26,7 @@
  *   button_press → press: { id, data, message_id, conversation, author }
  *   inline_search→ search: { id, query, author }
  *   app_data     → app_data: { data, button, conversation, author }
- * Hooks are signed: X-Talvio-Signature: sha256=HEX(HMAC_SHA256(secret, raw body)), plus X-Talvio-Event-Id.
+ * Hooks are signed: X-Hushavia-Signature: sha256=HEX(HMAC_SHA256(secret, raw body)), plus X-Hushavia-Event-Id.
  */
 const crypto = require('crypto');
 const db = require('../db');
@@ -91,7 +91,7 @@ function event(update, at) {
 function hookRequest(update, secret) {
   const body = JSON.stringify(event(update));
   const sig = crypto.createHmac('sha256', String(secret || '')).update(body).digest('hex');
-  return { body, headers: { 'X-Talvio-Signature': `sha256=${sig}`, 'X-Talvio-Event-Id': String(update.update_id) } };
+  return { body, headers: { 'X-Hushavia-Signature': `sha256=${sig}`, 'X-Hushavia-Event-Id': String(update.update_id) } };
 }
 
 // ------------------------------------------------------------------ v2 → v1 params

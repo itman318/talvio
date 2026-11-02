@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Android battery optimisation can stop Hushavia in the background, and then notifications come late
 /// or not at all. These helpers check that and open the system screen to allow it.
 class BatteryGuard {
-  static const _ch = MethodChannel('talvio/system');
+  static const _ch = MethodChannel('hushavia/system');
 
   /// True when the phone may put Hushavia to sleep (Android only).
   static Future<bool> restricted() async {

@@ -15,10 +15,10 @@ news newsroom update updates announcement announcements broadcast press media bl
 account accounts billing payment payments pay payout payouts refund refunds invoice invoices wallet wallets bank banking
 finance finances money cash coin coins crypto exchange trade trading premium plus pro vip gold diamond
 api apis dev devs developer developers docs documentation sdk app apps application mobile android ios iphone web
-bot bots botfather botforge robot official_bot support_bot help_bot admin_bot talvioidbot idbot getidbot userinfobot
+bot bots botfather botforge robot official_bot support_bot help_bot admin_bot idbot getidbot userinfobot
 test tests tester testing demo example sample null undefined none nobody everyone all here channel channels group groups
 user users username usernames member members guest guests anonymous unknown deleted removed banned
-talvio talvioapp talvioteam talviosupport talvioofficial talviohelp talvionews talviobot talvioplus tavi tavibot
+tavi tavibot
 hushavia hushaviaapp hushaviateam hushaviasupport hushaviaofficial hushaviahelp hushavianews hushaviabot hushaviaplus hushaviaidbot
 ceo cto cfo coo founder cofounder director manager president chairman chief executive
 customer customers customercare customer_care customerservice customer_service care client clients
@@ -32,15 +32,15 @@ home settings setting profile profiles search explore discover trending
 
 const EXACT = new Set(WORDS.split(/\s+/).filter(Boolean));
 
-// look-alikes of staff accounts: "admin_ali", "support_pk", "official.news", "talvio_x"…
-const PREFIXES = ['admin', 'support', 'official', 'talvio', 'hushavia', 'moderator', 'helpdesk', 'customercare', 'customer_care', 'verified', 'verify', 'security', 'sysadmin'];
+// look-alikes of staff accounts: "admin_ali", "support_pk", "official.news", "hushavia_x"…
+const PREFIXES = ['admin', 'support', 'official', 'hushavia', 'moderator', 'helpdesk', 'customercare', 'customer_care', 'verified', 'verify', 'security', 'sysadmin'];
 const SUFFIXES = ['admin', 'support', 'official', 'moderator', 'helpdesk', 'customercare', 'verified'];
 
 function isReservedName(name) {
   const n = String(name || '').toLowerCase().replace(/^@/, '');
   if (!n) return false;
   if (EXACT.has(n)) return true;
-  if (n.includes('talvio') || n.includes('hushavia')) return true;
+  if (n.includes('hushavia')) return true;
   const plain = n.replace(/[_.\d]+$/, '').replace(/^[_.\d]+/, '');
   if (EXACT.has(plain)) return true;
   return PREFIXES.some((p) => n.startsWith(p)) || SUFFIXES.some((s) => n.endsWith(s) || plain.endsWith(s));

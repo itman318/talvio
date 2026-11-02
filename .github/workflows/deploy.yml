@@ -51,8 +51,8 @@ jobs:
 
       - name: Package the backend
         run: |
-          tar -czf talvio-backend.tgz -C backend --exclude=node_modules --exclude=uploads --exclude=test --exclude=.env .
-          ls -la talvio-backend.tgz
+          tar -czf hushavia-backend.tgz -C backend --exclude=node_modules --exclude=uploads --exclude=test --exclude=.env .
+          ls -la hushavia-backend.tgz
 
       - name: Upload and set up the server
         id: setup
@@ -91,7 +91,7 @@ jobs:
           else
             echo "login: ok" | tee -a deploy.txt
           fi
-          if ! sshpass -e scp $SSH_OPTS talvio-backend.tgz .github/scripts/server-setup.sh root@"$HOST":/root/ 2>scp.err; then
+          if ! sshpass -e scp $SSH_OPTS hushavia-backend.tgz .github/scripts/server-setup.sh .github/scripts/server-rename.sh root@"$HOST":/root/ 2>scp.err; then
             echo "upload failed: $(head -c 400 scp.err | tr '\n' ' ')" | tee -a deploy.txt
             grep -qi "permission denied" scp.err && echo "→ the root password was not accepted (check SERVER_PASSWORD)" | tee -a deploy.txt
             exit 1
@@ -107,6 +107,7 @@ jobs:
               # push notifications: the Firebase key goes into a root-only file on the server
               printf 'export FIREBASE_SA_B64=%q\n' "$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | base64 -w0)"
             fi
+            echo 'bash /root/server-rename.sh && rm -f /root/server-rename.sh'
             echo 'bash /root/server-setup.sh'
           } | sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' 2>&1 | tee -a deploy.txt
 

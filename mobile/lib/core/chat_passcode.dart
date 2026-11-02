@@ -19,7 +19,7 @@ class ChatPasscode {
   static Future<void> load() async => _p ??= await SharedPreferences.getInstance();
 
   static String _key(int chatId) => 'chat_pin_$chatId';
-  static String _hash(int chatId, String pin) => sha256.convert(utf8.encode('talvio-chat-pin:$chatId:$pin')).toString();
+  static String _hash(int chatId, String pin) => sha256.convert(utf8.encode('hushavia-chat-pin:$chatId:$pin')).toString();
 
   static bool has(int chatId) => _p?.containsKey(_key(chatId)) ?? false;
   static bool isOpen(int chatId) => _open.contains(chatId);

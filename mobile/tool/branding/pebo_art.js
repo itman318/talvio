@@ -1,4 +1,4 @@
-// Pebo — Talvio's mascot, drawn as layered SVG and rendered to looping animated WebP for the app's
+// Pebo — Hushavia's mascot, drawn as layered SVG and rendered to looping animated WebP for the app's
 // screens (password, empty lists, code sent, success…). Original character; no third-party art.
 // Usage: node mobile/tool/branding/pebo_art.js            → mobile/assets/mascot/*.webp
 //        PREVIEW=/tmp/x.png ONLY=hide,search node ...      → a contact sheet to look at
@@ -15,7 +15,7 @@ const TAU = Math.PI * 2;
 const sin = (x) => Math.sin(x);
 const ease = (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, x)));
 
-// colour themes for Pebo (PAL=…); "brand" follows the Talvio logo gradient
+// colour themes for Pebo (PAL=…); "brand" follows the Hushavia logo gradient
 const PALETTES = {
   mint: { b: ['#D4FFF0', '#7EF0CC', '#2EC4A6', '#169985'], l: ['#B9FBE5', '#4AD8B6', '#22A992'], line: '#0F7E70', arm: '#47D3B2', shade: '#0E7F70' },
   brand: { b: ['#FFE3D6', '#FF9F8A', '#F2557E', '#8B45D6'], l: ['#FFD2C4', '#FF7E8E', '#C94AA8'], line: '#7A2A7E', arm: '#FF7D93', shade: '#5B1E7A' },

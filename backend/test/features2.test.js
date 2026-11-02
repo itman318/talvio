@@ -26,7 +26,7 @@ async function signup(first, phone) {
   rateLimit.reset();
   n += 1;
   const ip = `10.8.0.${n}`;
-  const r = phone ? await auth.requestOtp(phone, ip) : await auth.requestEmailCode(`${first.toLowerCase()}${n}@talvio.test`, ip);
+  const r = phone ? await auth.requestOtp(phone, ip) : await auth.requestEmailCode(`${first.toLowerCase()}${n}@hushavia.test`, ip);
   const s = phone ? await auth.verifyOtp(phone, r.dev_code, {}, ip) : await auth.verifyEmailCode(r.email, r.dev_code, {}, ip);
   await users.updateProfile(s.user.id, { first_name: first });
   return s.user.id;
@@ -83,7 +83,7 @@ test('live location: sender updates and stops; others cannot', async () => {
   assert.equal((await messages.updateLiveLocation(A, m.id, { lat: 2, lng: 2 })).ended, true);
 });
 
-test('contact cards link to Talvio accounts by phone', async () => {
+test('contact cards link to Hushavia accounts by phone', async () => {
   const r = msgOf(await messages.sendMessage(A, chat.id, { type: 'contact', contact: { name: 'Bina', phone: '+92 300 7000002' } }));
   assert.equal(r.meta.contact.user_id, B);
   assert.equal(r.meta.contact.phone, '+923007000002');

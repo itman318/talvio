@@ -53,7 +53,7 @@ jobs:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           flutter --version
-          flutter create . --org com.talvio --project-name chatapp --platforms=android
+          flutter create . --org com.hushavia --project-name chatapp --platforms=android
           rm -f test/widget_test.dart  # template test for the default counter app
           # release signing with the encrypted upload key (see android-key.yml); debug key otherwise
           if [ -n "$KEY_PASS" ] && [ -f signing/upload-keystore.jks.enc ]; then
@@ -67,7 +67,22 @@ jobs:
             echo "SIGNED=test" >> $GITHUB_ENV
           fi
           # push notifications: Firebase config from the GOOGLE_SERVICES_JSON secret (optional)
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json; fi
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            # the Firebase file must list our app id; if it is still the old one, point it at the new id
+            # (add the com.hushavia.app Android app in Firebase and update the secret for full push support)
+            if ! grep -q '"com.hushavia.app"' android/app/google-services.json; then
+              python3 - <<'PY'
+          import json
+          p = 'android/app/google-services.json'
+          j = json.load(open(p))
+          for c in j.get('client', []):
+              c.setdefault('client_info', {}).setdefault('android_client_info', {})['package_name'] = 'com.hushavia.app'
+          json.dump(j, open(p, 'w'))
+          PY
+              echo "FIREBASE_APP=old" >> $GITHUB_ENV
+            fi
+          fi
           dart run tool/patch_platforms.dart
           # keep Gradle within the runner's memory (the default -Xmx8G can get the runner killed)
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties
@@ -123,11 +138,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk talvio.apk
-          cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk talvio-x86_64-emulator.apk
-          FILES="talvio.apk talvio-x86_64-emulator.apk"
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk hushavia.apk
+          cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk hushavia-x86_64-emulator.apk
+          FILES="hushavia.apk hushavia-x86_64-emulator.apk"
           if [ -f mobile/build/app/outputs/bundle/release/app-release.aab ]; then
-            cp mobile/build/app/outputs/bundle/release/app-release.aab talvio-playstore.aab; FILES="$FILES talvio-playstore.aab"
+            cp mobile/build/app/outputs/bundle/release/app-release.aab hushavia-playstore.aab; FILES="$FILES hushavia-playstore.aab"
           fi
           R="${{ github.repository }}"
           TITLE="Hushavia Android (test build #${{ github.run_number }})"
@@ -135,7 +150,12 @@ jobs:
           for i in 1 2 3; do
             if gh release view android-latest -R "$R" >/dev/null 2>&1; then
               gh release upload android-latest $FILES --clobber -R "$R" &&
-                gh release edit android-latest --title "$TITLE" --notes "$NOTES" --prerelease -R "$R" && exit 0
+                gh release edit android-latest --title "$TITLE" --notes "$NOTES" --prerelease -R "$R" || { echo "publish attempt $i failed, retrying"; sleep 15; continue; }
+              # files with the app's old name: remove them so only Hushavia files remain
+              gh release view android-latest -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
+                gh release delete-asset android-latest "$old" -y -R "$R" || true
+              done
+              exit 0
             else
               gh release create android-latest $FILES -R "$R" --target "${{ github.sha }}" \
                 --prerelease --title "$TITLE" --notes "$NOTES" && exit 0

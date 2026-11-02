@@ -44,13 +44,13 @@ class ProxyServer {
         if (name.isNotEmpty) 'name': name,
       }).toString();
 
-  /// Reads hushavia://proxy?… (and the old talvio://proxy?…), https://<our server>/proxy?…, and tg-style socks links.
+  /// Reads hushavia://proxy?…, https://<our server>/proxy?…, and tg-style socks links.
   static ProxyServer? fromLink(String raw) {
     final uri = Uri.tryParse(raw.trim());
     if (uri == null) return null;
-    final talvio = (uri.scheme == 'hushavia' || uri.scheme == 'talvio') && uri.host == 'proxy';
+    final hushavia = uri.scheme == 'hushavia' && uri.host == 'proxy';
     final web = (uri.scheme == 'http' || uri.scheme == 'https') && uri.path.replaceAll('/', '') == 'proxy';
-    if (!talvio && !web && uri.scheme != 'socks5') return null;
+    if (!hushavia && !web && uri.scheme != 'socks5') return null;
     if (uri.scheme == 'socks5') {
       final info = uri.userInfo.split(':');
       return ProxyServer(type: 'socks5', host: uri.host, port: uri.port == 0 ? 1080 : uri.port, username: info.first, password: info.length > 1 ? info[1] : '');

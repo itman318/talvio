@@ -6,20 +6,20 @@ const assert = require('node:assert/strict');
 const link = require('../src/services/link.service');
 
 test('first link in a message', () => {
-  assert.equal(link.firstUrl('dekho https://talvio.app/download, mast hai!'), 'https://talvio.app/download');
+  assert.equal(link.firstUrl('dekho https://hushavia.app/download, mast hai!'), 'https://hushavia.app/download');
   assert.equal(link.firstUrl('no link here'), null);
 });
 
 test('Open Graph and <title> parsing', () => {
   const html = `<html><head><title>Fallback title</title>
-    <meta property="og:title" content="Talvio &amp; friends">
+    <meta property="og:title" content="Hushavia &amp; friends">
     <meta name="description" content="Fast chats">
-    <meta property="og:image" content="/img/cover.jpg"><meta property="og:site_name" content="Talvio"></head></html>`;
-  const p = link.parse('https://talvio.app/x', html);
-  assert.equal(p.title, 'Talvio & friends');
+    <meta property="og:image" content="/img/cover.jpg"><meta property="og:site_name" content="Hushavia"></head></html>`;
+  const p = link.parse('https://hushavia.app/x', html);
+  assert.equal(p.title, 'Hushavia & friends');
   assert.equal(p.description, 'Fast chats');
-  assert.equal(p.image, 'https://talvio.app/img/cover.jpg');
-  assert.equal(p.site, 'Talvio');
+  assert.equal(p.image, 'https://hushavia.app/img/cover.jpg');
+  assert.equal(p.site, 'Hushavia');
   assert.equal(link.parse('http://plain.example/', '<html><title>Only title</title></html>').image, null);
   assert.equal(link.parse('https://e.example/', '<html></html>'), null);
 });

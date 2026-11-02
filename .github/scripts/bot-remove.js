@@ -1,6 +1,6 @@
 'use strict';
 
-/** On the server: deletes a hosted bot's Talvio account.  cd /opt/talvio/app && node /root/bot-remove.js <bot_username> */
+/** On the server: deletes a hosted bot's Hushavia account.  cd /opt/hushavia/app && node /root/bot-remove.js <bot_username> */
 const path = require('path');
 
 const req = (p) => require(path.join(process.cwd(), p)); // eslint-disable-line global-require, import/no-dynamic-require

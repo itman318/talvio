@@ -40,7 +40,7 @@ class BackgroundKeepAlive {
       if (types.isEmpty) return;
       FlutterForegroundTask.init(
         androidNotificationOptions: AndroidNotificationOptions(
-          channelId: _sharing ? 'screen_share' : 'talvio_keep_alive',
+          channelId: _sharing ? 'screen_share' : 'hushavia_keep_alive',
           channelName: _sharing ? 'Screen sharing' : 'Background connection',
           channelDescription: _sharing ? 'Shown while you share your screen in a call' : 'Keeps Hushavia connected so messages arrive on time',
           channelImportance: _sharing ? NotificationChannelImportance.LOW : NotificationChannelImportance.MIN,

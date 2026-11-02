@@ -1,5 +1,5 @@
 {
-  "name": "talvio-backend",
+  "name": "hushavia-backend",
   "version": "1.0.0",
   "description": "Hushavia messaging app backend (REST API + Socket.IO + admin API)",
   "main": "src/server.js",

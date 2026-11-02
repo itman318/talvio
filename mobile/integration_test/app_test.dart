@@ -6,7 +6,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:chatapp/main.dart' as app;
 
-const email = 'muhammad@talvio.test';
+const email = 'muhammad@hushavia.test';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();

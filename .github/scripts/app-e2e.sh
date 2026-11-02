@@ -12,7 +12,7 @@ run() { # $1 = test file, $2 = prebuilt apk, $3 = log name
   ( while true; do
       echo "== $(date -u +%T)"; free -m | sed -n 2p
       ps -eo pid,rss,pcpu,comm --sort=-rss | head -4
-      timeout 10 adb shell dumpsys meminfo com.talvio.app 2>/dev/null | grep -E "TOTAL|Native Heap|Graphics" | head -3
+      timeout 10 adb shell dumpsys meminfo com.hushavia.app 2>/dev/null | grep -E "TOTAL|Native Heap|Graphics" | head -3
       sleep 15
     done ) > ci-app/watch-$3.txt 2>&1 &
   local wd=$!

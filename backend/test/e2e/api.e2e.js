@@ -145,7 +145,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     C.refresh_token = r.refresh_token || C.refresh_token;
   });
   await step('profile: username + bio', async () => {
-    await api.patch('/api/me', { username: 'ali_e2e', bio: 'Testing Talvio' }, A.access_token);
+    await api.patch('/api/me', { username: 'ali_e2e', bio: 'Testing Hushavia' }, A.access_token);
     const me = await api.get('/api/me', A.access_token);
     assert(me.username === 'ali_e2e', `username not saved: ${me.username}`);
   });
@@ -474,7 +474,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
         await api.post(`/api/admin/users/${C.me.id}/unban`, {}, adm);
       });
       await step('admin announcement → user sees it', async () => {
-        await api.post('/api/admin/announcements', { title: 'Hello', body: 'Welcome to Talvio' }, adm);
+        await api.post('/api/admin/announcements', { title: 'Hello', body: 'Welcome to Hushavia' }, adm);
         const r = await api.get('/api/announcements', B.access_token);
         assert((Array.isArray(r) ? r : r.announcements || []).length >= 1, 'announcement not visible');
       });

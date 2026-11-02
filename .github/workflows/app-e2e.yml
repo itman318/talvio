@@ -67,7 +67,7 @@ jobs:
       - name: Prepare Android project
         working-directory: mobile
         run: |
-          flutter create . --org com.talvio --project-name chatapp --platforms=android
+          flutter create . --org com.hushavia --project-name chatapp --platforms=android
           dart run tool/patch_platforms.dart
           rm -f test/widget_test.dart
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties

@@ -1071,9 +1071,9 @@ CREATE TABLE IF NOT EXISTS quick_replies (
 -- ---------------------------------------------------------------- public-looking IDs
 -- New accounts get 10-digit IDs (from 5 000 000 000) with small random gaps, so an ID says nothing
 -- about how many people use Hushavia; new chats start at 1 000 000 000 (bots see groups as -100<id>).
-CREATE TABLE IF NOT EXISTS talvio_migrations (name VARCHAR(64) PRIMARY KEY, ran_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS hushavia_migrations (name VARCHAR(64) PRIMARY KEY, ran_at TIMESTAMPTZ NOT NULL DEFAULT now());
 
-CREATE OR REPLACE FUNCTION talvio_next_user_id() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION hushavia_next_user_id() RETURNS trigger AS $$
 DECLARE nid BIGINT;
 BEGIN
   PERFORM pg_advisory_xact_lock(731100);
@@ -1084,7 +1084,7 @@ BEGIN
   RETURN NEW;
 END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS users_public_id ON users;
-CREATE TRIGGER users_public_id BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION talvio_next_user_id();
+CREATE TRIGGER users_public_id BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION hushavia_next_user_id();
 
 DO $$
 BEGIN
@@ -1097,9 +1097,9 @@ END $$;
 DO $$
 DECLARE r RECORD; def TEXT; nxt BIGINT := 5000000000;
 BEGIN
-  IF EXISTS (SELECT 1 FROM talvio_migrations WHERE name = 'user_ids_v1') THEN RETURN; END IF;
+  IF EXISTS (SELECT 1 FROM hushavia_migrations WHERE name = 'user_ids_v1') THEN RETURN; END IF;
   IF NOT EXISTS (SELECT 1 FROM users WHERE id < 5000000000) THEN
-    INSERT INTO talvio_migrations (name) VALUES ('user_ids_v1');
+    INSERT INTO hushavia_migrations (name) VALUES ('user_ids_v1');
     RETURN;
   END IF;
 
@@ -1148,7 +1148,7 @@ BEGIN
   ) k WHERE c.id = k.chat_id AND c.type = 'private';
 
   PERFORM setval('users_id_seq', nxt + 1 + floor(random() * 37)::bigint, false);
-  INSERT INTO talvio_migrations (name) VALUES ('user_ids_v1');
+  INSERT INTO hushavia_migrations (name) VALUES ('user_ids_v1');
 END $$;
 
 -- ---------------------------------------------------------------- emoji status (an emoji next to your name, optionally for a while)

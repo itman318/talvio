@@ -53,10 +53,10 @@ const optional = async (label, fn) => {
 
 async function main() {
   // ---------------------------------------------------------------- people
-  const er = await call('POST', '/auth/email/request', { email: 'demo@talvio.app' });
-  const et = await call('POST', '/auth/email/verify', { email: 'demo@talvio.app', code: er.dev_code, device: { name: 'Demo phone' } });
+  const er = await call('POST', '/auth/email/request', { email: 'demo@hushavia.app' });
+  const et = await call('POST', '/auth/email/verify', { email: 'demo@hushavia.app', code: er.dev_code, device: { name: 'Demo phone' } });
   const me = { token: et.access_token };
-  await call('PATCH', '/me', { first_name: 'Sam', last_name: 'Carter', bio: 'Building Talvio 🚀' }, me.token);
+  await call('PATCH', '/me', { first_name: 'Sam', last_name: 'Carter', bio: 'Building Hushavia 🚀' }, me.token);
   await optional('username', () => call('PATCH', '/me', { username: 'sam_demo' }, me.token));
   me.id = (await call('GET', '/me', null, me.token)).id;
 
@@ -81,7 +81,7 @@ async function main() {
   const a = await call('POST', '/chats/private', { user_id: me.id }, ayesha.token);
   await say(a.id, ayesha, 'Hey Sam! 👋');
   await say(a.id, me, 'Hi Sarah! How are you?');
-  await say(a.id, ayesha, 'Great, thanks! The new Talvio design looks amazing 😍');
+  await say(a.id, ayesha, 'Great, thanks! The new Hushavia design looks amazing 😍');
   const lake = await upload(path.join(ASSETS, 'lake.jpg'), 'image', ayesha.token);
   await call('POST', `/chats/${a.id}/messages`, { type: 'image', media_id: lake.id, text: 'From our mountain trip 🏔️' }, ayesha.token);
   await say(a.id, me, 'Wow, what a view 😮');
@@ -96,7 +96,7 @@ async function main() {
   await say(b.id, bilal, 'This is Alex, the designer I told you about 👍');
 
   const s = await call('POST', '/chats/private', { user_id: me.id }, sana.token);
-  await say(s.id, sana, 'Got the Talvio app, installed it ✅');
+  await say(s.id, sana, 'Got the Hushavia app, installed it ✅');
   const packs = await optional('stickers', () => call('GET', '/stickers/packs', null, sana.token));
   const st = packs && packs[0] && packs[0].stickers;
   if (st && st.length) await call('POST', `/chats/${s.id}/messages`, { type: 'sticker', sticker_id: st[0].id }, sana.token);
@@ -121,7 +121,7 @@ async function main() {
   const sunset = await upload(path.join(ASSETS, 'sunset.jpg'), 'image', ammi.token);
   await call('POST', `/chats/${fam.id}/messages`, { type: 'image', media_id: sunset.id, text: 'Sunset today 🌅' }, ammi.token);
 
-  const dev = (await call('POST', '/chats/group', { title: 'Talvio Dev Team', member_ids: [me.id, bilal.id, sana.id, ali.id, usman.id] }, me.token)).chat;
+  const dev = (await call('POST', '/chats/group', { title: 'Hushavia Dev Team', member_ids: [me.id, bilal.id, sana.id, ali.id, usman.id] }, me.token)).chat;
   await say(dev.id, ali, 'Android build passed ✅');
   await say(dev.id, sana, 'Tested the web version too, all good');
   await call('POST', `/chats/${dev.id}/messages`, { type: 'poll', poll: { question: 'When should we launch?', options: ['This week', 'Next week', 'Next month'] } }, me.token);
@@ -129,8 +129,8 @@ async function main() {
   await say(dev.id, usman, 'I will make the Play Store screenshots');
 
   // ---------------------------------------------------------------- channel
-  const ch = await call('POST', '/chats/channel', { title: 'Talvio News', username: 'talvio_news', description: 'Talvio updates and new features' }, ali.token);
-  await say(ch.id, ali, 'Welcome to Talvio! 🎉 New features are announced here.');
+  const ch = await call('POST', '/chats/channel', { title: 'Hushavia News', username: 'hushavia_news', description: 'Hushavia updates and new features' }, ali.token);
+  await say(ch.id, ali, 'Welcome to Hushavia! 🎉 New features are announced here.');
   await say(ch.id, ali, 'New: stickers, GIFs, disappearing messages and live location 📍');
   await say(ch.id, ali, 'New: prayer times, Qibla direction and Ramadan reminders 🕌');
   await call('POST', `/chats/${ch.id}/join`, {}, me.token);

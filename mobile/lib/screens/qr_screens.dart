@@ -12,9 +12,9 @@ import 'link_device_screen.dart';
 /// hushavia://u/<id> — the link inside a profile QR code.
 String profileLink(int userId) => 'hushavia://u/$userId';
 
-/// Reads the user id from a profile link (QR code or hushavia:// deep link; old talvio:// ones too).
+/// Reads the user id from a profile link (QR code or hushavia:// deep link).
 int? profileIdFromLink(String s) {
-  final m = RegExp(r'^(?:hushavia|talvio)://u/(\d+)$').firstMatch(s.trim());
+  final m = RegExp(r'^hushavia://u/(\d+)$').firstMatch(s.trim());
   return m == null ? null : int.tryParse(m.group(1)!);
 }
 

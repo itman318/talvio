@@ -224,7 +224,7 @@ class _LocationViewState extends State<LocationView> {
                   key: ValueKey('$lat,$lng'),
                   options: MapOptions(initialCenter: point, initialZoom: 15, interactionOptions: const InteractionOptions(flags: InteractiveFlag.none)),
                   children: [
-                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.talvio.app'),
+                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.hushavia.app'),
                     MarkerLayer(markers: [
                       Marker(
                         point: point,

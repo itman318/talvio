@@ -1,6 +1,6 @@
 'use strict';
 
-/** Talvio Bot API — Classic: classic-library-shaped requests and responses. WARNING: wipes the test DB. */
+/** Hushavia Bot API — Classic: classic-library-shaped requests and responses. WARNING: wipes the test DB. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -79,7 +79,7 @@ test.after(async () => {
   await db.close();
 });
 
-test('formatting: HTML, MarkdownV2 and Markdown become Talvio marks', () => {
+test('formatting: HTML, MarkdownV2 and Markdown become Hushavia marks', () => {
   assert.equal(classic.formatText('<b>Buy</b> <i>XAUUSD</i> &amp; <code>2350</code> <a href="https://t.co/x">chart</a><br>TP', 'HTML'), '**Buy** _XAUUSD_ & `2350` chart (https://t.co/x)\nTP');
   assert.equal(classic.formatText('*Done* \\! SL\\: 2340 _now_', 'MarkdownV2'), '**Done** ! SL: 2340 _now_');
   assert.equal(classic.formatText('*bold* [site](https://a.b)', 'Markdown'), '**bold** site (https://a.b)');

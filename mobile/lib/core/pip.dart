@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 /// Android picture-in-picture: during a video call, leaving the app keeps the call in a small window.
 class Pip {
-  static const _ch = MethodChannel('talvio/system');
+  static const _ch = MethodChannel('hushavia/system');
 
   /// True while the app is shown as the small floating window.
   static final ValueNotifier<bool> active = ValueNotifier(false);

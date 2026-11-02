@@ -1,5 +1,5 @@
-# Hosts a person's own Telegram-style bot on the Talvio server (kept private: it arrives encrypted on the
-# ci-botpayload branch). Makes the Talvio bot account, installs Python + the bot as a service that restarts
+# Hosts a person's own Telegram-style bot on the Hushavia server (kept private: it arrives encrypted on the
+# ci-botpayload branch). Makes the Hushavia bot account, installs Python + the bot as a service that restarts
 # by itself, and sends back an encrypted status report (ci-botrun). The payload branch is deleted afterwards.
 name: Bot host (private)
 
@@ -10,7 +10,7 @@ on:
         description: Service name
         default: elitexauvault
       username:
-        description: Bot username on Talvio
+        description: Bot username on Hushavia
         default: EliteXauVaultBot
       name:
         description: Bot display name
@@ -43,7 +43,7 @@ jobs:
           s = s.replace('bot = Bot(token=_bot_token)',
               'from aiogram.client.session.aiohttp import AiohttpSession\n'
               'from aiogram.client.telegram import TelegramAPIServer\n'
-              'bot = Bot(token=_bot_token, session=AiohttpSession(api=TelegramAPIServer.from_base(os.getenv("TALVIO_API", "http://127.0.0.1/api/classic"))))', 1)
+              'bot = Bot(token=_bot_token, session=AiohttpSession(api=TelegramAPIServer.from_base(os.getenv("HUSHAVIA_API", "http://127.0.0.1/api/classic"))))', 1)
           s = s.replace('"/data/trading_bot.db"', 'os.path.join(os.getenv("BOT_DATA_DIR", "/data"), "trading_bot.db")')
           open('/tmp/p/bot.py', 'w', encoding='utf-8').write(s)
           PY
@@ -74,15 +74,15 @@ jobs:
           $D/venv/bin/pip install -q --upgrade pip >/dev/null 2>&1 || true
           $D/venv/bin/pip install -q "aiogram>=3.4,<4" aiosqlite 2>&1 | tail -2
           $D/venv/bin/python -c "import aiogram; print('aiogram', aiogram.__version__)"
-          echo "--- talvio bot account"
-          cd /opt/talvio/app && set -a && . /etc/talvio/talvio.env && set +a && node /root/bot-host.js "$BOTUSER" "$BOTNAME" $D/bot.env
+          echo "--- hushavia bot account"
+          cd /opt/hushavia/app && set -a && . /etc/hushavia/hushavia.env && set +a && node /root/bot-host.js "$BOTUSER" "$BOTNAME" $D/bot.env
           rm -f /root/bot-host.js
-          printf 'TALVIO_API=http://127.0.0.1/api/classic\nBOT_DATA_DIR=%s/data\n' "$D" >> $D/bot.env
+          printf 'HUSHAVIA_API=http://127.0.0.1/api/classic\nBOT_DATA_DIR=%s/data\n' "$D" >> $D/bot.env
           chown -R $SVC:$SVC $D && chmod 600 $D/bot.env
           cat > /etc/systemd/system/$SVC.service <<UNIT
           [Unit]
-          Description=$BOTNAME (Talvio bot)
-          After=network-online.target talvio.service
+          Description=$BOTNAME (Hushavia bot)
+          After=network-online.target hushavia.service
           Wants=network-online.target
 
           [Service]

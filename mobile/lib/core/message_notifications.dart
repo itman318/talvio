@@ -126,7 +126,7 @@ class MessageNotifications {
           importance: _channel.importance,
           priority: _channel.priority,
           category: _channel.category,
-          groupKey: 'talvio.messages',
+          groupKey: 'hushavia.messages',
           styleInformation: BigTextStyleInformation('${data['body'] ?? ''}'),
           actions: canReply
               ? const [

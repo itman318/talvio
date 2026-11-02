@@ -1,6 +1,6 @@
 'use strict';
 
-/** Talvio Business: greeting, away message, working hours, quick replies. WARNING: wipes the test DB. */
+/** Hushavia Business: greeting, away message, working hours, quick replies. WARNING: wipes the test DB. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');

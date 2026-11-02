@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * On the server: makes (or re-keys) the Talvio bot account for a hosted bot and writes its env file.
- *   cd /opt/talvio/app && node /root/bot-host.js <bot_username> <bot_name> <env_file>
+ * On the server: makes (or re-keys) the Hushavia bot account for a hosted bot and writes its env file.
+ *   cd /opt/hushavia/app && node /root/bot-host.js <bot_username> <bot_name> <env_file>
  * Owner = the first person who signed up (the app owner). Prints who that is — never the token.
  */
 const path = require('path');

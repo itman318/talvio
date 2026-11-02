@@ -1,4 +1,4 @@
-// Pingo — Talvio's mascot: a little penguin in a Talvio-gradient scarf. Original character, sticker-style
+// Pingo — Hushavia's mascot: a little penguin in a Hushavia-gradient scarf. Original character, sticker-style
 // art (bold outline, soft shading, props that tell a story), rendered to looping animated WebP.
 // Usage: node mobile/tool/branding/pingo_art.js                    → mobile/assets/mascot/*.webp
 //        PREVIEW=/tmp/x.png ONLY=hide,search node ...               → contact sheet to look at

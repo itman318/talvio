@@ -5,7 +5,7 @@
    - Name `ANDROID_KEY_PASSWORD`, value: a strong password (12+ characters). **Write it down** — every release needs it.
 2. **Actions → Create Android upload key → Run workflow.** It creates the key, encrypts it with that password
    and saves it as `mobile/signing/upload-keystore.jks.enc` (+ `fingerprints.txt` with SHA-1/SHA-256 for Firebase).
-3. From now on every build of **Android APK** is signed with it and also produces **`talvio-playstore.aab`**
+3. From now on every build of **Android APK** is signed with it and also produces **`hushavia-playstore.aab`**
    in Releases → `android-latest`.
 
 Play Console uses *Play App Signing*: Google keeps the real app signing key, this is only the upload key
@@ -14,8 +14,8 @@ Play Console uses *Play App Signing*: Google keeps the real app signing key, thi
 ## 2. Play Console
 1. Create a developer account at play.google.com/console (one-time $25).
 2. **Create app** → name `Hushavia`, default language English, App, Free.
-3. Upload `talvio-playstore.aab` to **Testing → Internal testing** first, then Production.
-4. Application id: `com.talvio.app` (cannot be changed after the first upload).
+3. Upload `hushavia-playstore.aab` to **Testing → Internal testing** first, then Production.
+4. Application id: `com.hushavia.app` (cannot be changed after the first upload).
 
 ## 3. Store listing (copy/paste)
 **App name:** Hushavia

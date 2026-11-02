@@ -1,4 +1,4 @@
-"""Cuts the Talvio duck sticker sheet (10 stickers on white) into transparent stickers and gives each
+"""Cuts the Hushavia duck sticker sheet (10 stickers on white) into transparent stickers and gives each
 a looping motion (sway, hop, nod, breathe…) plus a glossy shine sweep → animated WebP for the app.
 Usage: python3 duck_animate.py sheet.png out_dir [preview.png]"""
 import math

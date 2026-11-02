@@ -29,8 +29,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download android-latest -p talvio-x86_64-emulator.apk -R "${{ github.repository }}"
-          mv talvio-x86_64-emulator.apk talvio.apk
+          gh release download android-latest -p hushavia-x86_64-emulator.apk -R "${{ github.repository }}"
+          mv hushavia-x86_64-emulator.apk hushavia.apk
 
       - name: Run on emulator
         uses: reactivecircus/android-emulator-runner@v2

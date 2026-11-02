@@ -1,4 +1,4 @@
-// Talvio duckling — premium sticker v2 (one scene at a time). Volumetric shading, layered parts and
+// Hushavia duckling — premium sticker v2 (one scene at a time). Volumetric shading, layered parts and
 // keyframed animation (anticipation, overshoot, follow-through), rendered at 24 fps to animated WebP.
 // Usage: SCENE=hide PREVIEW=/tmp/p.png node sticker_v2.js     → key frames side by side
 //        SCENE=hide OUT=/tmp/hide.webp node sticker_v2.js     → the animated sticker
@@ -77,7 +77,7 @@ function cap(t, lag) {
     <path d="M184 122 C 200 106 224 98 248 97" stroke="#D2B8FF" stroke-width="9" stroke-linecap="round" fill="none" opacity=".7"/>
     <path d="M150 186 C 146 122 194 92 256 92 C 318 92 366 122 362 186 C 296 172 216 172 150 186 Z" fill="none" stroke="${OL}" stroke-width="${OW}" stroke-linejoin="round"/>
     <ellipse cx="256" cy="${94 - btn}" rx="13" ry="6" fill="#8A4DFF" stroke="${OL}" stroke-width="4"/>
-    <!-- front badge: Talvio T on a brand bubble -->
+    <!-- front badge: Hushavia T on a brand bubble -->
     <g transform="translate(256 138) scale(.78)">
       <path d="M0 -30 c -22 0 -36 14 -36 31 c 0 9 4 16 10 22 l -4 14 c -.6 2 1.4 3.4 3 2.4 l 16 -9 c 3.5 1 7 1.4 11 1.4 c 22 0 36 -13 36 -31 S 22 -30 0 -30 z" fill="url(#g-brand)" stroke="${OL}" stroke-width="4"/>
       <rect x="-15" y="-14" width="30" height="8" rx="4" fill="#fff"/><rect x="-4" y="-14" width="8" height="28" rx="4" fill="#fff"/>

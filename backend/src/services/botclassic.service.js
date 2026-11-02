@@ -25,13 +25,13 @@ const media = require('./media.service');
 const { AppError, badRequest } = require('../utils/errors');
 
 // ------------------------------------------------------------------ token
-function toTalvioToken(raw) {
+function toHushaviaToken(raw) {
   const t = String(raw || '').trim();
   const m = /^(\d+):([A-Za-z0-9]{20,})$/.exec(t);
   return m ? `tlv_${m[1]}_${m[2]}` : t;
 }
-function toClassicToken(talvio) {
-  const m = /^tlv_(\d+)_([A-Za-z0-9]+)$/.exec(String(talvio || ''));
+function toClassicToken(hushavia) {
+  const m = /^tlv_(\d+)_([A-Za-z0-9]+)$/.exec(String(hushavia || ''));
   return m ? `${m[1]}:${m[2]}` : null;
 }
 
@@ -351,7 +351,7 @@ const MAP = {
 const botIdOf = (token) => Number((/^tlv_(\d+)_/.exec(token) || [])[1] || 0);
 
 async function call(rawToken, method, params = {}, files = {}) {
-  const token = toTalvioToken(rawToken);
+  const token = toHushaviaToken(rawToken);
   const fn = MAP[method];
   if (!fn) throw new AppError(404, 'method_not_found', `Not Found: method ${method} is not available on Hushavia yet`);
   const botId = botIdOf(token);
@@ -365,7 +365,7 @@ async function call(rawToken, method, params = {}, files = {}) {
 
 /** For GET {base}/file/bot<token>/media/<id>/<name>: the media row the bot may download. */
 async function fileFor(rawToken, filePath) {
-  const b = await bot.authenticate(toTalvioToken(rawToken));
+  const b = await bot.authenticate(toHushaviaToken(rawToken));
   const id = /^media\/(\d+)/.exec(String(filePath || ''));
   if (!id) throw new AppError(404, 'not_found', 'Not Found');
   const m = await media.getAccessible(b.user_id, id[1]);
@@ -382,4 +382,4 @@ function errorBody(err) {
   return { status, body };
 }
 
-module.exports = { toGroupId, fromGroupId, call, fileFor, errorBody, update, message, formatText, toTalvioToken, toClassicToken, tmpDir: os.tmpdir(), v };
+module.exports = { toGroupId, fromGroupId, call, fileFor, errorBody, update, message, formatText, toHushaviaToken, toClassicToken, tmpDir: os.tmpdir(), v };

@@ -110,7 +110,7 @@ class InlineKeyboard extends StatelessWidget {
 }
 
 /// A bot's mini app (web page) inside the app. The page gets signed user data in
-/// `location.hash` (#talvioData=…) and `window.Talvio`: { initData, user, close(), sendData(text) }.
+/// `location.hash` (#hushaviaData=…) and `window.Hushavia`: { initData, user, close(), sendData(text) }.
 class MiniAppScreen extends StatefulWidget {
   const MiniAppScreen({super.key, required this.botId, required this.url, required this.title});
   final int botId;
@@ -139,15 +139,15 @@ class _MiniAppScreenState extends State<MiniAppScreen> {
       final init = '${r['init_data']}';
       final uri = Uri.parse(widget.url);
       if (uri.scheme != 'https' && uri.scheme != 'http') throw const FormatException('bad url');
-      final target = uri.replace(fragment: 'talvioData=${Uri.encodeComponent(init)}');
-      final js = 'window.Talvio = { initData: ${jsonEncode(init)}, user: ${jsonEncode(Uri.splitQueryString(init)['user'] ?? '{}')}, '
-          'close: function(){ TalvioBridge.postMessage(JSON.stringify({type:"close"})); }, '
-          'sendData: function(d){ TalvioBridge.postMessage(JSON.stringify({type:"send_data", data: String(d)})); } }; '
-          'try { window.Talvio.user = JSON.parse(window.Talvio.user); } catch(e) {} window.Hushavia = window.Talvio; '
+      final target = uri.replace(fragment: 'hushaviaData=${Uri.encodeComponent(init)}');
+      final js = 'window.Hushavia = { initData: ${jsonEncode(init)}, user: ${jsonEncode(Uri.splitQueryString(init)['user'] ?? '{}')}, '
+          'close: function(){ HushaviaBridge.postMessage(JSON.stringify({type:"close"})); }, '
+          'sendData: function(d){ HushaviaBridge.postMessage(JSON.stringify({type:"send_data", data: String(d)})); } }; '
+          'try { window.Hushavia.user = JSON.parse(window.Hushavia.user); } catch(e) {} '
           'window.dispatchEvent(new Event("chatappready"));';
       final c = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..addJavaScriptChannel('TalvioBridge', onMessageReceived: (msg) => _onBridge(msg.message))
+        ..addJavaScriptChannel('HushaviaBridge', onMessageReceived: (msg) => _onBridge(msg.message))
         ..setNavigationDelegate(NavigationDelegate(
           onProgress: (p) {
             if (mounted) setState(() => _progress = p);

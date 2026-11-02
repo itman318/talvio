@@ -63,7 +63,7 @@ jobs:
         if: steps.want.outputs.go == '1'
         run: |
           flutter config --enable-${{ matrix.platform }}-desktop
-          flutter create . --org com.talvio --project-name chatapp --platforms=${{ matrix.platform }}
+          flutter create . --org com.hushavia --project-name chatapp --platforms=${{ matrix.platform }}
           rm -f test/widget_test.dart
           # window title and app name: Hushavia
           # the program is called Hushavia(.exe), not chatapp
@@ -135,9 +135,9 @@ jobs:
         run: |
           mkdir -p ../dist
           case "${{ matrix.platform }}" in
-            windows) (cd build/windows/x64/runner/Release && 7z a -tzip ../../../../../../dist/talvio-windows.zip . >/dev/null) ;;
-            linux) tar -C build/linux/x64/release -czf ../dist/talvio-linux.tar.gz --transform 's/^bundle/talvio/' bundle ;;
-            macos) (cd build/macos/Build/Products/Release && ditto -c -k --keepParent Hushavia.app ../../../../../../dist/talvio-macos.zip) ;;
+            windows) (cd build/windows/x64/runner/Release && 7z a -tzip ../../../../../../dist/hushavia-windows.zip . >/dev/null) ;;
+            linux) tar -C build/linux/x64/release -czf ../dist/hushavia-linux.tar.gz --transform 's/^bundle/hushavia/' bundle ;;
+            macos) (cd build/macos/Build/Products/Release && ditto -c -k --keepParent Hushavia.app ../../../../../../dist/hushavia-macos.zip) ;;
           esac
           ls -la ../dist
 
@@ -153,7 +153,7 @@ jobs:
               gh release upload desktop-latest dist/* --clobber -R "$R" && exit 0
             else
               gh release create desktop-latest dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
-                --title "Hushavia Desktop (test build)" --notes "Windows: unzip and run Hushavia.exe. Linux: extract and run talvio/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0
+                --title "Hushavia Desktop (test build)" --notes "Windows: unzip and run Hushavia.exe. Linux: extract and run hushavia/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0
             fi
             echo "retry $i"; sleep $((10 + i * 7))
           done

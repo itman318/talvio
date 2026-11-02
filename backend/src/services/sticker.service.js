@@ -201,7 +201,7 @@ async function gifs(userId, query = {}) {
   if (!key) throw forbidden('feature_disabled', 'GIF search is not set up yet');
   rateLimit.enforce(`gif:${userId}`, 60, 60 * 1000, 'Slow down');
   const q = String(query.q || '').trim().slice(0, 80);
-  const params = new URLSearchParams({ key, client_key: 'talvio', limit: '24', media_filter: 'gif,tinygif,tinymp4', contentfilter: 'medium', locale: 'en_PK' });
+  const params = new URLSearchParams({ key, client_key: 'hushavia', limit: '24', media_filter: 'gif,tinygif,tinymp4', contentfilter: 'medium', locale: 'en_PK' });
   if (query.pos) params.set('pos', String(query.pos).slice(0, 80));
   if (q) params.set('q', q);
   const res = await fetch(`https://tenor.googleapis.com/v2/${q ? 'search' : 'featured'}?${params}`, { signal: AbortSignal.timeout(8000) });

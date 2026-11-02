@@ -240,7 +240,7 @@ String callLinkUrl(String code) => '${AppConfig.serverUrl}/call/$code';
 
 /// Reads the code from hushavia://call/<code> or https://…/call/<code>.
 String? callCodeFromLink(String s) {
-  final m = RegExp(r'^(?:(?:hushavia|talvio)://call/|https?://[^/\s]+/call/)([A-Za-z0-9_-]{6,24})/?$').firstMatch(s.trim());
+  final m = RegExp(r'^(?:hushavia://call/|https?://[^/\s]+/call/)([A-Za-z0-9_-]{6,24})/?$').firstMatch(s.trim());
   return m?.group(1);
 }
 

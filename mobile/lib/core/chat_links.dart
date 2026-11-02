@@ -26,7 +26,7 @@ String? chatLinkOf(Chat chat) {
 /// ('c', username) or ('join', code) for our links: hushavia://c/x, https://<our server>/join/x …
 (String, String)? parseChatLink(String raw) {
   final s = raw.trim();
-  final deep = RegExp(r'^(?:hushavia|talvio)://(c|join)/([A-Za-z0-9_\-]{3,64})(/\d+)?/?(\?.*)?$').firstMatch(s);
+  final deep = RegExp(r'^hushavia://(c|join)/([A-Za-z0-9_\-]{3,64})(/\d+)?/?(\?.*)?$').firstMatch(s);
   if (deep != null) return (deep.group(1)!, deep.group(2)!);
   final uri = Uri.tryParse(s);
   if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return null;

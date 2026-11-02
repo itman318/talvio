@@ -1,4 +1,4 @@
-// "Tali the Fox" — Talvio's official sticker pack (512×512 transparent PNG, Telegram-style character stickers).
+// "Tali the Fox" — Hushavia's official sticker pack (512×512 transparent PNG, Telegram-style character stickers).
 // Usage: node mobile/tool/branding/fox_stickers.js            (uses playwright, or CHROME=/path/to/chrome)
 //        PREVIEW=1 node ...                                   (only writes the HTML/SVG files to OUT_TMP)
 const fs = require('fs');
@@ -6,7 +6,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 
-const OUT = process.env.OUT || path.resolve(__dirname, '../../../backend/assets/stickers/talvio-fox');
+const OUT = process.env.OUT || path.resolve(__dirname, '../../../backend/assets/stickers/hushavia-fox');
 
 // ------------------------------------------------------------------ palette
 const P = {

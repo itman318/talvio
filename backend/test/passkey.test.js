@@ -37,8 +37,8 @@ test.beforeEach(() => rateLimit.reset());
 test.after(() => db.close());
 
 test('passkey: register → challenge → signed login; wrong key, replay and removed key fail', async () => {
-  const r = await auth.requestEmailCode('pk@talvio.test', '10.6.0.1');
-  const t = await auth.verifyEmailCode('pk@talvio.test', r.dev_code, { name: 'x' }, '10.6.0.1');
+  const r = await auth.requestEmailCode('pk@hushavia.test', '10.6.0.1');
+  const t = await auth.verifyEmailCode('pk@hushavia.test', r.dev_code, { name: 'x' }, '10.6.0.1');
   const k = keyPair();
   await rejects(pk.register(t.user.id, { public_key: 'abc' }), 'invalid_key');
   const reg = await pk.register(t.user.id, { public_key: k.pub, name: 'Pixel 8' });

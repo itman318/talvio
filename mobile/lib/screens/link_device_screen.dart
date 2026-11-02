@@ -35,7 +35,7 @@ class _LinkDeviceScreenState extends State<LinkDeviceScreen> {
     String? raw;
     for (final b in capture.barcodes) {
       final v = b.rawValue ?? '';
-      if (v.startsWith('hushavia://login?token=') || v.startsWith('talvio://login?token=')) raw = v;
+      if (v.startsWith('hushavia://login?token=')) raw = v;
       final uid = widget.anyCode ? profileIdFromLink(v) : null;
       if (uid != null) {
         _busy = true;

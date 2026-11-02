@@ -1,7 +1,7 @@
 // Runs ON THE SERVER: logs in a throwaway test account and times every simple GET endpoint.
 const fs = require('fs');
 const BASE = 'http://127.0.0.1:4000/api';
-const routes = fs.readFileSync('/opt/talvio/app/src/http/routes.user.js', 'utf8');
+const routes = fs.readFileSync('/opt/hushavia/app/src/http/routes.user.js', 'utf8');
 const paths = [...routes.matchAll(/router\.get\('([^']+)'/g)].map((m) => m[1]).filter((p) => !p.includes(':'));
 async function call(method, path, body, token) {
   const t = Date.now();

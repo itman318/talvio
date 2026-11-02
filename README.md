@@ -127,7 +127,7 @@ grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never)
 1. Push this project to a GitHub repo (private recommended).
 2. Repo → **Settings → Secrets and variables → Actions → Variables** → add `API_BASE` = your server, e.g. `https://chat.yourdomain.com`.
 3. Repo → **Actions → Android APK → Run workflow** (it also runs on every push to `main` that touches `mobile/`).
-4. When it finishes (~15 min), open the repo's **Releases → android-latest** and download `talvio.apk` (64-bit phones — nearly all phones from the last 6+ years).
+4. When it finishes (~15 min), open the repo's **Releases → android-latest** and download `hushavia.apk` (64-bit phones — nearly all phones from the last 6+ years).
 
 The APK is signed with the debug key — fine for testing; set up a release key before publishing on Play Store.
 
@@ -141,7 +141,7 @@ The APK is signed with the debug key — fine for testing; set up a release key 
 ## Our own names (not a copy of any other messenger)
 
 Vault chats (end-to-end encrypted), My Notes (chat with yourself), Hushavia Plus (premium), the Hushavia Bot API
-(`/api/bot/v1/<method>`, `Authorization: Bearer tlv_…`), `talvio://` links, `window.Talvio` for mini apps.
+(`/api/bot/v1/<method>`, `Authorization: Bearer tlv_…`), `hushavia://` links, `window.Hushavia` for mini apps.
 
 ## Next
 

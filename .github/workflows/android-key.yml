@@ -26,7 +26,7 @@ jobs:
           mkdir -p mobile/signing
           if [ -f mobile/signing/upload-keystore.jks.enc ]; then echo "An upload key already exists — not replacing it"; exit 0; fi
           keytool -genkeypair -v -keystore upload.jks -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 10000 \
-            -storepass "$PASS" -keypass "$PASS" -dname "CN=Talvio, O=Talvio, C=PK"
+            -storepass "$PASS" -keypass "$PASS" -dname "CN=Hushavia, O=Hushavia, C=PK"
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in upload.jks -out mobile/signing/upload-keystore.jks.enc -pass env:PASS
           keytool -list -v -keystore upload.jks -storepass "$PASS" | grep -E "SHA1:|SHA256:" > mobile/signing/fingerprints.txt
           rm upload.jks

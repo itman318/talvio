@@ -204,7 +204,7 @@ test('webhook delivery with secret header; getUpdates refused while a webhook is
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
-      received.push({ secret: req.headers['x-talvio-webhook-secret'], body: JSON.parse(body) });
+      received.push({ secret: req.headers['x-hushavia-webhook-secret'], body: JSON.parse(body) });
       res.end('ok');
     });
   });

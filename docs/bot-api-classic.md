@@ -8,7 +8,7 @@ rewriting them**: you only point the library at Hushavia's address and use your 
 
 | | Value |
 |---|---|
-| Server address | `http://<your-talvio-server>/api/classic` |
+| Server address | `http://<your-hushavia-server>/api/classic` |
 | Token | the **Classic token** shown when you create a bot (Settings → My bots), written `<id>:<secret>` |
 
 Create the bot in the app first (Settings → My bots → New bot) and copy both values.

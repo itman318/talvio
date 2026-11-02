@@ -27,15 +27,6 @@ async function ensure() {
   if (cachedId) return cachedId;
   let u = await db.one('SELECT id FROM users WHERE lower(username) = lower($1) AND is_bot', [USERNAME]);
   if (!u) {
-    // the app was renamed from Talvio: the old @TalvioIDBot becomes @HushaviaIDBot (same chats, same ID)
-    const old = await db.one("SELECT id FROM users WHERE lower(username) = 'talvioidbot' AND is_bot");
-    if (old) {
-      await db.query('UPDATE users SET username = $2, first_name = $3, bio = $4, updated_at = now() WHERE id = $1', [old.id, USERNAME, NAME, 'I show your Hushavia ID — and anyone else’s.']);
-      await db.query('UPDATE bots SET about = $2, commands = $3 WHERE user_id = $1', [old.id, 'Send me anything and I’ll tell you your Hushavia ID. Forward a message to see who sent it.', JSON.stringify(COMMANDS)]);
-      u = old;
-    }
-  }
-  if (!u) {
     const owner = await require('./botforge.service').ensure(); // eslint-disable-line global-require
     u = await db.tx(async (c) => {
       const row = (await c.query(

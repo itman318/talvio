@@ -1,5 +1,5 @@
 # Runs a person's own Telegram-style bot (kept private: it arrives encrypted on the ci-botpayload branch)
-# against a fresh Talvio server in this runner, plays with it like a user would, and sends back an
+# against a fresh Hushavia server in this runner, plays with it like a user would, and sends back an
 # encrypted transcript (ci-botrun branch). The payload branch is deleted afterwards.
 name: Bot run (private)
 
@@ -58,7 +58,7 @@ jobs:
           rm /tmp/p/priv.pem /tmp/p/priv.enc /tmp/p/k
           wc -l /tmp/p/bot.py
 
-      - name: Start a fresh Talvio server
+      - name: Start a fresh Hushavia server
         working-directory: backend
         run: |
           npm install --no-audit --no-fund 2>&1 | tail -2

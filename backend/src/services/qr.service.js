@@ -24,7 +24,7 @@ const changes = new EventEmitter();
 changes.setMaxListeners(0);
 
 function parseToken(raw) {
-  const t = String(raw || '').trim().replace(/^(?:hushavia|talvio):\/\/login\?token=/, '');
+  const t = String(raw || '').trim().replace(/^hushavia:\/\/login\?token=/, '');
   if (!/^[A-Za-z0-9_-]{20,64}$/.test(t)) throw badRequest('invalid_qr', 'This is not a login QR code');
   return t;
 }

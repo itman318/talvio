@@ -35,20 +35,20 @@ jobs:
           echo "--- local endpoint timings"
           node /root/diagnose.js
           echo "--- push notifications"
-          journalctl -u talvio --since "-2d" --no-pager | grep -i "push notifications" | tail -3
+          journalctl -u hushavia --since "-2d" --no-pager | grep -i "push notifications" | tail -3
           echo "--- recent server errors"
-          journalctl -u talvio --since "-6h" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT" | grep -v OTP_DEV_MODE | tail -25 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
+          journalctl -u hushavia --since "-6h" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT" | grep -v OTP_DEV_MODE | tail -25 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
           echo "--- classic bot api (fake token → expect 401 JSON)"
           curl -s "http://127.0.0.1/api/classic/bot1:aaaaaaaaaaaaaaaaaaaaaaaa/getMe"; echo
           curl -s -X POST -F chat_id=1 -F text=hi "http://127.0.0.1/api/classic/bot1:aaaaaaaaaaaaaaaaaaaaaaaa/sendMessage"; echo
           echo "--- built-in bots"
-          sudo -u postgres psql -d talvio -tAc "SELECT u.id, u.username, b.status FROM bots b JOIN users u ON u.id = b.user_id WHERE u.username IN ('BotForge','TalvioIDBot')"
+          sudo -u postgres psql -d hushavia -tAc "SELECT u.id, u.username, b.status FROM bots b JOIN users u ON u.id = b.user_id WHERE u.username IN ('BotForge','HushaviaIDBot')"
           echo "--- ids"
-          sudo -u postgres psql -d talvio -tAc "SELECT 'users', min(id), max(id), count(*) FROM users UNION ALL SELECT 'chats', min(id), max(id), count(*) FROM chats"
-          sudo -u postgres psql -d talvio -tAc "SELECT name, ran_at FROM talvio_migrations"
-          ls -la /var/backups/talvio 2>/dev/null | tail -3
+          sudo -u postgres psql -d hushavia -tAc "SELECT 'users', min(id), max(id), count(*) FROM users UNION ALL SELECT 'chats', min(id), max(id), count(*) FROM chats"
+          sudo -u postgres psql -d hushavia -tAc "SELECT name, ran_at FROM hushavia_migrations"
+          ls -la /var/backups/hushavia 2>/dev/null | tail -3
           echo "--- recent sessions (no tokens)"
-          sudo -u postgres psql -d talvio -tAc "SELECT id, user_id, to_char(created_at,'MM-DD HH24:MI:SS') c, to_char(revoked_at,'MM-DD HH24:MI:SS') r, to_char(last_active_at,'MM-DD HH24:MI') a, to_char(expires_at,'MM-DD') e, (fcm_token IS NOT NULL) push FROM sessions ORDER BY id DESC LIMIT 15"
+          sudo -u postgres psql -d hushavia -tAc "SELECT id, user_id, to_char(created_at,'MM-DD HH24:MI:SS') c, to_char(revoked_at,'MM-DD HH24:MI:SS') r, to_char(last_active_at,'MM-DD HH24:MI') a, to_char(expires_at,'MM-DD') e, (fcm_token IS NOT NULL) push FROM sessions ORDER BY id DESC LIMIT 15"
           echo "--- auth requests (last 2h)"
           awk '$7 ~ /auth|logout|sessions/' /var/log/nginx/access.log 2>/dev/null | tail -30 | awk '{print $4, $6, $7, $9}'
           echo "--- nginx slow / failed requests"

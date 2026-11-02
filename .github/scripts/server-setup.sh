@@ -2,14 +2,14 @@
 # Runs ON THE SERVER (Ubuntu 22.04/24.04) as root. Safe to run again and again:
 # first run installs everything, later runs just update the app.
 #   Node 22 · PostgreSQL · nginx (port 80 → app) · coturn (calls) · firewall · systemd service
-# Secrets are generated once on the server and stay in /etc/talvio/talvio.env (never printed).
+# Secrets are generated once on the server and stay in /etc/hushavia/hushavia.env (never printed).
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-APP_DIR=/opt/talvio/app
-DATA_DIR=/var/lib/talvio
-ENV_FILE=/etc/talvio/talvio.env
-TARBALL=/root/talvio-backend.tgz
+APP_DIR=/opt/hushavia/app
+DATA_DIR=/var/lib/hushavia
+ENV_FILE=/etc/hushavia/hushavia.env
+TARBALL=/root/hushavia-backend.tgz
 PUBLIC_IP=$(curl -4 -fsS https://api.ipify.org || hostname -I | awk '{print $1}')
 
 log() { echo "==> $*"; }
@@ -40,9 +40,9 @@ if [ ! -f /swapfile ] && [ "$(free -m | awk '/Swap/ {print $2}')" -lt 512 ]; the
 fi
 
 # ------------------------------------------------------------------ user, folders, secrets
-id talvio >/dev/null 2>&1 || useradd --system --home /opt/talvio --shell /usr/sbin/nologin talvio
-mkdir -p /opt/talvio "$DATA_DIR/uploads" /etc/talvio
-chown -R talvio:talvio "$DATA_DIR"
+id hushavia >/dev/null 2>&1 || useradd --system --home /opt/hushavia --shell /usr/sbin/nologin hushavia
+mkdir -p /opt/hushavia "$DATA_DIR/uploads" /etc/hushavia
+chown -R hushavia:hushavia "$DATA_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
   log "Creating secrets (first run)"
@@ -51,7 +51,7 @@ if [ ! -f "$ENV_FILE" ]; then
 NODE_ENV=production
 PORT=4000
 TRUST_PROXY=true
-DATABASE_URL=postgres://talvio:${DB_PASS}@127.0.0.1:5432/talvio
+DATABASE_URL=postgres://hushavia:${DB_PASS}@127.0.0.1:5432/hushavia
 JWT_SECRET=$(rand 48)
 ADMIN_JWT_SECRET=$(rand 48)
 OTP_SECRET=$(rand 48)
@@ -80,14 +80,14 @@ set_env BREVO_API_KEY "${BREVO_API_KEY:-}"
 set_env OTP_DEV_MODE "${OTP_DEV_MODE:-}"
 # push notifications (Firebase service account from the FIREBASE_SERVICE_ACCOUNT secret)
 if [ -n "${FIREBASE_SA_B64:-}" ]; then
-  if echo "$FIREBASE_SA_B64" | base64 -d > /etc/talvio/firebase.json.tmp 2>/dev/null && grep -q '"private_key"' /etc/talvio/firebase.json.tmp; then
-    mv /etc/talvio/firebase.json.tmp /etc/talvio/firebase.json
-    chown talvio:talvio /etc/talvio/firebase.json 2>/dev/null || true
-    chmod 600 /etc/talvio/firebase.json
-    set_env FIREBASE_SERVICE_ACCOUNT_PATH /etc/talvio/firebase.json
+  if echo "$FIREBASE_SA_B64" | base64 -d > /etc/hushavia/firebase.json.tmp 2>/dev/null && grep -q '"private_key"' /etc/hushavia/firebase.json.tmp; then
+    mv /etc/hushavia/firebase.json.tmp /etc/hushavia/firebase.json
+    chown hushavia:hushavia /etc/hushavia/firebase.json 2>/dev/null || true
+    chmod 600 /etc/hushavia/firebase.json
+    set_env FIREBASE_SERVICE_ACCOUNT_PATH /etc/hushavia/firebase.json
     echo "push notifications: Firebase key installed"
   else
-    rm -f /etc/talvio/firebase.json.tmp
+    rm -f /etc/hushavia/firebase.json.tmp
     echo "push notifications: FIREBASE_SERVICE_ACCOUNT is not a valid service-account JSON"
   fi
 fi
@@ -96,32 +96,32 @@ fi
 sed -i "s#^PUBLIC_URL=http://[0-9.]*\$#PUBLIC_URL=http://${PUBLIC_IP}#" "$ENV_FILE"
 
 set -a; . "$ENV_FILE"; set +a
-DB_PASS=$(echo "$DATABASE_URL" | sed -E 's#^postgres://talvio:([^@]+)@.*#\1#')
+DB_PASS=$(echo "$DATABASE_URL" | sed -E 's#^postgres://hushavia:([^@]+)@.*#\1#')
 
 # ------------------------------------------------------------------ database
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='talvio'" | grep -q 1; then
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='hushavia'" | grep -q 1; then
   log "Creating database"
-  sudo -u postgres psql -qc "CREATE ROLE talvio LOGIN PASSWORD '${DB_PASS}'"
+  sudo -u postgres psql -qc "CREATE ROLE hushavia LOGIN PASSWORD '${DB_PASS}'"
 fi
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='talvio'" | grep -q 1; then
-  sudo -u postgres psql -qc "CREATE DATABASE talvio OWNER talvio"
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='hushavia'" | grep -q 1; then
+  sudo -u postgres psql -qc "CREATE DATABASE hushavia OWNER hushavia"
 fi
 
 # ------------------------------------------------------------------ app code
 log "Updating the app"
-rm -rf /opt/talvio/new && mkdir -p /opt/talvio/new
-tar -xzf "$TARBALL" -C /opt/talvio/new
-(cd /opt/talvio/new && npm install --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
-rm -rf /opt/talvio/old
-[ -d "$APP_DIR" ] && mv "$APP_DIR" /opt/talvio/old
-mv /opt/talvio/new "$APP_DIR"
-chown -R talvio:talvio /opt/talvio
+rm -rf /opt/hushavia/new && mkdir -p /opt/hushavia/new
+tar -xzf "$TARBALL" -C /opt/hushavia/new
+(cd /opt/hushavia/new && npm install --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
+rm -rf /opt/hushavia/old
+[ -d "$APP_DIR" ] && mv "$APP_DIR" /opt/hushavia/old
+mv /opt/hushavia/new "$APP_DIR"
+chown -R hushavia:hushavia /opt/hushavia
 
 # (the settings from the env file are already exported in this shell)
 log "Database backup"
-mkdir -p /var/backups/talvio && chmod 700 /var/backups/talvio
-sudo -u postgres pg_dump talvio 2>/dev/null | gzip > "/var/backups/talvio/before-deploy-$(date +%Y%m%d-%H%M%S).sql.gz" && echo "backup: saved" || echo "backup: skipped"
-ls -1t /var/backups/talvio/before-deploy-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f   # keep the last 10
+mkdir -p /var/backups/hushavia && chmod 700 /var/backups/hushavia
+sudo -u postgres pg_dump hushavia 2>/dev/null | gzip > "/var/backups/hushavia/before-deploy-$(date +%Y%m%d-%H%M%S).sql.gz" && echo "backup: saved" || echo "backup: skipped"
+ls -1t /var/backups/hushavia/before-deploy-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f   # keep the last 10
 
 log "Database migration"
 (cd "$APP_DIR" && node scripts/migrate.js)
@@ -132,13 +132,13 @@ if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
 fi
 
 # ------------------------------------------------------------------ service
-cat > /etc/systemd/system/talvio.service <<EOF
+cat > /etc/systemd/system/hushavia.service <<EOF
 [Unit]
-Description=Talvio server
+Description=Hushavia server
 After=network.target postgresql.service
 
 [Service]
-User=talvio
+User=hushavia
 WorkingDirectory=${APP_DIR}
 EnvironmentFile=${ENV_FILE}
 ExecStart=/usr/bin/node src/server.js
@@ -150,11 +150,11 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable talvio >/dev/null 2>&1
-systemctl restart talvio
+systemctl enable hushavia >/dev/null 2>&1
+systemctl restart hushavia
 
 # ------------------------------------------------------------------ nginx (port 80 → app, websockets, big uploads)
-cat > /etc/nginx/sites-available/talvio <<'EOF'
+cat > /etc/nginx/sites-available/hushavia <<'EOF'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -184,7 +184,7 @@ server {
     }
 }
 EOF
-ln -sf /etc/nginx/sites-available/talvio /etc/nginx/sites-enabled/talvio
+ln -sf /etc/nginx/sites-available/hushavia /etc/nginx/sites-enabled/hushavia
 rm -f /etc/nginx/sites-enabled/default
 nginx -t >/dev/null 2>&1 && systemctl reload nginx
 
@@ -194,7 +194,7 @@ listening-port=3478
 fingerprint
 use-auth-secret
 static-auth-secret=${TURN_SECRET}
-realm=talvio
+realm=hushavia
 external-ip=${PUBLIC_IP}
 min-port=49160
 max-port=49400
@@ -227,11 +227,11 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   sleep 3
 done
 echo "health: $(curl -fsS http://127.0.0.1/health || echo FAILED)"
-echo "service: $(systemctl is-active talvio) · nginx: $(systemctl is-active nginx) · coturn: $(systemctl is-active coturn) · postgres: $(systemctl is-active postgresql)"
+echo "service: $(systemctl is-active hushavia) · nginx: $(systemctl is-active nginx) · coturn: $(systemctl is-active coturn) · postgres: $(systemctl is-active postgresql)"
 echo "node: $(node -v) · public address: http://${PUBLIC_IP}"
-if [ "$(systemctl is-active talvio)" != active ]; then
+if [ "$(systemctl is-active hushavia)" != active ]; then
   echo "--- last server log lines ---"
-  journalctl -u talvio -n 30 --no-pager | sed -E 's/(SECRET|PASSWORD|postgres:\/\/)[^ ]*/\1***/g'
+  journalctl -u hushavia -n 30 --no-pager | sed -E 's/(SECRET|PASSWORD|postgres:\/\/)[^ ]*/\1***/g'
   exit 1
 fi
 rm -f "$TARBALL"

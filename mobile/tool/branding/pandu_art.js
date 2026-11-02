@@ -1,4 +1,4 @@
-// Pandu — Talvio's mascot: a chubby panda cub in a Talvio-gradient scarf. Original character,
+// Pandu — Hushavia's mascot: a chubby panda cub in a Hushavia-gradient scarf. Original character,
 // sticker-style art (bold outline, cel shading, props that tell a story), rendered to looping animated WebP.
 // Usage: node mobile/tool/branding/pandu_art.js                    → mobile/assets/mascot/*.webp
 //        PREVIEW=/tmp/x.png ONLY=hide,search PICKS=0,.3,.6 node ...  → contact sheet to look at

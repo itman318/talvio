@@ -101,7 +101,7 @@ async function login(phone, first) {
   p2.on('pageerror', (e) => errors.push(e.message));
   await p2.goto(BASE + '/web/');
   await p2.click('.tabs button:has-text("Email")');
-  await p2.fill('input[type=email]', 'web.mail@talvio.test');
+  await p2.fill('input[type=email]', 'web.mail@hushavia.test');
   await p2.click('button:visible:has-text("Send code")');
   await p2.waitForFunction(() => /code: \d{6}/.test(document.body.innerText), null, { timeout: 15000 });
   const devCode = (await p2.evaluate(() => document.body.innerText.match(/code: (\d{6})/)[1]));

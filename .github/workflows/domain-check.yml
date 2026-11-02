@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       names:
-        description: 'Names, comma separated (without a dot = .com; or full domains like talvio.app)'
+        description: 'Names, comma separated (without a dot = .com; or full domains like hushavia.app)'
         required: true
 
 permissions:

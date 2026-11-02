@@ -9,7 +9,7 @@ const path = require('path');
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgres://chat:chat@127.0.0.1:5432/chatapp_test';
 process.env.OTP_DEV_MODE = 'true';
-process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'talvio-st-'));
+process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'hushavia-st-'));
 
 const db = require('../src/db');
 const rateLimit = require('../src/utils/rateLimit');
@@ -27,7 +27,7 @@ async function rejects(p, code) {
 let n = 0;
 async function signup(first) {
   rateLimit.reset();
-  const email = `${first.toLowerCase()}${(n += 1)}@talvio.test`;
+  const email = `${first.toLowerCase()}${(n += 1)}@hushavia.test`;
   const r = await auth.requestEmailCode(email, `10.9.0.${n}`);
   const s = await auth.verifyEmailCode(email, r.dev_code, {}, `10.9.0.${n}`);
   await users.updateProfile(s.user.id, { first_name: first });

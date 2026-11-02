@@ -52,15 +52,14 @@ void _android() {
       xml = xml.replaceFirst('<application', '<uses-permission android:name="$p"/>\n    <application');
     }
   }
-  // hushavia:// (and old talvio://) links: "Back to the app" after paying, QR codes, invites
-  if (!xml.contains('android:scheme="talvio"')) {
+  // hushavia:// links: "Back to the app" after paying, QR codes, invites
+  if (!xml.contains('android:scheme="hushavia"')) {
     final i = xml.indexOf('</activity>');
     if (i > 0) {
       const filter = '''    <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="talvio"/>
                 <data android:scheme="hushavia"/>
             </intent-filter>
         ''';
@@ -122,9 +121,9 @@ void _android() {
       final n = f.path.split(Platform.pathSeparator).last;
       if (n != 'MainActivity.kt' && n != 'MainActivity.java') continue;
       var code = f.readAsStringSync();
-      if (n == 'MainActivity.kt' && !code.contains('talvio/system')) {
+      if (n == 'MainActivity.kt' && !code.contains('hushavia/system')) {
         // FlutterFragmentActivity + a small channel for "don't let the phone put Hushavia to sleep" (battery optimisation)
-        final pkg = RegExp(r'^package\s+[\w.]+', multiLine: true).firstMatch(code)?.group(0) ?? 'package com.talvio.chatapp';
+        final pkg = RegExp(r'^package\s+[\w.]+', multiLine: true).firstMatch(code)?.group(0) ?? 'package com.hushavia.chatapp';
         f.writeAsStringSync('''$pkg
 
 import android.app.PictureInPictureParams
@@ -170,7 +169,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "talvio/system")
+        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "hushavia/system")
         channel = ch
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -242,7 +241,7 @@ void _ios() {
     if (!s.contains(k)) add.write('\t<key>$k</key>\n\t<string>$v</string>\n');
   });
   if (!s.contains('CFBundleURLSchemes')) {
-    add.write('\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array><string>hushavia</string><string>talvio</string></array>\n\t\t</dict>\n\t</array>\n');
+    add.write('\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array><string>hushavia</string></array>\n\t\t</dict>\n\t</array>\n');
   }
   if (!s.contains('UIBackgroundModes')) {
     // keeps the call audio running when the screen locks / the app goes to the background
@@ -274,7 +273,7 @@ void _ios() {
 /// Some plugins still compile against an old Android SDK, while current AndroidX
 /// libraries require compileSdk 36. Raise every plugin module to 36 (minSdk/targetSdk unchanged).
 void _pluginCompileSdk() {
-  const marker = 'talvio-compileSdk';
+  const marker = 'hushavia-compileSdk';
   final kts = File('android/build.gradle.kts');
   final groovy = File('android/build.gradle');
   if (kts.existsSync()) {
@@ -339,7 +338,7 @@ void _desugaring() {
 }
 
 void _noMinify() {
-  const marker = 'talvio-no-minify';
+  const marker = 'hushavia-no-minify';
   for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
     final f = File(name);
     if (!f.existsSync()) continue;
@@ -395,15 +394,15 @@ void _androidBranding() {
 ''');
   write('mipmap-anydpi-v26/ic_launcher.xml', adaptive);
   write('mipmap-anydpi-v26/ic_launcher_round.xml', adaptive);
-  write('values/talvio_colors.xml', '''<?xml version="1.0" encoding="utf-8"?>
+  write('values/hushavia_colors.xml', '''<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="talvio_ink">#0F0E2A</color>
-    <color name="talvio_window">#F3F4F9</color>
+    <color name="hushavia_ink">#0F0E2A</color>
+    <color name="hushavia_window">#F3F4F9</color>
 </resources>
 ''');
   const launch = '''<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/talvio_ink"/>
+    <item android:drawable="@color/hushavia_ink"/>
     <item><bitmap android:gravity="center" android:src="@drawable/splash_logo"/></item>
 </layer-list>
 ''';
@@ -413,19 +412,19 @@ void _androidBranding() {
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:forceDarkAllowed">false</item>
-        <item name="android:windowSplashScreenBackground">@color/talvio_ink</item>
+        <item name="android:windowSplashScreenBackground">@color/hushavia_ink</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@color/talvio_window</item>
+        <item name="android:windowBackground">@color/hushavia_window</item>
     </style>
 </resources>
 ''';
   write('values-v31/styles.xml', v31);
   // after the splash, the window behind the app (and the system navigation bar) is calm, not brand midnight
-  write('values-night-v31/styles.xml', v31.replaceAll('@color/talvio_window', '#0D1122'));
-  write('values-night/talvio_window.xml', '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="talvio_window">#0D1122</color>\n</resources>\n');
+  write('values-night-v31/styles.xml', v31.replaceAll('@color/hushavia_window', '#0D1122'));
+  write('values-night/hushavia_window.xml', '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="hushavia_window">#0D1122</color>\n</resources>\n');
   stdout.writeln('✓ Android: Hushavia launcher icons + splash screen');
 }
 
@@ -457,24 +456,24 @@ void _iosBranding() {
   }
   add('ipad', 83.5, 2);
   add('ios-marketing', 1024, 1);
-  File('${set.path}/Contents.json').writeAsStringSync('{"images":[${images.join(',')}],"info":{"version":1,"author":"talvio"}}');
+  File('${set.path}/Contents.json').writeAsStringSync('{"images":[${images.join(',')}],"info":{"version":1,"author":"hushavia"}}');
   stdout.writeln('✓ iOS: Hushavia app icon');
 }
 
 /// Release signing: when android/key.properties exists (written by CI from the encrypted upload key),
 /// sign release builds with it instead of the debug key. Also sets the Play Store application id.
 void _releaseSigning() {
-  const appId = 'com.talvio.app';
+  const appId = 'com.hushavia.app';
   for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
     final f = File(name);
     if (!f.existsSync()) continue;
     var s = f.readAsStringSync();
     final kts = name.endsWith('.kts');
     s = s.replaceFirst(RegExp(r'applicationId\s*=?\s*"[^"]*"'), kts ? 'applicationId = "$appId"' : 'applicationId "$appId"');
-    if (File('android/key.properties').existsSync() && !s.contains('talvio-release-signing')) {
+    if (File('android/key.properties').existsSync() && !s.contains('hushavia-release-signing')) {
       final block = kts
           ? '''
-    // talvio-release-signing
+    // hushavia-release-signing
     signingConfigs {
         create("release") {
             val props = Properties()
@@ -487,7 +486,7 @@ void _releaseSigning() {
     }
 '''
           : '''
-    // talvio-release-signing
+    // hushavia-release-signing
     signingConfigs {
         release {
             def props = new Properties()
