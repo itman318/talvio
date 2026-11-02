@@ -182,14 +182,8 @@ class SettingsTile extends StatelessWidget {
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              gradient: LinearGradient(
-                colors: [Color.lerp(color, Colors.white, 0.18)!, color],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
+            // flat colour tile: cleaner (like iOS / Telegram settings) and cheaper to draw than a gradient
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), color: color),
             child: Icon(icon, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 14),
@@ -327,9 +321,6 @@ class ProfileHero extends StatelessWidget {
               child: Image.network(url, fit: BoxFit.cover, cacheWidth: 48, filterQuality: FilterQuality.low, errorBuilder: (_, __, ___) => const SizedBox()),
             ),
           ),
-        Positioned(right: -40, top: -30, child: _blob(170, 0.16)),
-        Positioned(left: -50, bottom: -60, child: _blob(190, 0.10)),
-        Positioned(right: 70, bottom: 18, child: _blob(46, 0.12)),
         // darker base so the white avatar ring and buttons read well
         DecoratedBox(
           decoration: BoxDecoration(
@@ -427,12 +418,6 @@ class ProfileHero extends StatelessWidget {
       ),
     ]);
   }
-
-  static Widget _blob(double size, double alpha) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: alpha)),
-      );
 }
 
 /// One of the round-cornered action buttons under a profile header.

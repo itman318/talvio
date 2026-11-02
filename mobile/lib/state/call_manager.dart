@@ -284,13 +284,58 @@ class CallManager extends ChangeNotifier {
   }
 
   void toggleCamera() {
-    if (!video) return;
+    if (!video || (_local?.getVideoTracks() ?? []).isEmpty) {
+      upgradeToVideo();
+      return;
+    }
     cameraOff = !cameraOff;
     for (final t in _local?.getVideoTracks() ?? <MediaStreamTrack>[]) {
       t.enabled = !cameraOff;
     }
     _sendMedia();
     notifyListeners();
+  }
+
+  bool _upgrading = false;
+
+  /// Voice call → video call: turns my camera on and renegotiates; the other phone switches to video too
+  /// (their own camera stays off until they tap Camera). Returns an error to show, or null.
+  Future<String?> upgradeToVideo() async {
+    final pc = _pc;
+    final local = _local;
+    if (pc == null || local == null || _upgrading) return null;
+    if (phase != CallPhase.connected && phase != CallPhase.reconnecting) return 'Wait until the call connects';
+    if (local.getVideoTracks().isNotEmpty) return null;
+    _upgrading = true;
+    try {
+      final cam = await navigator.mediaDevices.getUserMedia({
+        'audio': false,
+        'video': {
+          'facingMode': 'user',
+          'width': {'ideal': lowData ? 640 : 1280},
+          'height': {'ideal': lowData ? 480 : 720},
+          'frameRate': {'ideal': lowData ? 15 : 30},
+        },
+      });
+      final track = cam.getVideoTracks().first;
+      await local.addTrack(track);
+      await pc.addTrack(track, local);
+      await _ensureRenderers();
+      localRenderer.srcObject = local;
+      video = true;
+      cameraOff = false;
+      frontCamera = true;
+      if (!speaker) toggleSpeaker(); // video calls are on the loudspeaker, like everywhere
+      notifyListeners();
+      await _sendOffer();
+      _signal({'kind': 'media', 'muted': muted, 'video_off': false, 'screen': false, 'video': true});
+      return null;
+    } catch (e) {
+      final s = '$e'.toLowerCase();
+      return s.contains('permission') || s.contains('notallowed') ? 'Allow camera access to turn on video' : 'Could not turn on the camera';
+    } finally {
+      _upgrading = false;
+    }
   }
 
   Future<void> switchCamera() async {
@@ -652,6 +697,13 @@ class CallManager extends ChangeNotifier {
           }
           break;
         case 'media':
+          if (d['video'] == true && !video) {
+            // they turned this voice call into a video call: show their video; my camera stays off until I tap it
+            video = true;
+            cameraOff = true;
+            await _ensureRenderers();
+            if (!speaker) toggleSpeaker();
+          }
           remoteMuted = d['muted'] == true;
           remoteVideoOff = d['video_off'] == true;
           remoteSharing = d['screen'] == true;

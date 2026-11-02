@@ -337,7 +337,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ListTile(
                 dense: true,
                 leading: r['thumb_url'] != null
-                    ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network('${r['thumb_url']}', width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.article_outlined)))
+                    ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network('${r['thumb_url']}', width: 40, height: 40, cacheWidth: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.article_outlined)))
                     : Container(
                         width: 40,
                         height: 40,
@@ -852,10 +852,15 @@ class _ChatScreenState extends State<ChatScreen> {
           showDragHandle: true,
           builder: (ctx) => SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
-              child: GridView(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
+                child: Text('Share', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ),
+              GridView(
                 // fixed row height: narrow phones and bigger font sizes no longer overflow the tile
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, mainAxisSpacing: 6, crossAxisSpacing: 2, mainAxisExtent: 84),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisSpacing: 10, crossAxisSpacing: 4, mainAxisExtent: 90),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
@@ -865,21 +870,21 @@ class _ChatScreenState extends State<ChatScreen> {
                       onTap: () => Navigator.pop(ctx, key),
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
                         Container(
-                          width: 46,
-                          height: 46,
+                          width: 54,
+                          height: 54,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(15),
+                            shape: BoxShape.circle,
                             gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                            boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.28), blurRadius: 8, offset: const Offset(0, 3))],
                           ),
-                          child: Icon(icon, color: Colors.white, size: 22),
+                          child: Icon(icon, color: Colors.white, size: 25),
                         ),
-                        const SizedBox(height: 6),
-                        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.2), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 7),
+                        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.2), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                       ]),
                     ),
                 ],
               ),
+              ]),
             ),
           ),
         );
@@ -2495,7 +2500,7 @@ class _ChatScreenState extends State<ChatScreen> {
               enableIMEPersonalizedLearning: !context.watch<AppPrefs>().incognitoKeyboard,
               enableSuggestions: !context.watch<AppPrefs>().incognitoKeyboard,
               minLines: 1,
-              maxLines: 6,
+              maxLines: 8,
               maxLength: 4096,
               textCapitalization: TextCapitalization.sentences,
               style: const TextStyle(fontSize: 16, height: 1.3),
@@ -2534,20 +2539,86 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ),
+        // long text: open a full-screen editor with room to write
+        if ('\n'.allMatches(_text.text).length >= 3 || _text.text.length > 220)
+          SizedBox(
+            width: 38,
+            height: 46,
+            child: IconButton(
+              tooltip: 'Write in full screen',
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.open_in_full_rounded, color: iconColor, size: 19),
+              onPressed: _openFullEditor,
+            ),
+          ),
         if (_editing == null)
+          SizedBox(
+            width: 40,
+            height: 46,
+            child: IconButton(
+              tooltip: 'Attach: gallery, files, location…',
+              padding: EdgeInsets.zero,
+              icon: Transform.rotate(angle: 0.78, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 22)),
+              onPressed: () => _attach(),
+            ),
+          ),
+        // camera in one tap; hidden while typing so the text gets the room
+        if (_editing == null && _text.text.isEmpty)
           SizedBox(
             width: 42,
             height: 46,
             child: IconButton(
-              tooltip: 'Attach: gallery, camera, files…',
+              tooltip: 'Camera',
               padding: const EdgeInsets.only(right: 4),
-              icon: Transform.rotate(angle: 0.78, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 22)),
-              onPressed: () => _attach(),
+              icon: Icon(Icons.photo_camera_outlined, color: iconColor, size: 22),
+              onPressed: () => _attach('camera'),
             ),
           ),
       ]),
       ),
     );
+  }
+
+  /// Full-screen editor for long messages; the text comes back into the message box.
+  Future<void> _openFullEditor() async {
+    final ctrl = TextEditingController(text: _text.text)..selection = _text.selection;
+    final send = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (ctx) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Message'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Done')),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton.filled(tooltip: 'Send', onPressed: () => Navigator.pop(ctx, true), icon: const Icon(Icons.send_rounded)),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: TextField(
+              controller: ctrl,
+              autofocus: true,
+              expands: true,
+              maxLines: null,
+              maxLength: 4096,
+              textAlignVertical: TextAlignVertical.top,
+              textCapitalization: TextCapitalization.sentences,
+              enableIMEPersonalizedLearning: !context.read<AppPrefs>().incognitoKeyboard,
+              style: const TextStyle(fontSize: 17, height: 1.45),
+              decoration: const InputDecoration(border: InputBorder.none, filled: false, hintText: 'Write your message…'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    if (!mounted) return;
+    _text.value = TextEditingValue(text: ctrl.text, selection: TextSelection.collapsed(offset: ctrl.text.length));
+    ctrl.dispose();
+    setState(() {});
+    if (send == true && _text.text.trim().isNotEmpty) await _send();
   }
 
   Widget _roundAction({required IconData icon, required String tooltip, required VoidCallback onTap}) => Tooltip(
@@ -2556,16 +2627,15 @@ class _ChatScreenState extends State<ChatScreen> {
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
           child: Ink(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: Brand.aurora,
-              boxShadow: [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
-            ),
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(shape: BoxShape.circle, gradient: Brand.aurora),
             child: InkWell(
-              onTap: onTap,
-              child: Icon(icon, color: Colors.white, size: 22),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onTap();
+              },
+              child: Icon(icon, color: Colors.white, size: 23),
             ),
           ),
         ),

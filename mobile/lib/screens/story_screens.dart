@@ -136,7 +136,7 @@ Future<void> addStory(BuildContext context) async {
       builder: (ctx, setState) => AlertDialog(
         title: const Text('Share story'),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (choice != 'video') ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(x.path), height: 180, fit: BoxFit.cover)),
+          if (choice != 'video') ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(x.path), height: 180, cacheHeight: 540, fit: BoxFit.cover)),
           TextField(controller: caption, maxLength: 500, decoration: const InputDecoration(hintText: 'Add a caption…')),
           DropdownButton<String>(
             value: privacy,
@@ -685,7 +685,7 @@ class StoryThumb extends StatelessWidget {
               ? Container(color: Colors.black87, alignment: Alignment.center, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: icon))
               : FutureBuilder<File>(
                   future: context.read<AppServices>().media.get(m),
-                  builder: (_, snap) => snap.hasData ? Image.file(snap.data!, fit: BoxFit.cover) : fallback(Icons.photo_rounded),
+                  builder: (_, snap) => snap.hasData ? Image.file(snap.data!, fit: BoxFit.cover, cacheWidth: 200) : fallback(Icons.photo_rounded),
                 ),
     );
   }

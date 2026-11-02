@@ -35,7 +35,7 @@ class LinkPreviewCard extends StatelessWidget {
           if (image != null && !saver)
             AspectRatio(
               aspectRatio: 1.91,
-              child: Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              child: Image.network(image, fit: BoxFit.cover, cacheWidth: 720, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),

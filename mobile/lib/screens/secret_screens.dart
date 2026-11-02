@@ -621,7 +621,7 @@ class _SecretMediaViewState extends State<_SecretMediaView> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 320), child: Image.file(File(path), fit: BoxFit.cover)),
+          child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 320), child: Image.file(File(path), fit: BoxFit.cover, cacheWidth: 900)),
         ),
       );
     }

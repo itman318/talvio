@@ -380,6 +380,12 @@ async function relaySignal(userId, sessionId, body = {}) {
   } else {
     out.muted = body.muted === true;
     out.video_off = body.video_off === true;
+    out.screen = body.screen === true;
+    if (body.video === true) {
+      // a voice call turned into a video call: the other phone shows video, history shows 📹
+      out.video = true;
+      await db.query('UPDATE calls SET video = TRUE WHERE id = $1 AND NOT video', [callId]);
+    }
   }
   emit('call:signal', out, target.session ? { sessionIds: [target.session] } : { userIds: [target.user] });
   return {};

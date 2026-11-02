@@ -217,7 +217,7 @@ class _ThumbState extends State<_Thumb> {
     final m = widget.message;
     if (m.type == 'gif') {
       final g = (m.meta?['gif'] as Map?) ?? const {};
-      return Image.network('${g['preview'] ?? g['url'] ?? ''}', fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12));
+      return Image.network('${g['preview'] ?? g['url'] ?? ''}', fit: BoxFit.cover, cacheWidth: 300, errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12));
     }
     if (m.type == 'video') {
       return InkWell(

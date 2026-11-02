@@ -108,7 +108,15 @@ class _MessageImageState extends State<MessageImage> {
           if (snap.hasData) {
             return GestureDetector(
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FullImageScreen(file: snap.data!))),
-              child: Image.file(snap.data!, fit: BoxFit.cover, width: w, height: h),
+              // decode only the pixels the bubble shows (not the whole 2000+ px photo): smooth scrolling, less memory
+              child: Image.file(
+                snap.data!,
+                fit: BoxFit.cover,
+                width: w,
+                height: h,
+                gaplessPlayback: true,
+                cacheWidth: (math.max(w, h * ratio) * MediaQuery.devicePixelRatioOf(context)).round(),
+              ),
             );
           }
           if (snap.hasError) {

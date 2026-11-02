@@ -120,6 +120,13 @@ test('voice call: ring → accept → signaling relay → hang up → call messa
   assert.deepEqual(sig[1].sessionIds, [A.sid]);
   assert.equal(sig[2].payload.candidate.sdpMLineIndex, 0);
   assert.equal(sig[3].payload.muted, true);
+  assert.equal(sig[3].payload.video, undefined);
+  // voice → video in the middle of the call: the other phone hears about it, history shows a video call
+  await calls.relaySignal(A.id, A.sid, { call_id: start.call.id, kind: 'media', muted: false, video: true, screen: true });
+  const up = take('call:signal').pop();
+  assert.equal(up.payload.video, true);
+  assert.equal(up.payload.screen, true);
+  assert.equal((await db.one('SELECT video FROM calls WHERE id = $1', [start.call.id])).video, true);
 
   // another device of B, or a stranger, cannot inject signals
   await rejects(calls.relaySignal(B.id, B.sid + 999, { call_id: start.call.id, kind: 'ice', candidate: { candidate: 'x' } }), 'not_participant');

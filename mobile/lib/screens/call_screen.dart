@@ -331,6 +331,16 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     final buttons = <Widget>[
       _CallButton(icon: c.speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded, label: 'Speaker', active: c.speaker, onTap: c.toggleSpeaker),
       if (c.video) _CallButton(icon: c.cameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded, label: 'Camera', active: !c.cameraOff, onTap: c.toggleCamera),
+      if (!c.video && c.phase == CallPhase.connected)
+        _CallButton(
+          icon: Icons.videocam_rounded,
+          label: 'Video',
+          onTap: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            final err = await c.upgradeToVideo();
+            if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
+          },
+        ),
       if (c.video && !c.cameraOff && !c.sharingScreen) _CallButton(icon: Icons.cameraswitch_rounded, label: 'Flip', onTap: c.switchCamera),
       if (c.video && c.phase == CallPhase.connected)
         _CallButton(
@@ -377,7 +387,7 @@ class _Backdrop extends StatelessWidget {
           opacity: 0.35,
           child: ImageFiltered(
             imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-            child: Image.network(url!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
+            child: Image.network(url!, fit: BoxFit.cover, cacheWidth: 64, errorBuilder: (_, __, ___) => const SizedBox()),
           ),
         ),
       // a warm brand glow at the top
