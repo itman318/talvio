@@ -328,7 +328,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         ]),
       );
     }
-    final inCall = c.phase == CallPhase.connected || c.phase == CallPhase.reconnecting || c.phase == CallPhase.connecting;
     final buttons = <Widget>[
       _CallButton(icon: c.speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded, label: 'Speaker', active: c.speaker, onTap: c.toggleSpeaker),
       if (c.video) _CallButton(icon: c.cameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded, label: 'Camera', active: !c.cameraOff, onTap: c.toggleCamera),
