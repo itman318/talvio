@@ -75,13 +75,18 @@ jobs:
             sed -i 's/Size size(1280, 720)/Size size(1100, 760)/' windows/runner/main.cpp
             sed -i 's/"FileDescription", "chatapp"/"FileDescription", "Hushavia"/; s/"ProductName", "chatapp"/"ProductName", "Hushavia"/' windows/runner/Runner.rc || true
             # app icon
-            if [ -f assets/brand/app_icon.ico ]; then cp assets/brand/app_icon.ico windows/runner/resources/app_icon.ico; fi
+            # app icon: the Hushavia mark (from branding/), all Windows sizes in one .ico
+            python -m pip install -q pillow >/dev/null 2>&1 || true
+            python -c "from PIL import Image; Image.open('branding/store/icon-512.png').save('windows/runner/resources/app_icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])" || echo "icon: kept the default"
           fi
           if [ -f linux/runner/my_application.cc ]; then
             sed -i 's/"chatapp"/"Hushavia"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 760)/' linux/runner/my_application.cc
           fi
           if [ -f macos/Runner/Configs/AppInfo.xcconfig ]; then
             sed -i '' 's/^PRODUCT_NAME = .*/PRODUCT_NAME = Hushavia/' macos/Runner/Configs/AppInfo.xcconfig
+            # app icon: the Hushavia mark in every macOS size
+            SET=macos/Runner/Assets.xcassets/AppIcon.appiconset
+            for n in 16 32 64 128 256 512 1024; do sips -z $n $n branding/store/icon-512.png --out "$SET/app_icon_$n.png" >/dev/null 2>&1 || true; done
             # the app talks to the network, uses the mic and the camera (calls)
             for f in macos/Runner/DebugProfile.entitlements macos/Runner/Release.entitlements; do
               /usr/libexec/PlistBuddy -c "Add :com.apple.security.network.client bool true" "$f" || true
@@ -150,7 +155,13 @@ jobs:
           R="${{ github.repository }}"
           for i in 1 2 3 4 5; do
             if gh release view desktop-latest -R "$R" >/dev/null 2>&1; then
-              gh release upload desktop-latest dist/* --clobber -R "$R" && exit 0
+              if gh release upload desktop-latest dist/* --clobber -R "$R"; then
+                # files with the app's old name: remove them so only Hushavia files remain
+                gh release view desktop-latest -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
+                  gh release delete-asset desktop-latest "$old" -y -R "$R" || true
+                done
+                exit 0
+              fi
             else
               gh release create desktop-latest dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
                 --title "Hushavia Desktop (test build)" --notes "Windows: unzip and run Hushavia.exe. Linux: extract and run hushavia/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0

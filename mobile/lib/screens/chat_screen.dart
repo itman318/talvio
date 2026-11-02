@@ -2476,17 +2476,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final iconColor = dark ? Colors.white70 : Brand.muted;
     return GlassPanel(
-      radius: 23,
-      opacity: dark ? 0.82 : 0.9,
+      radius: 26,
+      ring: false,
+      opacity: 0.82, // nearly solid: text stays easy to read over any wallpaper
       child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 46),
+      constraints: const BoxConstraints(minHeight: 50),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         SizedBox(
-          width: 42,
-          height: 46,
+          width: 46,
+          height: 50,
           child: IconButton(
             tooltip: _emojiOpen ? 'Keyboard' : 'Emoji, stickers & GIFs',
-            padding: const EdgeInsets.only(left: 4),
+            padding: const EdgeInsets.only(left: 6),
             icon: Icon(_emojiOpen ? Icons.keyboard_rounded : Icons.sentiment_satisfied_alt_rounded, color: iconColor, size: 23),
             onPressed: _toggleEmoji,
           ),
@@ -2526,7 +2527,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 hintStyle: TextStyle(color: iconColor, fontSize: 16),
                 filled: false,
                 isDense: true,
-                contentPadding: const EdgeInsets.fromLTRB(2, 12.5, 2, 12.5),
+                contentPadding: const EdgeInsets.fromLTRB(2, 14.5, 2, 14.5),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -2543,7 +2544,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if ('\n'.allMatches(_text.text).length >= 3 || _text.text.length > 220)
           SizedBox(
             width: 38,
-            height: 46,
+            height: 50,
             child: IconButton(
               tooltip: 'Write in full screen',
               padding: EdgeInsets.zero,
@@ -2554,7 +2555,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (_editing == null)
           SizedBox(
             width: 40,
-            height: 46,
+            height: 50,
             child: IconButton(
               tooltip: 'Attach: gallery, files, location…',
               padding: EdgeInsets.zero,
@@ -2565,15 +2566,17 @@ class _ChatScreenState extends State<ChatScreen> {
         // camera in one tap; hidden while typing so the text gets the room
         if (_editing == null && _text.text.isEmpty)
           SizedBox(
-            width: 42,
-            height: 46,
+            width: 40,
+            height: 50,
             child: IconButton(
               tooltip: 'Camera',
-              padding: const EdgeInsets.only(right: 4),
+              padding: EdgeInsets.zero,
               icon: Icon(Icons.photo_camera_outlined, color: iconColor, size: 22),
               onPressed: () => _attach('camera'),
             ),
           ),
+        // send / voice button sits inside the box, at its right end
+        Padding(padding: const EdgeInsets.fromLTRB(2, 4, 4, 4), child: _sendOrMic()),
       ]),
       ),
     );
@@ -2621,21 +2624,43 @@ class _ChatScreenState extends State<ChatScreen> {
     if (send == true && _text.text.trim().isNotEmpty) await _send();
   }
 
-  Widget _roundAction({required IconData icon, required String tooltip, required VoidCallback onTap}) => Tooltip(
+  /// Send (when there is text) or record a voice message (hold: round video).
+  Widget _sendOrMic() => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 160),
+        transitionBuilder: (child, a) => ScaleTransition(scale: a, child: FadeTransition(opacity: a, child: child)),
+        child: _text.text.trim().isNotEmpty || _editing != null || !context.read<AuthState>().feature('voice_messages')
+            ? GestureDetector(
+                key: const ValueKey('send'),
+                onLongPress: _editing == null ? _sendOptions : null,
+                child: _roundAction(
+                  icon: _editing != null ? Icons.check_rounded : Icons.arrow_upward_rounded,
+                  tooltip: 'Send (hold to schedule)',
+                  onTap: _send,
+                  size: 42,
+                ),
+              )
+            : GestureDetector(
+                key: const ValueKey('mic'),
+                onLongPress: _recordVideoNote,
+                child: _roundAction(icon: Icons.mic_rounded, tooltip: 'Voice message (hold for video)', onTap: _startRecording, size: 42),
+              ),
+      );
+
+  Widget _roundAction({required IconData icon, required String tooltip, required VoidCallback onTap, double size = 48}) => Tooltip(
         message: tooltip,
         child: Material(
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
           child: Ink(
-            width: 48,
-            height: 48,
+            width: size,
+            height: size,
             decoration: const BoxDecoration(shape: BoxShape.circle, gradient: Brand.aurora),
             child: InkWell(
               onTap: () {
                 HapticFeedback.selectionClick();
                 onTap();
               },
-              child: Icon(icon, color: Colors.white, size: 23),
+              child: Icon(icon, color: Colors.white, size: size * 0.5),
             ),
           ),
         ),
@@ -3070,26 +3095,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       }),
                     ),
                   ],
-                  const SizedBox(width: 6),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    transitionBuilder: (child, a) => ScaleTransition(scale: a, child: FadeTransition(opacity: a, child: child)),
-                    child: _text.text.trim().isNotEmpty || _editing != null || !context.read<AuthState>().feature('voice_messages')
-                        ? GestureDetector(
-                            key: const ValueKey('send'),
-                            onLongPress: _editing == null ? _sendOptions : null,
-                            child: _roundAction(
-                              icon: _editing != null ? Icons.check_rounded : Icons.send_rounded,
-                              tooltip: 'Send (hold to schedule)',
-                              onTap: _send,
-                            ),
-                          )
-                        : GestureDetector(
-                            key: const ValueKey('mic'),
-                            onLongPress: _recordVideoNote,
-                            child: _roundAction(icon: Icons.mic_rounded, tooltip: 'Voice message (hold for video)', onTap: _startRecording),
-                          ),
-                  ),
                 ],
               ),
             if (_emojiOpen && !_recording && _reviewPath == null) _emojiPanel(),
