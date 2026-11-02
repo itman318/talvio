@@ -81,6 +81,14 @@ test('voice call: ring → accept → signaling relay → hang up → call messa
   assert.deepEqual(incoming.userIds, [B.id]);
   assert.equal(incoming.payload.call.direction, 'incoming');
   assert.equal(incoming.payload.call.peer.id, A.id);
+  // "Ringing…" only after B's phone says it rings; the caller can't fake it, and it is sent once
+  assert.equal((await calls.ringing(A.id, start.call.id)).ok, false);
+  assert.equal(take('call:ringing').length, 0);
+  assert.equal((await calls.ringing(B.id, start.call.id)).ok, true);
+  await calls.ringing(B.id, start.call.id);
+  const rung = take('call:ringing');
+  assert.equal(rung.length, 1);
+  assert.deepEqual(rung[0].userIds, [A.id]);
 
   // while it rings: the caller may already send its offer and candidates (to all of B's devices) …
   await calls.relaySignal(A.id, A.sid, { call_id: start.call.id, kind: 'offer', sdp: 'v=0 early' });

@@ -125,8 +125,13 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                   ),
                 ),
 
-              // ---------------- top bar: encryption + connection quality
-              SafeArea(
+              // ---------------- top bar: minimize, encryption, connection quality (pinned to the top)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: SafeArea(
+                bottom: false,
                 child: AnimatedOpacity(
                   opacity: controlsOn ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
@@ -161,6 +166,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                   ),
                 ),
               ),
+              ),
 
               // ---------------- who + status
               if (!showRemoteVideo)
@@ -174,7 +180,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
                           t: _pulse.value,
                           ringing: c.phase == CallPhase.outgoing || c.phase == CallPhase.incoming || c.phase == CallPhase.connecting,
                           level: c.phase == CallPhase.connected ? c.remoteLevel : 0,
-                          child: Avatar(id: peer.id, name: peer.name, url: peer.avatarAbsolute, size: 128),
+                          child: ClipOval(child: Avatar(id: peer.id, name: peer.name, url: peer.avatarAbsolute, size: 128)),
                         ),
                       ),
                     const SizedBox(height: 26),
@@ -326,7 +332,7 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     final buttons = <Widget>[
       _CallButton(icon: c.speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded, label: 'Speaker', active: c.speaker, onTap: c.toggleSpeaker),
       if (c.video) _CallButton(icon: c.cameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded, label: 'Camera', active: !c.cameraOff, onTap: c.toggleCamera),
-      if (c.video && inCall && !c.sharingScreen) _CallButton(icon: Icons.cameraswitch_rounded, label: 'Flip', onTap: c.switchCamera),
+      if (c.video && !c.cameraOff && !c.sharingScreen) _CallButton(icon: Icons.cameraswitch_rounded, label: 'Flip', onTap: c.switchCamera),
       if (c.video && c.phase == CallPhase.connected)
         _CallButton(
           icon: c.sharingScreen ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded,

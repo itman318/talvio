@@ -325,6 +325,19 @@ async function afterFinish(row) {
  * Relays WebRTC signaling to the other device on the call.
  * body: { call_id, kind: offer|answer|ice|media, sdp?, candidate?, muted?, video_off? }
  */
+/** The callee's phone got the call and is ringing: the caller's screen goes from "Calling…" to "Ringing…". */
+async function ringing(userId, callIdRaw) {
+  const id = parseInt(callIdRaw, 10);
+  if (!Number.isSafeInteger(id) || id <= 0) return { ok: false };
+  const l = live.get(id);
+  if (!l || l.status !== 'ringing' || Number(l.calleeId) !== Number(userId)) return { ok: false };
+  if (!l.ringingSent) {
+    l.ringingSent = true;
+    emit('call:ringing', { call_id: id }, { userIds: [l.callerId] });
+  }
+  return { ok: true };
+}
+
 async function relaySignal(userId, sessionId, body = {}) {
   const callId = v.id(body.call_id, 'call_id');
   const kind = v.oneOf(body.kind, SIGNAL_KINDS, 'kind');
@@ -611,6 +624,7 @@ module.exports = {
   hangup,
   finishCall,
   relaySignal,
+  ringing,
   endBySession,
   endByUser,
   sweep,

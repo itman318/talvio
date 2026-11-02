@@ -440,6 +440,7 @@ function init(httpServer) {
     socket.on('call:accept', handler((p) => callService.acceptCall(uid, sid, p.call_id)));
     socket.on('call:decline', handler((p) => callService.declineCall(uid, p.call_id)));
     socket.on('call:hangup', handler((p) => callService.hangup(uid, p.call_id, p.reason)));
+    socket.on('call:ringing', handler((p) => callService.ringing(uid, p && p.call_id)));
     socket.on('call:signal', callLimit(handler((p) => callService.relaySignal(uid, sid, p))));
 
     // live voice chats

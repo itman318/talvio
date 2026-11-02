@@ -112,7 +112,8 @@ class CallManager extends ChangeNotifier {
   String get statusText {
     switch (phase) {
       case CallPhase.outgoing:
-        return call == null ? 'Calling…' : (waitingNotice ?? 'Ringing…');
+        // "Ringing" only once their phone really rings (offline phone = still "Calling…")
+        return call == null ? 'Calling…' : (waitingNotice ?? (calleeRinging ? 'Ringing…' : 'Calling…'));
       case CallPhase.incoming:
         return video ? 'Incoming video call' : 'Incoming voice call';
       case CallPhase.connecting:
@@ -257,6 +258,9 @@ class CallManager extends ChangeNotifier {
 
   /// Shown on the caller's screen when the other person is on another call.
   String? waitingNotice;
+
+  /// The other phone confirmed it is ringing.
+  bool calleeRinging = false;
 
   void hangup() {
     if (phase == CallPhase.ended || phase == CallPhase.idle) return;
@@ -426,6 +430,13 @@ class CallManager extends ChangeNotifier {
         }
         _ring(c);
         break;
+      case 'call:ringing':
+        if (!_isMine(d['call_id'])) return;
+        if (!calleeRinging) {
+          calleeRinging = true;
+          notifyListeners();
+        }
+        break;
       case 'call:accepted':
         if (!_isMine(d['call_id'])) return;
         if (phase == CallPhase.outgoing) {
@@ -490,6 +501,7 @@ class CallManager extends ChangeNotifier {
     speaker = c.video;
     phase = CallPhase.incoming;
     _ringing = true;
+    services.socket.emit('call:ringing', {'call_id': c.id}); // tell the caller this phone is ringing
     _ensureRenderers().catchError((_) {}); // ready before they tap Accept
     final np = NotifPrefs.instance;
     if (np.callRing) FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false).catchError((_) {});
@@ -811,6 +823,7 @@ class CallManager extends ChangeNotifier {
   void _resetState() {
     phase = CallPhase.idle;
     waitingNotice = null;
+    calleeRinging = false;
     call = null;
     peer = null;
     muted = false;
