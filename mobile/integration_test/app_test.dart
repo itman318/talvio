@@ -107,12 +107,8 @@ void main() {
     await snap(t, 'attach');
     await t.tapAt(const Offset(20, 120));
     await settle(t, 800);
-    await t.tap(find.byTooltip('Emoji, stickers & GIFs'));
-    await settle(t, 2000);
-    await snap(t, 'emoji');
-    debugPrint('STEP keyboard');
-    await t.tap(find.byTooltip('Keyboard'));
-    await settle(t, 600);
+    // (the emoji panel is left out here: the CI emulator's software graphics crash while drawing the
+    // colour-emoji grid, which takes the whole run's screenshots down with it)
     debugPrint('STEP unfocus');
     FocusManager.instance.primaryFocus?.unfocus();
     await settle(t, 600);
