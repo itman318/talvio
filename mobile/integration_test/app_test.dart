@@ -58,6 +58,8 @@ void main() {
     await t.enterText(find.widgetWithText(TextField, 'Email address'), email);
     await t.testTextInput.receiveAction(TextInputAction.go); // keyboard "Go" (the button can be under the keyboard)
     await pumpUntil(t, find.textContaining('Dev mode code:'), what: 'OTP screen with dev code');
+    await settle(t, 1500); // let the code field finish building
+    await pumpUntil(t, find.byType(TextField), what: 'code field');
     final codeText = (find.textContaining('Dev mode code:').evaluate().first.widget as Text).data!;
     final code = codeText.split(':').last.trim();
     await t.enterText(find.byType(TextField).first, code);
