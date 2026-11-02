@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Tavi — Talvio's own mascot: a round, fluffy little night-bird in the app's aurora colours.
+/// Tavi — Hushavia's own mascot: a round, fluffy little night-bird in the app's aurora colours.
 /// Drawn in code (sharp at any size, tiny download) and animated: blinks, breathes, waves,
 /// hides its eyes on password screens, searches with a magnifier, sleeps, celebrates…
 enum TaviPose {
@@ -11,7 +11,7 @@ enum TaviPose {
   search, // nothing found / no contacts
   hideEyes, // password screens (wings over the eyes)
   peek, // password shown: one wing lowered
-  celebrate, // success, Talvio Plus
+  celebrate, // success, Hushavia Plus
   sleep, // nothing new, no calls
   mail, // check your email for the code
   sad, // error / offline
@@ -26,7 +26,7 @@ enum TaviPose {
   music, // headphones, swaying
 }
 
-/// Tavi stickers people can send. The second half are Talvio Plus only.
+/// Tavi stickers people can send. The second half are Hushavia Plus only.
 const taviStickers = <(TaviPose, String, bool)>[
   (TaviPose.wave, '👋', false),
   (TaviPose.love, '❤️', false),
@@ -149,7 +149,7 @@ class _TaviPainter extends CustomPainter {
 
   // palette
   static const _bodyLight = Color(0xFFFFB08A);
-  static const _bodyMid = Color(0xFFF2557E);
+  static const _bodyMid = Color(0xFF6D4AFF);
   static const _bodyDark = Color(0xFF7B4FE0);
   static const _wingA = Color(0xFFB65BE8);
   static const _wingB = Color(0xFF5B3FC8);
@@ -616,7 +616,7 @@ class _TaviPainter extends CustomPainter {
       ..lineTo(r.center.dx, r.top + 11)
       ..lineTo(r.right - 1, r.top + 1), flap);
     // little heart seal in the brand colour
-    _heart(c, Offset(r.center.dx, r.top + 11), 3.6, const Color(0xFFF2557E));
+    _heart(c, Offset(r.center.dx, r.top + 11), 3.6, const Color(0xFF6D4AFF));
   }
 
   void _heldHeart(Canvas c) {
@@ -651,7 +651,7 @@ class _TaviPainter extends CustomPainter {
       ..strokeWidth = 2.4);
     // coffee + a little heart on the cup
     c.drawOval(Rect.fromLTWH(40.5, 63.5 + lift, 19, 4), Paint()..color = const Color(0xFF7A4A2A));
-    _heart(c, Offset(50, 74 + lift), 3.2, const Color(0xFFF2557E));
+    _heart(c, Offset(50, 74 + lift), 3.2, const Color(0xFF6D4AFF));
   }
 
   void _headphones(Canvas c) {
@@ -663,7 +663,7 @@ class _TaviPainter extends CustomPainter {
     c.drawArc(const Rect.fromLTWH(20, 22, 60, 50), math.pi * 1.08, math.pi * 0.84, false, band);
     for (final x in [21.0, 79.0]) {
       final pad = RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, 48), width: 10, height: 16), const Radius.circular(5));
-      c.drawRRect(pad, Paint()..shader = const LinearGradient(colors: [Color(0xFFFF5E8A), Color(0xFF8E54E9)], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(pad.outerRect));
+      c.drawRRect(pad, Paint()..shader = const LinearGradient(colors: [Color(0xFF8F72FF), Color(0xFF8E54E9)], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(pad.outerRect));
     }
   }
 
@@ -706,7 +706,7 @@ class _TaviPainter extends CustomPainter {
       final p = (t + i / 3) % 1;
       final x = (i.isEven ? 84.0 : 14.0) + math.sin(p * 6) * 3;
       final y = 40 - p * 34;
-      final paint = Paint()..color = [const Color(0xFF8E54E9), const Color(0xFFFF5E8A), const Color(0xFF3CC8FF)][i].withValues(alpha: 1 - p);
+      final paint = Paint()..color = [const Color(0xFF8E54E9), const Color(0xFF8F72FF), const Color(0xFF3CC8FF)][i].withValues(alpha: 1 - p);
       c.drawOval(Rect.fromCenter(center: Offset(x, y), width: 5, height: 3.8), paint);
       c.drawLine(Offset(x + 2.2, y), Offset(x + 2.2, y - 8), paint..strokeWidth = 1.3);
       c.drawLine(Offset(x + 2.2, y - 8), Offset(x + 5.5, y - 6), paint);
@@ -745,7 +745,7 @@ class _TaviPainter extends CustomPainter {
   }
 
   void _confetti(Canvas c) {
-    const colors = [Color(0xFFFFC94D), Color(0xFFFF5E8A), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFF2ED47A)];
+    const colors = [Color(0xFFFFC94D), Color(0xFF8F72FF), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFF2ED47A)];
     final rnd = math.Random(7);
     for (var i = 0; i < 18; i++) {
       final x = 8 + rnd.nextDouble() * 84;
@@ -769,7 +769,7 @@ class _TaviPainter extends CustomPainter {
     for (var i = 0; i < 3; i++) {
       final p = (t + i / 3) % 1;
       final x = 22 + i * 26 + math.sin(p * 2 * math.pi) * 3;
-      _heart(c, Offset(x, 34 - p * 30), 3.5 + p * 2, const Color(0xFFFF5E8A).withValues(alpha: 1 - p));
+      _heart(c, Offset(x, 34 - p * 30), 3.5 + p * 2, const Color(0xFF8F72FF).withValues(alpha: 1 - p));
     }
   }
 
@@ -805,7 +805,7 @@ class _TaviPainter extends CustomPainter {
     }
 
     gear(const Offset(78, 20), 6, t * 2 * math.pi, const Color(0xFF8E54E9));
-    gear(const Offset(88, 31), 4, -t * 2 * math.pi * 1.5, const Color(0xFFF2557E));
+    gear(const Offset(88, 31), 4, -t * 2 * math.pi * 1.5, const Color(0xFF6D4AFF));
     // a light bulb idea
     final glow = 0.5 + 0.5 * math.sin(t * 4 * math.pi);
     c.drawCircle(const Offset(66, 10), 4.5 + glow, Paint()
@@ -886,7 +886,7 @@ class TaviEmptyState extends StatelessWidget {
   }
 }
 
-/// The Talvio duck, the app's illustrated mascot (animated WebP art in assets/mascot) for screens:
+/// The Hushavia duck, the app's illustrated mascot (animated WebP art in assets/mascot) for screens:
 /// password, empty lists, code sent, success… Tavi stays for the stickers people send.
 class AppMascot extends StatelessWidget {
   const AppMascot({super.key, required this.pose, this.size = 150, this.art});

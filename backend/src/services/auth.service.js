@@ -81,7 +81,7 @@ async function issueCode(target, kind, ip) {
     const m = mail.codeEmail(code);
     await mail.send(target, m.subject, m.text, m.html);
   } else {
-    await sms.send(target, `Your Talvio code is ${code}. Do not share it with anyone.`);
+    await sms.send(target, `Your Hushavia code is ${code}. Do not share it with anyone.`);
   }
 
   return {
@@ -164,7 +164,7 @@ async function recordLoginEvent(userId, kind, device, ip, sessionId = null) {
 
 /** "New login on <device>": tells the account's other devices, so a stranger's login can be logged out at once. */
 async function alertNewLogin(userId, sessionId, d, ip = null) {
-  const where = [d.name, d.platform, d.appVersion ? `Talvio ${d.appVersion}` : null].filter(Boolean).join(' · ') || 'a new device';
+  const where = [d.name, d.platform, d.appVersion ? `Hushavia ${d.appVersion}` : null].filter(Boolean).join(' · ') || 'a new device';
   await require('./notice.service').notify(userId, 'login', 'New login to your account', `${where}${ip ? ` · IP ${String(ip).replace(/^::ffff:/, '')}` : ''}. If this wasn't you, open Settings → Devices and log it out, then turn on two-step verification.`, { session_id: sessionId });
   const others = await db.many(
     'SELECT id FROM sessions WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL AND expires_at > now()',
@@ -179,7 +179,7 @@ async function alertNewLogin(userId, sessionId, d, ip = null) {
   });
   await require('./push.service').sendToUsers(
     [userId],
-    { title: 'New login to your account', body: `${device} just logged in. Not you? Open Talvio to log it out.` },
+    { title: 'New login to your account', body: `${device} just logged in. Not you? Open Hushavia to log it out.` },
     { type: 'new_login', session_id: sessionId },
     { tag: `login-${sessionId}` },
   );

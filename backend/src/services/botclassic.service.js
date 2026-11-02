@@ -1,18 +1,18 @@
 'use strict';
 
 /**
- * Talvio Bot API — Classic.
+ * Hushavia Bot API — Classic.
  *
  * A second doorway into the same bot platform, shaped like the de-facto standard used by most chat-bot
  * libraries (python aiogram / python-telegram-bot, node grammY / telegraf, …), so existing bots run on
- * Talvio by changing only their server address:
+ * Hushavia by changing only their server address:
  *
  *   POST {base}/bot<id>:<secret>/<methodName>          base = https://your-server/api/classic
  *   GET  {base}/file/bot<id>:<secret>/<file_path>      (downloads from getFile)
  *   → { ok: true, result } | { ok: false, error_code, description, parameters? }
  *
- * The token is the Talvio token written as "<id>:<secret>" (tlv_<id>_<secret> works too).
- * Everything here is Talvio's own code; methods call the regular bot service underneath.
+ * The token is the Hushavia token written as "<id>:<secret>" (tlv_<id>_<secret> works too).
+ * Everything here is Hushavia's own code; methods call the regular bot service underneath.
  */
 const fs = require('fs');
 const os = require('os');
@@ -35,7 +35,7 @@ function toClassicToken(talvio) {
   return m ? `${m[1]}:${m[2]}` : null;
 }
 
-// ------------------------------------------------------------------ text formatting → Talvio marks
+// ------------------------------------------------------------------ text formatting → Hushavia marks
 const ENT = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' };
 function decodeEntities(s) {
   return s.replace(/&(lt|gt|amp|quot|apos|nbsp|#39);/g, (m) => ENT[m] || m).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
@@ -67,7 +67,7 @@ function fromMarkdown(s, v2) {
   t = t
     .replace(/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g, (_, c) => c)
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, text, url) => (text === url ? url : `${text} (${url})`))
-    .replace(/__([^_\n]+)__/g, '$1') // underline: no such mark in Talvio
+    .replace(/__([^_\n]+)__/g, '$1') // underline: no such mark in Hushavia
     .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1**$2**');
   if (v2) t = t.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[Number(i)]);
   return t;
@@ -202,7 +202,7 @@ const fromGroupId = (n) => {
   return m > GROUP_BASE ? m - GROUP_BASE : m; // a plain -<id> still works
 };
 // Private chats are addressed by the other person's user ID; groups and channels by a negative ID.
-// (Inside Talvio every chat has its own positive ID — this maps between the two.)
+// (Inside Hushavia every chat has its own positive ID — this maps between the two.)
 async function resolveChatId(raw, botId) {
   const s = String(raw || '').trim();
   if (s.startsWith('@')) {
@@ -353,7 +353,7 @@ const botIdOf = (token) => Number((/^tlv_(\d+)_/.exec(token) || [])[1] || 0);
 async function call(rawToken, method, params = {}, files = {}) {
   const token = toTalvioToken(rawToken);
   const fn = MAP[method];
-  if (!fn) throw new AppError(404, 'method_not_found', `Not Found: method ${method} is not available on Talvio yet`);
+  if (!fn) throw new AppError(404, 'method_not_found', `Not Found: method ${method} is not available on Hushavia yet`);
   const botId = botIdOf(token);
   await bot.authenticate(token); // a bad token is "Unauthorized" before anything else
   const p = common(params);

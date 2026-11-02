@@ -8,7 +8,7 @@
 class AppConfig {
   static const String serverUrl = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:4000');
   static const String apiBase = '$serverUrl/api';
-  static const String appName = 'Talvio';
+  static const String appName = 'Hushavia';
   static const String appVersion = '1.0.0';
   static const String defaultCountryCode = '+44';
 

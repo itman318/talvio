@@ -142,7 +142,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                   height: 140,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: RadialGradient(colors: [Color(0x55F0446E), Color(0x308B5CF6), Color(0x00FFFFFF)], stops: [0, 0.55, 1]),
+                    gradient: RadialGradient(colors: [Color(0x556D4AFF), Color(0x308B5CF6), Color(0x00FFFFFF)], stops: [0, 0.55, 1]),
                   ),
                 ),
                 const BrandMark(size: 84),

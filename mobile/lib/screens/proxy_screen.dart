@@ -50,7 +50,7 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
                 ? 'Tap to add a proxy'
                 : pm.enabled
                     ? 'Connected through ${pm.active?.label ?? 'a proxy'}'
-                    : 'Talvio connects directly',
+                    : 'Hushavia connects directly',
             value: pm.enabled,
             onChanged: (v) async {
               if (pm.servers.isEmpty) {
@@ -80,7 +80,7 @@ class _ProxySettingsScreenState extends State<ProxySettingsScreen> {
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
           child: Text(
-            'A proxy helps when Talvio is slow or blocked on your network. All your messages, calls signalling, photos '
+            'A proxy helps when Hushavia is slow or blocked on your network. All your messages, calls signalling, photos '
             'and files go through it. Only use proxies you trust — the owner can see when and how much you connect '
             '(not what you write in secret chats). If some photos don’t load right after switching, reopen the app.',
             style: TextStyle(color: Brand.muted, fontSize: 12.5),

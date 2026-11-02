@@ -94,9 +94,9 @@ class _MessageTextState extends State<MessageText> {
           recognizer: _tap(() {
             final call = callCodeFromLink(token);
             if (call != null) {
-              openCallLink(context, call); // Talvio call link: start the call right here
+              openCallLink(context, call); // Hushavia call link: start the call right here
             } else if (parseChatLink(token) != null) {
-              openChatLink(context, token); // Talvio group / channel link: open it in the app
+              openChatLink(context, token); // Hushavia group / channel link: open it in the app
             } else {
               launchUrl(Uri.parse(token), mode: LaunchMode.externalApplication);
             }

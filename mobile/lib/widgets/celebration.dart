@@ -46,7 +46,7 @@ class _PartyPainter extends CustomPainter {
   final int seed;
   final double seconds;
 
-  static const _colors = [Color(0xFFFF5E8A), Color(0xFFFFC94D), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFF2ED47A), Color(0xFFFF8A3D)];
+  static const _colors = [Color(0xFF8F72FF), Color(0xFFFFC94D), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFF2ED47A), Color(0xFFFF8A3D)];
 
   @override
   void paint(Canvas canvas, Size size) {

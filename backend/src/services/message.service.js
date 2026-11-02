@@ -418,7 +418,7 @@ async function prepareMessage(userId, chat, body) {
     const pose = String(body.tavi);
     if (![...FREE, ...PLUS].includes(pose)) throw badRequest('invalid_sticker', 'Unknown Tavi sticker');
     if (PLUS.includes(pose) && !(await require('./payment.service').limitsFor(userId)).exclusive_stickers) { // eslint-disable-line global-require
-      throw forbidden('premium_required', 'This Tavi sticker is part of Talvio Plus');
+      throw forbidden('premium_required', 'This Tavi sticker is part of Hushavia Plus');
     }
     out.meta = { sticker: { tavi: pose, emoji: v.str(String(body.emoji || ''), { field: 'emoji', max: 8 }) || '🙂' } };
     out.text = '';
@@ -440,8 +440,8 @@ async function prepareMessage(userId, chat, body) {
         email = null;
       }
     }
-    if (!phone && !email && !c.user_id) throw badRequest('invalid_contact', 'A contact needs a phone number, an email or a Talvio account');
-    // link it to a Talvio account when we can (only phone numbers people allow to be found)
+    if (!phone && !email && !c.user_id) throw badRequest('invalid_contact', 'A contact needs a phone number, an email or a Hushavia account');
+    // link it to a Hushavia account when we can (only phone numbers people allow to be found)
     let userIdForCard = null;
     if (c.user_id) {
       const u = await db.one(`SELECT id FROM users WHERE id = $1 AND status = 'active'`, [v.id(c.user_id, 'user_id')]);

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Bots & mini apps — the Talvio Bot API (POST /api/bot/v1/<method>, token in the Authorization header).
+ * Bots & mini apps — the Hushavia Bot API (POST /api/bot/v1/<method>, token in the Authorization header).
  *
  *   POST https://your-server/api/bot/v1/<method>   Authorization: Bearer <TOKEN>   (JSON, form or multipart)
  *   → { ok: true, data } | { ok: false, error: { code, message } }
@@ -62,7 +62,7 @@ function serializeBot(u, b, { pending = 0 } = {}) {
   };
 }
 
-/** The same token written "<id>:<secret>" — what classic bot libraries expect (Talvio Bot API — Classic). */
+/** The same token written "<id>:<secret>" — what classic bot libraries expect (Hushavia Bot API — Classic). */
 function classicToken(token) {
   const m = /^tlv_(\d+)_([A-Za-z0-9]+)$/.exec(String(token || ''));
   return m ? `${m[1]}:${m[2]}` : null;
@@ -250,7 +250,7 @@ async function deliverWebhook(botId) {
       if (!u) return;
       try {
         const update = { update_id: Number(u.id), ...u.payload };
-        // v2 bots get Talvio events, signed with their hook secret
+        // v2 bots get Hushavia events, signed with their hook secret
         const v2 = b.api_version === 'v2' ? require('./botv2.service').hookRequest({ ...update }, b.webhook_secret) : null; // eslint-disable-line global-require
         // Classic bots get the classic update shape; the secret goes in the header their libraries check
         const cls = b.api_version === 'cls' ? await require('./botclassic.service').update(update, botId) : null; // eslint-disable-line global-require
@@ -640,7 +640,7 @@ async function setWebhook(bot, p) {
   const url = p.url ? parseHttpsUrl(p.url, 'url') : null;
   const secret = p.secret_token ? String(p.secret_token) : null;
   if (secret && !/^[A-Za-z0-9_-]{1,256}$/.test(secret)) throw badRequest('invalid_secret', 'secret_token: 1–256 characters A-Z a-z 0-9 _ -');
-  // which event format the hook gets: v1 updates, or (set through API v2) signed Talvio events
+  // which event format the hook gets: v1 updates, or (set through API v2) signed Hushavia events
   await db.query(`UPDATE bots SET webhook_url = $2, webhook_secret = $3, webhook_error = NULL, api_version = $4 WHERE user_id = $1`, [
     bot.user_id, url, secret, ['v2', 'cls'].includes(p.api_version) ? p.api_version : 'v1',
   ]);
@@ -738,7 +738,7 @@ async function callMethod(token, method, params = {}, file = null) {
       return { id: chat.id, type: chat.type, title: chat.title || undefined, description: chat.description || undefined };
     }
     default:
-      throw new AppError(404, 'method_not_found', `Unknown method "${method}" — see the Talvio Bot API docs`);
+      throw new AppError(404, 'method_not_found', `Unknown method "${method}" — see the Hushavia Bot API docs`);
   }
 }
 
@@ -889,7 +889,7 @@ function verifyInitData(initData, botToken) {
   return !!hash && hash.length === expected.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
 }
 
-/** The mini app called Talvio.sendData(data) → the bot gets a web_app_data message. */
+/** The mini app called Hushavia.sendData(data) → the bot gets a web_app_data message. */
 async function webAppData(userId, botIdRaw, body = {}) {
   const botId = v.id(botIdRaw, 'bot_id');
   const data = String(body.data || '');

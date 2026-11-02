@@ -28,7 +28,7 @@ class MyQrScreen extends StatefulWidget {
 
 class _MyQrScreenState extends State<MyQrScreen> {
   static const _backs = [
-    [Color(0xFFFF7A59), Color(0xFFF0446E), Color(0xFF8B5CF6)],
+    [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF8B5CF6)],
     [Color(0xFF1767CF), Color(0xFF3C9BEA), Color(0xFF5FD0E6)],
     [Color(0xFF0C8A64), Color(0xFF18B892), Color(0xFF8FF0D4)],
     [Color(0xFF151A2E), Color(0xFF2A3152), Color(0xFF59628F)],
@@ -80,7 +80,7 @@ class _MyQrScreenState extends State<MyQrScreen> {
                         errorCorrectionLevel: QrErrorCorrectLevel.M,
                       ),
                       const SizedBox(height: 8),
-                      const Text('Scan with Talvio to message me', style: TextStyle(color: Brand.muted, fontSize: 13)),
+                      const Text('Scan with Hushavia to message me', style: TextStyle(color: Brand.muted, fontSize: 13)),
                     ]),
                   ),
                   Container(

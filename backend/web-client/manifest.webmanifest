@@ -1,7 +1,7 @@
 {
-  "name": "Talvio",
-  "short_name": "Talvio",
-  "description": "Talvio for your computer",
+  "name": "Hushavia",
+  "short_name": "Hushavia",
+  "description": "Hushavia for your computer",
   "start_url": "/web/",
   "scope": "/web/",
   "display": "standalone",

@@ -194,7 +194,7 @@ class MyProfileScreen extends StatelessWidget {
           SettingsTile(icon: Icons.auto_awesome_rounded, color: Brand.amber, title: 'Story highlights', onTap: () => go(const MyHighlightsScreen())),
           SettingsTile(
             icon: Icons.emoji_emotions_rounded,
-            color: const Color(0xFFF2557E),
+            color: const Color(0xFF6D4AFF),
             title: 'Emoji status',
             subtitle: me.statusEmoji != null ? 'Now: ${me.statusEmoji}' : 'An emoji next to your name',
             onTap: () => showEmojiStatusPicker(context),
@@ -202,7 +202,7 @@ class MyProfileScreen extends StatelessWidget {
           SettingsTile(
             icon: Icons.star_rounded,
             color: Brand.premium,
-            title: me.isPremium ? 'Talvio Plus — active' : 'Talvio Plus',
+            title: me.isPremium ? 'Hushavia Plus — active' : 'Hushavia Plus',
             subtitle: me.isPremium
                 ? 'Thank you for your support'
                 : (context.read<AuthState>().plusAvailable ? 'Animated stickers, themes, no ads and more' : 'Coming soon · stickers, themes, no ads'),

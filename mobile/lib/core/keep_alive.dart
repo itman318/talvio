@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Settings → Notifications → Keep-Alive: a quiet foreground service that keeps Talvio running, so phones
+/// Settings → Notifications → Keep-Alive: a quiet foreground service that keeps Hushavia running, so phones
 /// that kill apps in the background (Xiaomi, Oppo, Vivo, Realme…) still deliver every message on time.
 /// The same service also carries screen sharing in calls, so both go through [apply].
 class BackgroundKeepAlive {
@@ -42,7 +42,7 @@ class BackgroundKeepAlive {
         androidNotificationOptions: AndroidNotificationOptions(
           channelId: _sharing ? 'screen_share' : 'talvio_keep_alive',
           channelName: _sharing ? 'Screen sharing' : 'Background connection',
-          channelDescription: _sharing ? 'Shown while you share your screen in a call' : 'Keeps Talvio connected so messages arrive on time',
+          channelDescription: _sharing ? 'Shown while you share your screen in a call' : 'Keeps Hushavia connected so messages arrive on time',
           channelImportance: _sharing ? NotificationChannelImportance.LOW : NotificationChannelImportance.MIN,
           priority: _sharing ? NotificationPriority.LOW : NotificationPriority.MIN,
           onlyAlertOnce: true,
@@ -60,7 +60,7 @@ class BackgroundKeepAlive {
       await FlutterForegroundTask.startService(
         serviceId: 4711,
         serviceTypes: types,
-        notificationTitle: 'Talvio',
+        notificationTitle: 'Hushavia',
         notificationText: _sharing ? 'You are sharing your screen' : 'Connected — you’ll get every message on time',
       );
     } catch (e) {

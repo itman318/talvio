@@ -766,7 +766,7 @@ extension on _StickerPanelState {
           borderRadius: BorderRadius.circular(14),
           onTap: () {
             if (locked) {
-              showInfo(context, context.read<AuthState>().plusAvailable ? 'This Tavi sticker comes with Talvio Plus ⭐' : 'This Tavi sticker comes with Talvio Plus — coming soon ⭐');
+              showInfo(context, context.read<AuthState>().plusAvailable ? 'This Tavi sticker comes with Hushavia Plus ⭐' : 'This Tavi sticker comes with Hushavia Plus — coming soon ⭐');
               return;
             }
             HapticFeedback.selectionClick();

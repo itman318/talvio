@@ -131,7 +131,7 @@ class VoiceChatScreen extends StatelessWidget {
       body: Stack(children: [
         // soft aurora glow
         Positioned(top: -120, left: -80, child: _glow(const Color(0xFF8E54E9), 320)),
-        Positioned(bottom: 40, right: -100, child: _glow(const Color(0xFFFF5E8A), 300)),
+        Positioned(bottom: 40, right: -100, child: _glow(const Color(0xFF8F72FF), 300)),
         if (vc.connecting)
           const Center(child: CircularProgressIndicator(color: Colors.white))
         else
@@ -290,7 +290,7 @@ class VoiceChatScreen extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: p.speaking ? Brand.aurora : null,
                 color: p.speaking ? null : Colors.white.withValues(alpha: 0.08),
-                boxShadow: p.speaking ? [BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.55), blurRadius: 18, spreadRadius: 2)] : null,
+                boxShadow: p.speaking ? [BoxShadow(color: const Color(0xFF8F72FF).withValues(alpha: 0.55), blurRadius: 18, spreadRadius: 2)] : null,
               ),
               child: ClipOval(child: Avatar(id: p.user.id, name: p.user.name, url: p.user.avatarAbsolute, size: size)),
             ),
@@ -357,7 +357,7 @@ class VoiceChatScreen extends StatelessWidget {
                 : (muted ? const LinearGradient(colors: [Color(0xFF3B3F63), Color(0xFF2A2E48)]) : Brand.aurora),
             boxShadow: [
               BoxShadow(
-                color: (!muted && canSpeak ? const Color(0xFFFF5E8A) : Colors.black).withValues(alpha: 0.4),
+                color: (!muted && canSpeak ? const Color(0xFF8F72FF) : Colors.black).withValues(alpha: 0.4),
                 blurRadius: me?.speaking == true ? 30 : 16,
                 spreadRadius: me?.speaking == true ? 4 : 0,
               ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Talvio custom emoji ("Tali the Fox" faces). Each is one Private Use Area character
+/// Hushavia custom emoji ("Tali the Fox" faces). Each is one Private Use Area character
 /// (U+E900 + index), so it takes exactly one character in text and in the input field.
 /// Other apps / notifications show it as 🦊.
 const taliNames = [

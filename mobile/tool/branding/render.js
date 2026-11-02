@@ -1,34 +1,35 @@
-// Renders the Talvio mark into every Android/iOS/Play asset we need.
+// Renders the Hushavia mark into every Android/iOS/Play asset we need.
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const OUT = process.argv[2];
 const FONTS = path.resolve(__dirname, '../../../backend/web-client/fonts');
-const DEFS = `<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF9A62"/><stop offset=".48" stop-color="#F2557E"/><stop offset="1" stop-color="#6C4BE0"/></linearGradient>
-<linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2557E"/><stop offset="1" stop-color="#6C4BE0"/></linearGradient>
-<mask id="tcut"><rect width="512" height="512" fill="#fff"/><rect x="178" y="170" width="156" height="44" rx="22" fill="#000"/><rect x="234" y="170" width="44" height="150" rx="22" fill="#000"/></mask></defs>`;
-// Talvio mark: a speech bubble with a "T" and two little sparks. Art bbox x100..412 y90..418 (center 256,254)
-const BUBBLE = 'M256 96c-88 0-156 62-156 144 0 40 16 76 44 102l-16 66c-2 8 6 14 13 10l70-38c14 4 29 6 45 6 88 0 156-62 156-146S344 96 256 96z';
+const DEFS = `<defs><linearGradient id="bg" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#8F72FF"/><stop offset="1" stop-color="#4E2FE0"/></linearGradient></defs>`;
+// Hushavia mark: a speech bubble folded from one sheet of paper (upper fold white, lower fold lilac) with a mint "seal".
+// Drawn in a 100-unit box; art bbox x24.5..75.5 y26.5..78.5 (center 50,52.5).
+const UP = '27,29 73,29 73,61';
+const LOW = '27,29 73,61 49,61 32,76 36,61 27,61';
+const ALL = '27,29 73,29 73,61 49,61 32,76 36,61 27,61';
 const ART = (mono) => mono
-  ? `<path d="${BUBBLE}" fill="#fff" mask="url(#tcut)"/><circle cx="372" cy="128" r="16" fill="#fff"/>`
-  : `<path d="${BUBBLE}" fill="#fff"/><rect x="178" y="170" width="156" height="44" rx="22" fill="url(#c)"/><rect x="234" y="170" width="44" height="150" rx="22" fill="url(#c)"/>
-<circle cx="372" cy="128" r="16" fill="#fff"/><circle cx="404" cy="98" r="8" fill="#fff" opacity=".8"/>`;
+  ? `<polygon points="${ALL}" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>`
+  : `<polygon points="${UP}" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+<polygon points="${LOW}" fill="#D6CBFF" stroke="#D6CBFF" stroke-width="5" stroke-linejoin="round"/><circle cx="66" cy="36" r="2.6" fill="#5EF0D2"/>`;
 const centered = (canvas, artW, mono) => {
-  const s = artW / 312;
-  return `<g transform="translate(${canvas / 2 - 256 * s} ${canvas / 2 - 254 * s}) scale(${s})">${ART(mono)}</g>`;
+  const s = artW / 51;
+  return `<g transform="translate(${canvas / 2 - 50 * s} ${canvas / 2 - 52.5 * s}) scale(${s})">${ART(mono)}</g>`;
 };
 const svg = {
-  full: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${DEFS}<rect width="512" height="512" rx="116" fill="url(#bg)"/><circle cx="150" cy="120" r="170" fill="#fff" opacity=".10"/>${centered(512, 330)}</svg>`,
-  square: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${DEFS}<rect width="512" height="512" fill="url(#bg)"/>${centered(512, 330)}</svg>`,
-  round: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${DEFS}<circle cx="256" cy="256" r="256" fill="url(#bg)"/>${centered(512, 300)}</svg>`,
-  fg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">${DEFS}${centered(108, 56)}</svg>`,
-  mono: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">${DEFS}${centered(108, 56, true)}</svg>`,
-  splash: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 288">${DEFS}${centered(288, 150)}</svg>`,
-  feature: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">${DEFS}<rect width="1024" height="500" fill="url(#bg)"/>
-  <circle cx="900" cy="-40" r="260" fill="#EF5A3C" opacity=".14"/><circle cx="120" cy="560" r="240" fill="#E0417A" opacity=".10"/>
-  <g transform="translate(110 130)"><rect width="240" height="240" rx="56" fill="url(#bg)"/>${`<g transform="translate(${120 - 256 * 0.5} ${120 - 254 * 0.5}) scale(0.5)">${ART(false)}</g>`}</g>
-  <text x="410" y="240" font-family="Plus Jakarta Sans, Arial" font-weight="800" font-size="92" fill="#fff" letter-spacing="-3">Talvio</text>
-  <text x="414" y="300" font-family="Plus Jakarta Sans, Arial" font-weight="500" font-size="30" fill="#c5cadb">Chats, calls &amp; channels — made simple.</text></svg>`,
+  full: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${DEFS}<circle cx="256" cy="256" r="256" fill="url(#bg)"/>${centered(512, 262)}</svg>`,
+  square: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${DEFS}<rect width="512" height="512" fill="url(#bg)"/>${centered(512, 290)}</svg>`,
+  round: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${DEFS}<circle cx="256" cy="256" r="256" fill="url(#bg)"/>${centered(512, 262)}</svg>`,
+  fg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">${DEFS}${centered(108, 50)}</svg>`,
+  mono: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">${DEFS}${centered(108, 50, true)}</svg>`,
+  splash: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 288">${DEFS}${centered(288, 130)}</svg>`,
+  feature: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500"><defs><linearGradient id="bg" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#8F72FF"/><stop offset="1" stop-color="#4E2FE0"/></linearGradient></defs>
+  <rect width="1024" height="500" fill="#0F0E2A"/><circle cx="230" cy="250" r="260" fill="#6D4AFF" opacity=".16"/>
+  <g transform="translate(110 130)"><circle cx="120" cy="120" r="120" fill="url(#bg)"/><g transform="translate(${120 - 50 * 2.45} ${120 - 52.5 * 2.45}) scale(2.45)">${ART(false)}</g></g>
+  <text x="410" y="240" font-family="Plus Jakarta Sans, Arial" font-weight="800" font-size="92" fill="#EDEBFF" letter-spacing="-3">hushavia</text>
+  <text x="414" y="300" font-family="Plus Jakarta Sans, Arial" font-weight="500" font-size="30" fill="#B9B3E6">Talk freely. Stay private.</text></svg>`,
 };
 const dens = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 const jobs = [];

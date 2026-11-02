@@ -1,7 +1,7 @@
 {
   "name": "talvio-backend",
   "version": "1.0.0",
-  "description": "Talvio messaging app backend (REST API + Socket.IO + admin API)",
+  "description": "Hushavia messaging app backend (REST API + Socket.IO + admin API)",
   "main": "src/server.js",
   "private": true,
   "engines": {

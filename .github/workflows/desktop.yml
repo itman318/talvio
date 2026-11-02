@@ -1,4 +1,4 @@
-# Builds Talvio for computers: Windows (.zip), Linux (.tar.gz) and macOS (.zip), from the same Flutter code
+# Builds Hushavia for computers: Windows (.zip), Linux (.tar.gz) and macOS (.zip), from the same Flutter code
 # as the phone app. Run it by hand from the Actions tab. Files go to the "desktop-latest" release;
 # a report (build logs + a Linux start-up screenshot) goes to the ci-desktop branch.
 name: Desktop apps
@@ -65,23 +65,23 @@ jobs:
           flutter config --enable-${{ matrix.platform }}-desktop
           flutter create . --org com.talvio --project-name chatapp --platforms=${{ matrix.platform }}
           rm -f test/widget_test.dart
-          # window title and app name: Talvio
-          # the program is called Talvio(.exe), not chatapp
+          # window title and app name: Hushavia
+          # the program is called Hushavia(.exe), not chatapp
           for c in windows/CMakeLists.txt linux/CMakeLists.txt; do
-            [ -f "$c" ] && sed -i 's/set(BINARY_NAME "chatapp")/set(BINARY_NAME "Talvio")/' "$c"
+            [ -f "$c" ] && sed -i 's/set(BINARY_NAME "chatapp")/set(BINARY_NAME "Hushavia")/' "$c"
           done
           if [ -f windows/runner/main.cpp ]; then
-            sed -i 's/L"chatapp"/L"Talvio"/' windows/runner/main.cpp
+            sed -i 's/L"chatapp"/L"Hushavia"/' windows/runner/main.cpp
             sed -i 's/Size size(1280, 720)/Size size(1100, 760)/' windows/runner/main.cpp
-            sed -i 's/"FileDescription", "chatapp"/"FileDescription", "Talvio"/; s/"ProductName", "chatapp"/"ProductName", "Talvio"/' windows/runner/Runner.rc || true
+            sed -i 's/"FileDescription", "chatapp"/"FileDescription", "Hushavia"/; s/"ProductName", "chatapp"/"ProductName", "Hushavia"/' windows/runner/Runner.rc || true
             # app icon
             if [ -f assets/brand/app_icon.ico ]; then cp assets/brand/app_icon.ico windows/runner/resources/app_icon.ico; fi
           fi
           if [ -f linux/runner/my_application.cc ]; then
-            sed -i 's/"chatapp"/"Talvio"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 760)/' linux/runner/my_application.cc
+            sed -i 's/"chatapp"/"Hushavia"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 760)/' linux/runner/my_application.cc
           fi
           if [ -f macos/Runner/Configs/AppInfo.xcconfig ]; then
-            sed -i '' 's/^PRODUCT_NAME = .*/PRODUCT_NAME = Talvio/' macos/Runner/Configs/AppInfo.xcconfig
+            sed -i '' 's/^PRODUCT_NAME = .*/PRODUCT_NAME = Hushavia/' macos/Runner/Configs/AppInfo.xcconfig
             # the app talks to the network, uses the mic and the camera (calls)
             for f in macos/Runner/DebugProfile.entitlements macos/Runner/Release.entitlements; do
               /usr/libexec/PlistBuddy -c "Add :com.apple.security.network.client bool true" "$f" || true
@@ -89,8 +89,8 @@ jobs:
               /usr/libexec/PlistBuddy -c "Add :com.apple.security.device.camera bool true" "$f" || true
               /usr/libexec/PlistBuddy -c "Add :com.apple.security.files.user-selected.read-write bool true" "$f" || true
             done
-            /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Talvio uses the microphone for calls and voice messages.'" macos/Runner/Info.plist || true
-            /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Talvio uses the camera for video calls.'" macos/Runner/Info.plist || true
+            /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Hushavia uses the microphone for calls and voice messages.'" macos/Runner/Info.plist || true
+            /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Hushavia uses the camera for video calls.'" macos/Runner/Info.plist || true
             sed -i '' "s/platform :osx, '[0-9.]*'/platform :osx, '10.15'/" macos/Podfile || true
             sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = 10.14;/MACOSX_DEPLOYMENT_TARGET = 10.15;/g' macos/Runner.xcodeproj/project.pbxproj || true
           fi
@@ -123,7 +123,7 @@ jobs:
           pactl load-module module-null-sink sink_name=fake >/dev/null 2>&1 || true
           pactl load-module module-virtual-source source_name=fakemic master=fake.monitor >/dev/null 2>&1 || true
           sleep 2
-          DISPLAY=:99 timeout 40 $B/Talvio > ../ci-report/run-linux.txt 2>&1 &
+          DISPLAY=:99 timeout 40 $B/Hushavia > ../ci-report/run-linux.txt 2>&1 &
           sleep 30
           DISPLAY=:99 import -window root ../ci-report/linux-start.png || true
           sleep 12
@@ -137,7 +137,7 @@ jobs:
           case "${{ matrix.platform }}" in
             windows) (cd build/windows/x64/runner/Release && 7z a -tzip ../../../../../../dist/talvio-windows.zip . >/dev/null) ;;
             linux) tar -C build/linux/x64/release -czf ../dist/talvio-linux.tar.gz --transform 's/^bundle/talvio/' bundle ;;
-            macos) (cd build/macos/Build/Products/Release && ditto -c -k --keepParent Talvio.app ../../../../../../dist/talvio-macos.zip) ;;
+            macos) (cd build/macos/Build/Products/Release && ditto -c -k --keepParent Hushavia.app ../../../../../../dist/talvio-macos.zip) ;;
           esac
           ls -la ../dist
 
@@ -153,7 +153,7 @@ jobs:
               gh release upload desktop-latest dist/* --clobber -R "$R" && exit 0
             else
               gh release create desktop-latest dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
-                --title "Talvio Desktop (test build)" --notes "Windows: unzip and run Talvio.exe. Linux: extract and run talvio/Talvio. macOS: unzip, right-click Talvio → Open (not signed yet)." && exit 0
+                --title "Hushavia Desktop (test build)" --notes "Windows: unzip and run Hushavia.exe. Linux: extract and run talvio/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0
             fi
             echo "retry $i"; sleep $((10 + i * 7))
           done

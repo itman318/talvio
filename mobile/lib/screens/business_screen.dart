@@ -29,7 +29,7 @@ class QuickReplies {
 
 const _days = [('mon', 'Monday'), ('tue', 'Tuesday'), ('wed', 'Wednesday'), ('thu', 'Thursday'), ('fri', 'Friday'), ('sat', 'Saturday'), ('sun', 'Sunday')];
 
-/// Settings → Talvio Business: greeting, away message, working hours, quick replies.
+/// Settings → Hushavia Business: greeting, away message, working hours, quick replies.
 class BusinessScreen extends StatefulWidget {
   const BusinessScreen({super.key});
 
@@ -110,7 +110,7 @@ class _BusinessScreenState extends State<BusinessScreen> {
   Widget build(BuildContext context) {
     final s = _s;
     return Scaffold(
-      appBar: AppBar(title: const Text('Talvio Business')),
+      appBar: AppBar(title: const Text('Hushavia Business')),
       body: s == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(padding: const EdgeInsets.only(bottom: 32), children: [

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Talvio Bot API — Classic (see services/botclassic.service.js):
+ * Hushavia Bot API — Classic (see services/botclassic.service.js):
  *   {base}/bot<token>/<method>  and  {base}/file/bot<token>/<file_path>,  base = /api/classic
  * Accepts JSON, urlencoded and multipart (files in any field).
  */

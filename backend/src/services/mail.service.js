@@ -72,7 +72,7 @@ async function sendSmtp(to, subject, text, html) {
 }
 
 /** The login-code email. */
-function codeEmail(code, appName = 'Talvio') {
+function codeEmail(code, appName = 'Hushavia') {
   const subject = `${code} is your ${appName} code`;
   const text = `Your ${appName} login code is ${code}.\n\nIt expires in 5 minutes. If you didn't ask for it, ignore this email — nobody can log in without the code.`;
   const html = `<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:420px;margin:0 auto;padding:24px;color:#1d1b2f">

@@ -62,7 +62,7 @@ const config = {
   mail: {
     // console | brevo | resend | smtp
     provider: env.MAIL_PROVIDER || 'console',
-    from: env.MAIL_FROM || 'Talvio <no-reply@example.com>',
+    from: env.MAIL_FROM || 'Hushavia <no-reply@example.com>',
     brevoKey: env.BREVO_API_KEY || '',
     resendKey: env.RESEND_API_KEY || '',
     smtpHost: env.SMTP_HOST || '',

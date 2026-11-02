@@ -286,7 +286,7 @@ class ProfileHero extends StatelessWidget {
     this.glow = false,
   });
   final int id;
-  final bool glow; // Talvio Plus: glowing gradient ring
+  final bool glow; // Hushavia Plus: glowing gradient ring
   final String name;
   final String? avatarUrl;
   final String? status;
@@ -359,11 +359,11 @@ class ProfileHero extends StatelessWidget {
                     padding: EdgeInsets.all(glow ? 3.5 : 4),
                     decoration: BoxDecoration(
                       color: glow ? null : bg,
-                      gradient: glow ? const SweepGradient(colors: [Color(0xFFFFC94D), Color(0xFFFF5E8A), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFFFFC94D)]) : null,
+                      gradient: glow ? const SweepGradient(colors: [Color(0xFFFFC94D), Color(0xFF8F72FF), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFFFFC94D)]) : null,
                       borderRadius: BorderRadius.circular((avatarSize + 8) * 0.34),
                       boxShadow: [
                         BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.45 : 0.16), blurRadius: 22, offset: const Offset(0, 10)),
-                        if (glow) BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.55), blurRadius: 26, spreadRadius: 1),
+                        if (glow) BoxShadow(color: const Color(0xFF8F72FF).withValues(alpha: 0.55), blurRadius: 26, spreadRadius: 1),
                       ],
                     ),
                     child: Hero(tag: 'avatar-$id', child: Avatar(id: id, name: name, url: url, size: avatarSize)),
@@ -736,7 +736,7 @@ class _LiveWavePainter extends CustomPainter {
   bool shouldRepaint(covariant _LiveWavePainter old) => old.levels.length != levels.length || old.color != color;
 }
 
-/// Talvio "glass": a frosted, slightly tinted panel with a faint aurora hairline around it.
+/// Hushavia "glass": a frosted, slightly tinted panel with a faint aurora hairline around it.
 /// Used for the floating chat header, the message bar and the pinned card.
 class GlassPanel extends StatelessWidget {
   const GlassPanel({super.key, required this.child, this.radius = 24, this.padding = EdgeInsets.zero, this.ring = true, this.opacity});
@@ -773,7 +773,7 @@ class GlassPanel extends StatelessWidget {
                 gradient: LinearGradient(
                   colors: dark
                       ? [Colors.white.withValues(alpha: 0.16), const Color(0xFF8B5CF6).withValues(alpha: 0.22), Colors.white.withValues(alpha: 0.06)]
-                      : [Colors.white, const Color(0xFFF0446E).withValues(alpha: 0.18), Colors.white.withValues(alpha: 0.7)],
+                      : [Colors.white, const Color(0xFF6D4AFF).withValues(alpha: 0.18), Colors.white.withValues(alpha: 0.7)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),

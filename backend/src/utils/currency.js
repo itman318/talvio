@@ -1,6 +1,6 @@
 'use strict';
 
-/** Country → currency for Talvio Plus prices, and how to show amounts. */
+/** Country → currency for Hushavia Plus prices, and how to show amounts. */
 const EURO = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'IE', 'PT', 'FI', 'GR', 'SK', 'SI', 'LT', 'LV', 'EE', 'LU', 'MT', 'CY', 'HR'];
 const BY_COUNTRY = {
   PK: 'PKR', US: 'USD', GB: 'GBP', AE: 'AED', SA: 'SAR', IN: 'INR', BD: 'BDT', CA: 'CAD', AU: 'AUD', TR: 'TRY', MY: 'MYR',

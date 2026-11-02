@@ -54,7 +54,7 @@ async function fetchHtml(rawUrl, depth = 0) {
   return new Promise((resolve, reject) => {
     const req = lib.get({
       host: ip, servername: u.hostname, path: `${u.pathname}${u.search}`, port: u.port || (u.protocol === 'https:' ? 443 : 80),
-      headers: { host: u.host, 'user-agent': 'TalvioBot/1.0 (link preview)', accept: 'text/html,application/xhtml+xml', 'accept-language': 'en,ur;q=0.8' },
+      headers: { host: u.host, 'user-agent': 'HushaviaBot/1.0 (link preview)', accept: 'text/html,application/xhtml+xml', 'accept-language': 'en,ur;q=0.8' },
       timeout: TIMEOUT_MS,
     }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && depth < 3) {

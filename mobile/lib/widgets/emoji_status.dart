@@ -95,7 +95,7 @@ class _PickerState extends State<_Picker> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text('Shown next to your name everywhere in Talvio.', style: TextStyle(color: muted, fontSize: 13)),
+            child: Text('Shown next to your name everywhere in Hushavia.', style: TextStyle(color: muted, fontSize: 13)),
           ),
           const SizedBox(height: 10),
           SizedBox(

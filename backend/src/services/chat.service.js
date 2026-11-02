@@ -834,7 +834,7 @@ async function updateMySettings(userId, chatIdRaw, body) {
         [userId, chat.id],
       );
       const maxPins = (await require('./payment.service').limitsFor(userId)).pinned_chats || MAX_PINNED; // eslint-disable-line global-require
-      if (n.n >= maxPins) throw badRequest('too_many_pinned', `You can pin up to ${maxPins} chats${maxPins === MAX_PINNED ? ' — Talvio Plus lets you pin more' : ''}`);
+      if (n.n >= maxPins) throw badRequest('too_many_pinned', `You can pin up to ${maxPins} chats${maxPins === MAX_PINNED ? ' — Hushavia Plus lets you pin more' : ''}`);
     }
     params.push(pin);
     sets.push(`is_pinned = $${params.length}`);

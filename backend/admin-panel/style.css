@@ -3,7 +3,7 @@
 @font-face { font-family: "Plus Jakarta Sans"; src: url(/web/fonts/PlusJakartaSans-Bold.woff2) format("woff2"); font-weight: 700; }
 @font-face { font-family: "Plus Jakarta Sans"; src: url(/web/fonts/PlusJakartaSans-ExtraBold.woff2) format("woff2"); font-weight: 800; }
 
-/* Talvio Admin — "Ink & Coral" console */
+/* Hushavia Admin — "Ink & Coral" console */
 :root {
   --bg: #f4f5fa;
   --panel: #ffffff;

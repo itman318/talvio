@@ -234,7 +234,7 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final r in list)
           ListTile(
             dense: true,
-            leading: const CircleAvatar(radius: 16, backgroundColor: Color(0x1FF2557E), child: Icon(Icons.bolt_rounded, size: 18, color: Brand.primary)),
+            leading: const CircleAvatar(radius: 16, backgroundColor: Color(0x1F6D4AFF), child: Icon(Icons.bolt_rounded, size: 18, color: Brand.primary)),
             title: Text('/${r['shortcut']}', style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text('${r['text']}', maxLines: 1, overflow: TextOverflow.ellipsis),
             onTap: () {
@@ -620,7 +620,7 @@ class _ChatScreenState extends State<ChatScreen> {
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
-              child: const Text('Remove ads with Talvio Plus ⭐', style: TextStyle(fontSize: 12)),
+              child: const Text('Remove ads with Hushavia Plus ⭐', style: TextStyle(fontSize: 12)),
             ),
           ),
       ]),
@@ -747,7 +747,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ListTile(leading: const Icon(Icons.share_location_rounded), title: const Text('For 8 hours'), onTap: () => Navigator.pop(ctx, 480)),
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text('Your location updates while Talvio is open. You can stop sharing any time.', style: TextStyle(fontSize: 12, color: Brand.muted)),
+                child: Text('Your location updates while Hushavia is open. You can stop sharing any time.', style: TextStyle(fontSize: 12, color: Brand.muted)),
               ),
             ],
           ]),
@@ -838,7 +838,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final items = <(String, IconData, String, List<Color>)>[
       ('photo', Icons.photo_library_rounded, 'Gallery', const [Color(0xFF8E7CF8), Color(0xFF6C5BE3)]),
       ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
-      ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFFEF5A3C)]),
+      ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFF6D4AFF)]),
       ('file', Icons.insert_drive_file_rounded, 'Document', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
       ('checklist', Icons.checklist_rounded, 'Checklist', const [Color(0xFF6FCB8C), Color(0xFF2F9D5A)]),
       if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Video note', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),

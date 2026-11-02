@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Android battery optimisation can stop Talvio in the background, and then notifications come late
+/// Android battery optimisation can stop Hushavia in the background, and then notifications come late
 /// or not at all. These helpers check that and open the system screen to allow it.
 class BatteryGuard {
   static const _ch = MethodChannel('talvio/system');
 
-  /// True when the phone may put Talvio to sleep (Android only).
+  /// True when the phone may put Hushavia to sleep (Android only).
   static Future<bool> restricted() async {
     if (!Platform.isAndroid) return false;
     try {
@@ -38,7 +38,7 @@ class BatteryGuard {
       builder: (d) => AlertDialog(
         icon: const Icon(Icons.notifications_active_rounded, size: 36),
         title: const Text('Never miss a message'),
-        content: const Text('Your phone may pause Talvio in the background to save battery, so messages and calls can arrive late. Allow Talvio to run in the background to get every notification on time.'),
+        content: const Text('Your phone may pause Hushavia in the background to save battery, so messages and calls can arrive late. Allow Hushavia to run in the background to get every notification on time.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Not now')),
           FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Allow')),

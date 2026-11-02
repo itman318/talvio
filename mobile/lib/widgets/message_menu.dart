@@ -12,7 +12,7 @@ class MessageMenuItem {
   final bool danger;
 }
 
-/// Talvio's message menu: tap a message → a reactions pill and a compact list of actions right next to it. The message itself is not copied or re-drawn. Returns the chosen value ("react:👍", "reply", …) or null.
+/// Hushavia's message menu: tap a message → a reactions pill and a compact list of actions right next to it. The message itself is not copied or re-drawn. Returns the chosen value ("react:👍", "reply", …) or null.
 Future<String?> showMessageMenu(
   BuildContext context, {
   required Rect anchor,

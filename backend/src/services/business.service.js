@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Talvio Business (for anyone who talks to customers):
+ * Hushavia Business (for anyone who talks to customers):
  *  - greeting message: sent automatically to someone who writes for the first time (or after N quiet days)
  *  - away message: sent automatically outside working hours / always / while you're offline
  *  - working hours: per weekday, in the owner's time zone

@@ -160,7 +160,7 @@ Future<void> pickReminder(BuildContext context, Chat chat, Message m) async {
     at: at,
   ));
   if (context.mounted) {
-    showInfo(context, ok ? 'I\'ll remind you ${DateFormat('EEE d MMM, h:mm a').format(at)}' : 'Allow notifications for Talvio to get reminders');
+    showInfo(context, ok ? 'I\'ll remind you ${DateFormat('EEE d MMM, h:mm a').format(at)}' : 'Allow notifications for Hushavia to get reminders');
   }
 }
 

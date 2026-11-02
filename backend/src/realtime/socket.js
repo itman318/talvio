@@ -126,7 +126,7 @@ async function broadcastPresence(userId, online) {
 }
 
 function previewText(message) {
-  // Talvio custom emoji (Private Use Area U+E900…) show as a fox in notifications
+  // Hushavia custom emoji (Private Use Area U+E900…) show as a fox in notifications
   return previewRaw(message).replace(/[\uE900-\uE9FF]/g, '🦊');
 }
 
@@ -185,7 +185,7 @@ async function pushNewMessage({ chatId, message, memberIds, senderId }) {
   // locked chats: a plain "New message" (no name, no text) — the phone opens the chat after the fingerprint
   const locked = rows.filter((r) => r.is_locked).map((r) => r.user_id);
   if (locked.length) {
-    await push.sendToUsers(locked, { title: 'Talvio', body: 'New message' }, { type: 'message', chat_id: chatId, message_id: message.id, locked: 1 });
+    await push.sendToUsers(locked, { title: 'Hushavia', body: 'New message' }, { type: 'message', chat_id: chatId, message_id: message.id, locked: 1 });
   }
   const targets = rows.filter((r) => !r.is_locked).map((r) => r.user_id);
   if (targets.length === 0) return;
@@ -310,7 +310,7 @@ function wireBus() {
       const m = await db.one('SELECT type, text, meta FROM messages WHERE id = $1', [e.messageId]);
       const who = await nameOf(e.userId);
       const body = `${who} pinned ${m && m.text ? `“${String(m.text).slice(0, 80)}”` : 'a message'}`;
-      await push.sendToUsers(to, { title: (chat && chat.title) || 'Talvio', body }, { type: 'message', chat_id: e.chatId, message_id: e.messageId });
+      await push.sendToUsers(to, { title: (chat && chat.title) || 'Hushavia', body }, { type: 'message', chat_id: e.chatId, message_id: e.messageId });
     } catch (_) {
       /* best-effort */
     }

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Pebo: Talvio's own animated sticker pack — a soft mint gummy with big eyes.
+/// Pebo: Hushavia's own animated sticker pack — a soft mint gummy with big eyes.
 /// Everything is drawn in code (vector, sharp at any size, no download) and loops smoothly.
 enum PeboPose { hi, love, laugh, cry, angry, cool, thumbsUp, party, sleep, think, wow, ok, kiss, facepalm, run, gift }
 
@@ -526,7 +526,7 @@ class _PeboPainter extends CustomPainter {
           ..lineTo(56, 9)
           ..lineTo(66, 36)
           ..close();
-        c.drawPath(hat, Paint()..shader = const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFFFF5E8A)]).createShader(const Rect.fromLTWH(38, 9, 28, 27)));
+        c.drawPath(hat, Paint()..shader = const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFF8F72FF)]).createShader(const Rect.fromLTWH(38, 9, 28, 27)));
         c.drawPath(hat, _stroke(1.6, color: const Color(0xFF5B2BA8)));
         for (var i = 0; i < 3; i++) {
           c.drawCircle(Offset(46 + i * 6.0, 28 - i * 6.5), 1.8, Paint()..color = const Color(0xFFFFC94D));
@@ -535,7 +535,7 @@ class _PeboPainter extends CustomPainter {
       case PeboPose.gift:
         final bob = 2 * math.sin(_w * 2);
         final box = Rect.fromLTWH(36, 70 + bob, 28, 20);
-        c.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(3)), Paint()..color = const Color(0xFFFF5E8A));
+        c.drawRRect(RRect.fromRectAndRadius(box, const Radius.circular(3)), Paint()..color = const Color(0xFF8F72FF));
         c.drawRect(Rect.fromLTWH(box.left - 2, box.top - 5, box.width + 4, 7), Paint()..color = const Color(0xFFFF3D6E));
         c.drawRect(Rect.fromLTWH(box.center.dx - 2.5, box.top - 5, 5, box.height + 5), Paint()..color = const Color(0xFFFFC94D));
         final bow = Path()
@@ -608,7 +608,7 @@ class _PeboPainter extends CustomPainter {
         }
       case PeboPose.party:
         final rnd = math.Random(7);
-        const colors = [Color(0xFFFF5E8A), Color(0xFFFFC94D), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFF2ED47A)];
+        const colors = [Color(0xFF8F72FF), Color(0xFFFFC94D), Color(0xFF8E54E9), Color(0xFF3CC8FF), Color(0xFF2ED47A)];
         for (var i = 0; i < 14; i++) {
           final x0 = rnd.nextDouble() * 100;
           final speed = 0.6 + rnd.nextDouble() * 0.6;

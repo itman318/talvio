@@ -53,7 +53,7 @@ Future<void> main() async {
       home: Scaffold(
         body: SafeArea(
           child: ListView(padding: const EdgeInsets.all(24), children: [
-            const Text('Talvio could not start', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            const Text('Hushavia could not start', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             SelectableText('$e\n\n$st', style: const TextStyle(fontSize: 12)),
           ]),
@@ -201,7 +201,7 @@ Future<void> _start() async {
       builder: (d) => AlertDialog(
         icon: const Icon(Icons.shield_rounded, color: Brand.primary, size: 36),
         title: const Text('New login to your account'),
-        content: Text('${device.isEmpty ? 'A new device' : device} just logged in to your Talvio account. Was this you?'),
+        content: Text('${device.isEmpty ? 'A new device' : device} just logged in to your Hushavia account. Was this you?'),
         actions: [
           TextButton(
             onPressed: () async {

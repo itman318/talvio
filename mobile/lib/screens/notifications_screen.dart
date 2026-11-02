@@ -126,7 +126,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 SettingsSwitchTile(
                   icon: Icons.person_add_alt_1_rounded,
                   color: Brand.green,
-                  title: 'Contact joined Talvio',
+                  title: 'Contact joined Hushavia',
                   subtitle: 'Someone from your phone book signs up',
                   value: on('contact_joined'),
                   onChanged: (v) => _set('contact_joined', v),
@@ -148,7 +148,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     icon: Icons.battery_alert_rounded,
                     color: Brand.amber,
                     title: 'Notifications may be delayed',
-                    subtitle: 'Tap to let Talvio run in the background',
+                    subtitle: 'Tap to let Hushavia run in the background',
                     onTap: () async {
                       await BatteryGuard.ask();
                       await Future<void>.delayed(const Duration(seconds: 2));
@@ -157,7 +157,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     },
                   ),
                 ]),
-              SettingsGroup(title: 'While Talvio is open', children: [
+              SettingsGroup(title: 'While Hushavia is open', children: [
                 SettingsSwitchTile(
                   icon: Icons.web_asset_rounded,
                   color: Brand.sky,
@@ -221,7 +221,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   color: Brand.amber,
                   title: 'Keep-Alive',
                   subtitle: BackgroundKeepAlive.enabled
-                      ? 'On — Talvio stays connected (a small “Talvio” note stays in the status bar)'
+                      ? 'On — Hushavia stays connected (a small “Hushavia” note stays in the status bar)'
                       : 'Turn on if messages arrive late or only when you open the app',
                   value: BackgroundKeepAlive.enabled,
                   onChanged: (v) async {

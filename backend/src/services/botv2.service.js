@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Talvio Bot API v2 — Talvio's own bot interface.
+ * Hushavia Bot API v2 — Hushavia's own bot interface.
  *
  *   POST https://<server>/api/bots/v2/<method>        header  X-Bot-Key: <key>   (or Authorization: Bearer <key>)
  *   JSON, form or multipart (field "file")             →  { ok: true, data } | { ok: false, error: { code, message } }
@@ -242,7 +242,7 @@ async function call(key, method, params = {}, file = null) {
     return { url: params.url || null, secret };
   }
   const t = translate(method, params);
-  if (!t) throw new AppError(404, 'unknown_method', `Unknown method "${method}" — see the Talvio Bot API v2 docs`);
+  if (!t) throw new AppError(404, 'unknown_method', `Unknown method "${method}" — see the Hushavia Bot API v2 docs`);
   const [v1, p1, convert] = t;
   for (const k of Object.keys(p1)) if (p1[k] === undefined) delete p1[k];
   const result = await botService.callMethod(key, v1, p1, file);

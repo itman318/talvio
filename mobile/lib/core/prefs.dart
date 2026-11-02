@@ -29,7 +29,7 @@ class AppPrefs extends ChangeNotifier {
   bool dataSaver = false;
 
   // privacy on this phone
-  bool relayCalls = false; // calls always through Talvio's server: the other person never sees my IP
+  bool relayCalls = false; // calls always through Hushavia's server: the other person never sees my IP
   bool blockScreenshots = false; // no screenshots / screen recording anywhere in the app
   bool incognitoKeyboard = false; // ask the keyboard not to learn or remember what I type
 

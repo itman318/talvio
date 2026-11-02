@@ -1,4 +1,4 @@
-# Talvio — messaging app
+# Hushavia — messaging app
 
 | Folder | What | Tech |
 |---|---|---|
@@ -77,7 +77,7 @@ Admin panel: on/off switch and counts only (content can't be read by anyone but 
 
 ## Batch D — what's included
 
-**Bots & mini apps:** create bots in the app (Settings → My bots), Talvio Bot API at `/api/bot/v1/<method>` (long polling
+**Bots & mini apps:** create bots in the app (Settings → My bots), Hushavia Bot API at `/api/bot/v1/<method>` (long polling
 or webhooks), commands menu, START screen, inline buttons (callback / link / mini app), mini apps in an
 in-app web view with signed user data. **Channel comments** under posts. **Topics** in groups.
 **Premium** (⭐ badge, bigger uploads, more folders, no ads) with **JazzCash**, **Easypaisa** and
@@ -105,7 +105,7 @@ grid bubble), **auto-download** setting for photos (always / Wi-Fi only / never)
 
 ## Batch F — premium look + new features
 
-- **Design "Ink & Coral":** deep ink `#151A2E` + coral `#EF5A3C`, mint `#10B39A`, champagne gold for Talvio Plus, Plus Jakarta Sans font. My bubbles are ink; new app icon, splash, store graphics (`mobile/branding/`).
+- **Design "Ink & Coral":** deep ink `#151A2E` + coral `#EF5A3C`, mint `#10B39A`, champagne gold for Hushavia Plus, Plus Jakarta Sans font. My bubbles are ink; new app icon, splash, store graphics (`mobile/branding/`).
 - **Push notifications** (Firebase — add `GOOGLE_SERVICES_JSON` secret), **crash reports** (admin → App crashes), **Play Store release** (see `docs/PLAY_STORE.md`).
 - **Stickers & GIFs** (official "Tali the Fox" pack (20 character stickers), own packs; GIFs via Tenor key in admin settings), **link previews**, **disappearing messages** (1h / 24h / 7d / 90d), **live location** (15 min / 1 h / 8 h on a map), **contact sharing**, **chat export** (.txt).
 - **Screen sharing** in video calls (Share button; Android shows a "sharing" notification).
@@ -140,7 +140,7 @@ The APK is signed with the debug key — fine for testing; set up a release key 
 
 ## Our own names (not a copy of any other messenger)
 
-Vault chats (end-to-end encrypted), My Notes (chat with yourself), Talvio Plus (premium), the Talvio Bot API
+Vault chats (end-to-end encrypted), My Notes (chat with yourself), Hushavia Plus (premium), the Hushavia Bot API
 (`/api/bot/v1/<method>`, `Authorization: Bearer tlv_…`), `talvio://` links, `window.Talvio` for mini apps.
 
 ## Next

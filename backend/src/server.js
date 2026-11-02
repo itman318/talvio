@@ -28,7 +28,7 @@ server.listen(config.port, () => {
     .then(() => require('./services/idbot.service').ensure())
     .catch((err) => console.error('id bot setup error', err)); // eslint-disable-line no-console
   // eslint-disable-next-line no-console
-  console.log(`Talvio API listening on http://localhost:${config.port}  (admin panel: /admin)`);
+  console.log(`Hushavia API listening on http://localhost:${config.port}  (admin panel: /admin)`);
   if (config.otp.devMode) console.log('OTP dev mode is ON — codes are returned in the API response'); // eslint-disable-line no-console
 });
 

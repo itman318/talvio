@@ -41,7 +41,7 @@ String? chatLinkOf(Chat chat) {
   return null;
 }
 
-/// Opens a Talvio chat link inside the app. Returns false when [link] isn't one of ours.
+/// Opens a Hushavia chat link inside the app. Returns false when [link] isn't one of ours.
 Future<bool> openChatLink(BuildContext context, String link) async {
   final p = parseChatLink(link);
   if (p == null) return false;

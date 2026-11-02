@@ -1,4 +1,4 @@
-# Builds the Talvio Android app (APK) on every push to main, or by hand from the Actions tab.
+# Builds the Hushavia Android app (APK) on every push to main, or by hand from the Actions tab.
 # Set the server address once: repo → Settings → Secrets and variables → Actions → Variables → API_BASE
 # (e.g. https://chat.yourdomain.com). Without it the APK points at the Android emulator (10.0.2.2:4000).
 name: Android APK
@@ -130,7 +130,7 @@ jobs:
             cp mobile/build/app/outputs/bundle/release/app-release.aab talvio-playstore.aab; FILES="$FILES talvio-playstore.aab"
           fi
           R="${{ github.repository }}"
-          TITLE="Talvio Android (test build #${{ github.run_number }})"
+          TITLE="Hushavia Android (test build #${{ github.run_number }})"
           NOTES="Built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${API_BASE:-http://10.0.2.2:4000 (emulator only - set the API_BASE variable)}"
           for i in 1 2 3; do
             if gh release view android-latest -R "$R" >/dev/null 2>&1; then

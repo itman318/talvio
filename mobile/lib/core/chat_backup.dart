@@ -134,10 +134,10 @@ class ChatBackup {
     try {
       archive = ZipDecoder().decodeBytes(zip);
     } catch (_) {
-      throw const BackupException('This is not a Talvio backup');
+      throw const BackupException('This is not a Hushavia backup');
     }
     final m = archive.findFile('backup.json');
-    if (m == null) throw const BackupException('This is not a Talvio backup');
+    if (m == null) throw const BackupException('This is not a Hushavia backup');
     return BackupContents(archive, Map<String, dynamic>.from(jsonDecode(utf8.decode(m.content as List<int>)) as Map));
   }
 }

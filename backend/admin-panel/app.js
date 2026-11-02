@@ -17,7 +17,7 @@
     { id: 'bots', label: 'Bots', perm: 'users.view', icon: 'bot', section: 'Moderation' },
     { id: 'revenue', label: 'Revenue', perm: 'payments', icon: 'trend', section: 'Business' },
     { id: 'payments', label: 'Payments', perm: 'payments', icon: 'card', section: 'Business' },
-    { id: 'plans', label: 'Talvio Plus plans', perm: 'payments', icon: 'star', section: 'Business' },
+    { id: 'plans', label: 'Hushavia Plus plans', perm: 'payments', icon: 'star', section: 'Business' },
     { id: 'ads', label: 'Sponsored messages', perm: 'payments', icon: 'megaphone', section: 'Business' },
     { id: 'support', label: 'Support', perm: 'support', icon: 'buoy', section: 'Communication' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast', icon: 'send', section: 'Communication' },
@@ -267,7 +267,7 @@
     const submit = el('button', { class: 'btn primary', type: 'submit' }, 'Log in');
     const form = el('form', { class: 'login' },
       el('img', { class: 'mark', src: LOGO, alt: '' }),
-      el('h1', {}, 'Talvio Admin'), el('p', {}, 'Sign in to manage users, reports and settings.'),
+      el('h1', {}, 'Hushavia Admin'), el('p', {}, 'Sign in to manage users, reports and settings.'),
       el('div', { class: 'field' }, el('label', {}, 'Email'), email),
       el('div', { class: 'field' }, el('label', {}, 'Password'), password),
       codeField,
@@ -388,7 +388,7 @@
     const name = state.admin.name || state.admin.email;
     const initials = String(name).trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'A';
     const side = el('nav', { class: 'side' },
-      el('div', { class: 'brand' }, el('img', { src: LOGO, alt: '' }), el('div', {}, el('b', {}, 'Talvio Admin'), el('small', {}, 'Control center'))),
+      el('div', { class: 'brand' }, el('img', { src: LOGO, alt: '' }), el('div', {}, el('b', {}, 'Hushavia Admin'), el('small', {}, 'Control center'))),
       el('div', { class: 'nav' }, navItems),
       el('div', { class: 'account' },
         el('div', { class: 'me' }, el('div', { class: 'ini' }, initials), el('div', {}, el('b', {}, name), el('small', {}, state.admin.role.replace('_', ' ')))),
@@ -469,7 +469,7 @@
         stat('Calls today', fmtNum(d.calls_today)),
         stat('Calls right now', fmtNum(d.calls_active)),
         stat('Vault chats', fmtNum(d.secret_chats_active)),
-        stat('Talvio Plus users', fmtNum(d.premium_users)),
+        stat('Hushavia Plus users', fmtNum(d.premium_users)),
         stat('Payments to review', fmtNum(d.payments_to_review)),
         stat('Bots', fmtNum(d.bots_total)),
         stat('Secret messages today', fmtNum(d.secret_messages_today)),
@@ -565,18 +565,18 @@
           class: 'btn',
           onclick: () => {
             const months = el('select', {}, [1, 3, 6, 12].map((m) => el('option', { value: m }, `${m} month${m > 1 ? 's' : ''}`)));
-            modal(premium ? 'Extend Talvio Plus' : 'Give Talvio Plus', [el('div', { class: 'field' }, el('label', {}, 'Length'), months)], 'Give', async () => {
-              const r = await action(() => api('POST', `/users/${id}/premium`, { months: Number(months.value) }), 'Talvio Plus given');
+            modal(premium ? 'Extend Hushavia Plus' : 'Give Hushavia Plus', [el('div', { class: 'field' }, el('label', {}, 'Length'), months)], 'Give', async () => {
+              const r = await action(() => api('POST', `/users/${id}/premium`, { months: Number(months.value) }), 'Hushavia Plus given');
               if (r) reload();
               return !!r;
             });
           },
-        }, premium ? 'Extend Talvio Plus' : 'Give Talvio Plus'));
+        }, premium ? 'Extend Hushavia Plus' : 'Give Hushavia Plus'));
         if (premium) {
           actions.push(el('button', {
             class: 'btn',
-            onclick: async () => { if (await action(() => api('POST', `/users/${id}/premium`, { months: 0 }), 'Talvio Plus removed')) reload(); },
-          }, 'Remove Talvio Plus'));
+            onclick: async () => { if (await action(() => api('POST', `/users/${id}/premium`, { months: 0 }), 'Hushavia Plus removed')) reload(); },
+          }, 'Remove Hushavia Plus'));
         }
       }
       if (can('users.ban')) {
@@ -1003,13 +1003,13 @@
     max_bots_per_user: ['Bots per user', ''],
     feature_channel_comments: ['Channel comments', 'Channel admins can turn on comments under posts.'],
     feature_topics: ['Topics in groups', 'Group admins can split a group into topics.'],
-    feature_premium: ['Talvio Plus', 'Show Talvio Plus plans and accept payments.'],
-    plus_sales_open: ['Sell Talvio Plus now', 'Off = the app shows Talvio Plus as “Coming soon” and no one can pay. Turn on when you are ready to sell.'],
-    premium_upload_mb: ['Talvio Plus upload limit (MB)', 'Free users get “Max upload size”.'],
+    feature_premium: ['Hushavia Plus', 'Show Hushavia Plus plans and accept payments.'],
+    plus_sales_open: ['Sell Hushavia Plus now', 'Off = the app shows Hushavia Plus as “Coming soon” and no one can pay. Turn on when you are ready to sell.'],
+    premium_upload_mb: ['Hushavia Plus upload limit (MB)', 'Free users get “Max upload size”.'],
     payment_manual_enabled: ['Accept manual payments', 'User sends money to your account and uploads a screenshot; you approve it under Payments.'],
     payment_manual_instructions: ['Manual payment instructions', 'Shown to the user: account number, title, what to write in the note.'],
     payment_intl_instructions: ['International payment instructions', 'For people outside Pakistan (Wise, Payoneer, PayPal, card link…). Empty = “coming soon”.'],
-    feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Talvio Plus users).'],
+    feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Hushavia Plus users).'],
     ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
     feature_secret_chats: ['Vault chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
     turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
@@ -1018,7 +1018,7 @@
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
-    ['Talvio Plus & payments', ['feature_premium', 'plus_sales_open', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions']],
+    ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
@@ -1491,14 +1491,14 @@
       head('Revenue', el('button', { class: 'btn', onclick: pageRevenue }, 'Refresh')),
       el('div', { class: 'stats' },
         stat('Total earned', rs(d.total)),
-        stat('Talvio Plus this month', rs(d.premium_this_month)),
-        stat('Talvio Plus (all time)', rs(d.premium_total)),
+        stat('Hushavia Plus this month', rs(d.premium_this_month)),
+        stat('Hushavia Plus (all time)', rs(d.premium_total)),
         stat('Ads (all time)', rs(d.ads_total)),
-        stat('Talvio Plus users now', fmtNum(d.premium_users)),
+        stat('Hushavia Plus users now', fmtNum(d.premium_users)),
         stat('Payments (30 days)', fmtNum(d.payments_30d)),
         stat('Waiting for review', fmtNum(d.to_review))),
       el('div', { class: 'charts' },
-        barChart('Talvio Plus income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.premium_pkr }))),
+        barChart('Hushavia Plus income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.premium_pkr }))),
         barChart('Ad income by month (Rs)', d.months.map((m) => ({ day: `${m.month}-01`, count: m.ads_pkr })))),
       el('h3', { style: 'margin:16px 0 8px;font-size:15px' }, 'By payment method'),
       table(['Method', 'Payments', 'Amount'], d.by_provider.map((p) => el('tr', {},
@@ -1528,7 +1528,7 @@
         proof, el('div', { class: 'field', style: 'margin-top:10px' }, note));
       openDrawer(el('div', {}, el('h3', {}, `Payment #${o.id}`), info,
         el('div', { class: 'btn-row', style: 'margin-top:12px' },
-          el('button', { class: 'btn primary', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/approve`, { note: note.value.trim() }), 'Approved — Talvio Plus is active')) { closeDrawer(); pagePayments(); } } }, 'Approve'),
+          el('button', { class: 'btn primary', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/approve`, { note: note.value.trim() }), 'Approved — Hushavia Plus is active')) { closeDrawer(); pagePayments(); } } }, 'Approve'),
           el('button', { class: 'btn danger', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/reject`, { note: note.value.trim() }), 'Rejected')) { closeDrawer(); pagePayments(); } } }, 'Reject'))));
     };
     const rows = data.orders.map((o) => {
@@ -1549,7 +1549,7 @@
 
   // ------------------------------------------------------------------ premium plans
   async function pagePlans() {
-    main.replaceChildren(head('Talvio Plus plans'), el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Hushavia Plus plans'), el('div', { class: 'muted' }, 'Loading…'));
     const plans = await action(() => api('GET', '/plans'));
     if (!plans) return;
     const edit = (p) => {
@@ -1581,8 +1581,8 @@
       el('td', {}, p.prices && p.prices.USD !== undefined ? `$${p.prices.USD}` : '—'),
       el('td', {}, el('span', { class: `chip ${p.is_active ? 'ok' : ''}` }, p.is_active ? 'On sale' : 'Hidden')),
       el('td', {}, el('button', { class: 'btn small', onclick: () => edit(p) }, 'Edit'))));
-    main.replaceChildren(head('Talvio Plus plans', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New plan')),
-      el('p', { class: 'muted' }, 'Talvio Plus gives: ⭐ badge, bigger uploads, 30 chat folders, no sponsored messages, animated Tavi stickers, exclusive themes, 15 pinned chats, 3 more accounts, a 300-character bio and a glowing profile ring.'),
+    main.replaceChildren(head('Hushavia Plus plans', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New plan')),
+      el('p', { class: 'muted' }, 'Hushavia Plus gives: ⭐ badge, bigger uploads, 30 chat folders, no sponsored messages, animated Tavi stickers, exclusive themes, 15 pinned chats, 3 more accounts, a 300-character bio and a glowing profile ring.'),
       table(['Plan', 'Months', 'Price', 'Per month', 'USD', 'Status', ''], rows, 'No plans'));
   }
 
@@ -1634,7 +1634,7 @@
           el('button', { class: 'btn small danger', onclick: async () => { if (await action(() => api('DELETE', `/ads/${c.id}`), 'Deleted')) pageAds(); } }, 'Delete'))));
     });
     main.replaceChildren(head('Sponsored messages', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New campaign')),
-      el('p', { class: 'muted' }, 'Shown at the end of big public channels, never to Talvio Plus users. Turn on in Settings → Sponsored messages.'),
+      el('p', { class: 'muted' }, 'Shown at the end of big public channels, never to Hushavia Plus users. Turn on in Settings → Sponsored messages.'),
       table(['Campaign', 'Status', 'Views', 'Clicks', 'CTR', 'Price', ''], rows, 'No campaigns yet'));
   }
 

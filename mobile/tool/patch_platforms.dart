@@ -94,14 +94,14 @@ void _android() {
         '    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="subject_segment" />\n    </application>');
   }
   // Name under the icon on the home screen
-  xml = xml.replaceFirst(RegExp(r'android:label="[^"]*"'), 'android:label="Talvio"');
+  xml = xml.replaceFirst(RegExp(r'android:label="[^"]*"'), 'android:label="Hushavia"');
   // calls keep playing in a small floating window when you leave the app (picture-in-picture)
   if (!xml.contains('supportsPictureInPicture')) {
     xml = xml.replaceFirstMapped(RegExp(r'<activity(\s+)android:name="\.MainActivity"'),
         (m) => '<activity${m[1]}android:name=".MainActivity"${m[1]}android:supportsPictureInPicture="true"${m[1]}android:resizeableActivity="true"');
   }
   manifest.writeAsStringSync(xml);
-  stdout.writeln('✓ AndroidManifest.xml: permissions added, label = Talvio');
+  stdout.writeln('✓ AndroidManifest.xml: permissions added, label = Hushavia');
 
   for (final name in ['android/app/build.gradle', 'android/app/build.gradle.kts']) {
     final f = File(name);
@@ -122,7 +122,7 @@ void _android() {
       if (n != 'MainActivity.kt' && n != 'MainActivity.java') continue;
       var code = f.readAsStringSync();
       if (n == 'MainActivity.kt' && !code.contains('talvio/system')) {
-        // FlutterFragmentActivity + a small channel for "don't let the phone put Talvio to sleep" (battery optimisation)
+        // FlutterFragmentActivity + a small channel for "don't let the phone put Hushavia to sleep" (battery optimisation)
         final pkg = RegExp(r'^package\s+[\w.]+', multiLine: true).firstMatch(code)?.group(0) ?? 'package com.talvio.chatapp';
         f.writeAsStringSync('''$pkg
 
@@ -252,8 +252,8 @@ void _ios() {
     add.write('\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>\n');
   }
   // Name under the icon on the home screen
-  s = s.replaceFirstMapped(RegExp(r'(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)'), (m) => '${m[1]}Talvio${m[2]}');
-  if (!s.contains('CFBundleDisplayName')) add.write('\t<key>CFBundleDisplayName</key>\n\t<string>Talvio</string>\n');
+  s = s.replaceFirstMapped(RegExp(r'(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)'), (m) => '${m[1]}Hushavia${m[2]}');
+  if (!s.contains('CFBundleDisplayName')) add.write('\t<key>CFBundleDisplayName</key>\n\t<string>Hushavia</string>\n');
   {
     final i = s.lastIndexOf('</dict>');
     s = s.substring(0, i) + add.toString() + s.substring(i);
@@ -362,7 +362,7 @@ void _noMinify() {
   }
 }
 
-/// Talvio launcher icons (legacy + adaptive + themed), and the launch/splash screen in brand ink.
+/// Hushavia launcher icons (legacy + adaptive + themed), and the launch/splash screen in brand ink.
 /// The PNGs come from branding/ (regenerate with: node tool/branding/render.js branding).
 void _androidBranding() {
   final res = Directory('android/app/src/main/res');
@@ -389,14 +389,14 @@ void _androidBranding() {
 ''';
   write('drawable/ic_launcher_background.xml', '''<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient android:angle="315" android:startColor="#FF9A62" android:centerColor="#F2557E" android:endColor="#6C4BE0"/>
+    <gradient android:angle="315" android:startColor="#8F72FF" android:endColor="#4E2FE0"/>
 </shape>
 ''');
   write('mipmap-anydpi-v26/ic_launcher.xml', adaptive);
   write('mipmap-anydpi-v26/ic_launcher_round.xml', adaptive);
   write('values/talvio_colors.xml', '''<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="talvio_ink">#F2557E</color>
+    <color name="talvio_ink">#0F0E2A</color>
     <color name="talvio_window">#F3F4F9</color>
 </resources>
 ''');
@@ -422,10 +422,10 @@ void _androidBranding() {
 </resources>
 ''';
   write('values-v31/styles.xml', v31);
-  // after the splash, the window behind the app (and the system navigation bar) is calm, not brand pink
+  // after the splash, the window behind the app (and the system navigation bar) is calm, not brand midnight
   write('values-night-v31/styles.xml', v31.replaceAll('@color/talvio_window', '#0D1122'));
   write('values-night/talvio_window.xml', '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="talvio_window">#0D1122</color>\n</resources>\n');
-  stdout.writeln('✓ Android: Talvio launcher icons + splash screen');
+  stdout.writeln('✓ Android: Hushavia launcher icons + splash screen');
 }
 
 void _iosBranding() {
@@ -457,7 +457,7 @@ void _iosBranding() {
   add('ipad', 83.5, 2);
   add('ios-marketing', 1024, 1);
   File('${set.path}/Contents.json').writeAsStringSync('{"images":[${images.join(',')}],"info":{"version":1,"author":"talvio"}}');
-  stdout.writeln('✓ iOS: Talvio app icon');
+  stdout.writeln('✓ iOS: Hushavia app icon');
 }
 
 /// Release signing: when android/key.properties exists (written by CI from the encrypted upload key),

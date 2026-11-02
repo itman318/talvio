@@ -552,7 +552,7 @@ async function setFcmToken(userId, sessionId, token) {
 }
 
 // ------------------------------------------------------------------ contacts
-/** Someone signed up: people who had their number saved get them as a contact and a "joined Talvio" push. */
+/** Someone signed up: people who had their number saved get them as a contact and a "joined Hushavia" push. */
 async function contactJoined(userId, phone, name) {
   const hash = require('crypto').createHash('sha256').update(String(phone)).digest('hex'); // eslint-disable-line global-require
   const owners = await db.many('DELETE FROM contact_hints WHERE phone_hash = $1 RETURNING owner_id', [hash]);
@@ -563,7 +563,7 @@ async function contactJoined(userId, phone, name) {
   const to = rows.filter((r) => (r.ns || {}).contact_joined !== false).map((r) => r.id);
   if (to.length) {
     require('./push.service') // eslint-disable-line global-require
-      .sendToUsers(to, { title: 'Talvio', body: `${name} joined Talvio 🎉 Say hello!` }, { type: 'user', user_id: userId })
+      .sendToUsers(to, { title: 'Hushavia', body: `${name} joined Hushavia 🎉 Say hello!` }, { type: 'user', user_id: userId })
       .catch(() => {});
   }
 }
@@ -579,7 +579,7 @@ async function syncContacts(userId, phones) {
     [normalized, userId],
   );
   const ids = found.map((r) => r.id);
-  // remember (hashed) numbers that aren't here yet, to say "X joined Talvio" later
+  // remember (hashed) numbers that aren't here yet, to say "X joined Hushavia" later
   try {
     const foundPhones = new Set((await db.many('SELECT phone FROM users WHERE id = ANY($1::bigint[])', [ids])).map((r) => r.phone));
     const missing = normalized.filter((p) => !foundPhones.has(p)).map((p) => require('crypto').createHash('sha256').update(p).digest('hex')); // eslint-disable-line global-require

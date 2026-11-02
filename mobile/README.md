@@ -1,4 +1,4 @@
-# Talvio — Flutter app (Android + iOS)
+# Hushavia — Flutter app (Android + iOS)
 
 Phase 1: OTP login, profile, 1-to-1 chats, groups, photos/videos/files, voice notes,
 replies, edit, forward, delete (for me / everyone), read receipts, typing & online status,

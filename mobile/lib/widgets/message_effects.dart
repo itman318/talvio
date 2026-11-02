@@ -40,7 +40,7 @@ class _EffectLayerState extends State<_EffectLayer> with SingleTickerProviderSta
   final _rnd = math.Random();
   late final List<_Particle> _parts = _make();
 
-  static const _colors = [Color(0xFFFF7A59), Color(0xFFF0446E), Color(0xFF8B5CF6), Color(0xFF3C9BEA), Color(0xFF22B573), Color(0xFFF5B544)];
+  static const _colors = [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF8B5CF6), Color(0xFF3C9BEA), Color(0xFF22B573), Color(0xFFF5B544)];
 
   List<_Particle> _make() {
     double r() => _rnd.nextDouble();

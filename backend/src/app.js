@@ -27,12 +27,12 @@ function createApp() {
     }
   });
 
-  // Talvio Bot API: /api/bot/v1/<method>, token in "Authorization: Bearer <token>"
+  // Hushavia Bot API: /api/bot/v1/<method>, token in "Authorization: Bearer <token>"
   app.all('/api/bot/v1/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
-  // Talvio Bot API v2 (own naming, Talvio events, signed hooks): /api/bots/v2/<method>, key in "X-Bot-Key"
+  // Hushavia Bot API v2 (own naming, Hushavia events, signed hooks): /api/bots/v2/<method>, key in "X-Bot-Key"
   app.all('/api/bots/v2/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botv2'));
 
-  // Talvio Bot API — Classic: existing bot libraries work by pointing them at /api/classic
+  // Hushavia Bot API — Classic: existing bot libraries work by pointing them at /api/classic
   const classicRoutes = require('./http/routes.botclassic');
   app.get(/^\/api\/classic\/file\/bot([^/]+)\/(.+)$/, classicRoutes.file);
   app.all(/^\/api\/classic\/bot([^/]+)\/([A-Za-z]+)$/, express.urlencoded({ extended: false, limit: '1mb' }), classicRoutes.method);
@@ -97,22 +97,22 @@ function createApp() {
   const landing = (res, { emoji, title, text, deep }) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:");
     res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · Talvio</title><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(text)}">
+<title>${esc(title)} · Hushavia</title><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(text)}">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif;background:#0f1222;color:#fff;text-align:center}
 .c{padding:32px 24px;max-width:380px}.e{font-size:54px}h1{margin:10px 0 6px;font-size:24px}a{display:inline-block;margin-top:22px;padding:14px 30px;border-radius:999px;color:#fff;text-decoration:none;font-weight:700;
 background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;line-height:1.5}small{display:block;margin-top:18px;color:#6d7393}</style></head>
-<body><div class="c"><div class="e">${emoji}</div><h1>${esc(title)}</h1><p>${esc(text)}</p><a href="${esc(deep)}">Open in Talvio</a>
-<small>Don’t have Talvio yet? Install the app, then open this link again.</small></div></body></html>`);
+<body><div class="c"><div class="e">${emoji}</div><h1>${esc(title)}</h1><p>${esc(text)}</p><a href="${esc(deep)}">Open in Hushavia</a>
+<small>Don’t have Hushavia yet? Install the app, then open this link again.</small></div></body></html>`);
   };
   const clean = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
   app.get('/call/:code', (req, res) => {
     const code = clean(req.params.code);
-    landing(res, { emoji: '📞', title: 'Talvio call', text: 'Someone shared a call link with you. Open it in the Talvio app to start the call.', deep: `talvio://call/${code}` });
+    landing(res, { emoji: '📞', title: 'Hushavia call', text: 'Someone shared a call link with you. Open it in the Hushavia app to start the call.', deep: `talvio://call/${code}` });
   });
   app.get(['/c/:username', '/c/:username/:post'], async (req, res) => {
     const name = clean(req.params.username);
     let title = `@${name}`;
-    let text = 'A public group or channel on Talvio.';
+    let text = 'A public group or channel on Hushavia.';
     try {
       // eslint-disable-next-line global-require
       const db = require('./db');
@@ -132,7 +132,7 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
         );
         if (b) {
           title = b.first_name;
-          text = `Bot · ${String(b.about || 'Open it in Talvio to start.').slice(0, 160)}`;
+          text = `Bot · ${String(b.about || 'Open it in Hushavia to start.').slice(0, 160)}`;
         }
       }
     } catch (_) {
@@ -143,7 +143,7 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
   });
   app.get('/join/:code', (req, res) => {
     const code = clean(req.params.code);
-    landing(res, { emoji: '✉️', title: 'You’re invited', text: 'You have an invite to a private group or channel on Talvio.', deep: `talvio://join/${code}` });
+    landing(res, { emoji: '✉️', title: 'You’re invited', text: 'You have an invite to a private group or channel on Hushavia.', deep: `talvio://join/${code}` });
   });
 
   app.use(notFoundHandler);

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Talvio Bot API endpoint: GET/POST /api/bot/v1/<method> with "Authorization: Bearer <bot token>"
+ * Hushavia Bot API endpoint: GET/POST /api/bot/v1/<method> with "Authorization: Bearer <bot token>"
  * (or ?token=…), JSON / form / multipart (photo, document).
  *   → { ok: true, data } | { ok: false, error: { code, message, retry_after? } }
  */

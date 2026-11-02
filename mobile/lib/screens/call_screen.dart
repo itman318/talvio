@@ -378,7 +378,7 @@ class _Backdrop extends StatelessWidget {
       // a warm brand glow at the top
       const DecoratedBox(
         decoration: BoxDecoration(
-          gradient: RadialGradient(center: Alignment(0, -0.75), radius: 0.9, colors: [Color(0x55F2557E), Color(0x00F2557E)]),
+          gradient: RadialGradient(center: Alignment(0, -0.75), radius: 0.9, colors: [Color(0x556D4AFF), Color(0x006D4AFF)]),
         ),
       ),
     ]);
@@ -415,11 +415,11 @@ class _AvatarRings extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             width: base + 20 + 60 * math.min(1, level * 4),
             height: base + 20 + 60 * math.min(1, level * 4),
-            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFF2557E).withValues(alpha: 0.10 + 0.25 * math.min(1, level * 4))),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF6D4AFF).withValues(alpha: 0.10 + 0.25 * math.min(1, level * 4))),
           ),
         Container(
           padding: const EdgeInsets.all(3),
-          decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFFF9A62), Color(0xFFF2557E), Color(0xFF6C4BE0)])),
+          decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF6C4BE0)])),
           child: child,
         ),
       ]),

@@ -192,9 +192,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     margin: const EdgeInsets.fromLTRB(16, 8, 16, 2),
                     padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFFF8A65), Color(0xFFFF5E8A), Color(0xFF8E54E9)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      gradient: const LinearGradient(colors: [Color(0xFFFF8A65), Color(0xFF8F72FF), Color(0xFF8E54E9)], begin: Alignment.topLeft, end: Alignment.bottomRight),
                       borderRadius: BorderRadius.circular(22),
-                      boxShadow: [BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 6))],
+                      boxShadow: [BoxShadow(color: const Color(0xFF8F72FF).withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 6))],
                     ),
                     child: Row(children: [
                       const Text('🎂', style: TextStyle(fontSize: 34)),

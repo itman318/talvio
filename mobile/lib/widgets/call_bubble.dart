@@ -48,7 +48,7 @@ class _CallBubbleState extends State<CallBubble> {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(video ? 18 : 30),
-              gradient: video ? null : const LinearGradient(colors: [Color(0xFF6C4BE0), Color(0xFFF2557E)]),
+              gradient: video ? null : const LinearGradient(colors: [Color(0xFF6C4BE0), Color(0xFF6D4AFF)]),
               color: video ? Colors.black : null,
               boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 18, offset: Offset(0, 6))],
             ),

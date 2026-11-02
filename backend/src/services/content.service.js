@@ -101,7 +101,7 @@ function renderHtml(page) {
   const blocks = out.join('\n');
   const when = updated ? escapeHtml(updated) : `Last updated ${escapeHtml((page.updated_at || new Date().toISOString()).slice(0, 10))}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(page.title)} · Talvio</title>
+<title>${escapeHtml(page.title)} · Hushavia</title>
 <style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px 18px 60px;line-height:1.65;color:#17202b;background:#fafbff}
 h1{font-size:28px;margin:0 0 4px;letter-spacing:-.4px}h2{font-size:20px;margin-top:30px;padding-left:10px;border-left:4px solid #7b4fe0}h3{font-size:16px;margin:18px 0 6px}
 h4{font-size:15.5px;margin:22px 0 4px;color:#3b2fa8}ul{padding-left:22px}li{margin:5px 0}.muted{color:#64748b;font-size:13px}

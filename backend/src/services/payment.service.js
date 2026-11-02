@@ -104,7 +104,7 @@ function providers() {
 }
 
 async function premiumInfo(userId, hint = {}) {
-  await settings.requireFeature('feature_premium', 'Talvio Plus');
+  await settings.requireFeature('feature_premium', 'Hushavia Plus');
   const u = await db.one('SELECT premium_until FROM users WHERE id = $1', [userId]);
   const plans = await db.many('SELECT * FROM premium_plans WHERE is_active ORDER BY sort, months');
   const s = await settings.getAll();
@@ -164,8 +164,8 @@ function checkPayToken(orderId, token) {
 }
 
 async function checkout(userId, body = {}) {
-  await settings.requireFeature('feature_premium', 'Talvio Plus');
-  if (!(await settings.get('plus_sales_open'))) throw forbidden('coming_soon', 'Talvio Plus is coming soon');
+  await settings.requireFeature('feature_premium', 'Hushavia Plus');
+  if (!(await settings.get('plus_sales_open'))) throw forbidden('coming_soon', 'Hushavia Plus is coming soon');
   const plan = await db.one('SELECT * FROM premium_plans WHERE id = $1 AND is_active', [v.id(body.plan_id, 'plan_id')]);
   if (!plan) throw notFound('plan_not_found', 'This plan is not available');
   const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual'], 'provider');
@@ -245,7 +245,7 @@ async function markPaid(orderId, { providerRef = null, raw = null, message = nul
   if (r) {
     bus.emit('user:updated', { userId: r.user_id });
     bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: r.id, status: 'paid' }, userIds: [r.user_id] });
-    await require('./notice.service').notify(r.user_id, 'payment', 'Payment received — Talvio Plus is active ⭐', `Order #${r.id}: ${r.months} month${r.months === 1 ? '' : 's'} added. Thank you!`, { order_id: r.id });
+    await require('./notice.service').notify(r.user_id, 'payment', 'Payment received — Hushavia Plus is active ⭐', `Order #${r.id}: ${r.months} month${r.months === 1 ? '' : 's'} added. Thank you!`, { order_id: r.id });
   }
   return r;
 }
@@ -285,7 +285,7 @@ async function jazzcashReturn(body) {
   }
   if (r.paid && r.amountPkr === o.amount_pkr) {
     await markPaid(o.id, { providerRef: r.providerRef, raw: body, message: r.message });
-    return { ok: true, message: 'Payment successful — Talvio Plus is active.', order: o };
+    return { ok: true, message: 'Payment successful — Hushavia Plus is active.', order: o };
   }
   await markFailed(o.id, { message: `${r.code} ${r.message}`.trim(), raw: body });
   return { ok: false, message: r.message || 'Payment was not completed.', order: o };
@@ -303,13 +303,13 @@ async function easypaisaDone(orderIdRaw, token, query = {}) {
   if (!checkPayToken(id, token)) throw notFound('order_not_found', 'Payment link is invalid');
   const o = await db.one(`SELECT * FROM payment_orders WHERE id = $1 AND provider = 'easypaisa'`, [id]);
   if (!o) throw notFound('order_not_found', 'Payment not found');
-  if (o.status === 'paid') return { ok: true, message: 'Payment successful — Talvio Plus is active.', order: o };
+  if (o.status === 'paid') return { ok: true, message: 'Payment successful — Hushavia Plus is active.', order: o };
   if (easypaisa.canInquire()) {
     try {
       const q = await easypaisa.inquire(o.txn_ref);
       if (q.paid && q.amountPkr === o.amount_pkr) {
         await markPaid(o.id, { providerRef: q.providerRef, raw: q.raw, message: q.status });
-        return { ok: true, message: 'Payment successful — Talvio Plus is active.', order: o };
+        return { ok: true, message: 'Payment successful — Hushavia Plus is active.', order: o };
       }
       if (String(query.status || '') !== '0000') {
         await markFailed(o.id, { message: String(query.desc || q.status || 'Not paid').slice(0, 300), raw: q.raw });
@@ -324,7 +324,7 @@ async function easypaisaDone(orderIdRaw, token, query = {}) {
     o.id,
     `Easypaisa says: ${String(query.status || '?')} ${String(query.desc || '')}`.slice(0, 300),
   ]);
-  return { ok: true, message: 'Thanks! We are confirming your payment — Talvio Plus will be activated shortly.', order: o };
+  return { ok: true, message: 'Thanks! We are confirming your payment — Hushavia Plus will be activated shortly.', order: o };
 }
 
 /** Scheduler: abandoned hosted-checkout orders expire after 2 hours. */

@@ -1,8 +1,8 @@
-# Talvio Bot API — Classic
+# Hushavia Bot API — Classic
 
 Many bots are written with ready-made bot libraries (for example aiogram or python-telegram-bot in
-Python, grammY or Telegraf in Node.js). The Classic API lets those bots run on Talvio **without
-rewriting them**: you only point the library at Talvio's address and use your Talvio token.
+Python, grammY or Telegraf in Node.js). The Classic API lets those bots run on Hushavia **without
+rewriting them**: you only point the library at Hushavia's address and use your Hushavia token.
 
 ## What you need
 
@@ -47,7 +47,7 @@ Everything else in your bot stays the same.
 
 - A private chat is addressed by the **user's ID** (what `message.chat.id` and `message.from.id` show).
 - Groups and channels use a **negative ID** (for example `-42`).
-- Need an ID for your bot's settings (admin ID, VIP group ID…)? Message **@TalvioIDBot**: it shows your ID,
+- Need an ID for your bot's settings (admin ID, VIP group ID…)? Message **@HushaviaIDBot**: it shows your ID,
   the ID of anyone whose message you forward to it, and — added to a group and sent `/id` — the group's ID.
 
 ## Request and response
@@ -69,9 +69,9 @@ getChatMember · getChatMemberCount · getFile · logOut · close
 
 Updates: `message` (text, photos, files, locations, mini-app data), `callback_query`, `inline_query`.
 
-Formatting: `parse_mode` HTML, MarkdownV2 and Markdown are converted to Talvio's formatting
+Formatting: `parse_mode` HTML, MarkdownV2 and Markdown are converted to Hushavia's formatting
 (bold, italic, strikethrough, code, spoiler). Links become "text (url)". Underline isn't
-available in Talvio and is shown as plain text.
+available in Hushavia and is shown as plain text.
 
 Files: send them as uploads, by `file_id` from an earlier message, or by a public http(s) URL
 (up to 20 MB).
@@ -84,5 +84,5 @@ header your library already checks.
 Payments, games, stories, business connections, forum-topic management, chat administration
 methods (ban/restrict/promote), inline_message_id editing. Calling them returns 404 "not available".
 
-Users and chats are Talvio's own: people have to open your bot on Talvio (or add it to a Talvio
+Users and chats are Hushavia's own: people have to open your bot on Hushavia (or add it to a Hushavia
 group) before it can message them.

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * In-app notifications ("Talvio notifications"): new logins, security events, being added to groups,
+ * In-app notifications ("Hushavia notifications"): new logins, security events, being added to groups,
  * admin rights, support replies, payments… One list per user, newest first, with an unread count.
  */
 const db = require('../db');
@@ -16,7 +16,7 @@ const KINDS = [
   'support', // support replied
   'payment', // payment approved / rejected
   'account', // restrictions, verification, Plus…
-  'system', // anything else from Talvio
+  'system', // anything else from Hushavia
 ];
 
 function serialize(n) {

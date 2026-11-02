@@ -10,7 +10,7 @@ import '../state/chat_store.dart';
 import '../utils/format.dart';
 import 'avatar.dart';
 
-/// A shared contact inside a message: name, number/email, and "Message" when they use Talvio.
+/// A shared contact inside a message: name, number/email, and "Message" when they use Hushavia.
 class ContactCardView extends StatelessWidget {
   const ContactCardView({super.key, required this.message, required this.accent});
   final Message message;

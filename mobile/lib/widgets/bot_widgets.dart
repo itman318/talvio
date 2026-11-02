@@ -143,7 +143,7 @@ class _MiniAppScreenState extends State<MiniAppScreen> {
       final js = 'window.Talvio = { initData: ${jsonEncode(init)}, user: ${jsonEncode(Uri.splitQueryString(init)['user'] ?? '{}')}, '
           'close: function(){ TalvioBridge.postMessage(JSON.stringify({type:"close"})); }, '
           'sendData: function(d){ TalvioBridge.postMessage(JSON.stringify({type:"send_data", data: String(d)})); } }; '
-          'try { window.Talvio.user = JSON.parse(window.Talvio.user); } catch(e) {} '
+          'try { window.Talvio.user = JSON.parse(window.Talvio.user); } catch(e) {} window.Hushavia = window.Talvio; '
           'window.dispatchEvent(new Event("chatappready"));';
       final c = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)

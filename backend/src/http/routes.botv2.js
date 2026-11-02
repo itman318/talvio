@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Talvio Bot API v2: GET/POST /api/bots/v2/<method>, key in "X-Bot-Key" (or "Authorization: Bearer", or ?key=).
+ * Hushavia Bot API v2: GET/POST /api/bots/v2/<method>, key in "X-Bot-Key" (or "Authorization: Bearer", or ?key=).
  * JSON, form or multipart (one file in the field "file"). → { ok: true, data } | { ok: false, error: { code, message } }
  */
 const multer = require('multer');

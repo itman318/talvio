@@ -218,7 +218,7 @@ Future<int?> _pickScreenshot(BuildContext context) async {
 
 String _deviceLine() {
   final os = Platform.isAndroid ? 'Android' : (Platform.isIOS ? 'iOS' : Platform.operatingSystem);
-  return '$os ${Platform.operatingSystemVersion.split(' ').take(3).join(' ')} · Talvio v${AppConfig.appVersion}'.trim();
+  return '$os ${Platform.operatingSystemVersion.split(' ').take(3).join(' ')} · Hushavia v${AppConfig.appVersion}'.trim();
 }
 
 class SupportListScreen extends StatefulWidget {
@@ -589,7 +589,7 @@ class _TicketScreenState extends State<TicketScreen> {
               border: mine ? null : Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.white12 : const Color(0xFFE8EBF2), width: 0.8),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (!mine) const Text('Talvio Support', style: TextStyle(fontWeight: FontWeight.w800, color: Brand.primary, fontSize: 12.5)),
+              if (!mine) const Text('Hushavia Support', style: TextStyle(fontWeight: FontWeight.w800, color: Brand.primary, fontSize: 12.5)),
               if (m.mediaUrl != null) ...[
                 const SizedBox(height: 4),
                 _SupportPicture(message: m),

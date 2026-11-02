@@ -1,4 +1,4 @@
-# Talvio backend — Node.js + PostgreSQL + Socket.IO
+# Hushavia backend — Node.js + PostgreSQL + Socket.IO
 
 One server process provides:
 
@@ -263,7 +263,7 @@ switched off in Settings → Features. Reports about a secret chat need the user
 
 ## Bots (Batch D)
 
-Users create bots in the app (Settings → My bots) and get a token (`tlv_<id>_<secret>`). The Talvio Bot API:
+Users create bots in the app (Settings → My bots) and get a token (`tlv_<id>_<secret>`). The Hushavia Bot API:
 
 ```bash
 API=https://chat.example.com/api/bot/v1
@@ -275,9 +275,9 @@ curl -X POST $API/messages.send -H "$AUTH" -H 'Content-Type: application/json' \
 curl -X POST $API/webhook.set -H "$AUTH" -d url=https://yourbot.example.com/hook -d secret_token=abc
 ```
 
-### Talvio Bot API v2 (recommended)
+### Hushavia Bot API v2 (recommended)
 
-Talvio's own bot interface — its own words, event format and signed hooks:
+Hushavia's own bot interface — its own words, event format and signed hooks:
 
 ```bash
 API=https://chat.example.com/api/bots/v2
@@ -343,7 +343,7 @@ delete), `/setcommands`, `/setuserpic`, `/setmenu`, `/setprivacy`, `/deletebot`,
   **block links**, **blocked words**, **member permissions** (media, voice, stickers, polls, links),
   hide join/leave messages — admins are never limited.
 
-## Talvio Plus (premium), payments & ads (Batch D)
+## Hushavia Plus (premium), payments & ads (Batch D)
 
 - **Premium plans** are edited in the admin panel (default: 1 month Rs 299, 12 months Rs 2,999).
   Perks: ⭐ badge, bigger uploads (Settings → Premium & payments), 30 chat folders, no sponsored messages.
@@ -369,7 +369,7 @@ delete), `/setcommands`, `/setuserpic`, `/setmenu`, `/setprivacy`, `/deletebot`,
 `web-client/`). Log in by scanning the QR code with the phone (Settings → Devices → Link a device) or
 with phone number + code. Realtime through Socket.IO (falls back to polling), photos/albums, files,
 voice, polls, reactions, replies, edit/delete, drag-and-drop & paste to send files, browser notifications,
-dark mode. It is an installable PWA: in Chrome/Edge choose **Install Talvio** to get a desktop app
+dark mode. It is an installable PWA: in Chrome/Edge choose **Install Hushavia** to get a desktop app
 (Windows, macOS, Linux) with its own window and taskbar icon. Calls and secret chats stay on the phone.
 
 ## Scaling later

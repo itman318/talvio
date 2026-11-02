@@ -509,7 +509,7 @@ class ChatStore extends ChangeNotifier {
   Future<void> sendTavi(int chatId, String pose, String emoji) =>
       sendSpecial(chatId, 'sticker', {'tavi': pose, 'emoji': emoji}, meta: {'sticker': {'tavi': pose, 'emoji': emoji}});
 
-  /// A Pebo sticker (Talvio's animated pack, drawn by the app).
+  /// A Pebo sticker (Hushavia's animated pack, drawn by the app).
   Future<void> sendPebo(int chatId, String pose, String emoji) =>
       sendSpecial(chatId, 'sticker', {'anim': pose, 'emoji': emoji}, meta: {'sticker': {'anim': pose, 'emoji': emoji}});
 

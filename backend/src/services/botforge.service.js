@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * BotForge — Talvio's built-in bot that creates and manages other bots from a chat.
+ * BotForge — Hushavia's built-in bot that creates and manages other bots from a chat.
  * Lives inside the server: messages to @BotForge are answered here (no token, no webhook).
  *
  *   /newbot      create a bot (name → username → token)
@@ -39,7 +39,7 @@ async function ensure() {
     u = await db.tx(async (c) => {
       const row = (await c.query(
         `INSERT INTO users (phone, first_name, username, is_bot, is_verified, privacy_phone, privacy_group_add, privacy_calls, bio)
-         VALUES (NULL, 'BotForge', $1, TRUE, TRUE, 'nobody', 'nobody', 'nobody', 'I can help you create and manage Talvio bots.')
+         VALUES (NULL, 'BotForge', $1, TRUE, TRUE, 'nobody', 'nobody', 'nobody', 'I can help you create and manage Hushavia bots.')
          ON CONFLICT DO NOTHING RETURNING id`,
         [USERNAME],
       )).rows[0];
@@ -49,7 +49,7 @@ async function ensure() {
         [
           row.id,
           sha256(crypto.randomBytes(32).toString('hex')), // nobody gets a token for BotForge
-          'I can help you create and manage Talvio bots. Send /newbot to start.',
+          'I can help you create and manage Hushavia bots. Send /newbot to start.',
           JSON.stringify(COMMANDS),
         ],
       );
@@ -116,7 +116,7 @@ const btn = (text, data) => ({ text, callback_data: data });
 const link = (username) => `${config.publicUrl}/c/${username}`;
 
 const HELP = [
-  'Hi, I’m BotForge 🛠 — I build and manage Talvio bots for you.',
+  'Hi, I’m BotForge 🛠 — I build and manage Hushavia bots for you.',
   '',
   'You can control me with these commands:',
   '',
@@ -135,7 +135,7 @@ const HELP = [
   '/revoke — make a new token',
   '/deletebot — delete a bot',
   '',
-  `Talvio Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>”. Start with profile.get, events.poll and message.send.`,
+  `Hushavia Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>”. Start with profile.get, events.poll and message.send.`,
 ].join('\n');
 
 async function myBots(ownerId) {
@@ -358,12 +358,12 @@ async function onMessage(userId, chatId, row) {
             '',
             'You can now add a description, commands and a profile photo — see /mybots.',
             '',
-            'Your bot key for the Talvio Bot API:',
+            'Your bot key for the Hushavia Bot API:',
             r.token,
             '',
             'Keep your key secret — anyone who has it can control your bot.',
             '',
-            `Talvio Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>” — e.g. message.send {to, text, buttons}.`,
+            `Hushavia Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>” — e.g. message.send {to, text, buttons}.`,
           ].join('\n'),
           kb([[{ text: '📋 Copy key', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }]]),
         );

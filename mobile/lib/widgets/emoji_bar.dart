@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/brand.dart';
 
-/// Talvio's emoji category bar: rounded chips, the active one in the aurora gradient, backspace at the end.
+/// Hushavia's emoji category bar: rounded chips, the active one in the aurora gradient, backspace at the end.
 class PremiumEmojiCategoryBar extends StatefulWidget {
   const PremiumEmojiCategoryBar(this.config, this.state, this.tabController, this.pageController, {super.key});
   final Config config;

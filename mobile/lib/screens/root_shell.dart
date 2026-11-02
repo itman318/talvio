@@ -40,7 +40,7 @@ class _RootShellState extends State<RootShell> {
   StreamSubscription<Uri>? _links;
   late final ChatStore _store = context.read<ChatStore>();
 
-  /// A new Talvio notification while the app is open: a small banner with a "View" button.
+  /// A new Hushavia notification while the app is open: a small banner with a "View" button.
   void _onNotice() {
     final n = _store.lastNotice.value;
     if (n == null || !mounted) return;

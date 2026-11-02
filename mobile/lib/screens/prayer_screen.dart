@@ -280,7 +280,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
     if (reminders == true || ramadan == true) {
       final ok = await PrayerReminders.requestPermission();
       if (!ok) {
-        if (mounted) showInfo(context, 'Allow notifications for Talvio to get reminders');
+        if (mounted) showInfo(context, 'Allow notifications for Hushavia to get reminders');
         return;
       }
     }

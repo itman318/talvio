@@ -312,7 +312,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       if (d != null && channels.isEmpty && groups.isEmpty && bots.isEmpty && _recent.isEmpty)
         const Padding(
           padding: EdgeInsets.only(top: 40),
-          child: TaviEmptyState(pose: TaviPose.search, title: 'Search Talvio', text: 'Find friends by @username, and discover public groups, channels and bots.'),
+          child: TaviEmptyState(pose: TaviPose.search, title: 'Search Hushavia', text: 'Find friends by @username, and discover public groups, channels and bots.'),
         ),
     ]);
   }

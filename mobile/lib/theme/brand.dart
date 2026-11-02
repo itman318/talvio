@@ -1,33 +1,33 @@
 import 'package:flutter/material.dart';
 
-/// Talvio's look ("Ink & Coral"): deep ink surfaces, one confident coral accent, cool clean neutrals,
-/// champagne gold for Talvio Plus, Plus Jakarta Sans type. Change these constants to re-brand the app.
+/// Hushavia's look ("Midnight & Violet"): deep ink surfaces, one calm violet accent, mint for "secure",
+/// champagne gold for Hushavia Plus, Plus Jakarta Sans type. Change these constants to re-brand the app.
 class Brand {
   Brand._();
 
   static const font = 'Jakarta';
 
   // core palette
-  static const primary = Color(0xFFEF5A3C); // coral
-  static const primaryDeep = Color(0xFFD2432A);
-  static const primaryLight = Color(0xFFFF8A6E);
+  static const primary = Color(0xFF6D4AFF); // Hush Violet
+  static const primaryDeep = Color(0xFF5232E0);
+  static const primaryLight = Color(0xFF9A82FF);
   static const rose = Color(0xFFE0417A);
-  static const accent = Color(0xFF10B39A); // mint: online, read, success
+  static const accent = Color(0xFF12B89C); // Signal Mint: online, read, secure, success
   static const amber = Color(0xFFF5B544);
   static const ink = Color(0xFF151A2E); // headers, my bubbles, dark surfaces
   static const inkSoft = Color(0xFF232945);
   /// Secondary text/icons readable on both the light and the dark background.
   static const muted = Color(0xFF656C84);
   static const faint = Color(0xFF959AAF);
-  static const premium = Color(0xFFC9A45C); // champagne gold (Talvio Plus)
+  static const premium = Color(0xFFC9A45C); // champagne gold (Hushavia Plus)
   static const violet = Color(0xFF7C5CFF);
   static const sky = Color(0xFF3C9BEA);
   static const green = Color(0xFF22B573);
 
   /// Signature "Aurora" gradient: coral → rose → violet. Buttons, badges, story rings, highlights.
   static const aurora = LinearGradient(
-    colors: [Color(0xFFFF7A59), Color(0xFFF0446E), Color(0xFF8B5CF6)],
-    stops: [0, 0.55, 1],
+    colors: [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF4A2FD8)],
+    stops: [0, 0.5, 1],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -35,16 +35,16 @@ class Brand {
   /// A very light aurora wash for backgrounds behind illustrations and headers.
   static LinearGradient auroraSoft(bool dark) => LinearGradient(
         colors: dark
-            ? const [Color(0xFF2A1A2E), Color(0xFF231A3A)]
-            : const [Color(0xFFFFEDE7), Color(0xFFFCE7F0), Color(0xFFEEE8FF)],
+            ? const [Color(0xFF1E1A3E), Color(0xFF16233A)]
+            : const [Color(0xFFF1EDFF), Color(0xFFECE7FF), Color(0xFFE5FAF5)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
 
   // gradients
   static const mineGradient = LinearGradient(colors: [Color(0xFF1B2138), Color(0xFF2A3152)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-  static const storyGradient = SweepGradient(colors: [Color(0xFFFF7A59), Color(0xFFF0446E), Color(0xFF8B5CF6), Color(0xFFFFB347), Color(0xFFFF7A59)]);
-  static const heroGradient = LinearGradient(colors: [Color(0xFFFF7A55), primary, rose], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const storyGradient = SweepGradient(colors: [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF3FD8C0), Color(0xFF8F72FF), Color(0xFF9A7BFF)]);
+  static const heroGradient = LinearGradient(colors: [Color(0xFF9A7BFF), primary, Color(0xFF4A2FD8)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const plusGradient = LinearGradient(colors: [Color(0xFFE6C987), Color(0xFFC9A45C), Color(0xFFA9853F)], begin: Alignment.topLeft, end: Alignment.bottomRight);
 
   /// Avatar gradients (initials avatars get one of these by id) — muted, jewel-toned.
@@ -238,7 +238,8 @@ class Brand {
   }
 }
 
-/// The app's mark: a coral "pebble" behind a white one on deep ink (drawn, so no image asset is needed).
+/// The app's mark: a speech bubble folded from one sheet of paper, in a violet circle
+/// (drawn, so no image asset is needed — same art as the app icon).
 class BrandMark extends StatelessWidget {
   const BrandMark({super.key, this.size = 72});
   final double size;
@@ -253,9 +254,9 @@ class BrandMark extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFFFF9A62), Color(0xFFF2557E), Color(0xFF6C4BE0)], stops: [0, 0.48, 1], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(size * 0.227),
-          boxShadow: [BoxShadow(color: const Color(0xFFF2557E).withAlpha(70), blurRadius: size * 0.3, offset: Offset(0, size * 0.1))],
+          gradient: const LinearGradient(colors: [Color(0xFF8F72FF), Color(0xFF4E2FE0)], begin: Alignment(-0.7, -1), end: Alignment(0.7, 1)),
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: const Color(0xFF6D4AFF).withAlpha(70), blurRadius: size * 0.3, offset: Offset(0, size * 0.1))],
         ),
         child: CustomPaint(painter: _MarkPainter()),
       ),
@@ -263,31 +264,36 @@ class BrandMark extends StatelessWidget {
   }
 }
 
-/// The Talvio mark (same art as the app icon): a speech bubble holding a "T", with two sparks.
+/// The folded bubble: upper fold white, lower fold lilac, a mint "seal" dot (100-unit box).
 class _MarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size s) {
-    final k = s.shortestSide / 512;
+    final k = s.shortestSide / 100;
     canvas.save();
     canvas.scale(k);
-    canvas.drawCircle(const Offset(150, 120), 170, Paint()..color = Colors.white.withAlpha(26));
-    final bubble = Path()
-      ..moveTo(256, 96)
-      ..cubicTo(168, 96, 100, 158, 100, 240)
-      ..cubicTo(100, 280, 116, 316, 144, 342)
-      ..lineTo(128, 408)
-      ..cubicTo(126, 416, 134, 422, 141, 418)
-      ..lineTo(211, 380)
-      ..cubicTo(225, 384, 240, 386, 256, 386)
-      ..cubicTo(344, 386, 412, 324, 412, 240)
-      ..cubicTo(412, 156, 344, 96, 256, 96)
-      ..close();
-    canvas.drawPath(bubble, Paint()..color = Colors.white);
-    final t = Paint()..shader = const LinearGradient(colors: [Color(0xFFF2557E), Color(0xFF6C4BE0)], begin: Alignment.topLeft, end: Alignment.bottomRight).createShader(const Rect.fromLTWH(178, 170, 156, 150));
-    canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(178, 170, 156, 44), const Radius.circular(22)), t);
-    canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(234, 170, 44, 150), const Radius.circular(22)), t);
-    canvas.drawCircle(const Offset(372, 128), 16, Paint()..color = Colors.white);
-    canvas.drawCircle(const Offset(404, 98), 8, Paint()..color = Colors.white.withAlpha(204));
+    Path poly(List<double> p) {
+      final path = Path()..moveTo(p[0], p[1]);
+      for (var i = 2; i < p.length; i += 2) {
+        path.lineTo(p[i], p[i + 1]);
+      }
+      return path..close();
+    }
+
+    Paint paint(Color c) => Paint()
+      ..color = c
+      ..style = PaintingStyle.fill;
+    Paint edge(Color c) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeJoin = StrokeJoin.round;
+    final up = poly(const [27, 29, 73, 29, 73, 61]);
+    final low = poly(const [27, 29, 73, 61, 49, 61, 32, 76, 36, 61, 27, 61]);
+    canvas.drawPath(up, paint(Colors.white));
+    canvas.drawPath(up, edge(Colors.white));
+    canvas.drawPath(low, paint(const Color(0xFFD6CBFF)));
+    canvas.drawPath(low, edge(const Color(0xFFD6CBFF)));
+    canvas.drawCircle(const Offset(66, 36), 2.6, paint(const Color(0xFF5EF0D2)));
     canvas.restore();
   }
 

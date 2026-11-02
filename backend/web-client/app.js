@@ -1,4 +1,4 @@
-/* Talvio Web / Desktop — dependency-free single page app.
+/* Hushavia Web / Desktop — dependency-free single page app.
  * Login with a QR code (scan with the phone) or phone number + code. Realtime via Socket.IO
  * (falls back to polling). All user content is rendered with textContent — never innerHTML. */
 (() => {
@@ -72,11 +72,11 @@
   }
 
   // Ember avatar gradients (match the mobile app's Brand.avatarGradients).
-  const GRADS = [['#FF8A6E', '#E2553A'], ['#EE6A9A', '#C8366E'], ['#8E7CF0', '#5B49D6'], ['#34CDB6', '#0E9A86'],
+  const GRADS = [['#9A82FF', '#E2553A'], ['#EE6A9A', '#C8366E'], ['#8E7CF0', '#5B49D6'], ['#34CDB6', '#0E9A86'],
     ['#F7C56B', '#E29A2E'], ['#5DA9F0', '#2F6FD0'], ['#6FCB8C', '#2F9D5A'], ['#8A93B4', '#4E5675']];
   const brandMark = (size = 40) => {
     const box = el('span', { class: 'brand-mark', style: `width:${size}px;height:${size}px` });
-    box.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="tvg" x1="0" x2="1"><stop offset="0" stop-color="#FF8A6E"/><stop offset=".5" stop-color="#EF5A3C"/><stop offset="1" stop-color="#E0417A"/></linearGradient></defs><rect x="23" y="12.8" width="28.2" height="23" rx="11.5" fill="url(#tvg)"/><rect x="11.5" y="24.3" width="30.7" height="24.3" rx="12" fill="#fff"/><circle cx="19.8" cy="36.5" r="2.2" fill="#151A2E"/><circle cx="26.9" cy="36.5" r="2.2" fill="#151A2E"/><circle cx="33.9" cy="36.5" r="2.2" fill="#151A2E"/></svg>';
+    box.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="tvg" x1="0" x2="1"><stop offset="0" stop-color="#9A82FF"/><stop offset=".5" stop-color="#6D4AFF"/><stop offset="1" stop-color="#E0417A"/></linearGradient></defs><rect x="23" y="12.8" width="28.2" height="23" rx="11.5" fill="url(#tvg)"/><rect x="11.5" y="24.3" width="30.7" height="24.3" rx="12" fill="#fff"/><circle cx="19.8" cy="36.5" r="2.2" fill="#151A2E"/><circle cx="26.9" cy="36.5" r="2.2" fill="#151A2E"/><circle cx="33.9" cy="36.5" r="2.2" fill="#151A2E"/></svg>';
     return box;
   };
   const initials = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
@@ -342,14 +342,14 @@
     $app.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'login-card' },
       el('div', { class: 'login-steps' },
         brandMark(56),
-        el('h1', {}, 'Use Talvio on your computer'),
+        el('h1', {}, 'Use Hushavia on your computer'),
         message ? el('p', { style: 'color:var(--danger)' }, message) : null,
         el('ol', {},
-          el('li', {}, 'Open Talvio on your phone'),
+          el('li', {}, 'Open Hushavia on your phone'),
           el('li', {}, 'Go to Settings → Devices → Link a device'),
           el('li', {}, 'Point your phone at this screen')),
         tabs,
-        el('p', { class: 'muted' }, 'Tip: install it as a desktop app from your browser menu (“Install Talvio”).')),
+        el('p', { class: 'muted' }, 'Tip: install it as a desktop app from your browser menu (“Install Hushavia”).')),
       qrPane, emailPane, phonePane)));
     buildPhoneLogin(phonePane);
     buildCodeLogin(emailPane, 'email');
@@ -561,7 +561,7 @@
   }
   function updateTitle() {
     const n = S.chats.reduce((s, c) => s + (c.is_muted || c.is_request ? 0 : c.unread_count || 0), 0);
-    document.title = n ? `(${n}) Talvio` : 'Talvio';
+    document.title = n ? `(${n}) Hushavia` : 'Hushavia';
   }
 
   // ------------------------------------------------------------------ chat list
@@ -835,7 +835,7 @@
     return el('div', { class: `row${mine ? ' mine' : ''}` }, b);
   }
 
-  // Talvio custom emoji: one Private Use Area character each (U+E900 + index)
+  // Hushavia custom emoji: one Private Use Area character each (U+E900 + index)
   const TALI = ['hello', 'love', 'laugh', 'thanks', 'like', 'wow', 'cry', 'angry', 'sleepy', 'cool',
     'party', 'think', 'coffee', 'kiss', 'shy', 'starstruck', 'gift', 'please', 'busy', 'king'];
   const TALI_RE = /[\uE900-\uE9FF]/g;
@@ -910,7 +910,7 @@
     const md = m.media;
     if (m.view_once) {
       const what = m.type === 'voice' ? 'Voice message' : m.type === 'video' ? 'Video' : 'Photo';
-      return [el('div', { class: 'once' }, el('span', { class: 'once-ico' }, '1'), el('div', {}, el('b', {}, `${what} · view once`), el('div', { class: 'muted' }, 'Open it in the Talvio app')))];
+      return [el('div', { class: 'once' }, el('span', { class: 'once-ico' }, '1'), el('div', {}, el('b', {}, `${what} · view once`), el('div', { class: 'muted' }, 'Open it in the Hushavia app')))];
     }
     switch (m.type) {
       case 'image':

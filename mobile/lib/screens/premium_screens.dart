@@ -78,7 +78,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
         );
         if (paid == true && mounted) {
           await context.read<AuthState>().refreshMe();
-          if (mounted) showInfo(context, 'Talvio Plus is active ⭐');
+          if (mounted) showInfo(context, 'Hushavia Plus is active ⭐');
         }
       }
       _load();
@@ -129,7 +129,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final comingSoon = context.watch<AuthState>().appConfig['plus_available'] != true && info?['is_premium'] != true;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Talvio Plus'),
+        title: const Text('Hushavia Plus'),
         actions: [
           if (!comingSoon)
           IconButton(
@@ -145,9 +145,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFFFB347), Color(0xFFFF5E8A), Color(0xFF8E54E9)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  gradient: const LinearGradient(colors: [Color(0xFFFFB347), Color(0xFF8F72FF), Color(0xFF8E54E9)], begin: Alignment.topLeft, end: Alignment.bottomRight),
                   borderRadius: BorderRadius.circular(26),
-                  boxShadow: [BoxShadow(color: const Color(0xFFFF5E8A).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10))],
+                  boxShadow: [BoxShadow(color: const Color(0xFF8F72FF).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10))],
                 ),
                 child: Column(children: [
                   const AppMascot(pose: TaviPose.celebrate, size: 120),
@@ -181,13 +181,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       child: const Text('COMING SOON', style: TextStyle(color: premiumColor, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2)),
                     ),
                     const SizedBox(height: 10),
-                    const Text('Talvio Plus is almost here', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                    const Text('Hushavia Plus is almost here', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                     const SizedBox(height: 4),
-                    const Text('Everything in Talvio stays free. Plus will add extras on top — here is what is coming.',
+                    const Text('Everything in Hushavia stays free. Plus will add extras on top — here is what is coming.',
                         textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 13.5, height: 1.35)),
                     const SizedBox(height: 10),
                     TextButton.icon(
-                      onPressed: () => showInfo(context, 'We will tell you in the app when Talvio Plus starts'),
+                      onPressed: () => showInfo(context, 'We will tell you in the app when Hushavia Plus starts'),
                       icon: const Icon(Icons.notifications_active_outlined, size: 19),
                       label: const Text('Notify me'),
                     ),
@@ -354,7 +354,7 @@ class _WaitForPaymentState extends State<_WaitForPayment> {
           child: Text(failed
               ? 'The payment did not go through. You can try again.'
               : _status == 'review'
-                  ? 'We received your payment details and are confirming them. Talvio Plus will start shortly.'
+                  ? 'We received your payment details and are confirming them. Hushavia Plus will start shortly.'
                   : 'Finish the payment in your browser, then come back here.'),
         ),
       ]),
@@ -398,7 +398,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Sent for review'),
-          content: const Text('Thanks! We will check your payment and turn on Talvio Plus — usually within a few hours.'),
+          content: const Text('Thanks! We will check your payment and turn on Hushavia Plus — usually within a few hours.'),
           actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
         ),
       );

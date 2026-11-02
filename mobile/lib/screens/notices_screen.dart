@@ -11,7 +11,7 @@ import 'folder_support_screens.dart' show TicketScreen;
 import 'settings_screens.dart' show SessionsScreen;
 import 'login_activity_screen.dart';
 
-/// Talvio notifications: new logins, security events, groups you were added to, admin rights,
+/// Hushavia notifications: new logins, security events, groups you were added to, admin rights,
 /// support replies and payments — newest first. Opening the screen marks them as read.
 class NoticesScreen extends StatefulWidget {
   const NoticesScreen({super.key});

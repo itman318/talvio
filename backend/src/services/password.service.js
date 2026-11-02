@@ -85,7 +85,7 @@ async function requestReset(token) {
   );
   if (u.email) {
     mail.send(u.email, 'Two-step verification reset requested',
-      `Someone asked to reset the two-step verification password of your Talvio account.\n\nIf this was not you, open Talvio on a logged-in device: Settings → Privacy → Two-step verification → Cancel reset.\n\nOtherwise the password will be removed on ${new Date(row.password_reset_after).toUTCString()}.`).catch(() => {});
+      `Someone asked to reset the two-step verification password of your Hushavia account.\n\nIf this was not you, open Hushavia on a logged-in device: Settings → Privacy → Two-step verification → Cancel reset.\n\nOtherwise the password will be removed on ${new Date(row.password_reset_after).toUTCString()}.`).catch(() => {});
   }
   return { ok: true, reset_pending_until: new Date(row.password_reset_after).toISOString() };
 }

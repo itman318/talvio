@@ -16,7 +16,7 @@ import '../widgets/premium.dart';
 import 'chat_screen.dart';
 import 'global_search_screen.dart';
 
-/// Settings → My bots: create bots and get their Talvio Bot API token.
+/// Settings → My bots: create bots and get their Hushavia Bot API token.
 class MyBotsScreen extends StatefulWidget {
   const MyBotsScreen({super.key});
 
@@ -132,7 +132,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                   _botFatherCard(),
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('Bots are programs that chat with people. Create one here or with BotForge, then use its key with the Talvio Bot API on your server.', textAlign: TextAlign.center),
+                    child: Text('Bots are programs that chat with people. Create one here or with BotForge, then use its key with the Hushavia Bot API on your server.', textAlign: TextAlign.center),
                   ),
                 ])
               : ListView(
@@ -186,11 +186,11 @@ Future<void> showTokenDialog(BuildContext context, String token, {String? classi
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Keep it secret — anyone with the key controls your bot. It is shown only now, copy it.'),
           box(ctx, 'TALVIO KEY', token, 'Key'),
-          Text('Talvio Bot API v2: ${AppConfig.serverUrl}/api/bots/v2/<method>, header X-Bot-Key', style: const TextStyle(fontSize: 11.5, color: Brand.muted)),
+          Text('Hushavia Bot API v2: ${AppConfig.serverUrl}/api/bots/v2/<method>, header X-Bot-Key', style: const TextStyle(fontSize: 11.5, color: Brand.muted)),
           if (classicToken != null) ...[
             const SizedBox(height: 14),
             const Text('Already have a bot?', style: TextStyle(fontWeight: FontWeight.w800)),
-            const Text('Bots built with popular bot libraries run on Talvio by changing only the server address. Use these two values:', style: TextStyle(fontSize: 12.5)),
+            const Text('Bots built with popular bot libraries run on Hushavia by changing only the server address. Use these two values:', style: TextStyle(fontSize: 12.5)),
             box(ctx, 'SERVER ADDRESS', '${AppConfig.serverUrl}/api/classic', 'Address'),
             box(ctx, 'CLASSIC TOKEN', classicToken, 'Token'),
           ],
@@ -471,7 +471,7 @@ class _BotEditScreenState extends State<BotEditScreen> {
           SettingsTile(
             icon: Icons.menu_book_rounded,
             color: Brand.primary,
-            title: 'Talvio Bot API',
+            title: 'Hushavia Bot API',
             subtitle: 'POST ${AppConfig.serverUrl}/api/bots/v2/<method> · header X-Bot-Key',
             maxSubtitleLines: 2,
             onTap: () async {

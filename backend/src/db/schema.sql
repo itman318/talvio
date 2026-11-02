@@ -997,7 +997,7 @@ CREATE TABLE IF NOT EXISTS voice_chat_participants (
 );
 ALTER TABLE voice_chat_participants ADD COLUMN IF NOT EXISTS video BOOLEAN NOT NULL DEFAULT FALSE;
 
--- ---------------------------------------------------------------- Talvio Bot API v2 (own event shape, signed hooks)
+-- ---------------------------------------------------------------- Hushavia Bot API v2 (own event shape, signed hooks)
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS api_version VARCHAR(4) NOT NULL DEFAULT 'v1';
 
 -- Settings → Notifications (private / groups / channels on-off, message text in notifications)
@@ -1030,7 +1030,7 @@ CREATE TABLE IF NOT EXISTS notices (
 );
 CREATE INDEX IF NOT EXISTS notices_user_idx ON notices (user_id, id DESC);
 
--- numbers from people's phone books that aren't on Talvio yet (only a hash) → "contact joined Talvio"
+-- numbers from people's phone books that aren't on Hushavia yet (only a hash) → "contact joined Hushavia"
 CREATE TABLE IF NOT EXISTS contact_hints (
   owner_id   BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   phone_hash CHAR(64)    NOT NULL,
@@ -1039,7 +1039,7 @@ CREATE TABLE IF NOT EXISTS contact_hints (
 );
 CREATE INDEX IF NOT EXISTS contact_hints_hash_idx ON contact_hints (phone_hash);
 
--- Talvio Business: greeting, away message, working hours, quick replies
+-- Hushavia Business: greeting, away message, working hours, quick replies
 CREATE TABLE IF NOT EXISTS business_settings (
   user_id          BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   greeting_on      BOOLEAN      NOT NULL DEFAULT false,
@@ -1070,7 +1070,7 @@ CREATE TABLE IF NOT EXISTS quick_replies (
 
 -- ---------------------------------------------------------------- public-looking IDs
 -- New accounts get 10-digit IDs (from 5 000 000 000) with small random gaps, so an ID says nothing
--- about how many people use Talvio; new chats start at 1 000 000 000 (bots see groups as -100<id>).
+-- about how many people use Hushavia; new chats start at 1 000 000 000 (bots see groups as -100<id>).
 CREATE TABLE IF NOT EXISTS talvio_migrations (name VARCHAR(64) PRIMARY KEY, ran_at TIMESTAMPTZ NOT NULL DEFAULT now());
 
 CREATE OR REPLACE FUNCTION talvio_next_user_id() RETURNS trigger AS $$

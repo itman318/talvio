@@ -1,4 +1,4 @@
-# Publishing Talvio on Google Play
+# Publishing Hushavia on Google Play
 
 ## 1. One-time: the upload key (signing)
 1. GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**
@@ -13,15 +13,15 @@ Play Console uses *Play App Signing*: Google keeps the real app signing key, thi
 
 ## 2. Play Console
 1. Create a developer account at play.google.com/console (one-time $25).
-2. **Create app** → name `Talvio`, default language English, App, Free.
+2. **Create app** → name `Hushavia`, default language English, App, Free.
 3. Upload `talvio-playstore.aab` to **Testing → Internal testing** first, then Production.
 4. Application id: `com.talvio.app` (cannot be changed after the first upload).
 
 ## 3. Store listing (copy/paste)
-**App name:** Talvio
+**App name:** Hushavia
 **Short description (80):** Fast, private chats, calls & channels — with vault chats and prayer times.
 **Full description:**
-Talvio is a fast, beautiful messenger made for everyday life.
+Hushavia is a fast, beautiful messenger made for everyday life.
 
 • Chats & groups — photos, videos, files, voice notes, polls, reactions, replies and pinned messages
 • Voice & video calls — clear calls, also on slow networks
@@ -32,8 +32,8 @@ Talvio is a fast, beautiful messenger made for everyday life.
 • Live location and contact sharing
 • Prayer times, Qibla direction and Sehri/Iftar timer
 • Data-saver mode for slow or expensive internet
-• Use Talvio on your computer — scan a QR code at /web
-• Talvio Plus — bigger uploads, more folders and no sponsored messages
+• Use Hushavia on your computer — scan a QR code at /web
+• Hushavia Plus — bigger uploads, more folders and no sponsored messages
 
 Log in with your email address — no SMS needed.
 
@@ -41,7 +41,7 @@ Log in with your email address — no SMS needed.
 **Graphics:** `mobile/branding/store/icon-512.png`, `mobile/branding/store/feature-graphic-1024x500.png`,
 phone screenshots from the `ci-app` branch (the emulator test saves them on every run).
 
-## 4. Data safety form (what Talvio does)
+## 4. Data safety form (what Hushavia does)
 - Collected: email or phone (account), name/photo (profile), messages & media (app functionality, stored on the server
   except vault chats), contacts (optional, matching only), approximate/precise location (only when the user shares it),
   device IDs/push token, crash logs (diagnostics).

@@ -119,7 +119,7 @@ class _UserSearchState extends State<UserSearch> {
                     pose: TaviPose.search,
                     art: 'nocontacts',
                     title: 'No contacts yet',
-                    text: 'Search for people by their @username above, or let Talvio find friends from your phone contacts.',
+                    text: 'Search for people by their @username above, or let Hushavia find friends from your phone contacts.',
                     size: 140,
                   ),
                 ),
