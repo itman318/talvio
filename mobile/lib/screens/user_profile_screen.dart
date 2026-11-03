@@ -215,7 +215,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             try {
                               final chat = await context.read<ChatStore>().openPrivateWith(u.id);
                               if (!mounted) return;
-                              await context.read<ChatStore>().sendText(chat.id, 'Happy birthday, ${u.firstName.isEmpty ? u.name : u.firstName}! 🎂🎉');
+                              await this.context.read<ChatStore>().sendText(chat.id, 'Happy birthday, ${u.firstName.isEmpty ? u.name : u.firstName}! 🎂🎉');
                               if (mounted) showInfo(this.context, 'Wish sent 🎉');
                             } catch (e) {
                               if (mounted) showError(this.context, e);

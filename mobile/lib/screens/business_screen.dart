@@ -332,7 +332,7 @@ class _HoursScreenState extends State<_HoursScreen> {
                           final b = await _pick(_h[d.$1]![1]);
                           if (b == null) return;
                           if (b <= a) {
-                            if (mounted) showInfo(context, 'Closing time must be after opening time');
+                            if (mounted) showInfo(this.context, 'Closing time must be after opening time');
                             return;
                           }
                           setState(() => _h[d.$1] = [a, b]);

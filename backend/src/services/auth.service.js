@@ -232,7 +232,7 @@ async function loginWithTarget(target, kind, device, ip) {
   // two-step verification: ask for the password before creating a session
   const challenge = await require('./password.service').loginChallenge(user, device);
   if (challenge) {
-    recordLoginEvent(user.id, 'password_needed', device, ip).catch(() => {});
+    await recordLoginEvent(user.id, 'password_needed', device, ip).catch(() => {});
     return challenge;
   }
 

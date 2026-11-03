@@ -395,7 +395,7 @@ class _BotEditScreenState extends State<BotEditScreen> {
               (Icons.chat_bubble_rounded, 'Open chat', _openChat),
               (Icons.link_rounded, 'Copy link', () async {
                 await Clipboard.setData(ClipboardData(text: link));
-                if (mounted) showInfo(context, 'Link copied');
+                if (mounted) showInfo(this.context, 'Link copied');
               }),
               (Icons.key_rounded, 'New key', _newKey),
             ])
@@ -476,7 +476,7 @@ class _BotEditScreenState extends State<BotEditScreen> {
             maxSubtitleLines: 2,
             onTap: () async {
               await Clipboard.setData(ClipboardData(text: '${AppConfig.serverUrl}/api/bots/v2/'));
-              if (mounted) showInfo(context, 'API address copied');
+              if (mounted) showInfo(this.context, 'API address copied');
             },
           ),
         ]),
@@ -490,10 +490,10 @@ class _BotEditScreenState extends State<BotEditScreen> {
               if (!await confirm(context, 'Delete @${b.username}?', 'The bot stops working and its username is freed. This can’t be undone.', ok: 'Delete', danger: true)) return;
               if (!mounted) return;
               try {
-                await context.read<AppServices>().api.delete('/bots/${b.id}');
-                if (mounted) Navigator.pop(context);
+                await this.context.read<AppServices>().api.delete('/bots/${b.id}');
+                if (mounted) Navigator.pop(this.context);
               } catch (e) {
-                if (mounted) showError(context, e);
+                if (mounted) showError(this.context, e);
               }
             },
           ),
