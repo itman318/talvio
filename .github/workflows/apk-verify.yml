@@ -1,0 +1,17 @@
+# Checks the published phone APK: signature, version, phone types. Run by hand.
+name: APK check
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download android-latest -R "${{ github.repository }}" -p hushavia.apk
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          echo "== signature"; $BT/apksigner verify -v --print-certs hushavia.apk 2>&1 | grep -vE 'WARNING: META-INF' | head -20
+          echo "== badging"; $BT/aapt dump badging hushavia.apk | grep -E "^package|sdkVersion|native-code|testOnly|application-debuggable"
+          echo "== zip"; $BT/zipalign -c -p 4 hushavia.apk && echo aligned
