@@ -116,8 +116,12 @@ jobs:
           API="$(echo '${{ vars.API_BASE || 'http://10.0.2.2:4000' }}' | tr -d '[:space:]' | sed -E 's#/[0-9]{1,3}$##; s#/+$##')"
           case "$API" in http://*|https://*) ;; *) API="http://$API" ;; esac
           echo "API_BASE=$API" >> "$GITHUB_ENV"
-          DEFINES="--dart-define=API_BASE=$API --build-number=${{ github.run_number }}"
-          { flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 $DEFINES &&
+          # version number 10000+ : always above the older one-phone-type builds (2000+), so it updates over them
+          DEFINES="--dart-define=API_BASE=$API --build-number=$((10000 + ${{ github.run_number }}))"
+          # phone APK works on every phone (64-bit and older 32-bit Android); the x86_64 one is only for the emulator
+          { flutter build apk --release --target-platform android-arm,android-arm64 $DEFINES &&
+            cp build/app/outputs/flutter-apk/app-release.apk ../hushavia-phone.apk &&
+            flutter build apk --release --split-per-abi --target-platform android-x64 $DEFINES &&
             { [ "$SIGNED" != release ] || flutter build appbundle --release $DEFINES; }; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
       - name: Save report to ci-logs branch
@@ -138,7 +142,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk hushavia.apk
+          mv hushavia-phone.apk hushavia.apk
           cp mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk hushavia-x86_64-emulator.apk
           FILES="hushavia.apk hushavia-x86_64-emulator.apk"
           if [ -f mobile/build/app/outputs/bundle/release/app-release.aab ]; then
