@@ -1,0 +1,33 @@
+# Installs the published phone APK (hushavia.apk) on fresh Android emulators and prints the exact result.
+name: APK install check
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [30, 34, 35]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download android-latest -p hushavia.apk -R "${{ github.repository }}"
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            echo "== adb install (api ${{ matrix.api }})"; adb install -r hushavia.apk || true
+            echo "== pm via session"; adb push hushavia.apk /data/local/tmp/h.apk >/dev/null; adb shell pm install -r /data/local/tmp/h.apk || true
+            adb shell pm list packages | grep -i hushavia || echo "NOT INSTALLED"
+            adb logcat -d | grep -iE 'PackageManager|PackageInstaller|INSTALL_' | tail -40 || true
