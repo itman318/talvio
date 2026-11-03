@@ -13,6 +13,12 @@ on:
         description: Only check the code (no APK)
         type: boolean
         default: false
+      lib_from:
+        description: Test only - take the app code (mobile/lib) from this commit
+        default: ''
+      tag:
+        description: Release to publish to
+        default: android-latest
 
 permissions:
   contents: write  # lets the job save its error report to the ci-logs branch
@@ -36,6 +42,13 @@ jobs:
           df -h /
 
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Test build with older app code
+        if: inputs.lib_from != ''
+        working-directory: .
+        run: git checkout ${{ inputs.lib_from }} -- mobile/lib && echo "app code from ${{ inputs.lib_from }}"
 
       - uses: actions/setup-java@v5
         with:
@@ -136,7 +149,7 @@ jobs:
           git add -A && git commit -qm "CI report ${{ github.sha }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-logs
 
-      - name: Publish APK to Releases (android-latest)
+      - name: Publish APK to Releases
         if: steps.build.outcome == 'success'
         working-directory: .
         env:
@@ -148,20 +161,20 @@ jobs:
           if [ -f mobile/build/app/outputs/bundle/release/app-release.aab ]; then
             cp mobile/build/app/outputs/bundle/release/app-release.aab hushavia-playstore.aab; FILES="$FILES hushavia-playstore.aab"
           fi
-          R="${{ github.repository }}"
+          R="${{ github.repository }}"; TAG="${{ inputs.tag || 'android-latest' }}"
           TITLE="Hushavia Android (test build #${{ github.run_number }})"
           NOTES="Built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${API_BASE:-http://10.0.2.2:4000 (emulator only - set the API_BASE variable)}"
           for i in 1 2 3; do
-            if gh release view android-latest -R "$R" >/dev/null 2>&1; then
-              gh release upload android-latest $FILES --clobber -R "$R" &&
-                gh release edit android-latest --title "$TITLE" --notes "$NOTES" --prerelease -R "$R" || { echo "publish attempt $i failed, retrying"; sleep 15; continue; }
+            if gh release view "$TAG" -R "$R" >/dev/null 2>&1; then
+              gh release upload "$TAG" $FILES --clobber -R "$R" &&
+                gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --prerelease -R "$R" || { echo "publish attempt $i failed, retrying"; sleep 15; continue; }
               # files with the app's old name: remove them so only Hushavia files remain
-              gh release view android-latest -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
-                gh release delete-asset android-latest "$old" -y -R "$R" || true
+              gh release view "$TAG" -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
+                gh release delete-asset "$TAG" "$old" -y -R "$R" || true
               done || true
               exit 0
             else
-              gh release create android-latest $FILES -R "$R" --target "${{ github.sha }}" \
+              gh release create "$TAG" $FILES -R "$R" --target "${{ github.sha }}" \
                 --prerelease --title "$TITLE" --notes "$NOTES" && exit 0
             fi
             echo "publish attempt $i failed, retrying"; sleep 15
