@@ -836,8 +836,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = context.read<AuthState>();
     final multi = _store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false;
     final items = <(String, IconData, String, List<Color>)>[
-      ('photo', Icons.photo_library_rounded, 'Gallery', const [Color(0xFF8E7CF8), Color(0xFF6C5BE3)]),
       ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
+      ('photo', Icons.photo_library_rounded, 'Gallery', const [Color(0xFF8E7CF8), Color(0xFF6C5BE3)]),
       ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFF6D4AFF)]),
       ('file', Icons.insert_drive_file_rounded, 'Document', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
       ('checklist', Icons.checklist_rounded, 'Checklist', const [Color(0xFF6FCB8C), Color(0xFF2F9D5A)]),
@@ -2545,22 +2545,10 @@ class _ChatScreenState extends State<ChatScreen> {
             width: 38,
             height: 50,
             child: IconButton(
-              tooltip: 'Attach: gallery, files, location…',
+              tooltip: 'Attach: camera, gallery, files…',
               padding: EdgeInsets.zero,
               icon: Transform.rotate(angle: 0.78, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 22)),
               onPressed: () => _attach(),
-            ),
-          ),
-        // camera in one tap; hidden while typing so the text gets the room
-        if (_editing == null && _text.text.isEmpty)
-          SizedBox(
-            width: 38,
-            height: 50,
-            child: IconButton(
-              tooltip: 'Camera',
-              padding: EdgeInsets.zero,
-              icon: Icon(Icons.photo_camera_outlined, color: iconColor, size: 22),
-              onPressed: () => _attach('camera'),
             ),
           ),
         // send / voice button sits inside the box, at its right end; long text adds "full screen" above it

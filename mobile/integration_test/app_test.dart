@@ -100,7 +100,7 @@ void main() {
     await settle(t, 600);
     await snap(t, 'reply');
     // attach sheet and emoji panel (visual check)
-    await t.tap(find.byTooltip('Attach: gallery, files, location…'));
+    await t.tap(find.byTooltip('Attach: camera, gallery, files…'));
     await pumpUntil(t, find.text('Gallery'), what: 'attach sheet');
     await snap(t, 'attach');
     // The CI emulator goes offline a little after this point (its software graphics give out), which also
