@@ -20,9 +20,10 @@ class ChatThemeDef {
 }
 
 const chatThemes = <ChatThemeDef>[
-  // Default: Hushavia — my messages in the brand violet, a calm lilac-to-mist wallpaper, white cards for others.
+  // Default: Hushavia — my messages on soft lilac with dark text (light mode) / brand violet (dark mode),
+  // a calm lilac-to-mist wallpaper, white cards for others.
   ChatThemeDef('hush', 'Hushavia', [Color(0xFFF1EEFF), Color(0xFFEAF1F8)], [Color(0xFF0B0A1C), Color(0xFF0E1226)], Color(0xFFE1DCF6),
-      Color(0xFF191735), [Color(0xFF7E62FF), Color(0xFF5B3CEB)], [Color(0xFF6E52F2), Color(0xFF4F33D6)]),
+      Color(0xFF191735), [Color(0xFFEFEBFF), Color(0xFFE4DDFF)], [Color(0xFF6E52F2), Color(0xFF4F33D6)]),
   // Sapphire — a clear indigo gradient for my messages, calm white cards for others.
   ChatThemeDef('classic', 'Sapphire', [Color(0xFFEEF1F8), Color(0xFFE7EBF5)], [Color(0xFF0A0D18), Color(0xFF0D1122)], Color(0xFFDDE3EF),
       Color(0xFF161B30), [Color(0xFF3442B8), Color(0xFF5A5CE6)], [Color(0xFF2F3CA6), Color(0xFF4D52D0)]),
@@ -116,6 +117,24 @@ LinearGradient? mineGradientOf(BuildContext context) {
   final dark = Theme.of(context).brightness == Brightness.dark;
   final c = dark ? a.def.mineDark : a.def.mine;
   return LinearGradient(colors: c, begin: Alignment.topLeft, end: Alignment.bottomRight);
+}
+
+/// True when my bubbles are light (soft lilac), so their text and icons are dark.
+bool softMineOf(BuildContext context) {
+  final g = mineGradientOf(context);
+  return g != null && g.colors.first.computeLuminance() > 0.5;
+}
+
+/// Colours for things drawn on my bubble: white on a deep bubble, dark ink on a soft one.
+class MineInk {
+  static const ink = Color(0xFF1C1838); // text on a soft bubble
+  static const accent = Color(0xFF6A47F5); // names, links, icons on a soft bubble
+  static Color text(BuildContext c) => softMineOf(c) ? ink : Colors.white;
+  static Color muted(BuildContext c) => softMineOf(c) ? const Color(0xFF6D6890) : Colors.white70;
+  /// a round button / chip on my bubble
+  static Color fill(BuildContext c) => softMineOf(c) ? accent : Colors.white.withValues(alpha: 0.18);
+  /// progress / waveform colour on my bubble
+  static Color line(BuildContext c) => softMineOf(c) ? accent : Colors.white;
 }
 
 /// Chat background: theme gradient + pattern, or a photo (dimmed / blurred).

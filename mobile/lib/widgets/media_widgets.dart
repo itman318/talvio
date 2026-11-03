@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../theme/brand.dart';
+import '../theme/chat_theme.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
@@ -341,7 +342,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
                     height: 44,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: widget.isMine ? Colors.white.withValues(alpha: 0.18) : null,
+                      color: widget.isMine ? MineInk.fill(context) : null,
                       gradient: widget.isMine ? null : Brand.aurora,
                       boxShadow: widget.isMine ? null : [BoxShadow(color: Brand.rose.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 3))],
                     ),
@@ -361,7 +362,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
                         value: frac,
                         strokeWidth: 2.2,
                         backgroundColor: Colors.transparent,
-                        valueColor: AlwaysStoppedAnimation(widget.isMine ? Colors.white : Brand.rose),
+                        valueColor: AlwaysStoppedAnimation(widget.isMine ? MineInk.line(context) : Brand.rose),
                       ),
                     ),
                 ]),
@@ -426,7 +427,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(speedLabel(vp.speed),
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: vp.speed == 1.0 ? c : (widget.isMine ? Brand.ink : Colors.white))),
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: vp.speed == 1.0 ? c : (widget.isMine && !softMineOf(context) ? Brand.ink : Colors.white))),
                       ),
                     ),
                 ]),
@@ -483,7 +484,7 @@ class AudioFilePlayer extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   gradient: isMine ? null : const LinearGradient(colors: [Color(0xFFFF8A65), Color(0xFFE0417A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                  color: isMine ? Colors.white.withValues(alpha: 0.18) : null,
+                  color: isMine ? MineInk.fill(context) : null,
                 ),
                 child: loading
                     ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
@@ -496,7 +497,7 @@ class AudioFilePlayer extends StatelessWidget {
                 Row(children: [
                   Icon(Icons.music_note_rounded, size: 15, color: c),
                   const SizedBox(width: 3),
-                  Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: isMine ? Colors.white : null))),
+                  Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, color: isMine ? MineInk.text(context) : null))),
                 ]),
                 const SizedBox(height: 6),
                 ClipRRect(
@@ -513,7 +514,7 @@ class AudioFilePlayer extends StatelessWidget {
                   mine && pos > Duration.zero
                       ? '${duration(pos.inSeconds)} / ${duration(lenMs ~/ 1000)}'
                       : '${md.duration != null ? '${duration(md.duration!)} · ' : ''}${fileSize(md.size)}',
-                  style: TextStyle(fontSize: 11.5, color: isMine ? Colors.white70 : Brand.muted, fontFeatures: const [FontFeature.tabularFigures()]),
+                  style: TextStyle(fontSize: 11.5, color: isMine ? MineInk.muted(context) : Brand.muted, fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
               ]),
             ),

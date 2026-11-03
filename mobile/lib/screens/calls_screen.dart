@@ -221,7 +221,7 @@ class CallLogBubble extends StatelessWidget {
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: red ? Colors.red : null)),
             Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(isMine ? Icons.call_made : (red ? Icons.call_missed : Icons.call_received), size: 14, color: red ? Colors.red : Brand.accent),
+              Icon(isMine ? Icons.call_made : (red ? Icons.call_missed : Icons.call_received), size: 14, color: red ? Colors.red : (isMine ? accent : Brand.accent)),
               const SizedBox(width: 3),
               Text(sec > 0 ? formatCallDuration(sec) : (status == 'failed' ? 'Failed' : ''), style: const TextStyle(fontSize: 12.5)),
             ]),

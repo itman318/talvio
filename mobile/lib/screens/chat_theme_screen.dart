@@ -105,7 +105,7 @@ class _ChatThemeScreenState extends State<ChatThemeScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: [t.light.first, t.mine.last], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                            gradient: LinearGradient(colors: [t.light.first, t.mine.last.computeLuminance() > 0.5 ? t.mineDark.first : t.mine.last], begin: Alignment.topLeft, end: Alignment.bottomRight),
                           ),
                         ),
                       ),
@@ -224,7 +224,7 @@ class _Preview extends StatelessWidget {
               ),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
             ),
-            child: Text(text, style: TextStyle(color: me || dark ? Colors.white : Brand.ink, fontSize: 15)),
+            child: Text(text, style: TextStyle(color: (me && !softMineOf(context)) || (!me && dark) ? Colors.white : Brand.ink, fontSize: 15)),
           ),
         );
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [

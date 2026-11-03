@@ -74,11 +74,12 @@ class MessageBubble extends StatelessWidget {
 
   Widget _ticks(BuildContext context) {
     final m = message;
-    final meta = isMine ? Colors.white.withAlpha(150) : ChatColors.of(context).meta;
+    final soft = isMine && softMineOf(context);
+    final meta = soft ? const Color(0xFF8A85AD) : isMine ? Colors.white.withAlpha(150) : ChatColors.of(context).meta;
     if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
     if (chat.isSavedMessages || _asChannel) return const SizedBox.shrink();
-    if (m.id <= chat.readUpTo) return Icon(Icons.done_all, size: 15, color: isMine ? const Color(0xFF7DF3DB) : Brand.accent);
+    if (m.id <= chat.readUpTo) return Icon(Icons.done_all, size: 15, color: soft ? MineInk.accent : isMine ? const Color(0xFF7DF3DB) : Brand.accent);
     if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: meta);
     return Icon(Icons.done, size: 15, color: meta);
   }
@@ -86,7 +87,7 @@ class MessageBubble extends StatelessWidget {
   Widget _body(BuildContext context, Color accent) {
     final m = message;
     if (m.viewOnce) {
-      return ViewOnceBubble(message: m, isMine: isMine, color: isMine ? Colors.white : accent, myId: context.read<ChatStore>().myId);
+      return ViewOnceBubble(message: m, isMine: isMine, color: isMine ? MineInk.line(context) : accent, myId: context.read<ChatStore>().myId);
     }
     switch (m.type) {
       case 'image':
@@ -94,11 +95,11 @@ class MessageBubble extends StatelessWidget {
       case 'video':
         return MessageVideo(message: m);
       case 'voice':
-        return VoicePlayer(message: m, color: isMine ? Colors.white : accent, isMine: isMine, title: isMine ? 'You' : (m.sender?.name ?? chat.title));
+        return VoicePlayer(message: m, color: isMine ? MineInk.line(context) : accent, isMine: isMine, title: isMine ? 'You' : (m.sender?.name ?? chat.title));
       case 'video_note':
         return VideoNoteBubble(message: m, size: 200);
       case 'file':
-        if (AudioFilePlayer.isAudio(m)) return AudioFilePlayer(message: m, color: isMine ? Colors.white : accent, isMine: isMine);
+        if (AudioFilePlayer.isAudio(m)) return AudioFilePlayer(message: m, color: isMine ? MineInk.line(context) : accent, isMine: isMine);
         return MessageFile(message: m, color: accent);
       case 'poll':
         return PollView(message: m, accent: accent);
@@ -124,11 +125,12 @@ class MessageBubble extends StatelessWidget {
     final themed = mineGradientOf(context);
     // My bubbles are deep ink with light text, so they use the dark theme inside.
     // on my violet bubble the accent (reply bar, links, names) is a light lilac so it stays readable
-    final accent = isMine ? const Color(0xFFDCD3FF) : colorForId(m.senderId ?? 0);
+    final soft = isMine && softMineOf(context);
+    final accent = soft ? MineInk.accent : isMine ? const Color(0xFFDCD3FF) : colorForId(m.senderId ?? 0);
     final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
     final colors = ChatColors.of(context);
-    final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
-    final textColor = isMine ? Colors.white : scheme.onSurface;
+    final meta = soft ? const Color(0xFF8A85AD) : isMine ? Colors.white.withAlpha(150) : colors.meta;
+    final textColor = soft ? MineInk.ink : isMine ? Colors.white : scheme.onSurface;
     final reserveAvatar = chat.isGroup && !isMine && !_asChannel && !commentMode;
     // a photo / video on its own: no padding around it, the time sits on the picture
     final mediaOnly = (m.type == 'image' || m.type == 'video') &&
@@ -394,10 +396,12 @@ class MessageBubble extends StatelessWidget {
               bottomRight: Radius.circular(isMine ? (lastInGroup ? 20 : 6) : 20),
             ),
             // no drop shadows: a hairline edge reads just as well and scrolling long chats stays smooth
-            border: isMine ? null : Border.all(color: dark ? Colors.white.withAlpha(16) : const Color(0xFFE6E8F0), width: 0.8),
+            border: soft
+                ? Border.all(color: const Color(0xFFD8CFFF), width: 0.8)
+                : isMine ? null : Border.all(color: dark ? Colors.white.withAlpha(16) : const Color(0xFFE6E8F0), width: 0.8),
           ),
           child: Theme(
-            data: isMine ? _inkTheme : Theme.of(context),
+            data: isMine && !soft ? _inkTheme : Theme.of(context),
             child: _asChannel
                 // channel posts are full cards (like a feed), so the footer can spread across them
                 ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: children)
