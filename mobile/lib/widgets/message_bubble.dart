@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'video_note.dart';
+import 'tali_emoji.dart';
 import 'message_extras.dart';
 import '../theme/chat_theme.dart';
 import '../models/models.dart';
@@ -225,27 +226,39 @@ class MessageBubble extends StatelessWidget {
       if (m.replyTo != null)
         GestureDetector(
           onTap: onReplyTap,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 5),
-            padding: const EdgeInsets.fromLTRB(9, 5, 10, 5),
-            decoration: BoxDecoration(
-              color: accent.withAlpha(isMine ? 40 : 26),
-              border: Border(left: BorderSide(color: accent, width: 3)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(m.replyTo!.senderName, style: TextStyle(color: accent, fontWeight: FontWeight.w600, fontSize: 12)),
-                Text(
-                  m.replyTo!.deleted
-                      ? 'Deleted message'
-                      : (m.replyTo!.text.isNotEmpty ? stripFormatting(m.replyTo!.text) : _typeLabel(m.replyTo!.type)),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, color: textColor.withAlpha(210)),
+          child: ConstrainedBox(
+            // never squeezed to a few letters by a short answer ("ok"): the quote gets real room
+            constraints: const BoxConstraints(minWidth: 190),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 5),
+              padding: const EdgeInsets.fromLTRB(9, 5, 6, 5),
+              decoration: BoxDecoration(
+                color: accent.withAlpha(isMine ? 40 : 26),
+                border: Border(left: BorderSide(color: accent, width: 3)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (m.replyTo!.media != null) ...[
+                  ReplyThumb(media: m.replyTo!.media!, type: m.replyTo!.type, size: 36),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(m.replyTo!.senderName.isEmpty ? chat.title : m.replyTo!.senderName,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      Text(
+                        replyLabel(m.replyTo!.type, m.replyTo!.text, deleted: m.replyTo!.deleted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, color: textColor.withAlpha(215)),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ]),
             ),
           ),
         ),
@@ -516,6 +529,52 @@ class MessageBubble extends StatelessWidget {
         'poll' => 'Poll',
         _ => 'Message',
       };
+}
+
+/// What a reply shows of the message it answers: its text, or "📷 Photo", "🎤 Voice message"…
+String replyLabel(String type, String text, {bool deleted = false}) {
+  if (deleted) return 'Deleted message';
+  final t = taliToPlain(stripFormatting(text)).replaceAll('\n', ' ').trim();
+  final kind = switch (type) {
+    'image' => '📷 Photo',
+    'video' => '🎬 Video',
+    'gif' => 'GIF',
+    'sticker' => 'Sticker',
+    'voice' => '🎤 Voice message',
+    'video_note' => '⏺ Video message',
+    'file' => '📄 File',
+    'poll' => '📊 Poll',
+    'location' => '📍 Location',
+    'contact' => '👤 Contact',
+    _ => '',
+  };
+  if (t.isNotEmpty) return t; // a caption says more than the kind
+  return kind.isEmpty ? 'Message' : kind;
+}
+
+/// Small square picture of the photo / video / sticker a reply answers.
+class ReplyThumb extends StatelessWidget {
+  const ReplyThumb({super.key, required this.media, required this.type, this.size = 36});
+  final MediaInfo media;
+  final String type;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final video = type == 'video' || type == 'video_note' || media.kind == 'video';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(type == 'video_note' ? size : 6),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(fit: StackFit.expand, children: [
+          StoryThumb(media: media, size: size),
+          if (video && media.kind != 'video')
+            const Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18, shadows: [Shadow(blurRadius: 4)])),
+        ]),
+      ),
+    );
+  }
 }
 
 class SystemBubble extends StatelessWidget {

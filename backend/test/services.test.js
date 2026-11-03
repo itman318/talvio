@@ -200,6 +200,7 @@ test('private chat: hidden until first message, unread, receipts, dedupe', async
 
   const reply = await messages.sendMessage(B.id, privateChat.id, { text: 'Hi, welcome back', reply_to_id: firstMsg.id });
   assert.equal(reply.reply_to.id, firstMsg.id);
+  assert.equal(reply.reply_to.media, null); // a text message: no picture
   assert.equal(reply.reply_to.sender_name, 'Ali Khan');
 
   await rejects(messages.sendMessage(C.id, privateChat.id, { text: 'hi' }), 'chat_not_found');

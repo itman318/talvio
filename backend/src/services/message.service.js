@@ -127,11 +127,14 @@ async function serializeRows(viewerId, rows) {
 
   const replyIds = [...new Set(rows.map((r) => r.reply_to_id).filter(Boolean))];
   const replies = replyIds.length
-    ? await db.many('SELECT id, sender_id, type, text, media_id, deleted_at FROM messages WHERE id = ANY($1::bigint[])', [replyIds])
+    ? await db.many('SELECT id, sender_id, type, text, media_id, meta, deleted_at FROM messages WHERE id = ANY($1::bigint[])', [replyIds])
     : [];
   const replyMap = new Map(replies.map((r) => [r.id, r]));
 
-  const mediaIds = [...new Set(rows.map((r) => r.media_id).filter(Boolean))];
+  // replies show a small picture of the photo / video / sticker they answer (never of a view-once one)
+  const REPLY_THUMB = ['image', 'video', 'gif', 'sticker', 'video_note'];
+  const replyMedia = (r) => (r && !r.deleted_at && r.media_id && REPLY_THUMB.includes(r.type) && !(r.meta && r.meta.view_once) ? r.media_id : null);
+  const mediaIds = [...new Set([...rows.map((r) => r.media_id), ...replies.map(replyMedia)].filter(Boolean))];
   const medias = mediaIds.length ? await db.many('SELECT * FROM media WHERE id = ANY($1::bigint[])', [mediaIds]) : [];
   const mediaMap = new Map(medias.map((m) => [m.id, m]));
 
@@ -202,6 +205,7 @@ async function serializeRows(viewerId, rows) {
             type: r.type,
             text: r.deleted_at ? '' : String(r.text || '').slice(0, 120),
             deleted: !!r.deleted_at,
+            media: replyMedia(r) ? mediaService.serialize(mediaMap.get(r.media_id)) : null,
           }
         : null,
       forwarded_from: m.forwarded_from_name ? { user_id: m.forwarded_from_user_id, name: m.forwarded_from_name } : null,

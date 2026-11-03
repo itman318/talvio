@@ -403,7 +403,14 @@ class ChatStore extends ChangeNotifier {
 
   ReplyInfo? _replyInfo(Message? r) => r == null
       ? null
-      : ReplyInfo(id: r.id, senderId: r.senderId, senderName: r.sender?.name ?? '', type: r.type, text: r.text);
+      : ReplyInfo(
+          id: r.id,
+          senderId: r.senderId,
+          senderName: r.sender?.name ?? '',
+          type: r.type,
+          text: r.text,
+          media: r.viewOnce || !const ['image', 'video', 'gif', 'sticker', 'video_note'].contains(r.type) ? null : r.media,
+        );
 
   Future<void> sendText(int chatId, String text, {Message? replyTo, bool silent = false, String? effect, Message? quote, bool asDraft = false}) async {
     final local = Message(

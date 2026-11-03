@@ -189,8 +189,9 @@ class ReplyInfo {
   final String type;
   final String text;
   final bool deleted;
+  final MediaInfo? media; // photo / video / sticker being answered: shown as a small picture
 
-  ReplyInfo({required this.id, this.senderId, required this.senderName, required this.type, required this.text, this.deleted = false});
+  ReplyInfo({required this.id, this.senderId, required this.senderName, required this.type, required this.text, this.deleted = false, this.media});
 
   factory ReplyInfo.fromJson(Map<String, dynamic> j) => ReplyInfo(
         id: _int(j['id']),
@@ -199,6 +200,7 @@ class ReplyInfo {
         type: j['type'] as String,
         text: (j['text'] ?? '') as String,
         deleted: j['deleted'] == true,
+        media: j['media'] is Map ? MediaInfo.fromJson(Map<String, dynamic>.from(j['media'] as Map)) : null,
       );
 }
 

@@ -67,3 +67,18 @@ test('shared media filters, counts and round video messages', async () => {
   const w = await send({ type: 'voice', media_id: (await media(a, 'voice')).id, waveform: [0, 5, 40, -3, 12, 31, 7, 9, 'x', 3] });
   assert.deepEqual(w.meta.waveform, [0, 5, 31, 0, 12, 31, 7, 9, 0, 3]);
 });
+
+test('replies carry a small picture of the photo they answer (never of view-once media)', async () => {
+  const a = await user('+923331110011');
+  const b = await user('+923331110012');
+  const chat = await chats.getOrCreatePrivate(a, b);
+  const photo = await messages.sendMessage(a, chat.id, { type: 'image', media_id: (await media(a, 'image')).id });
+  const r = await messages.sendMessage(b, chat.id, { text: 'nice!', reply_to_id: photo.id });
+  assert.equal(r.reply_to.type, 'image');
+  assert.equal(r.reply_to.media.id, photo.media.id);
+  const once = await messages.sendMessage(a, chat.id, { type: 'image', media_id: (await media(a, 'image')).id, view_once: true }).catch(() => null);
+  if (once) {
+    const r2 = await messages.sendMessage(b, chat.id, { text: 'hmm', reply_to_id: once.id });
+    assert.equal(r2.reply_to.media, null);
+  }
+});

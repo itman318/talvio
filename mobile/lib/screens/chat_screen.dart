@@ -2977,10 +2977,17 @@ class _ChatScreenState extends State<ChatScreen> {
                                   style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w700, fontSize: 13),
                                 ),
                                 const SizedBox(height: 1),
-                                Text(taliToPlain(banner.preview), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
+                                Text(_editing != null ? taliToPlain(banner.preview) : replyLabel(banner.type, banner.text),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
                               ]),
                             ),
                           ),
+                          // the photo / video / sticker being answered, small, like in the chat
+                          if (_editing == null && banner.media != null && !banner.viewOnce && const ['image', 'video', 'gif', 'sticker', 'video_note'].contains(banner.type))
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: ReplyThumb(media: banner.media!, type: banner.type, size: 40),
+                            ),
                           IconButton(
                             icon: const Icon(Icons.close_rounded, size: 20),
                             tooltip: 'Cancel',
