@@ -482,6 +482,9 @@ void _releaseSigning() {
             keyPassword = props.getProperty("keyPassword")
             storeFile = rootProject.file(props.getProperty("storeFile"))
             storePassword = props.getProperty("storePassword")
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 '''
@@ -495,6 +498,8 @@ void _releaseSigning() {
             keyPassword props["keyPassword"]
             storeFile rootProject.file(props["storeFile"])
             storePassword props["storePassword"]
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
     }
 ''';

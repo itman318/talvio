@@ -20,7 +20,7 @@ jobs:
           java-version: '17'
       - name: Create and encrypt the upload key
         env:
-          PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PASS: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.SERVER_PASSWORD }}
         run: |
           if [ -z "$PASS" ] || [ ${#PASS} -lt 8 ]; then echo "Set the ANDROID_KEY_PASSWORD secret (8+ characters) first"; exit 1; fi
           mkdir -p mobile/signing

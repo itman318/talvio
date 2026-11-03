@@ -49,7 +49,7 @@ jobs:
 
       - name: Generate android/ folder
         env:
-          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.SERVER_PASSWORD }}
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           flutter --version
