@@ -42,7 +42,7 @@ class Brand {
       );
 
   // gradients
-  static const mineGradient = LinearGradient(colors: [Color(0xFF1B2138), Color(0xFF2A3152)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const mineGradient = LinearGradient(colors: [Color(0xFF7E62FF), Color(0xFF5B3CEB)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const storyGradient = SweepGradient(colors: [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF3FD8C0), Color(0xFF8F72FF), Color(0xFF9A7BFF)]);
   static const heroGradient = LinearGradient(colors: [Color(0xFF9A7BFF), primary, Color(0xFF4A2FD8)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const plusGradient = LinearGradient(colors: [Color(0xFFE6C987), Color(0xFFC9A45C), Color(0xFFA9853F)], begin: Alignment.topLeft, end: Alignment.bottomRight);

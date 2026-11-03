@@ -20,7 +20,10 @@ class ChatThemeDef {
 }
 
 const chatThemes = <ChatThemeDef>[
-  // Default: sapphire — a clear indigo gradient for my messages, calm white cards for others.
+  // Default: Hushavia — my messages in the brand violet, a calm lilac-to-mist wallpaper, white cards for others.
+  ChatThemeDef('hush', 'Hushavia', [Color(0xFFF1EEFF), Color(0xFFEAF1F8)], [Color(0xFF0B0A1C), Color(0xFF0E1226)], Color(0xFFE1DCF6),
+      Color(0xFF191735), [Color(0xFF7E62FF), Color(0xFF5B3CEB)], [Color(0xFF6E52F2), Color(0xFF4F33D6)]),
+  // Sapphire — a clear indigo gradient for my messages, calm white cards for others.
   ChatThemeDef('classic', 'Sapphire', [Color(0xFFEEF1F8), Color(0xFFE7EBF5)], [Color(0xFF0A0D18), Color(0xFF0D1122)], Color(0xFFDDE3EF),
       Color(0xFF161B30), [Color(0xFF3442B8), Color(0xFF5A5CE6)], [Color(0xFF2F3CA6), Color(0xFF4D52D0)]),
   ChatThemeDef('teal', 'Teal', [Color(0xFFE6F3F1), Color(0xFFD8ECE8)], [Color(0xFF061614), Color(0xFF0A221F)], Color(0xFFCCE5E0),
@@ -57,7 +60,7 @@ ChatThemeDef chatThemeById(String id) => chatThemes.firstWhere((t) => t.id == id
 
 /// What the user picked: a theme, a background pattern, or their own photo.
 class ChatAppearance {
-  const ChatAppearance({this.themeId = 'classic', this.pattern = 'doodle', this.photoPath, this.dim = 0.15, this.blur = false});
+  const ChatAppearance({this.themeId = 'hush', this.pattern = 'doodle', this.photoPath, this.dim = 0.15, this.blur = false});
 
   final String themeId;
   final String pattern; // doodle | dots | none
@@ -83,7 +86,7 @@ class ChatAppearance {
       final j = jsonDecode(s) as Map;
       final photo = j['f'] as String?;
       return ChatAppearance(
-        themeId: (j['t'] ?? 'classic') as String,
+        themeId: (j['t'] ?? 'hush') as String,
         pattern: (j['p'] ?? 'doodle') as String,
         photoPath: photo != null && File(photo).existsSync() ? photo : null,
         dim: ((j['d'] ?? 0.15) as num).toDouble(),

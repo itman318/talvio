@@ -122,6 +122,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final showStories = q.isEmpty && folder == null && auth.feature('stories');
     final secrets = q.isEmpty && folder == null ? context.watch<SecretStore>().sortedChats : const <SecretChat>[];
     final showFound = q.length >= 2;
+    // one list, newest first: vault chats sit among the others by time (they used to be stuck on top,
+    // so a new message never brought its chat to the top); pinned chats stay first
+    final rows = <Object>[...chats, ...secrets];
+    rows.sort((a, b) {
+      final pa = a is Chat && a.isPinned, pb = b is Chat && b.isPinned;
+      if (pa != pb) return pa ? -1 : 1;
+      final ta = a is Chat ? a.sortTime : (a as SecretChat).lastActivity;
+      final tb = b is Chat ? b.sortTime : (b as SecretChat).lastActivity;
+      return tb.compareTo(ta);
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -252,19 +262,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? _searchResults(chats)
                         : ListView.builder(
                       padding: const EdgeInsets.only(bottom: 96), // room above the floating button
-                      itemCount: 1 + extraRows + chats.length + secrets.length + (showStories ? 1 : 0) + (chats.isEmpty && secrets.isEmpty ? 1 : 0),
+                      itemCount: 1 + extraRows + rows.length + (showStories ? 1 : 0) + (rows.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i0) {
                         if (i0 == 0) return Column(mainAxisSize: MainAxisSize.min, children: [_searchPill(), if (q.isEmpty) const BirthdayStrip()]);
                         if (locked.isNotEmpty && i0 == 1) return _lockedRow(locked);
                         if (requests.isNotEmpty && i0 == 1 + (locked.isEmpty ? 0 : 1)) return _requestsRow(requests);
                         final i = i0 - 1 - extraRows;
                         if (showStories && i == 0) return const StoryBar();
-                        final si = i - (showStories ? 1 : 0);
-                        if (si < secrets.length) {
-                          return SecretChatTile(chat: secrets[si]);
-                        }
-                        final idx = si - secrets.length;
-                        if (idx >= chats.length) {
+                        final idx = i - (showStories ? 1 : 0);
+                        if (idx >= rows.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 40),
                             child: q.isNotEmpty
@@ -280,7 +286,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : const EmptyState(tali: 'think', title: 'Nothing here yet', subtitle: 'Chats that match this folder will show up here.'),
                           );
                         }
-                        return ChatTile(chat: chats[idx]);
+                        final row = rows[idx];
+                        return row is Chat ? ChatTile(key: ValueKey('c${row.id}'), chat: row) : SecretChatTile(key: ValueKey('s${(row as SecretChat).id}'), chat: row);
                       },
                     ),
                   ),

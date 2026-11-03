@@ -122,7 +122,8 @@ class MessageBubble extends StatelessWidget {
     final bg = isMine ? ChatColors.of(context).mine : ChatColors.of(context).other;
     final themed = mineGradientOf(context);
     // My bubbles are deep ink with light text, so they use the dark theme inside.
-    final accent = isMine ? Brand.primaryLight : colorForId(m.senderId ?? 0);
+    // on my violet bubble the accent (reply bar, links, names) is a light lilac so it stays readable
+    final accent = isMine ? const Color(0xFFDCD3FF) : colorForId(m.senderId ?? 0);
     final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
     final colors = ChatColors.of(context);
     final meta = isMine ? Colors.white.withAlpha(150) : colors.meta;
@@ -379,16 +380,8 @@ class MessageBubble extends StatelessWidget {
               bottomLeft: Radius.circular(isMine ? 20 : (lastInGroup ? 20 : 6)),
               bottomRight: Radius.circular(isMine ? (lastInGroup ? 20 : 6) : 20),
             ),
-            border: isMine ? null : Border.all(color: dark ? Colors.white.withAlpha(16) : const Color(0xFFE8EBF2), width: 0.8),
-            boxShadow: dark
-                ? null
-                : [
-                    BoxShadow(
-                      color: (isMine ? (themed?.colors.last ?? Brand.ink) : const Color(0xFF1B2138)).withAlpha(isMine ? 46 : 12),
-                      blurRadius: isMine ? 12 : 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+            // no drop shadows: a hairline edge reads just as well and scrolling long chats stays smooth
+            border: isMine ? null : Border.all(color: dark ? Colors.white.withAlpha(16) : const Color(0xFFE6E8F0), width: 0.8),
           ),
           child: Theme(
             data: isMine ? _inkTheme : Theme.of(context),
