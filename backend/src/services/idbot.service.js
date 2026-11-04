@@ -44,6 +44,7 @@ async function ensure() {
     });
     if (!u) u = await db.one('SELECT id FROM users WHERE lower(username) = lower($1)', [USERNAME]);
   }
+  await require('./botavatar').ensureAvatar(u.id, USERNAME); // eslint-disable-line global-require
   cachedId = u.id;
   return cachedId;
 }

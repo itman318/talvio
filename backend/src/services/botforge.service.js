@@ -58,6 +58,7 @@ async function ensure() {
     if (!u) u = await db.one(`SELECT id FROM users WHERE lower(username) = lower($1)`, [USERNAME]);
   }
   await db.query(`UPDATE bots SET commands = $2 WHERE user_id = $1`, [u.id, JSON.stringify(COMMANDS)]);
+  await require('./botavatar').ensureAvatar(u.id, USERNAME); // eslint-disable-line global-require
   cachedId = u.id;
   return cachedId;
 }

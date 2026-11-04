@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+ <defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9A7BFF"/><stop offset="1" stop-color="#3A1FC4"/></linearGradient>
+  <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  <linearGradient id="head" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4DCFF"/></linearGradient>
+  <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A1745"/><stop offset="1" stop-color="#0F0E2A"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD877"/><stop offset="1" stop-color="#F29A1F"/></linearGradient>
+ </defs>
+ <rect width="512" height="512" fill="url(#bg)"/>
+ <rect width="512" height="512" fill="url(#glow)"/>
+ <!-- antenna -->
+ <rect x="248" y="96" width="16" height="50" rx="8" fill="#E4DCFF"/>
+ <circle cx="256" cy="92" r="20" fill="#5EF0D2"/>
+ <circle cx="250" cy="86" r="6" fill="#FFFFFF" opacity="0.8"/>
+ <!-- ears -->
+ <rect x="112" y="210" width="36" height="84" rx="16" fill="#CFC3FF"/>
+ <rect x="364" y="210" width="36" height="84" rx="16" fill="#CFC3FF"/>
+ <!-- head -->
+ <rect x="136" y="140" width="240" height="214" rx="64" fill="url(#head)"/>
+ <!-- visor -->
+ <rect x="166" y="190" width="180" height="104" rx="46" fill="url(#visor)"/>
+ <!-- eyes -->
+ <ellipse cx="216" cy="242" rx="20" ry="24" fill="#5EF0D2"/>
+ <ellipse cx="296" cy="242" rx="20" ry="24" fill="#5EF0D2"/>
+ <circle cx="223" cy="233" r="6" fill="#FFFFFF"/>
+ <circle cx="303" cy="233" r="6" fill="#FFFFFF"/>
+ <!-- smile -->
+ <path d="M226 318 Q256 338 286 318" stroke="#6D4AFF" stroke-width="10" stroke-linecap="round" fill="none"/>
+ <!-- hammer -->
+ <g transform="translate(362 356) rotate(-38) scale(0.85)">
+  <rect x="-11" y="-6" width="22" height="120" rx="11" fill="#7A4A2A"/>
+  <rect x="-11" y="-6" width="9" height="120" rx="4" fill="#9A6440" opacity="0.6"/>
+  <rect x="-54" y="-46" width="108" height="50" rx="14" fill="url(#gold)"/>
+  <rect x="-54" y="-46" width="108" height="16" rx="8" fill="#FFF1C2" opacity="0.7"/>
+ </g>
+ <!-- sparks -->
+ <g fill="#FFE08A">
+  <path d="M410 280 l8 22 l22 8 l-22 8 l-8 22 l-8 -22 l-22 -8 l22 -8z"/>
+  <path d="M452 336 l5 13 l13 5 l-13 5 l-5 13 l-5 -13 l-13 -5 l13 -5z"/>
+  <circle cx="436" cy="390" r="7"/>
+ </g>
+</svg>

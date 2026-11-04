@@ -273,3 +273,17 @@ test('helper bots: support requests in a chat, team replies come back; account s
   assert.equal(r.device, sysbots.TAG);
   await db.query('UPDATE users SET restricted_until = NULL, restrict_reason = NULL WHERE id = $1', [U.id]);
 });
+
+test('official bots have their profile pictures (and keep them on restart)', async () => {
+  const forge = await require('../src/services/botforge.service').ensure();
+  const sysbots = await require('../src/services/sysbots.service').ensure();
+  for (const id of [forge, sysbots.support, sysbots.spam]) {
+    const r = await db.one('SELECT m.original_name, m.is_public FROM users u JOIN media m ON m.id = u.avatar_media_id WHERE u.id = $1', [id]);
+    assert.ok(r, `bot ${id} has a picture`);
+    assert.match(r.original_name, /^sysbot-.+-v\d+\.png$/);
+    assert.equal(r.is_public, true);
+  }
+  const before = (await db.one('SELECT avatar_media_id FROM users WHERE id = $1', [forge])).avatar_media_id;
+  await require('../src/services/botavatar').ensureAvatar(forge, 'BotForge');
+  assert.equal((await db.one('SELECT avatar_media_id FROM users WHERE id = $1', [forge])).avatar_media_id, before);
+});
