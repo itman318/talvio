@@ -76,9 +76,39 @@ void main() {
     await pumpUntil(t, find.text('Sana Ahmed'), seconds: 40, what: 'chat list with seeded chat');
     await snap(t, 'chats');
 
+    // Settings and my profile (visual check); a missing piece here never stops the chat checks below
+    try {
+      await t.tap(find.text('Settings').last);
+      await settle(t, 1500);
+      await snap(t, 'settings');
+      await t.drag(find.byType(Scrollable).first, const Offset(0, -700));
+      await settle(t, 800);
+      await snap(t, 'settings-more');
+      await t.drag(find.byType(Scrollable).first, const Offset(0, 1400));
+      await settle(t, 600);
+      await t.tap(find.text('Muhammad').first);
+      await settle(t, 1500);
+      await snap(t, 'my-profile');
+      await t.pageBack();
+      await settle(t, 600);
+    } catch (e) {
+      debugPrint('settings shots skipped: $e');
+    }
+    await t.tap(find.text('Chats').last);
+    await settle(t, 800);
+
     await t.tap(find.text('Sana Ahmed'));
     await pumpUntil(t, find.text('Hello! How is the app working for you?'), what: 'messages in chat');
     await snap(t, 'chat');
+    try {
+      await t.tap(find.text('Sana Ahmed').first); // header → their profile
+      await settle(t, 1500);
+      await snap(t, 'user-profile');
+      await t.pageBack();
+      await settle(t, 600);
+    } catch (e) {
+      debugPrint('profile shot skipped: $e');
+    }
 
     // the message box: typing hides the camera button; long text shows the full-screen editor button
     await t.enterText(find.widgetWithText(TextField, 'Message'), 'Assalam o alaikum! Kal meeting 5 baje hai.\nPlease file saath le aana.\nShukriya 🙏\nAur report bhi check kar lena');

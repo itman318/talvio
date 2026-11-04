@@ -1587,6 +1587,27 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           if (secs != null && secs != chat.disappearAfterSec) await _store.setDisappearing(chatId, secs);
           break;
+        case 'more':
+          final pick = await showModalBottomSheet<String>(
+            context: context,
+            showDragHandle: true,
+            builder: (ctx) => SafeArea(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (!chat.isChannel && !chat.isSavedMessages)
+                  ListTile(leading: const Icon(Icons.share_location_rounded), title: const Text('Live locations'), onTap: () => Navigator.pop(ctx, 'live')),
+                if (chat.canPost)
+                  ListTile(leading: const Icon(Icons.schedule_send_outlined), title: const Text('Scheduled messages'), onTap: () => Navigator.pop(ctx, 'scheduled')),
+                ListTile(
+                    leading: const Icon(Icons.ios_share_rounded),
+                    title: const Text('Export chat'),
+                    subtitle: const Text('Save the messages as a text file'),
+                    onTap: () => Navigator.pop(ctx, 'export')),
+                const SizedBox(height: 8),
+              ]),
+            ),
+          );
+          if (pick != null && mounted) await _chatMenu(pick, chat);
+          break;
         case 'export':
           await exportChat(context, chat);
           break;
@@ -1606,7 +1627,7 @@ class _ChatScreenState extends State<ChatScreen> {
           final r = await _askClearHistory(chat);
           if (r != null) {
             await _store.clearHistory(chatId, forEveryone: r);
-            if (mounted) showInfo(context, r ? 'History cleared for everyone' : 'History cleared for you');
+            if (mounted) showInfo(context, r ? '🧹 Chat history cleared for everyone' : '🧹 Chat history cleared');
           }
           break;
         case 'block':
@@ -1644,8 +1665,13 @@ class _ChatScreenState extends State<ChatScreen> {
             danger: true,
           );
           if (ok) {
+            final messenger = ScaffoldMessenger.of(context);
+            final name = chat.title;
             await _store.leaveOrDelete(chatId);
             if (mounted) Navigator.pop(context);
+            messenger
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text(chat.isMulti ? 'You left “$name”' : '🗑 Chat with $name deleted')));
           }
           break;
       }
@@ -1801,17 +1827,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 _mi('voice_chat', Icons.graphic_eq_rounded, chat.voiceChat != null ? 'Join voice chat' : 'Start voice chat'),
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
-              if (!chat.isChannel && !chat.isSavedMessages) _mi('live', Icons.share_location_rounded, 'Live locations'),
               _mi('theme', Icons.palette_outlined, 'Theme & wallpaper'),
+              const PopupMenuDivider(),
               if (!chat.isRequest)
                 _mi('lock', chat.isLocked || ChatPasscode.has(chat.id) ? Icons.lock_rounded : Icons.lock_outline_rounded,
                     chat.isLocked || ChatPasscode.has(chat.id) ? 'Chat lock' : 'Lock chat'),
               if (auth.feature('disappearing') && !chat.isChannel && (chat.peer != null || chat.isAdmin) && !chat.isSavedMessages)
                 _mi('disappearing', Icons.timer_outlined, chat.disappearAfterSec > 0 ? 'Disappearing: ${disappearLabel(chat.disappearAfterSec)}' : 'Disappearing messages'),
-              if (chat.canPost) _mi('scheduled', Icons.schedule_send_outlined, 'Scheduled messages'),
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('secret_chats'))
-                _mi('secret', Icons.lock_outline_rounded, 'Start vault chat'),
-              _mi('export', Icons.ios_share_rounded, 'Export chat'),
+                _mi('secret', Icons.enhanced_encryption_outlined, 'Start vault chat'),
+              // used less often: one tap away, so the menu stays short
+              _mi('more', Icons.more_horiz_rounded, 'More…'),
               const PopupMenuDivider(),
               // in groups and channels only admins who may delete messages see this
               if (!chat.isMulti || chat.can('delete_messages')) _mi('clear', Icons.cleaning_services_outlined, 'Clear history'),
@@ -2304,6 +2330,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// A fresh chat: a friendly card with Tali and one-tap greetings.
   Widget _emptyChat(Chat chat) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final cleared = _store.clearedBy(chat.id); // who cleared this chat's history (this session), or null
     final canSend = !chat.isChannel || chat.canPost;
     return SingleChildScrollView(
       child: Container(
@@ -2323,13 +2350,17 @@ class _ChatScreenState extends State<ChatScreen> {
           if (canSend && !chat.isSavedMessages)
             const Text('Tap Tavi to say hi', style: TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
-          Text(chat.isSavedMessages ? 'Your notes' : 'No messages yet',
+          Text(cleared != null ? '🧹 Chat history cleared' : (chat.isSavedMessages ? 'Your notes' : 'No messages yet'),
               textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(
-            chat.isSavedMessages
-                ? 'Save notes, links and files here. Add #tags to find them later, or send a checklist.'
-                : (canSend ? 'Send a message or tap a greeting below.' : 'Nothing has been posted yet.'),
+            cleared != null
+                ? (cleared == _store.myId
+                    ? 'You cleared the messages in this chat. New messages will show up here.'
+                    : '${_store.userName(cleared)} cleared the chat history for everyone.')
+                : chat.isSavedMessages
+                    ? 'Save notes, links and files here. Add #tags to find them later, or send a checklist.'
+                    : (canSend ? 'Send a message or tap a greeting below.' : 'Nothing has been posted yet.'),
             textAlign: TextAlign.center,
             style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.35, fontSize: 13.5),
           ),

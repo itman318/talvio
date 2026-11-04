@@ -834,10 +834,16 @@ class ChatStore extends ChangeNotifier {
 
   Future<void> clearHistory(int chatId, {bool forEveryone = false}) async {
     await api.post('/chats/$chatId/clear', {'for_everyone': forEveryone});
-    _clearedLocally(chatId);
+    _clearedLocally(chatId, by: myId);
   }
 
-  void _clearedLocally(int chatId) {
+  final Map<int, int?> _clearedBy = {};
+
+  /// Who cleared this chat's history while the app was open (shown in the empty chat), or null.
+  int? clearedBy(int chatId) => _clearedBy[chatId];
+
+  void _clearedLocally(int chatId, {int? by}) {
+    _clearedBy[chatId] = by ?? myId;
     _messages[chatId] = [];
     _hasMore[chatId] = false;
     final chat = chatById(chatId);
@@ -1533,7 +1539,7 @@ class ChatStore extends ChangeNotifier {
         break;
       case 'chat:cleared':
         // the other person (or an admin) cleared the history for everyone
-        _clearedLocally(_int(d['chat_id']));
+        _clearedLocally(_int(d['chat_id']), by: d['by'] == null ? null : _int(d['by']));
         break;
       case 'typing':
         final uid = _int(d['user_id']);
