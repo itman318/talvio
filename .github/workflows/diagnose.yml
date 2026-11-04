@@ -43,6 +43,8 @@ jobs:
           curl -s -X POST -F chat_id=1 -F text=hi "http://127.0.0.1/api/classic/bot1:aaaaaaaaaaaaaaaaaaaaaaaa/sendMessage"; echo
           echo "--- built-in bots"
           sudo -u postgres psql -d hushavia -tAc "SELECT u.id, u.username, b.status FROM bots b JOIN users u ON u.id = b.user_id WHERE u.username IN ('BotForge','HushaviaIDBot')"
+          echo "--- recent replies (type, reply target, first bytes of the target)"
+          sudo -u postgres psql -d hushavia -tAc "SELECT m.id, m.chat_id, m.type, m.reply_to_id, r.type, r.sender_id, length(r.text), encode(convert_to(left(r.text, 12), 'UTF8'), 'hex'), r.meta::text FROM messages m JOIN messages r ON r.id = m.reply_to_id WHERE m.created_at > now() - interval '1 day' ORDER BY m.id DESC LIMIT 6"
           echo "--- ids"
           sudo -u postgres psql -d hushavia -tAc "SELECT 'users', min(id), max(id), count(*) FROM users UNION ALL SELECT 'chats', min(id), max(id), count(*) FROM chats"
           sudo -u postgres psql -d hushavia -tAc "SELECT name, ran_at FROM hushavia_migrations"
