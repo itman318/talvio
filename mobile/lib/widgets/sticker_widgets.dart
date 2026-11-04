@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
+import '../core/image_store.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -1217,8 +1219,13 @@ class _StickerPackScreenState extends State<StickerPackScreen> {
 }
 
 /// Network image for stickers and pack covers.
-Widget netImage(String url, {BoxFit? fit, ImageErrorWidgetBuilder? errorBuilder}) =>
-    Image.network(url, fit: fit, errorBuilder: errorBuilder, gaplessPlayback: true);
+Widget netImage(String url, {BoxFit? fit, ImageErrorWidgetBuilder? errorBuilder}) => CachedNetworkImage(
+      cacheManager: imageStore,
+      imageUrl: url, // stickers are kept on the phone: a pack opens instantly the second time
+      fit: fit,
+      fadeInDuration: const Duration(milliseconds: 120),
+      errorWidget: errorBuilder == null ? null : (ctx, _, err) => errorBuilder(ctx, err ?? 'error', null),
+    );
 
 // ------------------------------------------------------------------ emoji → sticker suggestions
 /// Emoji that mean nearly the same thing, so 🥰 also suggests ❤️ stickers.

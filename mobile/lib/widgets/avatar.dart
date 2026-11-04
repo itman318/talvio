@@ -1,5 +1,7 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../core/image_store.dart';
 import '../theme/brand.dart';
 
 /// Solid accent per user (names, reply bars); the avatar itself uses the matching gradient.
@@ -42,15 +44,18 @@ class Avatar extends StatelessWidget {
     final px = (size * MediaQuery.devicePixelRatioOf(context)).round();
     return ClipRRect(
       borderRadius: BorderRadius.circular(size * 0.34),
-      child: Image.network(
-        url!,
+      // kept on the phone (a picture's address never changes), so lists open with faces already there
+      child: CachedNetworkImage(
+        imageUrl: url!,
+        cacheManager: imageStore,
         width: size,
         height: size,
-        cacheWidth: px, // decode only as many pixels as shown: far less memory and work
+        memCacheWidth: px, // decode only as many pixels as shown: far less memory and work
         fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => fallback,
-        loadingBuilder: (ctx, child, progress) => progress == null ? child : fallback,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        placeholder: (_, __) => fallback,
+        errorWidget: (_, __, ___) => fallback,
       ),
     );
   }

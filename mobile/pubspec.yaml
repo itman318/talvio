@@ -40,6 +40,8 @@ dependencies:
 
   # Batch A
   shared_preferences: ^2.3.2
+  flutter_cache_manager: ^3.4.1
+  cached_network_image: ^3.4.1 # avatars & stickers saved on the phone: no re-download on every start
   flutter_contacts: ^1.1.9
   geolocator: ^13.0.1
   url_launcher: ^6.3.0
