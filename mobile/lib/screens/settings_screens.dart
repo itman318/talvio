@@ -51,7 +51,8 @@ class _Item {
   final String keywords;
 
   bool matches(String q) => '$title ${subtitle ?? ''} $keywords $section'.toLowerCase().contains(q);
-  Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap);
+  // one-line hints: the list stays short and easy to scan
+  Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap, maxSubtitleLines: 1);
 }
 
 class SettingsScreen extends StatefulWidget {
@@ -311,7 +312,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(colors: [Color(0xFF1B1F36), Color(0xFF2B2440)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      gradient: const LinearGradient(colors: [Color(0xFF7E62FF), Color(0xFF4E2FE0)], begin: Alignment.topLeft, end: Alignment.bottomRight),
                     ),
                     child: Row(children: [
                       Container(

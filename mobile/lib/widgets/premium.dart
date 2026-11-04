@@ -445,7 +445,7 @@ class ProfileAction extends StatelessWidget {
             border: highlight ? null : Border.all(color: dark ? Colors.white.withValues(alpha: 0.06) : Colors.white),
             boxShadow: [
               BoxShadow(
-                color: highlight ? Brand.rose.withValues(alpha: 0.3) : Brand.ink.withValues(alpha: dark ? 0 : 0.06),
+                color: highlight ? Brand.primary.withValues(alpha: 0.3) : Brand.ink.withValues(alpha: dark ? 0 : 0.06),
                 blurRadius: 14,
                 offset: const Offset(0, 5),
               ),
@@ -462,10 +462,16 @@ class ProfileAction extends StatelessWidget {
               child: Icon(icon, color: highlight ? Colors.white : Brand.primary, size: 19),
             ),
             const SizedBox(height: 5),
-            Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: highlight ? Colors.white : Theme.of(context).colorScheme.onSurface)),
+            // five buttons in a row on a small phone: the label shrinks a little instead of being cut ("Messa…")
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label,
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: highlight ? Colors.white : Theme.of(context).colorScheme.onSurface)),
+              ),
+            ),
           ]),
         ),
       ),

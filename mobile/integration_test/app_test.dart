@@ -80,17 +80,19 @@ void main() {
     try {
       await t.tap(find.text('Settings').last);
       await settle(t, 1500);
+      if (find.text('Not now').evaluate().isNotEmpty) {
+        await t.tap(find.text('Not now'));
+        await settle(t, 600);
+      }
       await snap(t, 'settings');
       await t.drag(find.byType(Scrollable).first, const Offset(0, -700));
       await settle(t, 800);
       await snap(t, 'settings-more');
       await t.drag(find.byType(Scrollable).first, const Offset(0, 1400));
       await settle(t, 600);
-      await t.tap(find.text('Muhammad').first);
+      await t.tap(find.text('Profile').last); // the Profile tab
       await settle(t, 1500);
       await snap(t, 'my-profile');
-      await t.pageBack();
-      await settle(t, 600);
     } catch (e) {
       debugPrint('settings shots skipped: $e');
     }
