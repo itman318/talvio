@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db');
+const { cut } = require('../utils/text');
 const bus = require('../bus');
 const settings = require('./settings.service');
 const userService = require('./user.service');
@@ -203,7 +204,7 @@ async function serializeRows(viewerId, rows) {
             sender_id: isChannel ? null : r.sender_id,
             sender_name: isChannel ? '' : nameOf(replyUser),
             type: r.type,
-            text: r.deleted_at ? '' : String(r.text || '').slice(0, 120),
+            text: r.deleted_at ? '' : cut(r.text, 120),
             deleted: !!r.deleted_at,
             media: replyMedia(r) ? mediaService.serialize(mediaMap.get(r.media_id)) : null,
           }
@@ -834,7 +835,7 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     const qs = q.sender_id ? await db.one('SELECT * FROM users WHERE id = $1', [q.sender_id]) : null;
     prepared.meta = {
       ...(prepared.meta || {}),
-      quote: { chat_id: qc.id, chat_title: qc.title, message_id: q.id, type: q.type, sender_name: qs ? userService.displayName(qs) : '', text: String(q.text || '').slice(0, 200) },
+      quote: { chat_id: qc.id, chat_title: qc.title, message_id: q.id, type: q.type, sender_name: qs ? userService.displayName(qs) : '', text: cut(q.text, 200) },
     };
   }
   const texts = [prepared.text, ...(prepared.poll ? prepared.poll.options : [])];
@@ -1218,7 +1219,7 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
     if (isAdmin) {
       for (const r of rows.filter((x) => x.sender_id !== userId && x.type !== 'system')) {
         const full = await db.one('SELECT text, type FROM messages WHERE id = $1', [r.id]);
-        await chatService.logEvent(chat.id, userId, 'message_deleted', r.sender_id, { type: full.type, text: String(full.text || '').slice(0, 120) });
+        await chatService.logEvent(chat.id, userId, 'message_deleted', r.sender_id, { type: full.type, text: cut(full.text, 120) });
       }
     }
     await db.query(

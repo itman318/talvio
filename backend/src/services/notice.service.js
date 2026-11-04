@@ -5,6 +5,7 @@
  * admin rights, support replies, payments… One list per user, newest first, with an unread count.
  */
 const db = require('../db');
+const { cut } = require('../utils/text');
 const bus = require('../bus');
 const v = require('../utils/validate');
 
@@ -93,7 +94,7 @@ async function clear(userId) {
 }
 
 bus.on('support:reply', (e) => {
-  notify(e.userId, 'support', 'Support replied', `“${e.subject}”: ${String(e.text || '').slice(0, 160)}`, { ticket_id: e.ticketId });
+  notify(e.userId, 'support', 'Support replied', `“${e.subject}”: ${cut(e.text, 160)}`, { ticket_id: e.ticketId });
 });
 
 module.exports = { notify, list, unreadCount, markAllRead, remove, clear, KINDS };

@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const { cut } = require('./utils/text');
 const express = require('express');
 require('./services/notice.service'); // in-app notifications listen to support replies etc.
 require('./services/business.service'); // business auto-replies listen to new messages
@@ -123,7 +124,7 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
       );
       if (c) {
         title = c.title;
-        text = `${c.n} ${c.type === 'channel' ? 'subscribers' : 'members'}${c.description ? ` · ${String(c.description).slice(0, 140)}` : ''}`;
+        text = `${c.n} ${c.type === 'channel' ? 'subscribers' : 'members'}${c.description ? ` · ${cut(c.description, 140)}` : ''}`;
       }
       if (!c) {
         const b = await db.one(
@@ -132,7 +133,7 @@ background:linear-gradient(135deg,#ff7a59,#f0446e 55%,#8b5cf6)}p{color:#b8bdd6;l
         );
         if (b) {
           title = b.first_name;
-          text = `Bot · ${String(b.about || 'Open it in Hushavia to start.').slice(0, 160)}`;
+          text = `Bot · ${cut(b.about || 'Open it in Hushavia to start.', 160)}`;
         }
       }
     } catch (_) {

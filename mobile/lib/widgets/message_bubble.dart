@@ -538,7 +538,7 @@ class MessageBubble extends StatelessWidget {
 /// What a reply shows of the message it answers: its text, or "📷 Photo", "🎤 Voice message"…
 String replyLabel(String type, String text, {bool deleted = false}) {
   if (deleted) return 'Deleted message';
-  final t = taliToPlain(stripFormatting(text)).replaceAll('\n', ' ').trim();
+  final t = taliToPlain(stripFormatting(wellFormed(text))).replaceAll('\n', ' ').trim();
   final kind = switch (type) {
     'image' => '📷 Photo',
     'video' => '🎬 Video',

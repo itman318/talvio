@@ -19,6 +19,7 @@
  * where data_check_string = all fields except hash, sorted, "key=value" joined by "\n".
  */
 const crypto = require('crypto');
+const { cut } = require('../utils/text');
 const { EventEmitter } = require('events');
 const db = require('../db');
 const bus = require('../bus');
@@ -760,7 +761,7 @@ function parseInlineResults(raw) {
     const text = v.str(String((r && (r.text || r.message_text)) || ''), { field: 'text', min: 1, max: 4096 });
     const out = {
       id: String((r && r.id) || i).slice(0, 64),
-      title: v.str(String((r && r.title) || text.slice(0, 64)), { field: 'title', min: 1, max: 128 }),
+      title: v.str(String((r && r.title) || cut(text, 64)), { field: 'title', min: 1, max: 128 }),
       description: v.str(String((r && r.description) || ''), { field: 'description', max: 256 }) || '',
       text,
     };

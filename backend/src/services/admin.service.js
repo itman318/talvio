@@ -1,6 +1,7 @@
 'use strict';
 
 const config = require('../config');
+const { cut } = require('../utils/text');
 const db = require('../db');
 const bus = require('../bus');
 const presence = require('./presence');
@@ -648,7 +649,7 @@ async function deleteMessage(admin, messageIdRaw, ip) {
   const m = await db.one('SELECT chat_id, text, type FROM messages WHERE id = $1', [id]);
   if (!m) throw notFound('message_not_found', 'Message not found');
   const ok = await require('./message.service').adminDeleteMessage(id); // eslint-disable-line global-require
-  await log(admin.id, 'message.delete', 'message', id, { chat_id: m.chat_id, type: m.type, text: String(m.text || '').slice(0, 120) }, ip);
+  await log(admin.id, 'message.delete', 'message', id, { chat_id: m.chat_id, type: m.type, text: cut(m.text, 120) }, ip);
   return { ok };
 }
 

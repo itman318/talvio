@@ -156,7 +156,7 @@ async function supportMessage(userId, chatId, row) {
       await lazy.support().userReply(userId, current.id, { text, media_id: mediaId || undefined });
       return say('support', chatId, `✉️ Added to request #${current.id}. The team will reply here.`);
     }
-    const subject = (text || 'Photo').replace(/\s+/g, ' ').slice(0, 80).padEnd(3, '.');
+    const subject = require('../utils/text').cut((text || 'Photo').replace(/\s+/g, ' '), 80).padEnd(3, '.'); // eslint-disable-line global-require
     const r = await lazy.support().createTicket(userId, {
       subject,
       category: 'other',

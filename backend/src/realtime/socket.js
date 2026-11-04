@@ -1,6 +1,7 @@
 'use strict';
 
 const { Server } = require('socket.io');
+const { cut } = require('../utils/text');
 const config = require('../config');
 const db = require('../db');
 const bus = require('../bus');
@@ -295,7 +296,7 @@ function wireBus() {
       if (!to.length) return;
       const who = await nameOf(e.userId);
       const m = await db.one('SELECT type, text FROM messages WHERE id = $1', [e.messageId]);
-      const what = m && m.text ? `“${String(m.text).slice(0, 60)}”` : 'your message';
+      const what = m && m.text ? `“${cut(m.text, 60)}”` : 'your message';
       await push.sendToUsers(to, { title: who, body: `Reacted ${e.emoji} to ${what}` }, { type: 'message', chat_id: e.chatId, message_id: e.messageId }, { tag: `r${e.chatId}` });
     } catch (_) {
       /* best-effort */
@@ -309,7 +310,7 @@ function wireBus() {
       const chat = await db.one('SELECT title FROM chats WHERE id = $1', [e.chatId]);
       const m = await db.one('SELECT type, text, meta FROM messages WHERE id = $1', [e.messageId]);
       const who = await nameOf(e.userId);
-      const body = `${who} pinned ${m && m.text ? `“${String(m.text).slice(0, 80)}”` : 'a message'}`;
+      const body = `${who} pinned ${m && m.text ? `“${cut(m.text, 80)}”` : 'a message'}`;
       await push.sendToUsers(to, { title: (chat && chat.title) || 'Hushavia', body }, { type: 'message', chat_id: e.chatId, message_id: e.messageId });
     } catch (_) {
       /* best-effort */

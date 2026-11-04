@@ -1069,6 +1069,34 @@ class Topic {
 /// **bold**, _italic_, ~strike~, `code`, ||spoiler|| (one line each, not nested).
 final formatRe = RegExp(r'\*\*([^\n]+?)\*\*|(?<![\w\\])_([^\n_]+?)_(?![\w])|(?<![\w~])~([^\n~]+?)~(?![\w~])|`([^`\n]+)`|\|\|([^\n]+?)\|\|');
 
+/// Drops half-emoji left by a cut text (older servers cut previews in the middle of an emoji,
+/// and such a string draws as "�").
+String wellFormed(String s) {
+  final u = s.codeUnits;
+  var ok = true;
+  for (var i = 0; i < u.length; i++) {
+    final c = u[i];
+    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < u.length && u[i + 1] >= 0xDC00 && u[i + 1] <= 0xDFFF) {
+      i++;
+    } else if (c >= 0xD800 && c <= 0xDFFF) {
+      ok = false;
+      break;
+    }
+  }
+  if (ok) return s;
+  final out = <int>[];
+  for (var i = 0; i < u.length; i++) {
+    final c = u[i];
+    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < u.length && u[i + 1] >= 0xDC00 && u[i + 1] <= 0xDFFF) {
+      out..add(c)..add(u[i + 1]);
+      i++;
+    } else if (c < 0xD800 || c > 0xDFFF) {
+      out.add(c);
+    }
+  }
+  return String.fromCharCodes(out);
+}
+
 /// Text without the formatting marks (chat list, notifications, copy).
 String stripFormatting(String s) => s.replaceAllMapped(formatRe, (m) {
       if (m.group(5) != null) return '▒▒▒▒';
