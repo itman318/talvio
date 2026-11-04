@@ -1290,7 +1290,9 @@
       if (!pollTimer) pollTimer = setInterval(poll, 5000);
       return;
     }
-    const s = window.io(location.origin, { transports: ['websocket'], auth: (cb) => cb({ token: auth.access }), reconnection: true });
+    const s = window.io(location.origin, { transports: ['websocket'], auth: (cb) => cb({ token: auth.access, active: !document.hidden }), reconnection: true });
+    // "online" only while this tab is on screen (like the phone app)
+    document.addEventListener('visibilitychange', () => { if (s.connected) s.emit('app:state', { active: !document.hidden }); });
     S.socket = s;
     s.on('connect', () => { S.connected = true; loadChats(); if (S.open) loadMessages(S.open).then(() => renderMessages(nearBottom())).catch(() => {}); });
     s.on('disconnect', () => { S.connected = false; });

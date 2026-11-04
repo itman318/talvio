@@ -127,7 +127,7 @@ function serialize(u, viewerId, rel) {
     avatar_url: can('avatar', u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
     phone: can('phone', u.privacy_phone) ? u.phone : null,
     birthday: bday ? { day: bday[2], month: bday[1], ...(self && bday[0] !== 1904 ? { year: bday[0] } : {}) } : null,
-    online: canSeeSeen && presence.isOnline(u.id),
+    online: canSeeSeen && presence.isShownOnline(u.id),
     last_seen: canSeeSeen && u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
     last_seen_hidden: !canSeeSeen,
   };

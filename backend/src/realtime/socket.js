@@ -349,11 +349,14 @@ function wireBus() {
 }
 
 function init(httpServer) {
+  // "online" follows the app being on screen (see presence.js), not just a connected socket
+  presence.setListener((userId, online) => broadcastPresence(userId, online).catch(() => {}));
   io = new Server(httpServer, {
     cors: { origin: config.corsOrigins.includes('*') ? '*' : config.corsOrigins },
     maxHttpBufferSize: 1e6,
-    pingInterval: 25000,
-    pingTimeout: 20000,
+    // a phone that vanished (app killed, no network) shows "last seen" within ~20 s
+    pingInterval: 10000,
+    pingTimeout: 10000,
   });
 
   io.use(async (socket, next) => {
@@ -377,8 +380,9 @@ function init(httpServer) {
     const uid = socket.data.userId;
     socket.join(userRoom(uid));
     socket.join(sessionRoom(socket.data.sessionId));
-    if (presence.add(uid)) broadcastPresence(uid, true).catch(() => {});
-    presence.socketUp(uid);
+    presence.add(uid);
+    // the app says in the handshake if it connected while hidden (then it stays "last seen")
+    presence.socketUp(socket.id, uid, { foreground: !(socket.handshake.auth && socket.handshake.auth.active === false) });
     // the app tells us when it goes to the background / comes back, so pushes aren't skipped while it's hidden
     socket.on('app:state', (p) => presence.setForeground(socket.id, uid, !(p && p.active === false)));
     messageService.markAllDelivered(uid).catch(() => {});
@@ -462,7 +466,7 @@ function init(httpServer) {
     socket.on('secret:notify', handler((p) => secretService.notify(uid, sid, p)));
 
     socket.on('disconnect', () => {
-      if (presence.remove(uid)) broadcastPresence(uid, false).catch(() => {});
+      presence.remove(uid);
       presence.socketDown(socket.id, uid);
       // Give a flaky mobile connection a moment to come back before dropping this device's call.
       const t = setTimeout(async () => {

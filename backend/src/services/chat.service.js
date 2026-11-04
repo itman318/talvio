@@ -1281,7 +1281,7 @@ async function onlineCount(userId, chatIdRaw) {
   if (!isMulti(chat)) return { online: 0 };
   const presence = require('./presence'); // eslint-disable-line global-require
   const ids = await memberIds(chat.id);
-  return { online: ids.filter((id) => id !== userId && presence.isOnline(id)).length + 1 };
+  return { online: ids.filter((id) => id !== userId && presence.isShownOnline(id)).length + 1 };
 }
 
 /** The new member tapped “I’m not a robot”. */

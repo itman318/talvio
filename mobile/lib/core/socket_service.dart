@@ -72,6 +72,9 @@ class SocketService {
     final token = api.accessToken;
     if (token == null) return;
     _socket?.dispose();
+    // tells the server in the handshake if the app is hidden, so a background reconnect doesn't show "online"
+    final auth = <String, dynamic>{'token': token, 'active': _foreground};
+    _auth = auth;
     final s = io.io(
       AppConfig.serverUrl,
       io.OptionBuilder()
@@ -79,7 +82,7 @@ class SocketService {
           // a fresh HttpClient per connection, so a proxy switched on/off in Settings applies right away
           // ignore: deprecated_member_use
           .setHttpClientAdapter(_FreshClientAdapter())
-          .setAuth({'token': token})
+          .setAuth(auth)
           // a brand-new connection every time: a cached one would keep the token of an earlier (logged-out) session
           .enableForceNew()
           .disableAutoConnect()
@@ -148,10 +151,12 @@ class SocketService {
   }
 
   bool _foreground = true;
+  Map<String, dynamic>? _auth;
 
   /// Tells the server whether the app is on screen; while it's hidden, messages also arrive as notifications.
   void setForeground(bool on) {
     _foreground = on;
+    _auth?['active'] = on; // used again by automatic reconnects
     emit('app:state', {'active': on});
   }
 

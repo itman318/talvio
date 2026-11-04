@@ -174,7 +174,7 @@ async function autoReply({ chatId, message, memberIds, senderId }) {
     }
   }
   if (st.away_on) {
-    const away = st.away_mode === 'always' || (st.away_mode === 'offline' ? !presence.isOnline(ownerId) : !isOpen(st));
+    const away = st.away_mode === 'always' || (st.away_mode === 'offline' ? !presence.isShownOnline(ownerId) : !isOpen(st));
     if (!away) return;
     const recent = await db.one(
       `SELECT 1 AS x FROM business_auto_log WHERE owner_id = $1 AND peer_id = $2 AND kind = 'away' AND sent_at > now() - make_interval(hours => $3)`,
