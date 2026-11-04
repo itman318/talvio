@@ -194,11 +194,42 @@ class ChatStore extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Logged out: the saved chat list goes too.
+  /// Logged out: the saved chat list and saved messages go too.
   Future<void> forgetCache(int meId) async {
     try {
       final f = await _chatCacheFile(meId);
       if (f != null && await f.exists()) await f.delete();
+      final dir = await getApplicationSupportDirectory();
+      await for (final e in dir.list()) {
+        if (e is File && e.uri.pathSegments.last.startsWith('msgs_${meId}_')) await e.delete();
+      }
+    } catch (_) {}
+  }
+
+  /// The newest messages of a chat, saved on the phone: an opened chat shows them at once,
+  /// then the server's fresh copy replaces them.
+  Future<File?> _msgCacheFile(int meId, int chatId) async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      return File('${dir.path}/msgs_${meId}_$chatId.json');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _showCachedMessages(int chatId) async {
+    final me = myId;
+    if (me == null || _messages.containsKey(chatId)) return;
+    final gen = _session;
+    try {
+      final f = await _msgCacheFile(me, chatId);
+      if (f == null || !await f.exists()) return;
+      final data = await compute(_decodeList, await f.readAsString());
+      if (gen != _session || _messages.containsKey(chatId)) return; // the server answered first
+      final list = data.map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+      _cacheSenders(list);
+      _messages[chatId] = list;
+      notifyListeners();
     } catch (_) {}
   }
 
@@ -300,8 +331,20 @@ class ChatStore extends ChangeNotifier {
 
   Future<void> loadMessages(int chatId) async {
     final gen = _session;
-    final data = Map<String, dynamic>.from(await api.get('/chats/$chatId/messages', query: {'limit': '50'}) as Map);
+    final fresh = api.get('/chats/$chatId/messages', query: {'limit': '50'});
+    await _showCachedMessages(chatId); // while the server answers
+    final data = Map<String, dynamic>.from(await fresh as Map);
     if (gen != _session) return;
+    final me = myId;
+    if (me != null) {
+      unawaited(() async {
+        try {
+          // disappearing and view-once messages are never written to the phone
+          final keep = (data['messages'] as List).where((j) => j is Map && j['expires_at'] == null && j['view_once'] != true).toList();
+          await (await _msgCacheFile(me, chatId))?.writeAsString(jsonEncode(keep));
+        } catch (_) {}
+      }());
+    }
     final list = (data['messages'] as List).map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     _cacheSenders(list);
     final locals = (_messages[chatId] ?? []).where((m) => m.isLocal).toList();
