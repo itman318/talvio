@@ -217,3 +217,59 @@ test('ID bot: your ID, a forwarded sender, @username', async () => {
   r = await last();
   assert.match(r.text, /Forwarded from/);
 });
+
+test('helper bots: support requests in a chat, team replies come back; account status and review', async () => {
+  const sysbots = require('../src/services/sysbots.service');
+  const bus = require('../src/bus');
+  const ids = await sysbots.ensure();
+  const last = async (chatId, botId) => db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [chatId, botId]);
+
+  // support: first message opens a request, the next one is added to it
+  const s = await chats.getOrCreatePrivate(U.id, ids.support);
+  await messages.sendMessage(U.id, s.id, { text: '/start' });
+  await flush(400);
+  assert.match((await last(s.id, ids.support)).text, /Hushavia Support/);
+  await messages.sendMessage(U.id, s.id, { text: 'My voice messages do not play' });
+  await flush(400);
+  const t = await db.one('SELECT * FROM support_tickets WHERE user_id = $1 AND device = $2 ORDER BY id DESC LIMIT 1', [U.id, sysbots.TAG]);
+  assert.ok(t);
+  assert.match((await last(s.id, ids.support)).text, new RegExp(`Request #${t.id} received`));
+  await messages.sendMessage(U.id, s.id, { text: 'It happens on Wi-Fi only' });
+  await flush(400);
+  assert.match((await last(s.id, ids.support)).text, new RegExp(`Added to request #${t.id}`));
+  const n = await db.one('SELECT count(*)::int AS n FROM support_messages WHERE ticket_id = $1', [t.id]);
+  assert.equal(n.n, 2);
+  // the team answers in the admin panel → delivered in the bot chat
+  bus.emit('support:reply', { userId: U.id, ticketId: t.id, subject: t.subject, text: 'Please update the app.' });
+  await flush(400);
+  assert.match((await last(s.id, ids.support)).text, /Please update the app\./);
+  await messages.sendMessage(U.id, s.id, { text: '/close' });
+  await flush(400);
+  assert.equal((await db.one('SELECT status FROM support_tickets WHERE id = $1', [t.id])).status, 'closed');
+
+  // account status: no limits, then limited → review request
+  const a = await chats.getOrCreatePrivate(U.id, ids.spam);
+  await messages.sendMessage(U.id, a.id, { text: 'hi' });
+  await flush(400);
+  assert.match((await last(a.id, ids.spam)).text, /no limits/);
+  await messages.sendMessage(U.id, a.id, { text: '/appeal I only messaged my friends' });
+  await flush(400);
+  assert.match((await last(a.id, ids.spam)).text, /nothing to review/);
+  // limited: can't message people, but can still reach the helper bot, see the limit and ask for a review
+  await db.query(`UPDATE users SET restricted_until = now() + interval '1 hour', restrict_reason = 'spam reports' WHERE id = $1`, [U.id]);
+  const other = await chats.getOrCreatePrivate(U.id, OWNER.id);
+  await assert.rejects(messages.sendMessage(U.id, other.id, { text: 'hello' }), /restricted/);
+  await messages.sendMessage(U.id, a.id, { text: 'status?' });
+  await flush(400);
+  const st = await last(a.id, ids.spam);
+  assert.match(st.text, /limited/);
+  assert.match(st.text, /spam reports/);
+  assert.equal(st.reply_markup.inline_keyboard[0][0].callback_data, 'appeal');
+  await messages.sendMessage(U.id, a.id, { text: '/appeal I only messaged my friends' });
+  await flush(400);
+  assert.match((await last(a.id, ids.spam)).text, /Sent to the team/);
+  const r = await db.one('SELECT * FROM support_tickets WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [U.id]);
+  assert.equal(r.category, 'account');
+  assert.equal(r.device, sysbots.TAG);
+  await db.query('UPDATE users SET restricted_until = NULL, restrict_reason = NULL WHERE id = $1', [U.id]);
+});

@@ -334,7 +334,12 @@ async function onNewMessage({ chatId, message, memberIds, senderId }) {
   const text = String(row.text || '');
   const botfather = require('./botforge.service'); // eslint-disable-line global-require
   const idbot = require('./idbot.service'); // eslint-disable-line global-require
+  const sysbots = require('./sysbots.service'); // eslint-disable-line global-require
   for (const b of bots) {
+    if (sysbots.which(b.id)) {
+      await sysbots.onMessage(b.id, senderId, chat, row);
+      continue;
+    }
     if (botfather.isBotForge(b.id)) {
       if (chat.type === 'private' && senderId) await botfather.onMessage(senderId, chat.id, row);
       continue;
@@ -839,8 +844,12 @@ async function pressButton(userId, messageIdRaw, body = {}) {
   rateLimit.enforce(`botbtn:${userId}`, 30, 60 * 1000, 'Slow down');
   const id = crypto.randomBytes(12).toString('hex');
   const botfather = require('./botforge.service'); // eslint-disable-line global-require
-  if (botfather.isBotForge(bot.user_id)) {
-    setImmediate(() => botfather.onCallback(userId, m.chat_id, m.id, data).catch((err) => console.error('botfather error', err))); // eslint-disable-line no-console
+  const sysbots = require('./sysbots.service'); // eslint-disable-line global-require
+  if (botfather.isBotForge(bot.user_id) || sysbots.which(bot.user_id)) {
+    const run = sysbots.which(bot.user_id)
+      ? () => sysbots.onCallback(bot.user_id, userId, m.chat_id, data)
+      : () => botfather.onCallback(userId, m.chat_id, m.id, data);
+    setImmediate(() => run().catch((err) => console.error('system bot error', err))); // eslint-disable-line no-console
     // the app starts listening for the answer once this request returns
     setTimeout(() => bus.emit('rt:emit', { event: 'bot:callback_answer', payload: { callback_query_id: id, message_id: m.id, text: '' }, userIds: [userId] }), 400).unref();
     return { callback_query_id: id };

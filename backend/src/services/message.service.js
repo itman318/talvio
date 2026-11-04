@@ -838,7 +838,13 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     };
   }
   const texts = [prepared.text, ...(prepared.poll ? prepared.poll.options : [])];
-  const flags = await moderation.checkOutgoing(sender, texts);
+  // a limited account can still talk to the official helper bots (account status, support)
+  let checked = sender;
+  if (chat.type === 'private' && sender.restricted_until) {
+    const peer = await chatService.privatePeerId(chat.id, userId);
+    if (require('./sysbots.service').which(peer)) checked = { ...sender, restricted_until: null }; // eslint-disable-line global-require
+  }
+  const flags = await moderation.checkOutgoing(checked, texts);
 
   if (body.schedule_at) return { scheduled: await schedule(userId, chat, body) };
 

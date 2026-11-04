@@ -26,6 +26,7 @@ server.listen(config.port, () => {
   require('./services/botforge.service').ensure().catch((err) => console.error('botfather setup error', err)); // eslint-disable-line no-console
   require('./services/botforge.service').ensure()
     .then(() => require('./services/idbot.service').ensure())
+    .then(() => require('./services/sysbots.service').ensure())
     .catch((err) => console.error('id bot setup error', err)); // eslint-disable-line no-console
   // eslint-disable-next-line no-console
   console.log(`Hushavia API listening on http://localhost:${config.port}  (admin panel: /admin)`);
