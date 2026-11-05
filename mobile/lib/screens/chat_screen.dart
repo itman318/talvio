@@ -2125,6 +2125,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return ListView.builder(
       controller: _scroll,
       reverse: true,
+      // build a screen's worth of older messages ahead: scrolling up stays smooth
+      cacheExtent: 900,
       padding: EdgeInsets.only(top: top, bottom: bottom),
       itemCount: messages.length + (hasMore ? 1 : 0) + (_ad != null ? 1 : 0),
       itemBuilder: (ctx, idx) {

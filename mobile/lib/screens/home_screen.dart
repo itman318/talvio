@@ -261,6 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: showFound
                         ? _searchResults(chats)
                         : ListView.builder(
+                      cacheExtent: 800, // rows just below the screen are ready before you scroll to them
                       padding: const EdgeInsets.only(bottom: 96), // room above the floating button
                       itemCount: 1 + extraRows + rows.length + (showStories ? 1 : 0) + (rows.isEmpty ? 1 : 0),
                       itemBuilder: (ctx, i0) {
