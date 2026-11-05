@@ -499,3 +499,49 @@ class PaymentHistoryScreen extends StatelessWidget {
     );
   }
 }
+
+
+/// A Plus-only feature was tapped: explain it, and (while Plus isn't on sale) say it's coming soon.
+Future<void> showPlusFeature(BuildContext context, {required IconData icon, required String title, required String text}) {
+  final available = context.read<AuthState>().plusAvailable;
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(22)),
+            child: Icon(icon, color: Colors.white, size: 34),
+          ),
+          const SizedBox(height: 14),
+          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(color: Brand.premium.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+            child: Text(available ? '⭐ Hushavia Plus' : '⭐ Hushavia Plus · coming soon',
+                style: const TextStyle(color: Brand.premium, fontWeight: FontWeight.w800, fontSize: 12.5)),
+          ),
+          const SizedBox(height: 12),
+          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted, height: 1.4, fontSize: 14.5)),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Brand.primary, padding: const EdgeInsets.symmetric(vertical: 14)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen()));
+              },
+              child: Text(available ? 'Get Hushavia Plus' : 'See what Plus will bring', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+      ),
+    ),
+  );
+}

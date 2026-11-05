@@ -70,6 +70,14 @@ async function perks() {
     { key: 'accounts', title: 'Up to 3 more accounts', text: 'On the same phone' },
     { key: 'bio', title: `Longer bio — ${PREMIUM_BIO} characters`, text: `Instead of ${FREE_BIO}, with links` },
     { key: 'ring', title: 'Glowing profile ring', text: 'Your photo shines in chats and stories' },
+    { key: 'business', title: 'Hushavia Business', text: 'Greeting & away messages, working hours, quick replies' },
+    { key: 'translate', title: 'Translate messages', text: 'Any message in Urdu or English with one tap' },
+    { key: 'voice_text', title: 'Voice to text', text: 'Read voice messages instead of listening' },
+    { key: 'stealth', title: 'Story stealth mode', text: 'Watch stories without showing up in the viewer list' },
+    { key: 'last_seen', title: 'See last seen while hiding yours', text: 'Keep your status private, still see others' },
+    { key: 'icons', title: 'App icons', text: 'Choose a different Hushavia icon for your home screen' },
+    { key: 'scheduled', title: 'Bigger schedules', text: 'Schedule up to 500 messages and posts' },
+    { key: 'support', title: 'Priority support', text: 'Your requests answered first' },
   ];
 }
 

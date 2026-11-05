@@ -7,12 +7,19 @@
  *  - working hours: per weekday, in the owner's time zone
  *  - quick replies: "/shortcut" → saved text, picked in the composer
  * Auto-replies only happen in private chats with real people, at most once per person every 6 hours (away).
+ * Part of Hushavia Plus: setting it up needs Plus, and auto-replies stop while Plus is not active.
  */
 const db = require('../db');
 const bus = require('../bus');
 const v = require('../utils/validate');
 const presence = require('./presence');
-const { badRequest, notFound } = require('../utils/errors');
+const { badRequest, notFound, forbidden } = require('../utils/errors');
+
+/** Hushavia Business comes with Hushavia Plus. */
+async function requirePlus(userId) {
+  const ok = await require('./payment.service').isPremium(userId); // eslint-disable-line global-require
+  if (!ok) throw forbidden('premium_required', 'Hushavia Business comes with Hushavia Plus — coming soon');
+}
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const MODES = ['always', 'outside_hours', 'offline'];
@@ -56,6 +63,7 @@ function parseHours(raw) {
 }
 
 async function set(userId, body = {}) {
+  await requirePlus(userId);
   const cur = await get(userId);
   const next = { ...cur };
   if (body.greeting_on !== undefined) next.greeting_on = v.bool(body.greeting_on, 'greeting_on');
@@ -111,6 +119,7 @@ function parseShortcut(raw) {
 }
 
 async function addReply(userId, body = {}) {
+  await requirePlus(userId);
   const shortcut = parseShortcut(body.shortcut);
   const text = v.str(String(body.text || ''), { field: 'text', min: 1, max: 4000 });
   const n = await db.one('SELECT count(*)::int AS n FROM quick_replies WHERE user_id = $1', [userId]);
@@ -124,6 +133,7 @@ async function addReply(userId, body = {}) {
 }
 
 async function updateReply(userId, idRaw, body = {}) {
+  await requirePlus(userId);
   const id = v.id(idRaw, 'reply_id');
   const cur = await db.one('SELECT * FROM quick_replies WHERE id = $1 AND user_id = $2', [id, userId]);
   if (!cur) throw notFound('not_found', 'Quick reply not found');
@@ -152,6 +162,7 @@ async function autoReply({ chatId, message, memberIds, senderId }) {
   const ownerId = others[0];
   const s = await db.one('SELECT * FROM business_settings WHERE user_id = $1 AND (greeting_on OR away_on)', [ownerId]);
   if (!s) return;
+  if (!(await require('./payment.service').isPremium(ownerId))) return; // eslint-disable-line global-require -- Plus only
   const people = await db.many('SELECT id, is_bot FROM users WHERE id = ANY($1::bigint[])', [[ownerId, senderId]]);
   if (people.some((p) => p.is_bot)) return;
   const st = serialize(s);

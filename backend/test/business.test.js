@@ -49,6 +49,9 @@ test.after(async () => {
 });
 
 test('settings: validation and saving', async () => {
+  // Hushavia Business is part of Plus
+  await assert.rejects(business.set(SHOP.id, { greeting_on: false }), /Plus/);
+  await db.query(`UPDATE users SET premium_until = now() + interval '30 days' WHERE id = $1`, [SHOP.id]);
   await assert.rejects(business.set(SHOP.id, { greeting_on: true }), /greeting/i);
   await assert.rejects(business.set(SHOP.id, { hours: { mon: [[600, 500]] } }), /before/);
   const s = await business.set(SHOP.id, { greeting_on: true, greeting_text: 'Welcome to our shop!', greeting_days: 7, hours: { mon: [[540, 1080]] }, tz_offset_min: 300 });
