@@ -416,3 +416,19 @@ test('BotForge: stats, share links, about text, transfer to another person', asy
   assert.equal(Number((await db.one('SELECT owner_id FROM bots WHERE user_id = $1', [BOT_ID])).owner_id), Number(U.id));
   await db.query('UPDATE bots SET owner_id = $2 WHERE user_id = $1', [BOT_ID, OWNER.id]); // back, for the tests after this
 });
+
+test('Button Maker: buttons sent first are kept, then the post text', async () => {
+  const sysbots = require('../src/services/sysbots.service');
+  const ids = await sysbots.ensure();
+  const c = await chats.getOrCreatePrivate(U.id, ids.buttons);
+  const bot = () => db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [c.id, ids.buttons]);
+  await messages.sendMessage(U.id, c.id, { text: '/new' });
+  await flush(300);
+  await messages.sendMessage(U.id, c.id, { text: 'GOLD SELL - https://example.com/a\n\nJOIN VIP CHANNEL - https://example.com/b' });
+  await flush(300);
+  assert.match((await bot()).text, /Got 2 buttons/);
+  await messages.sendMessage(U.id, c.id, { text: '🔶 GOLD SELL NOW 🔶' });
+  await flush(500);
+  const prev = await db.one(`SELECT reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 AND text = '🔶 GOLD SELL NOW 🔶'`, [c.id, ids.buttons]);
+  assert.deepEqual(prev.reply_markup.inline_keyboard.map((r) => r[0].text), ['GOLD SELL', 'JOIN VIP CHANNEL']);
+});

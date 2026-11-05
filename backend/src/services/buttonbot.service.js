@@ -321,6 +321,19 @@ async function onMessage(userId, chatId, row) {
   // anything else starts (or replaces) the post
   const post = postFrom(row);
   if (!post) return say(chatId, 'Send the post as text, or a photo / video with a caption. /help');
+  // sent the buttons first ("GOLD SELL - https://…" lines only)? keep them and ask for the post text
+  if (post.type === 'text' && !s.changing) {
+    const asButtons = parseButtons(post.text);
+    if (asButtons.markup) {
+      await setState(userId, { step: 'post', pendingMarkup: asButtons.markup, lastMarkup: s.lastMarkup || null, silent: s.silent === true });
+      const n = asButtons.markup.inline_keyboard.flat().length;
+      return say(chatId, `🔘 Got ${n} button${n === 1 ? '' : 's'}! Now send the post they go under — the text people read (or a photo with a caption).`);
+    }
+  }
+  if (s.pendingMarkup) {
+    const next = await setState(userId, { step: 'ready', post, markup: s.pendingMarkup, lastMarkup: s.lastMarkup || null, silent: s.silent === true }).then(() => getState(userId));
+    return preview(userId, chatId, next);
+  }
   if (s.step === 'post' && s.changing && s.markup) {
     const next = await patchState(userId, { step: 'ready', post, changing: null });
     return preview(userId, chatId, next);
