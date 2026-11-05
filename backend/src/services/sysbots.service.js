@@ -50,6 +50,7 @@ const BOTS = {
     about: 'Send me a post, then its buttons (“Text - link”). I’ll make it ready to publish or forward.',
     commands: [
       { command: 'new', description: 'Make a post with buttons' },
+      { command: 'myposts', description: 'Change or delete posts I published' },
       { command: 'help', description: 'How it works' },
       { command: 'cancel', description: 'Stop' },
     ],
@@ -81,6 +82,8 @@ async function ensureOne(key) {
     });
     if (!u) u = await db.one('SELECT id FROM users WHERE lower(username) = lower($1)', [d.username]);
   }
+  // keep the command list and description current after updates
+  await db.query('UPDATE bots SET commands = $2, about = $3 WHERE user_id = $1', [u.id, JSON.stringify(d.commands), d.about]).catch(() => {});
   await require('./botavatar').ensureAvatar(u.id, d.username); // eslint-disable-line global-require
   ids[key] = Number(u.id);
   return ids[key];
