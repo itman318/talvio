@@ -352,3 +352,42 @@ test('Button Maker bot: post + "Text - link" buttons → preview → publish in 
   assert.equal(posted.reply_markup.inline_keyboard[1][0].text, 'Join my vip free now');
   assert.match((await bot()).text, /Published in “U signals”/);
 });
+
+test('Button Maker: copy and @name buttons, change buttons on a published post, schedule, steps survive in the database', async () => {
+  const sysbots = require('../src/services/sysbots.service');
+  const ids = await sysbots.ensure();
+  const c = await chats.getOrCreatePrivate(U.id, ids.buttons);
+  const bot = () => db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [c.id, ids.buttons]);
+  const ch = await db.one(`SELECT c.id FROM chats c JOIN chat_members cm ON cm.chat_id = c.id WHERE cm.user_id = $1 AND c.type = 'channel' AND cm.role = 'owner' LIMIT 1`, [U.id]);
+
+  await messages.sendMessage(U.id, c.id, { text: '/new' });
+  await flush(300);
+  await messages.sendMessage(U.id, c.id, { text: 'GOLD BUY 4020' });
+  await flush(300);
+  assert.ok((await bot()).reply_markup.inline_keyboard[0][0].callback_data === 'bb:last', 'offers the last buttons');
+  await messages.sendMessage(U.id, c.id, { text: 'Promo - copy:GOLD50 | My channel - @signals_pk' });
+  await flush(500);
+  const st = (await db.one('SELECT data FROM buttonbot_state WHERE user_id = $1', [U.id])).data;
+  assert.equal(st.step, 'ready');
+  assert.equal(st.markup.inline_keyboard[0][0].copy_text.text, 'GOLD50');
+  assert.match(st.markup.inline_keyboard[0][1].url, /\/c\/signals_pk$/);
+
+  // publish, then change its buttons from /myposts
+  await sysbots.onCallback(ids.buttons, U.id, c.id, `bb:to:${ch.id}`);
+  const post = await db.one('SELECT id, message_id FROM buttonbot_posts WHERE user_id = $1 AND message_id IS NOT NULL ORDER BY id DESC LIMIT 1', [U.id]);
+  await sysbots.onCallback(ids.buttons, U.id, c.id, `bb:pe:${post.id}`);
+  await messages.sendMessage(U.id, c.id, { text: 'New link - https://example.com/new' });
+  await flush(400);
+  const live = await db.one('SELECT reply_markup FROM messages WHERE id = $1', [post.message_id]);
+  assert.equal(live.reply_markup.inline_keyboard[0][0].url, 'https://example.com/new');
+  assert.match((await bot()).text, /Buttons changed/);
+
+  // schedule: the scheduled post keeps its buttons
+  await sysbots.onCallback(ids.buttons, U.id, c.id, 'bb:sch');
+  const later = Date.now() + 2 * 3600e3;
+  await sysbots.onCallback(ids.buttons, U.id, c.id, `bb:at:${later}`);
+  await sysbots.onCallback(ids.buttons, U.id, c.id, `bb:to:${ch.id}`);
+  const sch = await db.one('SELECT payload FROM scheduled_messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [ch.id, U.id]);
+  assert.equal(sch.payload.reply_markup.inline_keyboard[0][0].text, 'Promo');
+  assert.match((await bot()).text, /Scheduled for/);
+});

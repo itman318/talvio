@@ -857,7 +857,7 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
   }
   const flags = await moderation.checkOutgoing(checked, texts);
 
-  if (body.schedule_at) return { scheduled: await schedule(userId, chat, body) };
+  if (body.schedule_at) return { scheduled: await schedule(userId, chat, body, internal) };
 
   let mentionCandidates = null;
   if (chat.type === 'group') {
@@ -1424,7 +1424,7 @@ function serializeScheduled(s) {
   };
 }
 
-async function schedule(userId, chat, body) {
+async function schedule(userId, chat, body, internal = {}) {
   const at = new Date(body.schedule_at);
   if (Number.isNaN(at.getTime())) throw badRequest('invalid_input', 'schedule_at must be a date');
   if (at.getTime() < Date.now() + 30 * 1000) throw badRequest('invalid_input', 'Pick a time at least 1 minute from now');
@@ -1439,6 +1439,9 @@ async function schedule(userId, chat, body) {
     poll: body.type === 'poll' ? body.poll : null,
     location: body.type === 'location' ? body.location : null,
     silent: body.silent === true,
+    // posts made by the Button Maker keep their link buttons (and may use a picture someone gave the bot)
+    reply_markup: internal.replyMarkup || null,
+    any_media: internal.anyMedia === true,
   };
   const row = await db.one(
     'INSERT INTO scheduled_messages (chat_id, sender_id, payload, send_at) VALUES ($1, $2, $3, $4) RETURNING *',
@@ -1477,7 +1480,8 @@ async function runDueScheduled(limit = 50) {
   let sent = 0;
   for (const s of due) {
     try {
-      const msg = await sendMessage(s.sender_id, s.chat_id, { ...s.payload, client_id: `sched-${s.id}` }, { skipRateLimit: true });
+      const { reply_markup: rm, any_media: anyMedia, ...p } = s.payload || {};
+      const msg = await sendMessage(s.sender_id, s.chat_id, { ...p, client_id: `sched-${s.id}` }, { skipRateLimit: true, replyMarkup: rm || null, anyMedia: anyMedia === true });
       await db.query('UPDATE scheduled_messages SET message_id = $2 WHERE id = $1', [s.id, msg.id]);
       sent += 1;
     } catch (err) {

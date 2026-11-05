@@ -1158,3 +1158,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS emoji_status_until TIMESTAMPTZ;
 -- ---------------------------------------------------------------- more privacy: typing, voice messages
 ALTER TABLE users ADD COLUMN IF NOT EXISTS show_typing BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_voice TEXT NOT NULL DEFAULT 'everyone';
+
+-- ---------------------------------------------------------------- Button Maker bot: steps survive restarts, published posts can be edited
+CREATE TABLE IF NOT EXISTS buttonbot_state (
+  user_id    BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS buttonbot_posts (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chat_id      BIGINT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  message_id   BIGINT,
+  scheduled_id BIGINT,
+  title        TEXT NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS buttonbot_posts_user_idx ON buttonbot_posts (user_id, id DESC);
