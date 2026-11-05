@@ -317,7 +317,7 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
           `🕓 Last message sent: ${ago}`,
           `📥 Updates waiting to be read: ${st.pending}${st.pending > 50 ? ' ⚠️ is your bot running?' : ''}`,
         ].join('\n'),
-        markup: kb([[btn('🔄 Refresh', `stats:${id}`)], [btn('« Back to bot', `bot:${id}`)]]),
+        markup: kb([[btn('🔄 Refresh', `stats:${b.id}`)], [btn('« Back to bot', `bot:${b.id}`)]]),
       });
     }
     case 'share': {
@@ -334,7 +334,7 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
         markup: kb([
           [{ text: '📋 Copy bot link', copy_text: { text: url } }],
           [{ text: '📋 Copy start link', copy_text: { text: `${url}?start=promo1` } }],
-          [btn('« Back to bot', `bot:${id}`)],
+          [btn('« Back to bot', `bot:${b.id}`)],
         ]),
       });
     }
@@ -342,12 +342,12 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
       if (!b.webhook_url) {
         return show({
           text: `🔌 @${b.username} gets its updates by polling (getUpdates / events.poll).\n\nTo use a webhook, call setWebhook from your code with your https:// address.`,
-          markup: kb([[btn('« Back to bot', `bot:${id}`)]]),
+          markup: kb([[btn('« Back to bot', `bot:${b.id}`)]]),
         });
       }
       return show({
         text: `🔌 Webhook for @${b.username}:\n${b.webhook_url}\n\nRemove it to switch the bot back to polling (getUpdates).`,
-        markup: kb([[btn('🧹 Remove webhook', `hookoff:${id}`)], [btn('« Back to bot', `bot:${id}`)]]),
+        markup: kb([[btn('🧹 Remove webhook', `hookoff:${b.id}`)], [btn('« Back to bot', `bot:${b.id}`)]]),
       });
     }
     case 'hookoff':
