@@ -7,6 +7,7 @@ import '../theme/brand.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
 import '../widgets/tali_emoji.dart';
+import 'chat_screen.dart';
 
 enum _Kind { all, people, groups, channels, bots }
 
@@ -99,8 +100,17 @@ class _ForwardScreenState extends State<ForwardScreen> {
         }
       }
       if (!mounted) return;
-      Navigator.pop(context);
       final what = widget.messageIds.length == 1 ? 'Message' : '${widget.messageIds.length} messages';
+      if (_selected.length == 1) {
+        // one chat: go there, like Telegram — back returns to where you forwarded from
+        final id = _selected.first;
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id, initial: store.chatById(id))));
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('↪ $what forwarded')));
+        return;
+      }
+      Navigator.pop(context);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(names.length == 1 ? '↪ $what forwarded to ${names.first}' : '↪ $what forwarded to ${names.length} chats')));
