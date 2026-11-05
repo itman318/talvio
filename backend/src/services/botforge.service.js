@@ -142,9 +142,18 @@ const HELP = [
   '/stats — users, groups and messages',
   '/transfer — give a bot to someone else',
   '/deletebot — delete a bot',
+].join('\n');
+
+// only for people who write code for their bot: one tap away instead of in every help message
+const API_HELP = [
+  '📖 **For developers**',
   '',
-  `**API** · Classic (Telegram-style libraries): ${config.publicUrl}/api/classic/bot<key>/<method>`,
-  `Hushavia Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>”.`,
+  '**Classic API** (works with Telegram-style bot libraries — just change the server address):',
+  `${config.publicUrl}/api/classic/bot<key>/<method>`,
+  '',
+  '**Hushavia Bot API v2:**',
+  `POST ${config.publicUrl}/api/bots/v2/<method>`,
+  'with the header “X-Bot-Key: <key>”. Start with profile.get, events.poll and message.send.',
 ].join('\n');
 
 async function myBots(ownerId) {
@@ -223,7 +232,6 @@ function tokenText(b, token) {
     token,
     '',
     'Keep it secret — anyone with it can control the bot. The old key no longer works.',
-    `Try it: POST ${config.publicUrl}/api/bots/v2/profile.get  (header “X-Bot-Key: <key>”)`,
   ].join('\n');
 }
 
@@ -265,7 +273,7 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
     }
     case 'revyes': {
       const { token } = await bots.regenerateToken(userId, b.id);
-      return say(chatId, tokenText(b, token), kb([[{ text: '📋 Copy key', copy_text: { text: token } }], [btn('« Back to bot', `bot:${b.id}`)]]));
+      return say(chatId, tokenText(b, token), kb([[{ text: '📋 Copy key', copy_text: { text: token } }], [btn('📖 For developers', 'api'), btn('« Back to bot', `bot:${b.id}`)]]));
     }
     case 'priv': {
       await bots.updateBot(userId, b.id, { group_privacy: !b.group_privacy });
@@ -402,7 +410,7 @@ async function onMessage(userId, chatId, row) {
     }
     if (cmd === 'start' || cmd === 'help') {
       await clearState(userId);
-      return say(chatId, HELP, kb([[btn('➕ New bot', 'new'), btn('🤖 My bots', 'list')]]));
+      return say(chatId, HELP, kb([[btn('➕ New bot', 'new'), btn('🤖 My bots', 'list')], [btn('📖 For developers', 'api')]]));
     }
     if (cmd === 'newbot') {
       await setState(userId, 'new_name');
@@ -447,10 +455,8 @@ async function onMessage(userId, chatId, row) {
             r.token,
             '',
             'Keep your key secret — anyone who has it can control your bot.',
-            '',
-            `Hushavia Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>” — e.g. message.send {to, text, buttons}.`,
           ].join('\n'),
-          kb([[{ text: '📋 Copy key', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }]]),
+          kb([[{ text: '📋 Copy key', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }], [btn('📖 For developers', 'api')]]),
         );
       }
       case 'set_name':
@@ -521,6 +527,7 @@ async function onCallback(userId, chatId, messageId, data) {
       const l = await listMessage(userId);
       return edit(chatId, messageId, l.text, l.markup);
     }
+    if (action === 'api') return say(chatId, API_HELP, kb([[btn('🤖 My bots', 'list')]]));
     if (action === 'xferyes') {
       const st = await getState(userId);
       const b = await ownedBot(userId, id);
