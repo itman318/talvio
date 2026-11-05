@@ -71,6 +71,9 @@ const COMMANDS = [
   { command: 'setname', description: 'Change a bot’s name' },
   { command: 'setdescription', description: 'Change the text people see before they start the bot' },
   { command: 'setcommands', description: 'Change the list of commands' },
+  { command: 'setabouttext', description: 'Change the bot’s about text' },
+  { command: 'stats', description: 'Users, groups and messages of a bot' },
+  { command: 'transfer', description: 'Give a bot to someone else' },
   { command: 'setuserpic', description: 'Change a bot’s profile photo' },
   { command: 'setmenu', description: 'Set the mini app opened by the Menu button' },
   { command: 'setprivacy', description: 'Group privacy mode' },
@@ -117,26 +120,31 @@ const btn = (text, data) => ({ text, callback_data: data });
 const link = (username) => `${config.publicUrl}/c/${username}`;
 
 const HELP = [
-  'Hi, I’m BotForge 🛠 — I build and manage Hushavia bots for you.',
+  '🛠 **BotForge** — I build and manage your Hushavia bots.',
   '',
-  'You can control me with these commands:',
-  '',
+  '**Start**',
   '/newbot — create a new bot',
-  '/mybots — edit your bots',
+  '/mybots — your bots: stats, settings, links',
   '',
-  'Edit bots',
-  '/setname — change a bot’s name',
-  '/setdescription — change the bot description',
-  '/setcommands — change the list of commands',
-  '/setuserpic — change the bot’s profile photo',
-  '/setmenu — the mini app for the Menu button',
+  '**Edit a bot**',
+  '/setname — name',
+  '/setdescription — what people read before they press Start',
+  '/setabouttext — the short bio on the bot’s profile',
+  '/setcommands — the command list (the “/” menu)',
+  '/setuserpic — profile photo',
+  '/setmenu — mini app for the Menu button',
   '/setprivacy — group privacy mode',
   '/setinline — inline mode (@bot query in any chat)',
-  '/token — get the API token',
-  '/revoke — make a new token',
+  '',
+  '**Keys & ownership**',
+  '/token — a new API key',
+  '/revoke — make a new key (the old one stops)',
+  '/stats — users, groups and messages',
+  '/transfer — give a bot to someone else',
   '/deletebot — delete a bot',
   '',
-  `Hushavia Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>”. Start with profile.get, events.poll and message.send.`,
+  `**API** · Classic (Telegram-style libraries): ${config.publicUrl}/api/classic/bot<key>/<method>`,
+  `Hushavia Bot API v2: POST ${config.publicUrl}/api/bots/v2/<method> with the header “X-Bot-Key: <key>”.`,
 ].join('\n');
 
 async function myBots(ownerId) {
@@ -186,8 +194,10 @@ function botCard(b) {
     markup: kb([
       [btn('🔑 API token', `tok:${id}`), btn('✏️ Edit bot', `edit:${id}`)],
       [btn(b.group_privacy ? '👥 Privacy: ON' : '👥 Privacy: OFF', `priv:${id}`), btn('📱 Mini app', `menu:${id}`)],
-      [btn(b.inline_placeholder ? '🔎 Inline: ON' : '🔎 Inline: OFF', `inl:${id}`)],
-      [btn('🔄 Revoke token', `rev:${id}`), btn('🗑 Delete bot', `del:${id}`)],
+      [btn(b.inline_placeholder ? '🔎 Inline: ON' : '🔎 Inline: OFF', `inl:${id}`), btn('📊 Stats', `stats:${id}`)],
+      [btn('🔗 Share links', `share:${id}`), btn(b.webhook_url ? '🔌 Webhook: ON' : '🔌 Webhook: OFF', `hook:${id}`)],
+      [btn('🔄 Revoke token', `rev:${id}`), btn('🤝 Transfer', `xfer:${id}`)],
+      [btn('🗑 Delete bot', `del:${id}`)],
       [btn('« Back to bot list', 'list')],
     ]),
   };
@@ -200,6 +210,7 @@ function editCard(b) {
     markup: kb([
       [btn('Edit name', `ename:${id}`), btn('Edit description', `edesc:${id}`)],
       [btn('Edit commands', `ecmd:${id}`), btn('Edit photo', `epic:${id}`)],
+      [btn('Edit about text', `ebio:${id}`)],
       [btn('« Back to bot', `bot:${id}`)],
     ]),
   };
@@ -278,6 +289,76 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
     case 'epic':
       await setState(userId, 'set_photo', { bot: b.id });
       return say(chatId, `OK. Send me the new profile photo for @${b.username}.`);
+    case 'stats': {
+      const st = await db.one(
+        `SELECT
+           (SELECT count(*)::int FROM chat_members cm JOIN chats c ON c.id = cm.chat_id AND c.type = 'private' WHERE cm.user_id = $1) AS users,
+           (SELECT count(*)::int FROM chat_members cm JOIN chats c ON c.id = cm.chat_id AND c.type = 'group' WHERE cm.user_id = $1) AS groups,
+           (SELECT count(*)::int FROM chat_members cm JOIN chats c ON c.id = cm.chat_id AND c.type = 'channel' WHERE cm.user_id = $1) AS channels,
+           (SELECT count(*)::int FROM messages WHERE sender_id = $1 AND created_at > now() - interval '1 day') AS sent_day,
+           (SELECT count(*)::int FROM messages WHERE sender_id = $1 AND created_at > now() - interval '7 days') AS sent_week,
+           (SELECT count(*)::int FROM messages m JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1
+              JOIN chats c ON c.id = m.chat_id AND c.type = 'private'
+            WHERE m.sender_id <> $1 AND m.created_at > now() - interval '1 day') AS got_day,
+           (SELECT count(*)::int FROM bot_updates WHERE bot_id = $1) AS pending,
+           (SELECT max(created_at) FROM messages WHERE sender_id = $1) AS last_sent`,
+        [b.id],
+      );
+      const ago = st.last_sent ? `${Math.max(1, Math.round((Date.now() - new Date(st.last_sent).getTime()) / 60000))} min ago` : 'never';
+      return show({
+        text: [
+          `📊 **@${b.username}** — stats`,
+          '',
+          `👤 Users: ${st.users}`,
+          `👥 Groups: ${st.groups} · 📣 Channels: ${st.channels}`,
+          '',
+          `📨 Messages to the bot (24 h): ${st.got_day}`,
+          `📤 Sent by the bot: ${st.sent_day} today · ${st.sent_week} this week`,
+          `🕓 Last message sent: ${ago}`,
+          `📥 Updates waiting to be read: ${st.pending}${st.pending > 50 ? ' ⚠️ is your bot running?' : ''}`,
+        ].join('\n'),
+        markup: kb([[btn('🔄 Refresh', `stats:${id}`)], [btn('« Back to bot', `bot:${id}`)]]),
+      });
+    }
+    case 'share': {
+      const url = link(b.username);
+      return show({
+        text: [
+          `🔗 Links for @${b.username}`,
+          '',
+          `Open the bot: ${url}`,
+          `With a start code: ${url}?start=promo1`,
+          '',
+          'A start code reaches your bot as “/start promo1” — use it to see where people came from (ads, channels, friends).',
+        ].join('\n'),
+        markup: kb([
+          [{ text: '📋 Copy bot link', copy_text: { text: url } }],
+          [{ text: '📋 Copy start link', copy_text: { text: `${url}?start=promo1` } }],
+          [btn('« Back to bot', `bot:${id}`)],
+        ]),
+      });
+    }
+    case 'hook': {
+      if (!b.webhook_url) {
+        return show({
+          text: `🔌 @${b.username} gets its updates by polling (getUpdates / events.poll).\n\nTo use a webhook, call setWebhook from your code with your https:// address.`,
+          markup: kb([[btn('« Back to bot', `bot:${id}`)]]),
+        });
+      }
+      return show({
+        text: `🔌 Webhook for @${b.username}:\n${b.webhook_url}\n\nRemove it to switch the bot back to polling (getUpdates).`,
+        markup: kb([[btn('🧹 Remove webhook', `hookoff:${id}`)], [btn('« Back to bot', `bot:${id}`)]]),
+      });
+    }
+    case 'hookoff':
+      await db.query('UPDATE bots SET webhook_url = NULL WHERE user_id = $1 AND owner_id = $2', [b.id, userId]);
+      return show(botCard(await ownedBot(userId, b.id)));
+    case 'ebio':
+      await setState(userId, 'set_bio', { bot: b.id });
+      return say(chatId, `OK. Send the new about text for @${b.username} — the short line on its profile (up to 120 characters). /empty clears it.`);
+    case 'xfer':
+      await setState(userId, 'transfer', { bot: b.id });
+      return say(chatId, `🤝 Who should own @${b.username} from now on? Send their @username.\n\nThey get full control (keys, settings, delete) and you lose it. /cancel to stop.`);
     case 'del':
       return show({
         text: `Delete @${b.username}? This can’t be undone and the username becomes free.`,
@@ -303,6 +384,9 @@ const COMMAND_ACTIONS = {
   setprivacy: 'priv',
   setinline: 'inl',
   deletebot: 'del',
+  setabouttext: 'ebio',
+  stats: 'stats',
+  transfer: 'xfer',
 };
 
 // ------------------------------------------------------------------ incoming
@@ -391,6 +475,25 @@ async function onMessage(userId, chatId, row) {
         await bots.updateBot(userId, data.bot, { menu_url: text === '/empty' ? null : text });
         await clearState(userId);
         return say(chatId, text === '/empty' ? 'Menu mini app removed.' : 'Success! The Menu button now opens your mini app.', kb([[btn('« Back to bot', `bot:${data.bot}`)]]));
+      case 'set_bio': {
+        const b = await ownedBot(userId, data.bot);
+        if (!b) throw new Error('That bot wasn’t found.');
+        const bio = text === '/empty' ? '' : text;
+        if ([...bio].length > 120) return say(chatId, 'That’s longer than 120 characters — try a shorter line.');
+        await db.query('UPDATE users SET bio = $2, updated_at = now() WHERE id = $1', [b.id, bio]);
+        bus.emit('user:updated', { userId: b.id });
+        await clearState(userId);
+        return say(chatId, 'Success! About text updated.', kb([[btn('« Back to bot', `bot:${b.id}`)]]));
+      }
+      case 'transfer': {
+        const b = await ownedBot(userId, data.bot);
+        if (!b) throw new Error('That bot wasn’t found.');
+        const to = await db.one(`SELECT id, first_name, username FROM users WHERE lower(username) = lower($1) AND NOT is_bot AND status = 'active'`, [text.replace(/^@/, '')]);
+        if (!to) return say(chatId, 'I couldn’t find that person. Send their @username (not a bot), or /cancel.');
+        if (to.id === userId) return say(chatId, 'That’s you 🙂 Send someone else’s @username, or /cancel.');
+        await setState(userId, 'transfer_confirm', { bot: b.id, to: to.id });
+        return say(chatId, `Give @${b.username} to ${to.first_name} (@${to.username})? This can’t be undone by you.`, kb([[btn('🤝 Yes, transfer', `xferyes:${b.id}`)], [btn('Cancel', `bot:${b.id}`)]]));
+      }
       case 'set_photo': {
         if (row.type !== 'image' || !row.media_id) return say(chatId, 'Please send a photo (or /cancel).');
         const b = await ownedBot(userId, data.bot);
@@ -418,11 +521,29 @@ async function onCallback(userId, chatId, messageId, data) {
       const l = await listMessage(userId);
       return edit(chatId, messageId, l.text, l.markup);
     }
+    if (action === 'xferyes') {
+      const st = await getState(userId);
+      const b = await ownedBot(userId, id);
+      if (!st || st.step !== 'transfer_confirm' || !b || Number(st.data.bot) !== b.id) return say(chatId, 'That transfer expired. Start again with /transfer.');
+      const max = await require('./settings.service').get('max_bots_per_user'); // eslint-disable-line global-require
+      const n = await db.one('SELECT count(*)::int AS n FROM bots WHERE owner_id = $1', [st.data.to]);
+      if (n.n >= max) return say(chatId, `They already have ${max} bots — the most anyone can have.`);
+      await db.query('UPDATE bots SET owner_id = $2 WHERE user_id = $1 AND owner_id = $3', [b.id, st.data.to, userId]);
+      await clearState(userId);
+      // tell the new owner (in their BotForge chat, if they have one)
+      const me = await ensure();
+      const theirs = await db.one(
+        `SELECT c.id FROM chats c JOIN chat_members a ON a.chat_id = c.id AND a.user_id = $1 JOIN chat_members t ON t.chat_id = c.id AND t.user_id = $2 WHERE c.type = 'private' LIMIT 1`,
+        [me, st.data.to],
+      );
+      if (theirs) await say(theirs.id, `🤝 You now own @${b.username}. Send /mybots to manage it — make a new key with /token.`).catch(() => {});
+      return say(chatId, `✅ @${b.username} now belongs to its new owner.`, kb([[btn('« Back to bot list', 'list')]]));
+    }
     if (action === 'new') {
       await setState(userId, 'new_name');
       return say(chatId, 'Alright, a new bot. How are we going to call it? Please choose a name for your bot.');
     }
-    return runAction(userId, chatId, action, id, ['tok', 'revyes', 'menu', 'inl', 'ename', 'edesc', 'ecmd', 'epic'].includes(action) ? null : messageId);
+    return runAction(userId, chatId, action, id, ['tok', 'revyes', 'menu', 'inl', 'ename', 'edesc', 'ecmd', 'epic', 'ebio', 'xfer'].includes(action) ? null : messageId);
   } catch (err) {
     return say(chatId, `⚠️ ${err.message || 'Something went wrong'}`);
   }

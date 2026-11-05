@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../core/chat_links.dart';
 import '../core/services.dart';
 import '../models/models.dart';
 import '../theme/brand.dart';
@@ -27,8 +28,12 @@ class InlineKeyboard extends StatelessWidget {
     }
     final services = context.read<AppServices>();
     if (b['url'] != null) {
-      final ok = await confirm(context, 'Open link?', '${b['url']}', ok: 'Open');
-      if (ok) launchUrl(Uri.parse('${b['url']}'), mode: LaunchMode.externalApplication);
+      final url = '${b['url']}';
+      HapticFeedback.selectionClick();
+      // Hushavia links (channels, groups, invites, bots) open right here in the app; others in the browser
+      if (await openChatLink(context, url)) return;
+      final uri = Uri.tryParse(url);
+      if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
       return;
     }
     final web = b['web_app'];
@@ -75,35 +80,81 @@ class InlineKeyboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = message.inlineKeyboard;
     if (rows.isEmpty) return const SizedBox.shrink();
-    final accent = Theme.of(context).colorScheme.primary;
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Column(
-        children: rows
-            .map((row) => Row(
-                  children: row
-                      .map((b) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(2),
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: Theme.of(context).colorScheme.surface.withAlpha(200),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                onPressed: () => _press(context, b),
-                                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                  Flexible(child: Text('${b['text']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent))),
-                                  if (b['url'] != null) Icon(Icons.north_east, size: 12, color: accent),
-                                  if (b['copy_text'] != null) Icon(Icons.copy_rounded, size: 12, color: accent),
-                                  if (b['web_app'] != null) Icon(Icons.apps, size: 12, color: accent),
-                                ]),
-                              ),
-                            ),
-                          ))
-                      .toList(),
-                ))
-            .toList(),
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(children: [
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(children: [
+              for (final (i, b) in row.indexed) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Expanded(child: _KeyButton(data: b, onTap: () => _press(context, b))),
+              ],
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+/// One button under a message: a soft violet tile with the action's small mark (link, copy, app…).
+class _KeyButton extends StatefulWidget {
+  const _KeyButton({required this.data, required this.onTap});
+  final Map<String, dynamic> data;
+  final VoidCallback onTap;
+
+  @override
+  State<_KeyButton> createState() => _KeyButtonState();
+}
+
+class _KeyButtonState extends State<_KeyButton> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = widget.data;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = dark ? const Color(0xFFCBBEFF) : Brand.primary;
+    final IconData? mark = b['url'] != null
+        ? Icons.arrow_outward_rounded
+        : b['copy_text'] != null
+            ? Icons.content_copy_rounded
+            : b['web_app'] != null
+                ? Icons.grid_view_rounded
+                : b.containsKey('switch_inline_query')
+                    ? Icons.ios_share_rounded
+                    : null;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) => setState(() => _down = false),
+      onTapCancel: () => setState(() => _down = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _down ? 0.97 : 1,
+        duration: const Duration(milliseconds: 90),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          constraints: const BoxConstraints(minHeight: 42),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: _down
+                ? Brand.primary.withValues(alpha: dark ? 0.34 : 0.18)
+                : (dark ? Brand.primary.withValues(alpha: 0.22) : Brand.primary.withValues(alpha: 0.09)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Brand.primary.withValues(alpha: dark ? 0.35 : 0.18), width: 0.8),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Flexible(
+              child: Text('${b['text']}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.1)),
+            ),
+            if (mark != null) ...[const SizedBox(width: 5), Icon(mark, size: 14, color: fg.withValues(alpha: 0.75))],
+          ]),
+        ),
       ),
     );
   }

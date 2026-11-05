@@ -391,3 +391,28 @@ test('Button Maker: copy and @name buttons, change buttons on a published post, 
   assert.equal(sch.payload.reply_markup.inline_keyboard[0][0].text, 'Promo');
   assert.match((await bot()).text, /Scheduled for/);
 });
+
+test('BotForge: stats, share links, about text, transfer to another person', async () => {
+  const forge = require('../src/services/botforge.service');
+  const fid = await forge.ensure();
+  const c = await chats.getOrCreatePrivate(OWNER.id, fid);
+  const last = () => db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [c.id, fid]);
+  await forge.onCallback(OWNER.id, c.id, null, `stats:${BOT_ID}`);
+  assert.match((await last()).text, /Users: \d+/);
+  await forge.onCallback(OWNER.id, c.id, null, `share:${BOT_ID}`);
+  assert.match((await last()).reply_markup.inline_keyboard[1][0].copy_text.text, /\?start=promo1$/);
+  await forge.onCallback(OWNER.id, c.id, null, `ebio:${BOT_ID}`);
+  await messages.sendMessage(OWNER.id, c.id, { text: 'Gold signals every morning' });
+  await flush(400);
+  assert.equal((await db.one('SELECT bio FROM users WHERE id = $1', [BOT_ID])).bio, 'Gold signals every morning');
+  // transfer to U and back
+  await db.query("UPDATE users SET username = 'usman_t' WHERE id = $1 AND username IS NULL", [U.id]);
+  const uname = (await db.one('SELECT username FROM users WHERE id = $1', [U.id])).username;
+  await forge.onCallback(OWNER.id, c.id, null, `xfer:${BOT_ID}`);
+  await messages.sendMessage(OWNER.id, c.id, { text: `@${uname}` });
+  await flush(400);
+  assert.match((await last()).text, /Give @xau_signals_bot to/);
+  await forge.onCallback(OWNER.id, c.id, null, `xferyes:${BOT_ID}`);
+  assert.equal(Number((await db.one('SELECT owner_id FROM bots WHERE user_id = $1', [BOT_ID])).owner_id), Number(U.id));
+  await db.query('UPDATE bots SET owner_id = $2 WHERE user_id = $1', [BOT_ID, OWNER.id]); // back, for the tests after this
+});

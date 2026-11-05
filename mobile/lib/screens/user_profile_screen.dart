@@ -226,6 +226,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ]),
                   ),
                 if (!u.deleted) HighlightsRow(key: ValueKey('hl${u.id}'), userId: u.id, mine: u.id == myId),
+                // shown only when there is something to show (no empty "no info" card, no raw ID numbers)
+                if (u.phone != null || u.username != null || u.bio.isNotEmpty || u.birthday != null)
                 SettingsGroup(title: 'Info', children: [
                   if (u.phone != null)
                     SettingsTile(
@@ -258,17 +260,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       subtitle: u.birthday!.isToday && other ? 'Birthday today — send a wish!' : 'Birthday',
                       onTap: u.birthday!.isToday && other ? () => _message(u) : null,
                     ),
-                  // always something useful here: the Hushavia ID (bots and groups ask for it)
-                  SettingsTile(
-                    icon: Icons.tag_rounded,
-                    color: const Color(0xFF8A93B4),
-                    title: '${u.id}',
-                    subtitle: 'Hushavia ID · tap to copy',
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: '${u.id}'));
-                      showInfo(context, 'ID copied');
-                    },
-                  ),
                 ]),
                 if (chat != null)
                   SettingsGroup(children: [
