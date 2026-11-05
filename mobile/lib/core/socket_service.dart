@@ -131,6 +131,19 @@ class SocketService {
     s.connect();
   }
 
+  /// Back on screen: wake the existing connection instead of tearing it down and starting over
+  /// (a rebuild on every app open showed "Connecting…" each time). An expired token is handled
+  /// by the connect-error handler (refresh, then reconnect).
+  void ensureConnected() {
+    _wantConnected = true;
+    final s = _socket;
+    if (s == null) {
+      connect();
+    } else if (!isConnected) {
+      s.connect();
+    }
+  }
+
   /// Called after a token refresh. The token is only checked during the handshake,
   /// so a live connection keeps working; a dropped one is rebuilt with the new token.
   void updateToken(String token) {

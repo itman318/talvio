@@ -355,9 +355,10 @@ function init(httpServer) {
   io = new Server(httpServer, {
     cors: { origin: config.corsOrigins.includes('*') ? '*' : config.corsOrigins },
     maxHttpBufferSize: 1e6,
-    // a phone that vanished (app killed, no network) shows "last seen" within ~20 s
-    pingInterval: 10000,
-    pingTimeout: 10000,
+    // patient with slow mobile data (a short ping wait dropped working connections → "Connecting…");
+    // "online" doesn't depend on this anyway: it follows the app being on screen (presence.js)
+    pingInterval: 25000,
+    pingTimeout: 30000,
   });
 
   io.use(async (socket, next) => {

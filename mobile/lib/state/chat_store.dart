@@ -52,6 +52,7 @@ class ChatStore extends ChangeNotifier {
   }
   bool chatsLoaded = false;
   bool connected = false;
+  Timer? _offlineTimer;
   int? activeChatId;
   bool appInForeground = true;
   void Function()? onSessionRevoked;
@@ -112,9 +113,22 @@ class ChatStore extends ChangeNotifier {
     connected = socket.isConnected;
     _eventSub = socket.events.listen(_onEvent);
     _connSub = socket.connectionChanges.listen((c) {
-      connected = c;
-      notifyListeners();
-      if (c) _resync();
+      _offlineTimer?.cancel();
+      if (c) {
+        final changed = !connected;
+        connected = true;
+        if (changed) notifyListeners();
+        _resync();
+        return;
+      }
+      // a short drop (switching Wi-Fi/mobile data, a weak signal) usually comes back in a moment:
+      // only say "Connecting…" when it lasts a few seconds
+      _offlineTimer = Timer(const Duration(seconds: 4), () {
+        if (!socket.isConnected && connected) {
+          connected = false;
+          notifyListeners();
+        }
+      });
     });
     _typingTimer = Timer.periodic(const Duration(seconds: 2), (_) => _expireTyping());
     unawaited(_showCachedChats(meId)); // the last list from disk: the screen is ready at once, the server updates it
@@ -132,6 +146,7 @@ class ChatStore extends ChangeNotifier {
     bookmarked.clear();
     _eventSub?.cancel();
     _connSub?.cancel();
+    _offlineTimer?.cancel();
     _typingTimer?.cancel();
     _eventSub = null;
     _connSub = null;

@@ -297,9 +297,7 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       }
       store.setForeground(true);
       services.socket.setForeground(true);
-      if (auth.status == AuthStatus.loggedIn && !services.socket.isConnected) {
-        services.api.refreshTokens().then((_) => services.socket.connect()).catchError((_) {});
-      }
+      if (auth.status == AuthStatus.loggedIn && !services.socket.isConnected) services.socket.ensureConnected();
       if (auth.status == AuthStatus.loggedIn) {
         context.read<CallManager>().checkActive();
         store.loadStories().catchError((_) {});
