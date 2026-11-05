@@ -322,3 +322,33 @@ test('forwarding keeps link buttons and drops bot-only buttons', async () => {
   const f = await db.one('SELECT reply_markup FROM messages WHERE forward_source_id = $1 ORDER BY id DESC LIMIT 1', [m.id]);
   assert.deepEqual(f.reply_markup.inline_keyboard.map((r) => r[0].text), ['XAUUSD', 'Join VIP']);
 });
+
+test('Button Maker bot: post + "Text - link" buttons → preview → publish in my channel', async () => {
+  const sysbots = require('../src/services/sysbots.service');
+  const ids = await sysbots.ensure();
+  const c = await chats.getOrCreatePrivate(U.id, ids.buttons);
+  const bot = (sql) => db.one(`SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ${sql || ''} ORDER BY id DESC LIMIT 1`, [c.id, ids.buttons]);
+  await messages.sendMessage(U.id, c.id, { text: '/new' });
+  await flush(300);
+  await messages.sendMessage(U.id, c.id, { text: 'CHOOSE NEXT SIGNAL' });
+  await flush(300);
+  assert.match((await bot()).text, /one row per line/);
+  await messages.sendMessage(U.id, c.id, { text: 'no link here' });
+  await flush(300);
+  assert.match((await bot()).text, /couldn’t read/);
+  await messages.sendMessage(U.id, c.id, { text: 'XAUUSD 😍 - https://a.com | BTCUSD - b.com\nJoin my vip free now - https://t.me/vip' });
+  await flush(500);
+  const prev = await bot(`AND text = 'CHOOSE NEXT SIGNAL'`);
+  assert.deepEqual(prev.reply_markup.inline_keyboard.map((r) => r.map((b) => b.url)), [['https://a.com', 'https://b.com'], ['https://t.me/vip']]);
+  // publish in a channel U runs
+  const ch = await chats.createChannel(U.id, { title: 'U signals' });
+  await sysbots.onCallback(ids.buttons, U.id, c.id, 'bb:pub');
+  const pick = await bot();
+  const target = pick.reply_markup.inline_keyboard.flat().find((b) => b.callback_data === `bb:to:${ch.id}`);
+  assert.ok(target, 'my channel is offered');
+  await sysbots.onCallback(ids.buttons, U.id, c.id, target.callback_data);
+  const posted = await db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 ORDER BY id DESC LIMIT 1', [ch.id]);
+  assert.equal(posted.text, 'CHOOSE NEXT SIGNAL');
+  assert.equal(posted.reply_markup.inline_keyboard[1][0].text, 'Join my vip free now');
+  assert.match((await bot()).text, /Published in “U signals”/);
+});

@@ -7,6 +7,7 @@
  *                        (the same tickets the admin panel answers); team replies come back in this chat.
  *  @HushaviaSpamBot    — "is my account limited?" Shows any sending limit, why, and until when,
  *                        and lets a limited user ask the team to review it.
+ *  @HushaviaButtonsBot — "Button Maker": posts with link buttons (see buttonbot.service.js).
  */
 const crypto = require('crypto');
 const db = require('../db');
@@ -40,6 +41,17 @@ const BOTS = {
     commands: [
       { command: 'start', description: 'Check my account' },
       { command: 'appeal', description: 'Ask the team to review a limit' },
+    ],
+  },
+  buttons: {
+    username: 'HushaviaButtonsBot',
+    name: 'Button Maker',
+    bio: 'Make posts with link buttons for your channel or group — no code needed.',
+    about: 'Send me a post, then its buttons (“Text - link”). I’ll make it ready to publish or forward.',
+    commands: [
+      { command: 'new', description: 'Make a post with buttons' },
+      { command: 'help', description: 'How it works' },
+      { command: 'cancel', description: 'Stop' },
     ],
   },
 };
@@ -262,6 +274,7 @@ async function onMessage(botId, senderId, chat, row) {
   if (chat.type !== 'private' || !senderId) return true; // they only work in private chats
   if (key === 'support') await supportMessage(senderId, chat.id, row);
   if (key === 'spam') await spamMessage(senderId, chat.id, row);
+  if (key === 'buttons') await require('./buttonbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
   return true;
 }
 
@@ -274,6 +287,7 @@ async function onCallback(botId, userId, chatId, data) {
       return say('support', chatId, '📝 OK — write your new question or problem in one message.');
     }
   }
+  if (key === 'buttons') return require('./buttonbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
   if (key === 'spam' && data === 'appeal') {
     const user = await db.one('SELECT id, restricted_until, restrict_reason FROM users WHERE id = $1', [userId]);
     return spamAppeal(user, chatId, '');
@@ -281,4 +295,4 @@ async function onCallback(botId, userId, chatId, data) {
   return null;
 }
 
-module.exports = { ensure, which, onMessage, onCallback, BOTS, TAG };
+module.exports = { ensure, ensureOne, say, which, onMessage, onCallback, BOTS, TAG };

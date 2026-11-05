@@ -394,7 +394,7 @@ function parsePoll(raw) {
  * Validates a send request and returns what to insert (no side effects).
  * Shared by direct sends and scheduled posts.
  */
-async function prepareMessage(userId, chat, body) {
+async function prepareMessage(userId, chat, body, internal = {}) {
   const type = v.oneOf(body.type || 'text', SEND_TYPES, 'type');
   const text = cleanText(body.text);
   const out = { type, text, mediaId: null, replyToId: null, poll: null, meta: null };
@@ -487,7 +487,10 @@ async function prepareMessage(userId, chat, body) {
     }
   } else {
     if (text.length > MAX_CAPTION) throw badRequest('caption_too_long', `Captions can be at most ${MAX_CAPTION} characters`);
-    const media = await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
+    // internal.anyMedia: server code (official bots) re-sending a picture someone gave them
+    const media = internal.anyMedia
+      ? await db.one('SELECT * FROM media WHERE id = $1', [v.id(body.media_id, 'media_id')])
+      : await db.one('SELECT * FROM media WHERE id = $1 AND uploader_id = $2', [v.id(body.media_id, 'media_id'), userId]);
     if (!media) throw notFound('media_not_found', 'Upload the file first');
     if (!MEDIA_KINDS_FOR_TYPE[type].includes(media.kind)) throw badRequest('invalid_media', `This file can't be sent as ${type}`);
     if (type === 'video_note') {
@@ -811,7 +814,7 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     if (existing) return (await serializeRows(userId, [existing]))[0];
   }
 
-  const prepared = await prepareMessage(userId, chat, body);
+  const prepared = await prepareMessage(userId, chat, body, internal);
 
   if (chat.type === 'channel' && !prepared.threadId && body.schedule_at && !chatService.hasRight(chat, 'post_messages')) {
     throw forbidden('no_right', 'Your posts need an admin’s approval — send it now and it will wait for review');
