@@ -275,6 +275,25 @@ class ChatStore extends ChangeNotifier {
     chatsLoaded = true;
     notifyListeners();
     if (firstLoad) unawaited(loadBookmarks().then((_) {}).catchError((_) {}));
+    if (!_prefetched) {
+      _prefetched = true;
+      unawaited(_prefetchTop(gen));
+    }
+  }
+
+  bool _prefetched = false;
+
+  /// Like Telegram: the few chats at the top (where new messages are) are loaded in the background,
+  /// so opening them shows the newest messages at once.
+  Future<void> _prefetchTop(int gen) async {
+    await Future<void>.delayed(const Duration(milliseconds: 800)); // let the screen settle first
+    final top = chats.where((c) => !c.isLocked && !_messages.containsKey(c.id) && (c.unreadCount > 0 || c.isPinned)).take(5).toList();
+    for (final c in top) {
+      if (gen != _session || _messages.containsKey(c.id)) continue;
+      try {
+        await loadMessages(c.id);
+      } catch (_) {}
+    }
   }
 
   Future<List<Chat>> loadArchived() async {

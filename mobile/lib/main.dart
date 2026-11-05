@@ -66,10 +66,13 @@ Future<void> main() async {
 Future<void> _start() async {
   final prefs = AppPrefs();
   try {
-    await prefs.load().timeout(const Duration(seconds: 5));
-    await NotifPrefs.instance.load();
-    await BackgroundKeepAlive.load();
-    await ChatPasscode.load();
+    // read side by side: a faster start than one after another
+    await Future.wait([
+      prefs.load().timeout(const Duration(seconds: 5)),
+      NotifPrefs.instance.load(),
+      BackgroundKeepAlive.load(),
+      ChatPasscode.load(),
+    ]);
   } catch (e) {
     debugPrint('Prefs not loaded: $e');
   }
