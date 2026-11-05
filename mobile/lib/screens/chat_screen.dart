@@ -2083,8 +2083,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return padded(Center(child: SingleChildScrollView(child: _emptyChat(chat))));
     }
     final hasMore = store.hasMore(chatId);
-    if (chat.isChannel) {
-      // Count views for the posts on screen (server ignores repeats).
+    if (chat.isChannel || chat.isGroup) {
+      // Count views for the posts/messages on screen (server ignores repeats).
       WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, messages.take(40)));
     }
     return ListView.builder(

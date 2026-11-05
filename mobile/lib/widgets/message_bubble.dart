@@ -8,6 +8,7 @@ import 'tali_emoji.dart';
 import 'message_extras.dart';
 import '../theme/chat_theme.dart';
 import '../models/models.dart';
+import 'views_badge.dart';
 import '../utils/format.dart';
 import 'avatar.dart';
 import 'media_widgets.dart';
@@ -309,9 +310,7 @@ class MessageBubble extends StatelessWidget {
             const Spacer(),
             const SizedBox(width: 10),
             if (!m.isLocal) ...[
-              Icon(Icons.remove_red_eye_rounded, size: 13, color: meta),
-              const SizedBox(width: 3),
-              Text(compactNumber(m.views), style: TextStyle(fontSize: 11.5, color: meta, fontWeight: FontWeight.w600, fontFeatures: const [FontFeature.tabularFigures()])),
+              ViewsBadge(count: m.views, color: meta),
               const SizedBox(width: 8),
             ],
             if (m.editedAt != null)
@@ -328,6 +327,8 @@ class MessageBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
+          // groups: how many members saw it (counted once each, never the sender)
+          if (chat.isGroup && m.views > 0 && !m.isLocal) ...[ViewsBadge(count: m.views, color: meta, fontSize: 11), const SizedBox(width: 6)],
           if (m.editedAt != null)
             GestureDetector(
               onTap: m.isLocal ? null : () => showEditHistory(context, m),

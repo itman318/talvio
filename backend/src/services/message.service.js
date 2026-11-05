@@ -1282,7 +1282,7 @@ async function react(userId, messageIdRaw, emoji) {
   return { reactions: summary.list, my_reaction: summary.mine };
 }
 
-/** Counts a view once per user (used for channel post view counters). */
+/** Counts a view once per user (channel posts and group messages; the sender's own look doesn't count). */
 async function recordViews(userId, chatIdRaw, messageIdsRaw) {
   const chat = await chatService.requireMember(chatIdRaw, userId);
   const ids = v.idList(messageIdsRaw, 'message_ids', 100);
@@ -1290,6 +1290,7 @@ async function recordViews(userId, chatIdRaw, messageIdsRaw) {
   const fresh = await db.many(
     `INSERT INTO message_views (message_id, user_id)
      SELECT m.id, $2 FROM messages m WHERE m.chat_id = $1 AND m.id = ANY($3::bigint[]) AND m.deleted_at IS NULL
+       AND m.sender_id IS DISTINCT FROM $2 AND m.type <> 'system'
      ON CONFLICT DO NOTHING RETURNING message_id`,
     [chat.id, userId, ids],
   );
