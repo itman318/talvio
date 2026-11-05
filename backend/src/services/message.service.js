@@ -1294,8 +1294,8 @@ async function recordViews(userId, chatIdRaw, messageIdsRaw) {
   if (!ids.length) return { views: {} };
   const fresh = await db.many(
     `INSERT INTO message_views (message_id, user_id)
-     SELECT m.id, $2 FROM messages m WHERE m.chat_id = $1 AND m.id = ANY($3::bigint[]) AND m.deleted_at IS NULL
-       AND m.sender_id IS DISTINCT FROM $2 AND m.type <> 'system'
+     SELECT m.id, $2::bigint FROM messages m WHERE m.chat_id = $1 AND m.id = ANY($3::bigint[]) AND m.deleted_at IS NULL
+       AND m.sender_id IS DISTINCT FROM $2::bigint AND m.type <> 'system'
      ON CONFLICT DO NOTHING RETURNING message_id`,
     [chat.id, userId, ids],
   );
@@ -1304,7 +1304,7 @@ async function recordViews(userId, chatIdRaw, messageIdsRaw) {
     // seeing a forwarded channel post also counts as a view of the original post (once per person)
     const src = await db.many(
       `INSERT INTO message_views (message_id, user_id)
-       SELECT DISTINCT o.id, $2 FROM messages f JOIN messages o ON o.id = f.forward_source_id JOIN chats c ON c.id = o.chat_id
+       SELECT DISTINCT o.id, $2::bigint FROM messages f JOIN messages o ON o.id = f.forward_source_id JOIN chats c ON c.id = o.chat_id
        WHERE f.id = ANY($1::bigint[]) AND c.type = 'channel' AND o.deleted_at IS NULL
        ON CONFLICT DO NOTHING RETURNING message_id`,
       [fresh.map((r) => r.message_id), userId],
