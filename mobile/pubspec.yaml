@@ -41,6 +41,7 @@ dependencies:
   # Batch A
   shared_preferences: ^2.3.2
   flutter_cache_manager: ^3.4.1
+  gal: ^2.3.0 # save photos and videos to the phone's gallery
   cached_network_image: ^3.4.1 # avatars & stickers saved on the phone: no re-download on every start
   flutter_contacts: ^1.1.9
   geolocator: ^13.0.1

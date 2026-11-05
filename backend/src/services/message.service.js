@@ -969,11 +969,22 @@ async function forwardMessages(userId, body = {}) {
         fwdName: r.forwarded_from_name || fromName,
         meta: ['location', 'voice', 'sticker'].includes(r.type) ? r.meta : null, // voice keeps its waveform, stickers their pack / Tavi pose
         forwardSourceId: r.forward_source_id || r.id,
+        replyMarkup: linkButtonsOnly(r.reply_markup), // link buttons keep working anywhere (bot buttons don't)
       });
       count += 1;
     }
   }
   return { forwarded: count };
+}
+
+/** A forwarded bot message keeps its link (and copy) buttons; buttons that talk to the bot are dropped. */
+function linkButtonsOnly(markup) {
+  const rows = markup && Array.isArray(markup.inline_keyboard) ? markup.inline_keyboard : null;
+  if (!rows) return null;
+  const kept = rows
+    .map((row) => (Array.isArray(row) ? row.filter((b) => b && b.text && (b.url || b.copy_text)) : []))
+    .filter((row) => row.length);
+  return kept.length ? { inline_keyboard: kept } : null;
 }
 
 /** True when every one of these users shares read receipts. */

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
 import '../theme/brand.dart';
 import '../theme/chat_theme.dart';
 import 'package:open_filex/open_filex.dart';
@@ -10,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/prefs.dart';
+import '../core/screen_guard.dart';
 import '../core/services.dart';
 import '../core/voice_playback.dart';
 import '../models/models.dart';
@@ -133,15 +135,41 @@ class _MessageImageState extends State<MessageImage> {
   }
 }
 
+/// Saves a photo or video into the phone's gallery (a "Hushavia" album). Returns a message to show.
+Future<String> saveToGallery(File file, {bool video = false}) async {
+  try {
+    if (!await Gal.hasAccess(toAlbum: true) && !await Gal.requestAccess(toAlbum: true)) return 'Allow Hushavia to add to your gallery first';
+    if (video) {
+      await Gal.putVideo(file.path, album: 'Hushavia');
+    } else {
+      await Gal.putImage(file.path, album: 'Hushavia');
+    }
+    return video ? '⬇️ Video saved to your gallery' : '⬇️ Photo saved to your gallery';
+  } catch (_) {
+    return 'Couldn’t save it — check storage space and try again';
+  }
+}
+
 class FullImageScreen extends StatelessWidget {
-  const FullImageScreen({super.key, required this.file});
+  const FullImageScreen({super.key, required this.file, this.canSave});
   final File file;
+  final bool? canSave; // null: allowed unless a protected chat is open
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, actions: [
+        if (canSave ?? ScreenGuard.protectedOpen == 0)
+          IconButton(
+            tooltip: 'Save to gallery',
+            icon: const Icon(Icons.download_rounded),
+            onPressed: () async {
+              final msg = await saveToGallery(file);
+              if (context.mounted) showInfo(context, msg);
+            },
+          ),
+      ]),
       body: Center(child: InteractiveViewer(maxScale: 5, child: Image.file(file))),
     );
   }

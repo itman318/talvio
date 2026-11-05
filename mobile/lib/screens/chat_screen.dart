@@ -55,7 +55,7 @@ import 'album_send_screen.dart';
 import 'video_send_screen.dart';
 import 'live_map_screen.dart';
 import '../widgets/swipe_reply.dart';
-import '../widgets/media_widgets.dart' show VoiceWavePainter, resampleBars;
+import '../widgets/media_widgets.dart' show VoiceWavePainter, resampleBars, saveToGallery;
 import '../widgets/album_view.dart';
 import 'thread_screen.dart';
 import '../widgets/bot_widgets.dart';
@@ -165,6 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _adSeen = false;
 
   bool _guarded = false;
+  bool _protectedOn = false;
 
   // floating glass header & message bar: their heights pad the message list
   static const double _headerH = 66;
@@ -562,6 +563,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _inlineDebounce?.cancel();
     if (_guarded) ScreenGuard.release();
+    if (_protectedOn) ScreenGuard.protectedOpen--;
     final draft = _editing == null ? _text.text : '';
     if (draft != (_prefs.draft(chatId) ?? '')) _store.syncDraft(chatId, draft);
     _prefs.setDraft(chatId, draft);
@@ -1301,6 +1303,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (chat.canPost) const MessageMenuItem('reply', Icons.reply_rounded, 'Reply'),
       if (m.text.isNotEmpty && !chat.noForwards) const MessageMenuItem('copy', Icons.copy_rounded, 'Copy'),
       if (publicLink != null && !chat.noForwards) const MessageMenuItem('copy_link', Icons.link_rounded, 'Copy link'),
+      if ((m.type == 'image' || m.type == 'video') && m.media != null && !m.viewOnce && !chat.noForwards)
+        const MessageMenuItem('save', Icons.download_rounded, 'Save to gallery'),
       if (m.type != 'poll' && m.type != 'call' && !m.viewOnce && !chat.noForwards) const MessageMenuItem('forward', Icons.shortcut_rounded, 'Forward'),
       if (chat.type == 'private' || chat.can('pin_messages'))
         MessageMenuItem(chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin', Icons.push_pin_outlined, chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
@@ -1370,6 +1374,16 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.text));
         if (mounted) showInfo(context, 'Copied');
+        break;
+      case 'save':
+        try {
+          if (mounted) showInfo(context, 'Saving…');
+          final file = await context.read<AppServices>().media.get(m.media!);
+          final msg = await saveToGallery(file, video: m.type == 'video');
+          if (mounted) showInfo(context, msg);
+        } catch (e) {
+          if (mounted) showError(context, e);
+        }
         break;
       case 'bookmark':
       case 'unbookmark':
@@ -1714,6 +1728,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     // locked & protected chats: no screenshots
     final guard = chat.isLocked || chat.protectedContent || ChatPasscode.has(chat.id);
+    if (chat.protectedContent != _protectedOn) {
+      _protectedOn = chat.protectedContent;
+      ScreenGuard.protectedOpen += _protectedOn ? 1 : -1;
+    }
     if (guard != _guarded) {
       _guarded = guard;
       guard ? ScreenGuard.acquire() : ScreenGuard.release();

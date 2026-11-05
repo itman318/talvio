@@ -8,6 +8,8 @@ class ScreenGuard {
   ScreenGuard._();
 
   static int _count = 0;
+  /// Protected chats on screen right now (their photos can't be saved from the viewer).
+  static int protectedOpen = 0;
   static bool _always = false;
 
   static void _apply() {
