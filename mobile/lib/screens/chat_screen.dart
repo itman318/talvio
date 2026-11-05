@@ -2086,6 +2086,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (chat.isChannel || chat.isGroup) {
       // Count views for the posts/messages on screen (server ignores repeats).
       WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, messages.take(40)));
+    } else {
+      // private chats: only forwarded posts count (a view of the channel post they came from)
+      final fwd = messages.take(40).where((m) => m.forwardedFromName != null).toList();
+      if (fwd.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, fwd));
     }
     return ListView.builder(
       controller: _scroll,

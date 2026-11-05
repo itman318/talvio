@@ -328,7 +328,8 @@ class MessageBubble extends StatelessWidget {
         children: [
           if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
           // groups: how many members saw it (counted once each, never the sender)
-          if (chat.isGroup && m.views > 0 && !m.isLocal) ...[ViewsBadge(count: m.views, color: meta, fontSize: 11), const SizedBox(width: 6)],
+          // groups: how many members saw it; anywhere: a forwarded channel post shows the post's views
+          if ((chat.isGroup || m.forwardedFromName != null) && m.views > 0 && !m.isLocal) ...[ViewsBadge(count: m.views, color: meta, fontSize: 11), const SizedBox(width: 6)],
           if (m.editedAt != null)
             GestureDetector(
               onTap: m.isLocal ? null : () => showEditHistory(context, m),

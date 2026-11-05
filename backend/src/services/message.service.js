@@ -217,7 +217,9 @@ async function serializeRows(viewerId, rows) {
       forwarded_from: m.forwarded_from_name ? { user_id: m.forwarded_from_user_id, name: m.forwarded_from_name } : null,
       reactions: react ? react.list : [],
       my_reaction: react ? react.mine : null,
-      views: m.forward_source_id && fwdViews.has(m.forward_source_id) ? fwdViews.get(m.forward_source_id) : m.views_count || 0,
+      views: m.forward_source_id && fwdViews.has(m.forward_source_id)
+        ? fwdViews.get(m.forward_source_id)
+        : ((chatMap.get(m.chat_id) || {}).type === 'private' ? 0 : m.views_count || 0), // no view counts in private chats
       played: m.type === 'voice' || m.type === 'video_note' ? (playMap.get(m.id) || 0) > 0 : undefined,
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
