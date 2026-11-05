@@ -1429,6 +1429,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final list = _store.messagesOf(chatId).where((m) => _selected.contains(m.id)).toList()..sort((a, b) => a.id.compareTo(b.id));
     if (list.isEmpty) return;
     switch (action) {
+      case 'reply':
+        setState(_selected.clear);
+        _startReply(list.first);
+        return;
       case 'copy':
         final text = list.where((m) => m.text.isNotEmpty).map((m) => list.length > 1 && chat.isGroup ? '${m.sender?.name ?? ''}: ${m.text}' : m.text).join('\n\n');
         await Clipboard.setData(ClipboardData(text: text));
@@ -1471,12 +1475,21 @@ class _ChatScreenState extends State<ChatScreen> {
   PreferredSizeWidget _selectionBar(Chat chat) {
     final noFwd = chat.noForwards;
     return AppBar(
-      leading: IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => setState(_selected.clear)),
-      title: Text('${_selected.length} selected'),
+      leading: IconButton(tooltip: 'Cancel', icon: const Icon(Icons.close_rounded), onPressed: () => setState(_selected.clear)),
+      titleSpacing: 0,
+      title: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 150),
+        transitionBuilder: (c, a) => FadeTransition(opacity: a, child: SlideTransition(position: Tween(begin: const Offset(0, 0.3), end: Offset.zero).animate(a), child: c)),
+        child: Text('${_selected.length}', key: ValueKey(_selected.length), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+      ),
       actions: [
+        if (_selected.length == 1 && chat.canPost && !chat.isChannel)
+          IconButton(tooltip: 'Reply', icon: const Icon(Icons.reply_rounded), onPressed: () => _selectionAction('reply', chat)),
         if (!noFwd) IconButton(tooltip: 'Copy', icon: const Icon(Icons.copy_rounded), onPressed: () => _selectionAction('copy', chat)),
         if (!noFwd) IconButton(tooltip: 'Forward', icon: const Icon(Icons.shortcut_rounded), onPressed: () => _selectionAction('forward', chat)),
-        IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline_rounded), onPressed: () => _selectionAction('delete', chat)),
+        if (!chat.isChannel || chat.can('delete_messages'))
+          IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline_rounded), onPressed: () => _selectionAction('delete', chat)),
+        const SizedBox(width: 4),
       ],
     );
   }
@@ -2174,8 +2187,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 firstInGroup: first,
                 lastInGroup: last,
                 showAvatar: last && chat.isGroup && !mine,
-                // one tap (or a long press) opens the message menu; long press while selecting adds to the selection
-                onLongPress: () => selecting ? setState(() => _selected.add(m.id)) : _messageMenu(m, chat, bctx),
+                // a tap opens the message menu; a long press picks the message (Copy · Forward · Reply · Delete on top),
+                // and more messages can then be picked with a tap
+                onLongPress: m.isSystem || m.isLocal
+                    ? null
+                    : () {
+                        HapticFeedback.mediumImpact();
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        setState(() => _selected.add(m.id));
+                      },
                 onTap: selecting ? null : () => _messageMenu(m, chat, bctx),
                 onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
                 onForward: chat.isChannel && !chat.noForwards && !selecting
