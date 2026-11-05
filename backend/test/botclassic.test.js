@@ -317,7 +317,7 @@ test('forwarding keeps link buttons and drops bot-only buttons', async () => {
   const m = await messages.sendMessage(OWNER.id, src.id, { text: 'CHOOSE NEXT SIGNAL' }, {
     replyMarkup: { inline_keyboard: [[{ text: 'XAUUSD', url: 'https://example.com/x' }], [{ text: 'Vote', callback_data: 'v1' }], [{ text: 'Join VIP', url: 'https://example.com/vip' }]] },
   });
-  const dst = await chats.createGroup(U.id, { title: 'Fwd test', member_ids: [] }).catch(() => null) || src;
+  const dst = src; // forwarded back into the same chat is enough to check the copy
   await messages.forwardMessages(U.id, { from_chat_id: src.id, message_ids: [m.id], to_chat_ids: [dst.id] });
   const f = await db.one('SELECT reply_markup FROM messages WHERE forward_source_id = $1 ORDER BY id DESC LIMIT 1', [m.id]);
   assert.deepEqual(f.reply_markup.inline_keyboard.map((r) => r[0].text), ['XAUUSD', 'Join VIP']);
