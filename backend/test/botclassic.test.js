@@ -287,3 +287,27 @@ test('official bots have their profile pictures (and keep them on restart)', asy
   await require('../src/services/botavatar').ensureAvatar(forge, 'BotForge');
   assert.equal((await db.one('SELECT avatar_media_id FROM users WHERE id = $1', [forge])).avatar_media_id, before);
 });
+
+test('a forwarded channel post shows (and adds to) the original post’s views', async () => {
+  const V = await signup('+923279990011', 'Viewer');
+  const ch = await chats.createChannel(OWNER.id, { title: 'Signals' });
+  await chats.joinPublic(V.id, ch.id).catch(async () => {
+    await db.query(`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`, [ch.id, V.id]);
+  });
+  const post = await messages.sendMessage(OWNER.id, ch.id, { text: 'GOLD SELL' });
+  await messages.recordViews(V.id, ch.id, [post.id]);
+  assert.equal((await db.one('SELECT views_count FROM messages WHERE id = $1', [post.id])).views_count, 1);
+  // forwarded into a private chat with U
+  const pc = await chats.getOrCreatePrivate(OWNER.id, U.id);
+  await messages.forwardMessages(OWNER.id, { from_chat_id: ch.id, message_ids: [post.id], to_chat_ids: [pc.id] });
+  const fwd = await db.one('SELECT id FROM messages WHERE chat_id = $1 AND forward_source_id = $2', [pc.id, post.id]);
+  let list = await messages.listMessages(U.id, pc.id, {});
+  assert.equal(list.messages.find((m) => m.id === fwd.id).views, 1, 'the forward shows the post’s views');
+  // U sees the forward → the original gets U's view too (once)
+  const r = await messages.recordViews(U.id, pc.id, [fwd.id]);
+  assert.equal(r.views[fwd.id], 2);
+  await messages.recordViews(U.id, pc.id, [fwd.id]);
+  assert.equal((await db.one('SELECT views_count FROM messages WHERE id = $1', [post.id])).views_count, 2);
+  list = await messages.listMessages(U.id, pc.id, {});
+  assert.equal(list.messages.find((m) => m.id === fwd.id).views, 2);
+});

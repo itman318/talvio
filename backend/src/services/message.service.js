@@ -144,6 +144,11 @@ async function serializeRows(viewerId, rows) {
   const polls = await loadPolls(viewerId, rows.filter((r) => r.type === 'poll').map((r) => r.id));
   const reactions = await loadReactions(viewerId, ids);
   const mentionRows = await db.many('SELECT message_id, user_id FROM message_mentions WHERE message_id = ANY($1::bigint[])', [ids]);
+  // a forwarded channel post shows the original post's views (like the post itself does)
+  const fwdIds = [...new Set(rows.map((r) => r.forward_source_id).filter(Boolean))];
+  const fwdViews = new Map((fwdIds.length
+    ? await db.many(`SELECT m.id, m.views_count FROM messages m JOIN chats c ON c.id = m.chat_id WHERE m.id = ANY($1::bigint[]) AND c.type = 'channel'`, [fwdIds])
+    : []).map((r) => [r.id, r.views_count || 0]));
   const postIds = rows.filter((r) => !r.thread_id && (chatMap.get(r.chat_id) || {}).type === 'channel').map((r) => r.id);
   const commentRows = postIds.length
     ? await db.many(
@@ -212,7 +217,7 @@ async function serializeRows(viewerId, rows) {
       forwarded_from: m.forwarded_from_name ? { user_id: m.forwarded_from_user_id, name: m.forwarded_from_name } : null,
       reactions: react ? react.list : [],
       my_reaction: react ? react.mine : null,
-      views: m.views_count || 0,
+      views: m.forward_source_id && fwdViews.has(m.forward_source_id) ? fwdViews.get(m.forward_source_id) : m.views_count || 0,
       played: m.type === 'voice' || m.type === 'video_note' ? (playMap.get(m.id) || 0) > 0 : undefined,
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
@@ -1296,8 +1301,22 @@ async function recordViews(userId, chatIdRaw, messageIdsRaw) {
   );
   if (fresh.length) {
     await db.query('UPDATE messages SET views_count = views_count + 1 WHERE id = ANY($1::bigint[])', [fresh.map((r) => r.message_id)]);
+    // seeing a forwarded channel post also counts as a view of the original post (once per person)
+    const src = await db.many(
+      `INSERT INTO message_views (message_id, user_id)
+       SELECT DISTINCT o.id, $2 FROM messages f JOIN messages o ON o.id = f.forward_source_id JOIN chats c ON c.id = o.chat_id
+       WHERE f.id = ANY($1::bigint[]) AND c.type = 'channel' AND o.deleted_at IS NULL
+       ON CONFLICT DO NOTHING RETURNING message_id`,
+      [fresh.map((r) => r.message_id), userId],
+    );
+    if (src.length) await db.query('UPDATE messages SET views_count = views_count + 1 WHERE id = ANY($1::bigint[])', [src.map((r) => r.message_id)]);
   }
-  const rows = await db.many('SELECT id, views_count FROM messages WHERE chat_id = $1 AND id = ANY($2::bigint[])', [chat.id, ids]);
+  const rows = await db.many(
+    `SELECT f.id, COALESCE(CASE WHEN c.type = 'channel' THEN o.views_count END, f.views_count) AS views_count
+     FROM messages f LEFT JOIN messages o ON o.id = f.forward_source_id LEFT JOIN chats c ON c.id = o.chat_id
+     WHERE f.chat_id = $1 AND f.id = ANY($2::bigint[])`,
+    [chat.id, ids],
+  );
   return { views: Object.fromEntries(rows.map((r) => [r.id, r.views_count])) };
 }
 
