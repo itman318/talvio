@@ -1,0 +1,246 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.3.79 available)
+  app_links 6.4.1 (7.2.2 available)
+  audio_session 0.1.25 (0.2.4 available)
+  cached_network_image 3.4.1 (4.0.6 available)
+  cached_network_image_platform_interface 4.1.1 (5.0.3 available)
+  cached_network_image_web 1.3.1 (2.0.4 available)
+  camera 0.11.4 (0.12.2 available)
+  camera_android_camerax 0.6.30 (0.7.6+1 available)
+  camera_avfoundation 0.9.23+2 (0.11.1 available)
+  code_assets 1.2.1 (2.1.0 available)
+  connectivity_plus 6.1.5 (7.3.2 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  dbus 0.7.15 (0.8.0 available)
+  device_info_plus 11.5.0 (13.3.0 available)
+  device_info_plus_platform_interface 7.0.3 (8.1.0 available)
+  file_picker 10.3.10 (13.3.2 available)
+  firebase_core 3.15.2 (5.1.0 available)
+  firebase_core_platform_interface 6.0.3 (8.1.1 available)
+  firebase_core_web 2.24.1 (4.1.0 available)
+  firebase_messaging 15.2.10 (17.0.1 available)
+  firebase_messaging_platform_interface 4.6.10 (4.11.1 available)
+  firebase_messaging_web 3.10.10 (4.3.1 available)
+  flutter_contacts 1.1.9+2 (2.6.0 available)
+  flutter_foreground_task 9.2.2 (11.0.3 available)
+  flutter_lints 4.0.0 (6.0.0 available)
+  flutter_local_notifications 18.0.1 (23.0.0 available)
+  flutter_local_notifications_linux 5.0.0 (9.0.0 available)
+  flutter_local_notifications_platform_interface 8.0.0 (13.0.0 available)
+  flutter_map 7.0.2 (8.3.2 available)
+  flutter_secure_storage 9.2.4 (11.2.0 available)
+  flutter_secure_storage_linux 1.2.3 (3.0.3 available)
+  flutter_secure_storage_macos 3.1.3 (4.0.0 available)
+  flutter_secure_storage_platform_interface 1.1.2 (2.1.1 available)
+  flutter_secure_storage_web 1.2.1 (2.1.1 available)
+  flutter_secure_storage_windows 3.1.2 (4.2.2 available)
+  flutter_webrtc 0.12.12+hotfix.1 (1.6.3 available)
+  geolocator 13.0.4 (14.1.2 available)
+  geolocator_android 4.6.2 (5.2.1 available)
+  google_mlkit_commons 0.13.0 (1.0.0 available)
+  google_mlkit_subject_segmentation 0.2.1 (0.3.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  intl 0.19.0 (0.20.3 available)
+  js 0.6.7 (0.7.2 available)
+  just_audio 0.9.46 (0.10.6 available)
+  latlong2 0.9.1 (0.10.1 available)
+  lints 4.0.0 (6.1.0 available)
+  local_auth 2.3.0 (3.0.2 available)
+  local_auth_android 1.0.56 (2.3.0 available)
+  local_auth_darwin 1.6.1 (2.0.5 available)
+  local_auth_windows 1.0.11 (2.0.2 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  mime 1.0.6 (2.1.0 available)
+  mobile_scanner 5.2.3 (7.5.0 available)
+  nm 0.5.0 (0.6.0 available)
+  no_screenshot 0.3.6 (2.0.1 available)
+  objective_c 9.5.0 (9.6.3 available)
+  open_filex 4.7.0 (5.0.0 available)
+  package_info_plus 9.0.1 (10.2.2 available)
+  package_info_plus_platform_interface 3.2.1 (4.1.0 available)
+  petitparser 7.0.2 (7.1.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  proximity_sensor 1.4.0 (2.0.0 available)
+  qr 3.0.3 (4.0.1 available)
+  record 6.2.1 (7.1.2 available)
+  record_android 1.5.2 (2.2.0 available)
+  record_ios 1.2.1 (2.1.1 available)
+  record_linux 1.3.1 (2.1.3 available)
+  record_macos 1.2.2 (2.1.1 available)
+  record_platform_interface 1.6.0 (2.1.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  record_web 1.3.0 (2.1.3 available)
+  record_windows 1.0.7 (2.3.0 available)
+  sensors_plus 6.1.2 (7.1.1 available)
+  shared_preferences_foundation 2.5.7 (2.6.1 available)
+  test_api 0.7.12 (0.7.15 available)
+  timezone 0.10.1 (0.11.2 available)
+  unicode 0.3.1 (1.1.9 available)
+  vector_math 2.4.0 (2.4.4 available)
+  wakelock_plus 1.5.2 (1.8.2 available)
+  win32 5.15.0 (6.4.0 available)
+  win32_registry 2.1.0 (3.0.3 available)
+  xml 7.0.1 (7.1.0 available)
+Got dependencies!
+84 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Installing ../app-test.apk...                                    1,553ms
+D/FlutterGeolocator( 2444): Creating service.
+D/FlutterGeolocator( 2444): Binding to location service.
+W/FlutterWebRTCPlugin( 2444): audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+I/Choreographer( 2444): Skipped 35 frames!  The application may be doing too much work on its main thread.
+D/FlutterGeolocator( 2444): Geolocator foreground service connected
+D/FlutterGeolocator( 2444): Initializing Geolocator services
+D/FlutterGeolocator( 2444): Flutter engine connected. Connected engine count 1
+W/om.hushavia.ap( 2444): Accessing hidden method Landroid/app/ActivityThread;->currentActivityThread()Landroid/app/ActivityThread; (greylist, linking, allowed)
+W/om.hushavia.ap( 2444): Accessing hidden method Landroid/app/ActivityThread;->getActivity(Landroid/os/IBinder;)Landroid/app/Activity; (greylist, linking, allowed)
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:39205/aOh_lHPGhcU=/
+VMServiceFlutterDriver: Isolate found with number: 2816127416178507
+VMServiceFlutterDriver: Isolate 2816127416178507 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+I/flutter ( 2444): 00:00 +0: login → chats → send message → tabs
+VMServiceFlutterDriver: Connected to Flutter application.
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/flutter ( 2444): Push disabled (Firebase not configured): PlatformException(java.lang.Exception: Failed to load FirebaseOptions from resource. Check that you have defined values.xml correctly., Exception, Cause: null, Stacktrace: java.lang.Exception: Failed to load FirebaseOptions from resource. Check that you have defined values.xml correctly.
+I/flutter ( 2444): 	at io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin.lambda$optionsFromResource$5(FlutterFirebaseCorePlugin.java:222)
+I/flutter ( 2444): 	at io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin.$r8$lambda$UKjIMRLnh50mCq5Rg7c5X1_2d5w(Unknown Source:0)
+I/flutter ( 2444): 	at io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin$$ExternalSyntheticLambda3.run(D8$$SyntheticClass:0)
+I/flutter ( 2444): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)
+I/flutter ( 2444): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)
+I/flutter ( 2444): 	at java.lang.Thread.run(Thread.java:923)
+I/flutter ( 2444): , null)
+D/ProfileInstaller( 2444): Installing profile for com.hushavia.app
+W/IInputConnectionWrapper( 2444): getSelectedText on inactive InputConnection
+W/IInputConnectionWrapper( 2444): requestCursorAnchorInfo on inactive InputConnection
+W/IInputConnectionWrapper( 2444): getTextBeforeCursor on inactive InputConnection
+W/IInputConnectionWrapper( 2444): getTextBeforeCursor on inactive InputConnection
+W/IInputConnectionWrapper( 2444): getTextBeforeCursor on inactive InputConnection
+W/IInputConnectionWrapper( 2444): getTextBeforeCursor on inactive InputConnection
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/InputConnectionAdaptor( 2444): The input method toggled cursor monitoring on
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 1 line
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/InputConnectionAdaptor( 2444): The input method toggled cursor monitoring on
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/om.hushavia.ap( 2444): Explicit concurrent copying GC freed 22390(1383KB) AllocSpace objects, 13(692KB) LOS objects, 49% free, 3462KB/6924KB, paused 38us total 15.466ms
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/InputConnectionAdaptor( 2444): The input method toggled cursor monitoring on
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+I/chatty  ( 2444): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2444): Sending viewport metrics to the engine.
+W/Gralloc4( 2444): allocator 3.x is not supported
+I/flutter ( 2444): SCREENSHOT 01-chats
+I/flutter ( 2444): SCREENSHOT 02-settings
+I/flutter ( 2444): 
+I/flutter ( 2444): Warning: A call to drag() with finder "Found 1 widget with type "Scrollable" (ignoring all but first): [
+I/flutter ( 2444):   Scrollable(axisDirection: down, physics: AlwaysScrollableScrollPhysics, restorationId: null, dependencies: [InheritedCupertinoTheme, MediaQuery, ScrollConfiguration, UnmanagedRestorationScope, _InheritedTheme, _LocalizationsScope-[GlobalKey#b58ea]], state: ScrollableState#245e6(position: ScrollPositionWithSingleContext#6fb26(offset: 0.0, range: 0.0..2172.0, viewport: 492.0, ScrollableState, AlwaysScrollableScrollPhysics -> ClampingScrollPhysics -> RangeMaintainingScrollPhysics, IdleScrollActivity#aea0d, ScrollDirection.idle), effective physics: AlwaysScrollableScrollPhysics -> ClampingScrollPhysics -> RangeMaintainingScrollPhysics)),
+I/flutter ( 2444): ]" derived an Offset (Offset(160.0, 326.0)) that would not hit test on the specified widget.
+I/flutter ( 2444): Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+I/flutter ( 2444): The finder corresponds to this RenderBox: RenderClipRect#ba875 relayoutBoundary=up5
+I/flutter ( 2444): The hit test result at that offset is: HitTestResult(HitTestEntry<HitTestTarget>#85465(TextSpan(debugLabel: (englishLike bodyMedium 2021).merge((((blackMountainView bodyMedium).apply).apply).copyWith), inherit: false, color: Color(alpha: 1.0000, red: 0.0706, green: 0.0824, blue: 0.1647, colorSpace: ColorSpace.sRGB), family: Jakarta, size: 14.0, weight: 400, letterSpacing: 0.3, baseline: alphabetic, height: 1.4x, leadingDistribution: even, decoration: Color(alpha: 1.0000, red: 0.0706, green: 0.0824, blue: 0.1647, colorSpace: ColorSpace.sRGB) TextDecoration.none, "Your phone may pause Hushavia in the background to save battery, so messages and calls can arrive late. Allow Hushavia to run in the background to get every notification on time.")), RenderParagraph#7cf68@Offset(96.0, 48.0), RenderSemanticsAnnotations#e4a86@Offset(96.0, 48.0), RenderPadding#a7541@Offset(120.0, 64.0), RenderFlex#36a26@Offset(120.0, 188.0), RenderIntrinsicWidth#32448@Offset(120.0, 188.0), RenderSemanticsAnnotations#575e5@Offset(120.0, 
+I/flutter ( 2444): #0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+I/flutter ( 2444): #1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+I/flutter ( 2444): #2      WidgetController.drag (package:flutter_test/src/controller.dart:1604:7)
+I/flutter ( 2444): #3      main.<anonymous closure> (file:///home/runner/work/talvio/talvio/mobile/integration_test/app_test.dart:88:15)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #6      TestWidgetsFlutterBinding._createTestCompletionHandler.<anonymous closure> (package:flutter_test/src/binding.dart:1707:12)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): To silence this warning, pass "warnIfMissed: false" to "drag()".
+I/flutter ( 2444): To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+I/flutter ( 2444): 
+I/flutter ( 2444): SCREENSHOT 03-settings-more
+I/flutter ( 2444): 
+I/flutter ( 2444): Warning: A call to drag() with finder "Found 1 widget with type "Scrollable" (ignoring all but first): [
+I/flutter ( 2444):   Scrollable(axisDirection: down, physics: AlwaysScrollableScrollPhysics, restorationId: null, dependencies: [InheritedCupertinoTheme, MediaQuery, ScrollConfiguration, UnmanagedRestorationScope, _InheritedTheme, _LocalizationsScope-[GlobalKey#b58ea]], state: ScrollableState#245e6(position: ScrollPositionWithSingleContext#6fb26(offset: 0.0, range: 0.0..2172.0, viewport: 492.0, ScrollableState, AlwaysScrollableScrollPhysics -> ClampingScrollPhysics -> RangeMaintainingScrollPhysics, IdleScrollActivity#aea0d, ScrollDirection.idle), effective physics: AlwaysScrollableScrollPhysics -> ClampingScrollPhysics -> RangeMaintainingScrollPhysics)),
+I/flutter ( 2444): ]" derived an Offset (Offset(160.0, 326.0)) that would not hit test on the specified widget.
+I/flutter ( 2444): Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+I/flutter ( 2444): The finder corresponds to this RenderBox: RenderClipRect#ba875 relayoutBoundary=up5
+I/flutter ( 2444): The hit test result at that offset is: HitTestResult(HitTestEntry<HitTestTarget>#975b9(TextSpan(debugLabel: (englishLike bodyMedium 2021).merge((((blackMountainView bodyMedium).apply).apply).copyWith), inherit: false, color: Color(alpha: 1.0000, red: 0.0706, green: 0.0824, blue: 0.1647, colorSpace: ColorSpace.sRGB), family: Jakarta, size: 14.0, weight: 400, letterSpacing: 0.3, baseline: alphabetic, height: 1.4x, leadingDistribution: even, decoration: Color(alpha: 1.0000, red: 0.0706, green: 0.0824, blue: 0.1647, colorSpace: ColorSpace.sRGB) TextDecoration.none, "Your phone may pause Hushavia in the background to save battery, so messages and calls can arrive late. Allow Hushavia to run in the background to get every notification on time.")), RenderParagraph#7cf68@Offset(96.0, 48.0), RenderSemanticsAnnotations#e4a86@Offset(96.0, 48.0), RenderPadding#a7541@Offset(120.0, 64.0), RenderFlex#36a26@Offset(120.0, 188.0), RenderIntrinsicWidth#32448@Offset(120.0, 188.0), RenderSemanticsAnnotations#575e5@Offset(120.0, 
+I/flutter ( 2444): #0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+I/flutter ( 2444): #1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+I/flutter ( 2444): #2      WidgetController.drag (package:flutter_test/src/controller.dart:1604:7)
+I/flutter ( 2444): #3      main.<anonymous closure> (file:///home/runner/work/talvio/talvio/mobile/integration_test/app_test.dart:91:15)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #6      TestWidgetsFlutterBinding._createTestCompletionHandler.<anonymous closure> (package:flutter_test/src/binding.dart:1707:12)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): To silence this warning, pass "warnIfMissed: false" to "drag()".
+I/flutter ( 2444): To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+I/flutter ( 2444): 
+I/flutter ( 2444): 
+I/flutter ( 2444): Warning: A call to tap() with finder "Found 1 widget with text "Profile" (ignoring all but last): [
+I/flutter ( 2444):   Text("Profile", inherit: true, color: Color(alpha: 1.0000, red: 0.3686, green: 0.3922, blue: 0.4784, colorSpace: ColorSpace.sRGB), family: Jakarta, size: 12.0, weight: 500, dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery]),
+I/flutter ( 2444): ]" derived an Offset (Offset(280.0, 624.0)) that would not hit test on the specified widget.
+I/flutter ( 2444): Maybe the widget is actually off-screen, or another widget is obscuring it, or the widget cannot receive pointer events.
+I/flutter ( 2444): The finder corresponds to this RenderBox: RenderParagraph#7e3ee relayoutBoundary=up27
+I/flutter ( 2444): The hit test result at that offset is: HitTestResult(_RenderColoredBox#2b671@Offset(280.0, 624.0), RenderConstrainedBox#9d671@Offset(280.0, 624.0), RenderMouseRegion#ba46e@Offset(280.0, 624.0), RenderSemanticsAnnotations#8f4d3@Offset(280.0, 624.0), RenderPointerListener#87158@Offset(280.0, 624.0), RenderSemanticsGestureHandler#e6672@Offset(280.0, 624.0), RenderExcludeSemantics#89ec1@Offset(280.0, 624.0), RenderBlockSemantics#aeb17@Offset(280.0, 624.0), RenderIgnorePointer#b1063@Offset(280.0, 624.0), RenderSemanticsAnnotations#6596e@Offset(280.0, 624.0), _RenderTheater#fa8c3@Offset(280.0, 624.0), RenderAbsorbPointer#fe63a@Offset(280.0, 624.0), RenderPointerListener#f0da4@Offset(280.0, 624.0), RenderSemanticsAnnotations#c2ead@Offset(280.0, 624.0), RenderStack#d300a@Offset(280.0, 624.0), RenderAnnotatedRegion<SystemUiOverlayStyle>#45bd7@Offset(280.0, 624.0), RenderSemanticsAnnotations#73bbd@Offset(280.0, 624.0), RenderSemanticsAnnotations#38617@Offset(280.0, 624.0), RenderSemanticsAnnotations#1a8fe@Offset(280.0
+I/flutter ( 2444): #0      WidgetController._getElementPoint (package:flutter_test/src/controller.dart:2165:25)
+I/flutter ( 2444): #1      WidgetController.getCenter (package:flutter_test/src/controller.dart:1947:12)
+I/flutter ( 2444): #2      WidgetController.tap (package:flutter_test/src/controller.dart:1080:7)
+I/flutter ( 2444): #3      main.<anonymous closure> (file:///home/runner/work/talvio/talvio/mobile/integration_test/app_test.dart:93:15)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): #6      TestWidgetsFlutterBinding._createTestCompletionHandler.<anonymous closure> (package:flutter_test/src/binding.dart:1707:12)
+I/flutter ( 2444): <asynchronous suspension>
+I/flutter ( 2444): To silence this warning, pass "warnIfMissed: false" to "tap()".
+I/flutter ( 2444): To make this warning fatal, set WidgetController.hitTestWarningShouldBeFatal to true.
+I/flutter ( 2444): 
+I/om.hushavia.ap( 2444): Explicit concurrent copying GC freed 17554(886KB) AllocSpace objects, 27(1252KB) LOS objects, 49% free, 3474KB/6949KB, paused 11us total 6.068ms
+I/flutter ( 2444): SCREENSHOT 04-my-profile
+I/flutter ( 2444): SCREENSHOT 05-chat
+Unhandled exception:
+DriverError: Failed to fulfill RequestData due to remote error
+Original error: ext.flutter.driver: (112) Service has disappeared
+Original stack trace:
+#0      new _OutstandingRequest (package:vm_service/src/vm_service.dart:280:34)
+#1      VmService._call.<anonymous closure> (package:vm_service/src/vm_service.dart:1962:25)
+#2      VmService._call (package:vm_service/src/vm_service.dart:1974:8)
+#3      VmService.callServiceExtension (package:vm_service/src/vm_service.dart:1913:14)
+#4      VMServiceFlutterDriver.sendCommand (package:flutter_driver/src/driver/vmservice_driver.dart:327:12)
+#5      FlutterDriver.requestData (package:flutter_driver/src/driver/driver.dart:585:13)
+#6      integrationDriver (package:integration_test/integration_test_driver_extended.dart:87:38)
+<asynchronous suspension>
+
+
+#0      VMServiceFlutterDriver.sendCommand (package:flutter_driver/src/driver/vmservice_driver.dart:340:7)
+<asynchronous suspension>
+#1      FlutterDriver.requestData (package:flutter_driver/src/driver/driver.dart:585:7)
+<asynchronous suspension>
+#2      integrationDriver (package:integration_test/integration_test_driver_extended.dart:87:25)
+<asynchronous suspension>
+Failed to stop app
+adb uninstall failed: ProcessException: Process exited abnormally with exit code 1:
+adb: device offline
+  Command: /usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 uninstall com.hushavia.app
+Failed to uninstall app

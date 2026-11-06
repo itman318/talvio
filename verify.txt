@@ -1,0 +1,4 @@
+FAIL: the message sent from the app did not reach the other user. Last: [
+  'Have you seen the new design? 🔥',
+  'Hello! How is the app working for you?'
+]
