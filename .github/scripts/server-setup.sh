@@ -122,6 +122,11 @@ log "Database backup"
 mkdir -p /var/backups/hushavia && chmod 700 /var/backups/hushavia
 sudo -u postgres pg_dump hushavia 2>/dev/null | gzip > "/var/backups/hushavia/before-deploy-$(date +%Y%m%d-%H%M%S).sql.gz" && echo "backup: saved" || echo "backup: skipped"
 ls -1t /var/backups/hushavia/before-deploy-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f   # keep the last 10
+# and every night at 03:15 (server time): a full database copy, the last 14 days kept
+cat > /etc/cron.d/hushavia-backup <<'CRON'
+15 3 * * * root mkdir -p /var/backups/hushavia && sudo -u postgres pg_dump hushavia | gzip > /var/backups/hushavia/daily-$(date +\%Y\%m\%d).sql.gz && ls -1t /var/backups/hushavia/daily-*.sql.gz | tail -n +15 | xargs -r rm -f
+CRON
+chmod 644 /etc/cron.d/hushavia-backup
 
 log "Database migration"
 (cd "$APP_DIR" && node scripts/migrate.js)
