@@ -130,7 +130,9 @@ jobs:
           case "$API" in http://*|https://*) ;; *) API="http://$API" ;; esac
           echo "API_BASE=$API" >> "$GITHUB_ENV"
           # version number 10000+ (the 64-bit APK becomes 12000+): always above older builds, so it updates over them
-          DEFINES="--dart-define=API_BASE=$API --build-number=$((10000 + ${{ github.run_number }}))"
+          # every build has its own version: 1.1.<build> (shown in Settings, Devices and login codes)
+          VER="1.1.${{ github.run_number }}"
+          DEFINES="--dart-define=API_BASE=$API --dart-define=APP_VERSION=$VER --build-name=$VER --build-number=$((10000 + ${{ github.run_number }}))"
           # one small APK per phone type (like Telegram): 64-bit phones (almost all) get hushavia.apk,
           # older 32-bit Android gets hushavia-arm32.apk, the x86_64 one is only for the emulator.
           # debug symbols are kept out of the app (smaller download).
@@ -165,7 +167,7 @@ jobs:
           fi
           R="${{ github.repository }}"; TAG="${{ inputs.tag || 'android-latest' }}"
           TITLE="Hushavia Android (test build #${{ github.run_number }})"
-          NOTES="Built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${API_BASE:-http://10.0.2.2:4000 (emulator only - set the API_BASE variable)}"
+          NOTES="Hushavia 1.1.${{ github.run_number }} · built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${API_BASE:-http://10.0.2.2:4000 (emulator only - set the API_BASE variable)}"
           for i in 1 2 3; do
             if gh release view "$TAG" -R "$R" >/dev/null 2>&1; then
               gh release upload "$TAG" $FILES --clobber -R "$R" &&

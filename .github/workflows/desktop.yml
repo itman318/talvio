@@ -115,7 +115,7 @@ jobs:
           API="$(echo "$API_BASE_RAW" | tr -d '[:space:]' | sed -E 's#/[0-9]{1,3}$##; s#/+$##')"
           case "$API" in http://*|https://*) ;; *) API="http://$API" ;; esac
           set -o pipefail
-          flutter build ${{ matrix.platform }} --release --dart-define=API_BASE=$API --build-number=${{ github.run_number }} 2>&1 | tail -300 | tee ../ci-report/build-${{ matrix.platform }}.txt
+          flutter build ${{ matrix.platform }} --release --dart-define=API_BASE=$API --dart-define=APP_VERSION=1.1.${{ github.run_number }} --build-name=1.1.${{ github.run_number }} --build-number=${{ github.run_number }} 2>&1 | tail -300 | tee ../ci-report/build-${{ matrix.platform }}.txt
 
       - name: Linux start-up check (screenshot)
         if: steps.build.outcome == 'success' && matrix.platform == 'linux'

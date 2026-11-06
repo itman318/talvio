@@ -9,7 +9,8 @@ class AppConfig {
   static const String serverUrl = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:4000');
   static const String apiBase = '$serverUrl/api';
   static const String appName = 'Hushavia';
-  static const String appVersion = '1.0.0';
+  /// Set by the build: 1.1.<build number> (e.g. 1.1.221) — every APK gets its own version.
+  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.1.0');
   static const String defaultCountryCode = '+44';
 
   /// Absolute URL for a path returned by the API (e.g. "/api/media/12/public").
