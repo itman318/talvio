@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -17,7 +19,25 @@ import 'chat_store.dart';
 enum AuthStatus { loading, loggedOut, needsProfile, loggedIn, maintenance, updateRequired }
 
 class AuthState extends ChangeNotifier {
-  AuthState(this.services, this.chats);
+  AuthState(this.services, this.chats) {
+    _loadDeviceModel();
+  }
+
+  /// "Infinix X6880 · Android 15": the phone's real name for login codes and Settings → Devices.
+  static String? _model;
+  static Future<void> _loadDeviceModel() async {
+    try {
+      final info = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final a = await info.androidInfo;
+        final brand = a.manufacturer.isEmpty ? '' : '${a.manufacturer[0].toUpperCase()}${a.manufacturer.substring(1)} ';
+        _model = '$brand${a.model} · Android ${a.version.release}';
+      } else if (Platform.isIOS) {
+        final i = await info.iosInfo;
+        _model = '${i.utsname.machine} · iOS ${i.systemVersion}';
+      }
+    } catch (_) {}
+  }
 
   final AppServices services;
   final ChatStore chats;
@@ -203,7 +223,7 @@ class AuthState extends ChangeNotifier {
   // ------------------------------------------------------------------ login
   /// [byFallback]: skip the in-app delivery and send it by SMS.
   Future<Map<String, dynamic>> requestOtp(String phone, {bool byFallback = false}) async {
-    return Map<String, dynamic>.from(await api.post('/auth/otp/request', {'phone': phone, if (byFallback) 'via': 'sms'}) as Map);
+    return Map<String, dynamic>.from(await api.post('/auth/otp/request', {'phone': phone, 'device': _device, if (byFallback) 'via': 'sms'}) as Map);
   }
 
   Future<void> verifyOtp(String phone, String code) =>
@@ -212,7 +232,7 @@ class AuthState extends ChangeNotifier {
   /// Login code by email (free) — the account is identified by the email address.
   /// [byFallback]: skip the in-app delivery and send it by email.
   Future<Map<String, dynamic>> requestEmailCode(String email, {bool byFallback = false}) async {
-    return Map<String, dynamic>.from(await api.post('/auth/email/request', {'email': email, if (byFallback) 'via': 'email'}) as Map);
+    return Map<String, dynamic>.from(await api.post('/auth/email/request', {'email': email, 'device': _device, if (byFallback) 'via': 'email'}) as Map);
   }
 
   Future<void> verifyEmailCode(String email, String code) =>
@@ -224,7 +244,17 @@ class AuthState extends ChangeNotifier {
 
   Map<String, dynamic> get _device => {
         'name': _deviceName(),
-        'platform': Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'other'),
+        'platform': Platform.isAndroid
+            ? 'android'
+            : Platform.isIOS
+                ? 'ios'
+                : Platform.isWindows
+                    ? 'windows'
+                    : Platform.isMacOS
+                        ? 'macos'
+                        : Platform.isLinux
+                            ? 'linux'
+                            : 'other',
         'app_version': AppConfig.appVersion,
       };
 
@@ -452,7 +482,7 @@ class AuthState extends ChangeNotifier {
   }
 
   static String _deviceName() {
-    final s = '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+    final s = _model ?? '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
     return s.length > 100 ? s.substring(0, 100) : s;
   }
 

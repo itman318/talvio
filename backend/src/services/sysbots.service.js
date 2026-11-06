@@ -108,18 +108,25 @@ function which(id) {
 }
 
 /** A login code delivered to the person's Hushavia app (their other logged-in devices). */
-async function sendLoginCode(userId, code, ip) {
+async function sendLoginCode(userId, code, ip, device = null) {
   const me = await ensureOne('login');
   const chat = await require('./chat.service').getOrCreatePrivate(userId, me); // eslint-disable-line global-require
-  const where = ip ? `\n\nRequested from IP ${String(ip).replace(/^::ffff:/, '')}.` : '';
+  const geo = require('../utils/geo'); // eslint-disable-line global-require
+  const g = geo.lookup(ip);
+  const dev = geo.deviceLabel(device);
   const text = [
     `🔐 Login code: **${code}**`,
     '',
     'Don’t give this code to anyone — not even someone who says they’re from Hushavia. We never ask for it.',
-    `Someone is logging in to your account on a new device.${where}`,
     '',
-    'Wasn’t you? Ignore this message, and turn on two-step verification in Settings → Privacy & security.',
-  ].join('\n');
+    '**Login attempt**',
+    `📱 Device: ${dev || 'a new device'}`,
+    `📍 Location: ${g.label || 'unknown'}`,
+    g.ip ? `🌐 IP: ${g.ip}` : null,
+    `🕓 Time: ${geo.localTime(new Date(), g.timezone)}`,
+    '',
+    'Wasn’t you? Don’t share the code — and turn on two-step verification in Settings → Privacy & security.',
+  ].filter((x) => x !== null).join('\n');
   await say('login', chat.id, text, [[{ text: '📋 Copy code', copy_text: { text: String(code) } }]]);
   return true;
 }

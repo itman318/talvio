@@ -23,7 +23,8 @@
     "socket.io": "^4.8.1"
   },
   "optionalDependencies": {
-    "firebase-admin": "^12.7.0"
+    "firebase-admin": "^12.7.0",
+    "geoip-lite": "^1.4.10"
   },
   "devDependencies": {
     "socket.io-client": "^4.8.1"

@@ -96,7 +96,7 @@ test('logged in on another device: the code arrives in the Hushavia app (no emai
   assert.equal(r.delivery, 'email', 'a brand-new account gets an email');
   const s = await auth.verifyEmailCode('two.devices@example.com', r.dev_code, { platform: 'android' }, '10.1.0.20');
   rateLimit.reset();
-  const again = await auth.requestEmailCode('two.devices@example.com', '10.1.0.21');
+  const again = await auth.requestEmailCode('two.devices@example.com', '39.32.0.10', { device: { name: 'Infinix X6880 · Android 15', platform: 'android', app_version: '1.0.0' } });
   assert.equal(again.delivery, 'app');
   const sysbots = require('../src/services/sysbots.service');
   const ids = await sysbots.ensure();
@@ -106,10 +106,13 @@ test('logged in on another device: the code arrives in the Hushavia app (no emai
     [s.user.id, ids.login],
   );
   assert.ok(msg.text.includes(again.dev_code), 'the code is in the app message');
+  assert.match(msg.text, /Device: Infinix X6880 · Android 15 · Android · Hushavia 1\.0\.0/);
+  assert.match(msg.text, /Location: /);
+  assert.match(msg.text, /IP: 39\.32\.0\.10/);
   assert.equal(msg.reply_markup.inline_keyboard[0][0].copy_text.text, again.dev_code);
   // "send it by email instead" works right away
-  const byMail = await auth.requestEmailCode('two.devices@example.com', '10.1.0.21', { fallback: true });
+  const byMail = await auth.requestEmailCode('two.devices@example.com', '39.32.0.10', { fallback: true });
   assert.equal(byMail.delivery, 'email');
-  const done = await auth.verifyEmailCode('two.devices@example.com', byMail.dev_code, {}, '10.1.0.21');
+  const done = await auth.verifyEmailCode('two.devices@example.com', byMail.dev_code, {}, '39.32.0.10');
   assert.ok(done.access_token);
 });

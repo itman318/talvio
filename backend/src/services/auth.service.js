@@ -13,7 +13,7 @@ const v = require('../utils/validate');
 const { randomToken, sha256, hmac, safeEqual, randomDigits, signJwt, verifyJwt } = require('../utils/crypto');
 const { badRequest, unauthorized, forbidden } = require('../utils/errors');
 
-const PLATFORMS = ['android', 'ios', 'web', 'desktop', 'other'];
+const PLATFORMS = ['android', 'ios', 'web', 'desktop', 'windows', 'macos', 'linux', 'other'];
 
 function otpHash(phone, code) {
   return hmac(config.otpSecret, `${phone}:${code}`);
@@ -87,7 +87,7 @@ async function issueCode(target, kind, ip, opts = {}) {
     );
     if (active) {
       try {
-        await require('./sysbots.service').sendLoginCode(existing.id, code, ip); // eslint-disable-line global-require
+        await require('./sysbots.service').sendLoginCode(existing.id, code, ip, opts.device); // eslint-disable-line global-require
         delivery = 'app';
       } catch (err) {
         console.error('in-app login code failed:', err.message); // eslint-disable-line no-console
@@ -195,7 +195,9 @@ async function recordLoginEvent(userId, kind, device, ip, sessionId = null) {
 /** "New login on <device>": tells the account's other devices, so a stranger's login can be logged out at once. */
 async function alertNewLogin(userId, sessionId, d, ip = null) {
   const where = [d.name, d.platform, d.appVersion ? `Hushavia ${d.appVersion}` : null].filter(Boolean).join(' · ') || 'a new device';
-  await require('./notice.service').notify(userId, 'login', 'New login to your account', `${where}${ip ? ` · IP ${String(ip).replace(/^::ffff:/, '')}` : ''}. If this wasn't you, open Settings → Devices and log it out, then turn on two-step verification.`, { session_id: sessionId });
+  const g = require('../utils/geo').lookup(ip); // eslint-disable-line global-require
+  const place = [g.label, g.ip ? `IP ${g.ip}` : null].filter(Boolean).join(' · ');
+  await require('./notice.service').notify(userId, 'login', 'New login to your account', `${where}${place ? ` · ${place}` : ''}. If this wasn't you, open Settings → Devices and log it out, then turn on two-step verification.`, { session_id: sessionId });
   const others = await db.many(
     'SELECT id FROM sessions WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL AND expires_at > now()',
     [userId, sessionId],
@@ -209,7 +211,7 @@ async function alertNewLogin(userId, sessionId, d, ip = null) {
   });
   await require('./push.service').sendToUsers(
     [userId],
-    { title: 'New login to your account', body: `${device} just logged in. Not you? Open Hushavia to log it out.` },
+    { title: 'New login to your account', body: `${device}${g.label ? ` in ${g.label}` : ''} just logged in. Not you? Open Hushavia to log it out.` },
     { type: 'new_login', session_id: sessionId },
     { tag: `login-${sessionId}` },
   );
