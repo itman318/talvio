@@ -45,6 +45,9 @@ jobs:
           sudo -u postgres psql -d hushavia -tAc "SELECT u.id, u.username, b.status FROM bots b JOIN users u ON u.id = b.user_id WHERE u.username IN ('BotForge','HushaviaIDBot')"
           echo "--- recent replies (type, reply target, first bytes of the target)"
           sudo -u postgres psql -d hushavia -tAc "SELECT m.id, m.chat_id, m.type, m.reply_to_id, r.type, r.sender_id, length(r.text), encode(convert_to(left(r.text, 12), 'UTF8'), 'hex'), r.meta::text FROM messages m JOIN messages r ON r.id = m.reply_to_id WHERE m.created_at > now() - interval '1 day' ORDER BY m.id DESC LIMIT 6"
+          echo "--- geo lookup"
+          (cd /opt/hushavia/app && node -e "const g=require('./src/utils/geo');console.log(JSON.stringify(g.lookup('39.32.0.10')))") 2>&1 | tail -2
+          ls /etc/cron.d/hushavia-backup 2>&1
           echo "--- ids"
           sudo -u postgres psql -d hushavia -tAc "SELECT 'users', min(id), max(id), count(*) FROM users UNION ALL SELECT 'chats', min(id), max(id), count(*) FROM chats"
           sudo -u postgres psql -d hushavia -tAc "SELECT name, ran_at FROM hushavia_migrations"
