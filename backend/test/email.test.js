@@ -89,3 +89,27 @@ test('code email content', () => {
   assert.match(m.text, /123456/);
   assert.match(m.html, /123456/);
 });
+
+test('logged in on another device: the code arrives in the Hushavia app (no email), email on request', async () => {
+  rateLimit.reset();
+  const r = await auth.requestEmailCode('two.devices@example.com', '10.1.0.20');
+  assert.equal(r.delivery, 'email', 'a brand-new account gets an email');
+  const s = await auth.verifyEmailCode('two.devices@example.com', r.dev_code, { platform: 'android' }, '10.1.0.20');
+  rateLimit.reset();
+  const again = await auth.requestEmailCode('two.devices@example.com', '10.1.0.21');
+  assert.equal(again.delivery, 'app');
+  const sysbots = require('../src/services/sysbots.service');
+  const ids = await sysbots.ensure();
+  const msg = await db.one(
+    `SELECT m.text, m.reply_markup FROM messages m JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1
+     WHERE m.sender_id = $2 ORDER BY m.id DESC LIMIT 1`,
+    [s.user.id, ids.login],
+  );
+  assert.ok(msg.text.includes(again.dev_code), 'the code is in the app message');
+  assert.equal(msg.reply_markup.inline_keyboard[0][0].copy_text.text, again.dev_code);
+  // "send it by email instead" works right away
+  const byMail = await auth.requestEmailCode('two.devices@example.com', '10.1.0.21', { fallback: true });
+  assert.equal(byMail.delivery, 'email');
+  const done = await auth.verifyEmailCode('two.devices@example.com', byMail.dev_code, {}, '10.1.0.21');
+  assert.ok(done.access_token);
+});

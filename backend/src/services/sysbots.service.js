@@ -43,6 +43,13 @@ const BOTS = {
       { command: 'appeal', description: 'Ask the team to review a limit' },
     ],
   },
+  login: {
+    username: 'HushaviaCodes',
+    name: 'Hushavia',
+    bio: 'Login codes and security alerts for your account. Never share a code with anyone.',
+    about: 'I send your Hushavia login codes here, so you don’t need email or SMS when you’re already logged in on another device.',
+    commands: [],
+  },
   buttons: {
     username: 'HushaviaButtonsBot',
     name: 'Button Maker',
@@ -98,6 +105,23 @@ async function ensure() {
 function which(id) {
   const n = Number(id);
   return Object.keys(ids).find((k) => ids[k] === n) || null;
+}
+
+/** A login code delivered to the person's Hushavia app (their other logged-in devices). */
+async function sendLoginCode(userId, code, ip) {
+  const me = await ensureOne('login');
+  const chat = await require('./chat.service').getOrCreatePrivate(userId, me); // eslint-disable-line global-require
+  const where = ip ? `\n\nRequested from IP ${String(ip).replace(/^::ffff:/, '')}.` : '';
+  const text = [
+    `🔐 Login code: **${code}**`,
+    '',
+    'Don’t give this code to anyone — not even someone who says they’re from Hushavia. We never ask for it.',
+    `Someone is logging in to your account on a new device.${where}`,
+    '',
+    'Wasn’t you? Ignore this message, and turn on two-step verification in Settings → Privacy & security.',
+  ].join('\n');
+  await say('login', chat.id, text, [[{ text: '📋 Copy code', copy_text: { text: String(code) } }]]);
+  return true;
 }
 
 async function say(key, chatId, text, buttons = null) {
@@ -278,6 +302,7 @@ async function onMessage(botId, senderId, chat, row) {
   if (key === 'support') await supportMessage(senderId, chat.id, row);
   if (key === 'spam') await spamMessage(senderId, chat.id, row);
   if (key === 'buttons') await require('./buttonbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
+  if (key === 'login') await say('login', chat.id, 'I only send login codes and security alerts. For help, write to @HushaviaSupportBot.');
   return true;
 }
 
@@ -298,4 +323,4 @@ async function onCallback(botId, userId, chatId, data) {
   return null;
 }
 
-module.exports = { ensure, ensureOne, say, which, onMessage, onCallback, BOTS, TAG };
+module.exports = { ensure, ensureOne, say, which, onMessage, onCallback, sendLoginCode, BOTS, TAG };

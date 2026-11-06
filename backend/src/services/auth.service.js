@@ -52,9 +52,11 @@ async function liftExpiredBan(u) {
  * Login codes. `target` is the normalized phone ("+92…", sent by SMS) or email address
  * (sent by email); both use the same otp_codes table and the same verification rules.
  */
-async function issueCode(target, kind, ip) {
+async function issueCode(target, kind, ip, opts = {}) {
   const label = kind === 'email' ? 'email address' : 'number';
-  rateLimit.enforce(`otp:phone1m:${target}`, 1, 60 * 1000, 'Please wait a minute before requesting another code');
+  // "send it by email instead" right after an in-app code is allowed at once (still limited per hour)
+  if (!opts.fallback) rateLimit.enforce(`otp:phone1m:${target}`, 1, 60 * 1000, 'Please wait a minute before requesting another code');
+  else rateLimit.enforce(`otp:fallback:${target}`, 2, 10 * 60 * 1000, 'Please wait a minute before requesting another code');
   rateLimit.enforce(`otp:phone1h:${target}`, 5, 60 * 60 * 1000, `Too many codes requested for this ${label}. Try later.`);
   rateLimit.enforce(`otp:ip:${ip}`, 20, 60 * 60 * 1000);
 
@@ -74,9 +76,30 @@ async function issueCode(target, kind, ip) {
     [target, otpHash(target, code), ip || null, config.otp.ttlSec],
   );
 
+  // Like Telegram: someone already logged in on another device gets the code inside the Hushavia app,
+  // free and instant — email / SMS only when there is no such device or they ask for it.
+  let delivery = kind;
+  if (existing && !opts.fallback && !existing.is_bot) {
+    const active = await db.one(
+      `SELECT 1 AS x FROM sessions WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+         AND last_active_at > now() - interval '30 days' LIMIT 1`,
+      [existing.id],
+    );
+    if (active) {
+      try {
+        await require('./sysbots.service').sendLoginCode(existing.id, code, ip); // eslint-disable-line global-require
+        delivery = 'app';
+      } catch (err) {
+        console.error('in-app login code failed:', err.message); // eslint-disable-line no-console
+      }
+    }
+  }
+
   if (config.otp.devMode) {
     // eslint-disable-next-line no-console
     console.log(`[OTP dev mode] ${target} → ${code}`);
+  } else if (delivery === 'app') {
+    // delivered in the app — no email / SMS needed
   } else if (kind === 'email') {
     const m = mail.codeEmail(code);
     await mail.send(target, m.subject, m.text, m.html);
@@ -86,6 +109,7 @@ async function issueCode(target, kind, ip) {
 
   return {
     [kind]: target,
+    delivery, // 'app' | 'email' | 'phone'
     expires_in: config.otp.ttlSec,
     ...(config.otp.devMode ? { dev_code: code } : {}),
   };
@@ -97,20 +121,26 @@ function findUserByTarget(target, kind) {
     : db.one('SELECT * FROM users WHERE phone = $1', [target]);
 }
 
-async function requestOtp(rawPhone, ip) {
+async function requestOtp(rawPhone, ip, opts = {}) {
   const phone = v.normalizePhone(rawPhone);
   // no SMS gateway on a live server: say so clearly, the app then offers email instead
   if (config.isProd && config.sms.provider === 'console') {
-    throw badRequest('sms_unavailable', 'SMS verification isn’t available in your country yet. Please continue with your email address.');
+    // no SMS — but someone logged in on another device can still get the code in the app
+    const u = opts.fallback ? null : await db.one(
+      `SELECT u.id FROM users u JOIN sessions s ON s.user_id = u.id AND s.revoked_at IS NULL AND s.expires_at > now()
+       WHERE u.phone = $1 AND s.last_active_at > now() - interval '30 days' LIMIT 1`,
+      [phone],
+    );
+    if (!u) throw badRequest('sms_unavailable', 'SMS verification isn’t available in your country yet. Please continue with your email address.');
   }
   if (await moderation.isPhoneBlocked(phone)) {
     throw forbidden('phone_not_allowed', 'This phone number cannot be used to sign up');
   }
-  return issueCode(phone, 'phone', ip);
+  return issueCode(phone, 'phone', ip, opts);
 }
 
-async function requestEmailCode(rawEmail, ip) {
-  return issueCode(v.normalizeEmail(rawEmail), 'email', ip);
+async function requestEmailCode(rawEmail, ip, opts = {}) {
+  return issueCode(v.normalizeEmail(rawEmail), 'email', ip, opts);
 }
 
 function parseDevice(device) {

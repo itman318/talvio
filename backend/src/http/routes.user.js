@@ -47,7 +47,7 @@ router.use(maintenanceGate);
 router.post('/appeals', h(async (req, res) => res.json(await appealService.create(req.body))));
 
 router.post('/auth/otp/request', h(async (req, res) => {
-  res.json(await authService.requestOtp(req.body.phone, req.ip));
+  res.json(await authService.requestOtp(req.body.phone, req.ip, { fallback: req.body.via === 'sms' }));
 }));
 
 router.post('/auth/otp/verify', h(async (req, res) => {
@@ -69,7 +69,7 @@ router.post('/client-errors', h(async (req, res) => {
 }));
 
 router.post('/auth/email/request', h(async (req, res) => {
-  res.json(await authService.requestEmailCode(req.body.email, req.ip));
+  res.json(await authService.requestEmailCode(req.body.email, req.ip, { fallback: req.body.via === 'email' }));
 }));
 
 router.post('/auth/email/verify', h(async (req, res) => {

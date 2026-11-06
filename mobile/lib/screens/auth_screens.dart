@@ -82,6 +82,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
           phone: (r[email ? 'email' : 'phone'] as String?) ?? target,
           isEmail: email,
           devCode: r['dev_code'] as String?,
+          inApp: r['delivery'] == 'app',
         ),
       ));
     } catch (e) {
@@ -292,12 +293,13 @@ class _PhoneScreenState extends State<PhoneScreen> {
 
 // ------------------------------------------------------------------ OTP
 class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key, required this.phone, this.isEmail = false, this.devCode});
+  const OtpScreen({super.key, required this.phone, this.isEmail = false, this.devCode, this.inApp = false});
 
   /// Where the code went: a phone number or (when [isEmail]) an email address.
   final String phone;
   final bool isEmail;
   final String? devCode;
+  final bool inApp; // the code went to the Hushavia app on another device
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -309,11 +311,13 @@ class _OtpScreenState extends State<OtpScreen> {
   int _resendIn = 60;
   String? _devCode;
   Timer? _timer;
+  late bool _inApp;
 
   @override
   void initState() {
     super.initState();
     _devCode = widget.devCode;
+    _inApp = widget.inApp;
     _startTimer();
   }
 
@@ -367,14 +371,19 @@ class _OtpScreenState extends State<OtpScreen> {
     }
   }
 
-  Future<void> _resend() async {
+  Future<void> _resend({bool byFallback = false}) async {
     final auth = context.read<AuthState>();
     try {
-      final r = widget.isEmail ? await auth.requestEmailCode(widget.phone) : await auth.requestOtp(widget.phone);
+      final r = widget.isEmail
+          ? await auth.requestEmailCode(widget.phone, byFallback: byFallback)
+          : await auth.requestOtp(widget.phone, byFallback: byFallback);
       if (!mounted) return;
-      setState(() => _devCode = r['dev_code'] as String?);
+      setState(() {
+        _devCode = r['dev_code'] as String?;
+        _inApp = r['delivery'] == 'app';
+      });
       _startTimer();
-      showInfo(context, 'A new code was sent');
+      showInfo(context, _inApp ? 'A new code was sent to your Hushavia app' : (widget.isEmail ? 'Code sent to your email' : 'Code sent by SMS'));
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -391,9 +400,31 @@ class _OtpScreenState extends State<OtpScreen> {
           const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
-          Text(widget.isEmail ? 'We emailed a 6-digit code to ${widget.phone}' : 'We sent an SMS with a code to ${widget.phone}',
-              textAlign: TextAlign.center),
-          if (widget.isEmail) ...[
+          if (_inApp) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Brand.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
+              child: Row(children: [
+                const Icon(Icons.phonelink_lock_rounded, color: Brand.primary, size: 30),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'We sent the code to your Hushavia app on your other device — open the “Hushavia” chat there.',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface, height: 1.35, fontSize: 14),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: () => _resend(byFallback: true),
+              icon: Icon(widget.isEmail ? Icons.mail_outline_rounded : Icons.sms_outlined, size: 18),
+              label: Text(widget.isEmail ? 'Send the code by email instead' : 'Send the code by SMS instead'),
+            ),
+          ] else
+            Text(widget.isEmail ? 'We emailed a 6-digit code to ${widget.phone}' : 'We sent an SMS with a code to ${widget.phone}',
+                textAlign: TextAlign.center),
+          if (widget.isEmail && !_inApp) ...[
             const SizedBox(height: 6),
             const Text('Not in your inbox? Check the Spam / Promotions folder.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Brand.muted)),
           ],

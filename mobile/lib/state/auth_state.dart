@@ -201,16 +201,18 @@ class AuthState extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------ login
-  Future<Map<String, dynamic>> requestOtp(String phone) async {
-    return Map<String, dynamic>.from(await api.post('/auth/otp/request', {'phone': phone}) as Map);
+  /// [byFallback]: skip the in-app delivery and send it by SMS.
+  Future<Map<String, dynamic>> requestOtp(String phone, {bool byFallback = false}) async {
+    return Map<String, dynamic>.from(await api.post('/auth/otp/request', {'phone': phone, if (byFallback) 'via': 'sms'}) as Map);
   }
 
   Future<void> verifyOtp(String phone, String code) =>
       _verify('/auth/otp/verify', {'phone': phone, 'code': code});
 
   /// Login code by email (free) — the account is identified by the email address.
-  Future<Map<String, dynamic>> requestEmailCode(String email) async {
-    return Map<String, dynamic>.from(await api.post('/auth/email/request', {'email': email}) as Map);
+  /// [byFallback]: skip the in-app delivery and send it by email.
+  Future<Map<String, dynamic>> requestEmailCode(String email, {bool byFallback = false}) async {
+    return Map<String, dynamic>.from(await api.post('/auth/email/request', {'email': email, if (byFallback) 'via': 'email'}) as Map);
   }
 
   Future<void> verifyEmailCode(String email, String code) =>
