@@ -1175,3 +1175,6 @@ CREATE TABLE IF NOT EXISTS buttonbot_posts (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS buttonbot_posts_user_idx ON buttonbot_posts (user_id, id DESC);
+
+-- ---------------------------------------------------------------- sticker packs only Hushavia Plus members can send
+ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;

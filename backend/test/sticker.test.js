@@ -104,3 +104,17 @@ test('GIF messages only from Tenor', async () => {
   await rejects(messages.sendMessage(A, chat.id, { type: 'gif', gif: { url: 'https://media.tenor.com/abc/x.gif' } }), 'feature_disabled');
   await settings.update({ feature_gifs: true });
 });
+
+test('premium sticker pack: everyone sees it, only Plus members send it', async () => {
+  await stickers.ensureOfficialPacks();
+  const pack = await db.one(`SELECT * FROM sticker_packs WHERE slug = 'hushi'`);
+  assert.ok(pack && pack.is_premium, 'the Hushi pack is installed as a Plus pack');
+  const st = await db.one('SELECT id FROM stickers WHERE pack_id = $1 ORDER BY position LIMIT 1', [pack.id]);
+  const u = await db.one('SELECT id FROM users WHERE NOT is_bot ORDER BY id LIMIT 1');
+  await db.query('UPDATE users SET premium_until = NULL WHERE id = $1', [u.id]);
+  await assert.rejects(stickers.stickerForSend(st.id, u.id), /Hushavia Plus/);
+  await db.query(`UPDATE users SET premium_until = now() + interval '1 day' WHERE id = $1`, [u.id]);
+  assert.ok(await stickers.stickerForSend(st.id, u.id));
+  const mine = await stickers.myPacks(u.id);
+  assert.equal(mine.find((p) => p.slug === 'hushi').is_premium, true);
+});

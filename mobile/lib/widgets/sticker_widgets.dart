@@ -18,6 +18,7 @@ import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../screens/premium_screens.dart' show showPlusFeature;
 import 'mascot.dart';
 import 'pebo_stickers.dart';
 import 'sticker_maker.dart';
@@ -541,7 +542,21 @@ class _StickerPanelState extends State<StickerPanel> {
     }
   }
 
+  /// Stickers from a Hushavia Plus pack: only Plus members send them (others see what they'd get).
+  bool _locked(Map<String, dynamic> sticker) {
+    if (context.read<AuthState>().me?.isPremium == true) return false;
+    final pid = sticker['pack_id'];
+    return (_packs ?? const []).any((p) => p['id'] == pid && p['is_premium'] == true);
+  }
+
   void _send(Map<String, dynamic> sticker) {
+    if (_locked(sticker)) {
+      showPlusFeature(context,
+          icon: Icons.emoji_emotions_rounded,
+          title: 'Premium stickers',
+          text: 'Hushi and other exclusive sticker packs come with Hushavia Plus. You can still look at them — and anyone can see them when a Plus member sends one.');
+      return;
+    }
     final store = context.read<ChatStore>();
     HapticFeedback.selectionClick();
     widget.onSent?.call();
@@ -718,11 +733,21 @@ class _StickerPanelState extends State<StickerPanel> {
                 padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 86, mainAxisSpacing: 6, crossAxisSpacing: 6),
                 itemCount: stickers.length,
-                itemBuilder: (_, i) => _StickerCell(
-                  sticker: stickers[i],
-                  onTap: () => _send(stickers[i]),
-                  onLongPress: () => _preview(stickers[i]),
-                ),
+                itemBuilder: (_, i) => Stack(children: [
+                  Positioned.fill(
+                    child: _StickerCell(
+                      sticker: stickers[i],
+                      onTap: () => _send(stickers[i]),
+                      onLongPress: () => _preview(stickers[i]),
+                    ),
+                  ),
+                  if (_locked(stickers[i]))
+                    const Positioned(
+                      right: 2,
+                      bottom: 2,
+                      child: IgnorePointer(child: Icon(Icons.stars_rounded, size: 18, color: Brand.premium)),
+                    ),
+                ]),
               ),
       ),
     ]);

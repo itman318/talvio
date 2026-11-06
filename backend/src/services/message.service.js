@@ -436,7 +436,7 @@ async function prepareMessage(userId, chat, body, internal = {}) {
     out.text = '';
   } else if (type === 'sticker') {
     await settings.requireFeature('feature_stickers', 'Stickers');
-    const st = await require('./sticker.service').stickerForSend(body.sticker_id); // lazy: avoids circular import
+    const st = await require('./sticker.service').stickerForSend(body.sticker_id, userId); // lazy: avoids circular import
     out.mediaId = st.media_id;
     out.meta = { sticker: { id: st.id, pack_id: st.pack_id, emoji: st.emoji, pack_title: st.pack_title } };
     out.text = '';

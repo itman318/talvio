@@ -1,0 +1,71 @@
+{
+  "title": "Hushi ⭐",
+  "size": 512,
+  "premium": true,
+  "stickers": [
+    {
+      "file": "hi.webp",
+      "emoji": "👋😊"
+    },
+    {
+      "file": "salam.webp",
+      "emoji": "🤝😊🙏"
+    },
+    {
+      "file": "love.webp",
+      "emoji": "❤️😍🥰"
+    },
+    {
+      "file": "lol.webp",
+      "emoji": "😂🤣😆"
+    },
+    {
+      "file": "thanks.webp",
+      "emoji": "🙏😊💜"
+    },
+    {
+      "file": "ok.webp",
+      "emoji": "👍👌✅"
+    },
+    {
+      "file": "wow.webp",
+      "emoji": "😮🤩✨"
+    },
+    {
+      "file": "party.webp",
+      "emoji": "🥳🎉🎊"
+    },
+    {
+      "file": "cool.webp",
+      "emoji": "😎🔥👌"
+    },
+    {
+      "file": "think.webp",
+      "emoji": "🤔💭❓"
+    },
+    {
+      "file": "sad.webp",
+      "emoji": "😢😔💔"
+    },
+    {
+      "file": "angry.webp",
+      "emoji": "😠😡💢"
+    },
+    {
+      "file": "sleep.webp",
+      "emoji": "😴💤🌙"
+    },
+    {
+      "file": "gm.webp",
+      "emoji": "☀️🌅😊"
+    },
+    {
+      "file": "gn.webp",
+      "emoji": "🌙😴✨"
+    },
+    {
+      "file": "eid.webp",
+      "emoji": "🌙🕌🎉"
+    }
+  ]
+}

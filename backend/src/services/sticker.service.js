@@ -25,6 +25,7 @@ function packJson(p, stickers, installed) {
     title: p.title,
     slug: p.slug,
     is_official: p.is_official,
+    is_premium: !!p.is_premium, // Hushavia Plus pack: everyone sees it, Plus members send it
     is_public: p.is_public,
     owner_id: p.owner_id,
     installs: p.installs,
@@ -135,12 +136,15 @@ async function deletePack(userId, idRaw) {
 }
 
 /** For message sending: the sticker → its media and pack. */
-async function stickerForSend(idRaw) {
+async function stickerForSend(idRaw, userId = null) {
   const s = await db.one(
-    `SELECT s.*, p.title AS pack_title FROM stickers s JOIN sticker_packs p ON p.id = s.pack_id WHERE s.id = $1`,
+    `SELECT s.*, p.title AS pack_title, p.is_premium FROM stickers s JOIN sticker_packs p ON p.id = s.pack_id WHERE s.id = $1`,
     [v.id(idRaw, 'sticker_id')],
   );
   if (!s) throw notFound('sticker_not_found', 'This sticker is no longer available');
+  if (s.is_premium && userId && !(await require('./payment.service').limitsFor(userId)).exclusive_stickers) { // eslint-disable-line global-require
+    throw forbidden('premium_required', `“${s.pack_title.replace(/\s*⭐$/, '')}” stickers are part of Hushavia Plus`);
+  }
   return s;
 }
 
@@ -156,8 +160,11 @@ async function ensureOfficialPacks() {
     if (!fs.existsSync(manifestPath)) continue;
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     let pack = await db.one('SELECT * FROM sticker_packs WHERE slug = $1', [slug]);
-    if (pack) continue;
-    pack = await db.one('INSERT INTO sticker_packs (title, slug, is_official, is_public) VALUES ($1, $2, TRUE, TRUE) RETURNING *', [manifest.title, slug]);
+    if (pack) {
+      await db.query('UPDATE sticker_packs SET is_premium = $2, title = $3 WHERE id = $1', [pack.id, manifest.premium === true, manifest.title]);
+      continue;
+    }
+    pack = await db.one('INSERT INTO sticker_packs (title, slug, is_official, is_public, is_premium) VALUES ($1, $2, TRUE, TRUE, $3) RETURNING *', [manifest.title, slug, manifest.premium === true]);
     const target = path.join(config.uploadDir, 'stickers', slug);
     fs.mkdirSync(target, { recursive: true });
     let pos = 0;

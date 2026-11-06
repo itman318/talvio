@@ -64,7 +64,7 @@ async function perks() {
     { key: 'uploads', title: `Upload files up to ${s.premium_upload_mb} MB`, text: `Instead of ${s.max_upload_mb} MB` },
     { key: 'folders', title: `${PREMIUM_FOLDERS} chat folders`, text: `Instead of ${FREE_FOLDERS}` },
     { key: 'no_ads', title: 'No sponsored messages', text: 'No ads in channels' },
-    { key: 'stickers', title: 'Animated Tavi stickers', text: 'An exclusive pack of our animated mascot' },
+    { key: 'stickers', title: 'Premium sticker packs', text: 'Hushi (16 stickers: Salam, Eid Mubarak, Good morning…) and animated Tavi' },
     { key: 'themes', title: 'Exclusive chat themes', text: 'Aurora Gold, Midnight Neon and more' },
     { key: 'pins', title: `Pin ${PREMIUM_PINS} chats`, text: `Instead of ${FREE_PINS}` },
     { key: 'accounts', title: 'Up to 3 more accounts', text: 'On the same phone' },
