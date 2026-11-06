@@ -98,7 +98,7 @@ async function main() {
   const s = await call('POST', '/chats/private', { user_id: me.id }, sana.token);
   await say(s.id, sana, 'Got the Hushavia app, installed it ✅');
   const packs = await optional('stickers', () => call('GET', '/stickers/packs', null, sana.token));
-  const st = packs && packs[0] && packs[0].stickers;
+  const st = packs && (packs.find((p) => !p.is_premium) || {}).stickers;
   if (st && st.length) await call('POST', `/chats/${s.id}/messages`, { type: 'sticker', sticker_id: st[0].id }, sana.token);
   await say(s.id, me, 'Thanks! Let me know if anything breaks');
   await say(s.id, sana, 'The stickers are so cute 😄');

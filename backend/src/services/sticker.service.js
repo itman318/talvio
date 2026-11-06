@@ -55,7 +55,7 @@ async function myPacks(userId) {
     `SELECT p.*, (u.user_id IS NOT NULL) AS installed FROM sticker_packs p
      LEFT JOIN user_sticker_packs u ON u.pack_id = p.id AND u.user_id = $1
      WHERE p.is_official OR u.user_id IS NOT NULL OR p.owner_id = $1
-     ORDER BY p.is_official DESC, u.added_at NULLS LAST, p.id`,
+     ORDER BY p.is_official DESC, p.is_premium ASC, u.added_at NULLS LAST, p.id`,
     [userId],
   );
   const map = await stickersOf(packs.map((p) => p.id));

@@ -64,7 +64,8 @@ async function login(phone, first) {
   await page.waitForSelector('.bubble:has-text("Live message")', { timeout: 15000 });
   // new message types: sticker, contact card, live location, disappearing-messages notice
   const packs = await call('GET', '/stickers/packs', null, friend.token);
-  const sticker = packs[0] && packs[0].stickers[0];
+  const freePack = packs.find((p) => !p.is_premium);
+  const sticker = freePack && freePack.stickers[0];
   if (!sticker) throw new Error('no official sticker pack');
   await call('POST', `/chats/${chat.id}/messages`, { type: 'sticker', sticker_id: sticker.id }, friend.token);
   await call('POST', `/chats/${chat.id}/messages`, { type: 'contact', contact: { name: 'Ali Raza', phone: '+923001234567' } }, friend.token);
