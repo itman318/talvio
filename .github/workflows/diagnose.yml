@@ -40,6 +40,10 @@ jobs:
           (cd /opt/hushavia/app && node -e "try{const s=require('sharp');console.log('sharp: ok', s.versions.sharp)}catch(e){console.log('sharp: MISSING', e.message)}")
           sudo -u postgres psql -d hushavia -tAc "SELECT kind||' with thumb: '||count(*) FILTER (WHERE thumb IS NOT NULL)||' / '||count(*) FROM media WHERE kind IN ('image','video') GROUP BY kind" 2>/dev/null
           echo "ffmpeg: $(command -v ffmpeg >/dev/null && echo ok || echo MISSING)"
+          sudo -u postgres psql -d hushavia -tAc "SELECT 'videos: id='||id||' mime='||mime||' size='||size_bytes||' failed='||thumb_failed||' thumb='||(thumb IS NOT NULL) FROM media WHERE kind='video' ORDER BY id DESC LIMIT 5" 2>/dev/null
+          V=$(sudo -u postgres psql -d hushavia -tAc "SELECT storage_path FROM media WHERE kind='video' ORDER BY id DESC LIMIT 1" 2>/dev/null)
+          [ -n "$V" ] && echo "newest video probe: $(ffprobe -v error -show_entries format=format_name,duration -of csv=p=0 "/var/lib/hushavia/uploads/$V" 2>&1 | head -c 200)"
+          grep -n "uploadDir\|UPLOAD_DIR" /opt/hushavia/app/.env 2>/dev/null | sed 's/=.*/=…/' | head -2
           echo "app update: $(curl -s 'http://127.0.0.1:4000/api/app/update?build=1&abi=arm64-v8a' | head -c 300)"
           echo "--- recent server errors"
           journalctl -u hushavia --since "-3d" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT|unhandled|TypeError" | grep -v OTP_DEV_MODE | tail -40 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
