@@ -37,7 +37,7 @@ jobs:
           echo "--- push notifications"
           journalctl -u hushavia --since "-2d" --no-pager | grep -i "push notifications" | tail -3
           echo "--- recent server errors"
-          journalctl -u hushavia --since "-6h" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT" | grep -v OTP_DEV_MODE | tail -25 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
+          journalctl -u hushavia --since "-3d" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT|unhandled|TypeError" | grep -v OTP_DEV_MODE | tail -40 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
           echo "--- classic bot api (fake token → expect 401 JSON)"
           curl -s "http://127.0.0.1/api/classic/bot1:aaaaaaaaaaaaaaaaaaaaaaaa/getMe"; echo
           curl -s -X POST -F chat_id=1 -F text=hi "http://127.0.0.1/api/classic/bot1:aaaaaaaaaaaaaaaaaaaaaaaa/sendMessage"; echo
