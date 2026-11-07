@@ -813,6 +813,7 @@ async function guarded(userId, chat, check) {
       await chatService.logEvent(chat.id, null, 'guard_removed', userId, { rule: err.code });
       await createSystemMessage(chat.id, null, { event: 'guard_removed', user_id: userId });
       await chatService.removeUserFromGroup(chat.id, userId, { reason: 'guard' });
+      await chatService.ban(chat.id, userId, null, 'guard');
       await require('./notice.service').notify(userId, 'group', `Removed from ${chat.title}`, // eslint-disable-line global-require
         `Group Guard removed you from “${chat.title}” after 3 warnings for breaking the group’s rules.`).catch(() => {});
       err.message = `${err.message}. After 3 warnings you were removed from the group`;

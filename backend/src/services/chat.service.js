@@ -569,8 +569,18 @@ async function addMembers(userId, chatIdRaw, userIdsRaw) {
   requireRight(chat, 'invite_users');
   if (chat.is_suspended) throw forbidden('chat_suspended', 'This group has been suspended');
   const existing = new Set(await memberIds(chat.id));
-  const candidates = v.idList(userIdsRaw, 'user_ids', 200).filter((id) => !existing.has(id));
-  const { ok, skipped } = await filterAddable(userId, candidates);
+  let candidates = v.idList(userIdsRaw, 'user_ids', 200).filter((id) => !existing.has(id));
+  // removed people: an admin who may remove members can bring them back (that unbans them); others can't
+  const banned = candidates.length
+    ? new Set((await db.many('SELECT user_id FROM chat_bans WHERE chat_id = $1 AND user_id = ANY($2::bigint[])', [chat.id, candidates])).map((r) => Number(r.user_id)))
+    : new Set();
+  const bannedSkipped = [];
+  if (banned.size && !hasRight(chat, 'ban_users')) {
+    candidates = candidates.filter((id) => (banned.has(id) ? (bannedSkipped.push({ user_id: id, reason: 'removed' }), false) : true));
+  }
+  const { ok, skipped: notAddable } = await filterAddable(userId, candidates);
+  const skipped = [...notAddable, ...bannedSkipped];
+  for (const id of ok) if (banned.has(id)) await unbanRow(chat.id, id);
   const max = await settings.get('max_group_members');
   if (chat.type === 'group' && existing.size + ok.length > max) {
     throw badRequest('group_full', `A group can have at most ${max} members`);
@@ -641,6 +651,48 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
   return outcome;
 }
 
+// ------------------------------------------------------------------ bans (removed = can't come back by link)
+async function isBanned(chatId, userId) {
+  return !!(await db.one('SELECT 1 AS x FROM chat_bans WHERE chat_id = $1 AND user_id = $2', [chatId, userId]));
+}
+
+async function ban(chatId, userId, by = null, reason = 'removed') {
+  await db.query(
+    `INSERT INTO chat_bans (chat_id, user_id, banned_by, reason) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (chat_id, user_id) DO UPDATE SET banned_by = EXCLUDED.banned_by, reason = EXCLUDED.reason, created_at = now()`,
+    [chatId, userId, by, reason],
+  );
+  await db.query('DELETE FROM chat_join_requests WHERE chat_id = $1 AND user_id = $2', [chatId, userId]);
+}
+
+async function unbanRow(chatId, userId) {
+  return db.one('DELETE FROM chat_bans WHERE chat_id = $1 AND user_id = $2 RETURNING user_id', [chatId, userId]);
+}
+
+/** Removed people of a group/channel (admins with "remove members"). */
+async function listBanned(userId, chatIdRaw) {
+  const chat = await requireMember(chatIdRaw, userId);
+  requireRight(chat, 'ban_users');
+  const rows = await db.many('SELECT user_id, banned_by, reason, created_at FROM chat_bans WHERE chat_id = $1 ORDER BY created_at DESC LIMIT 500', [chat.id]);
+  const users = await userService.getUsersMap(userId, [...new Set(rows.flatMap((r) => [r.user_id, r.banned_by]).filter(Boolean))]);
+  return rows.map((r) => ({
+    user: users.get(r.user_id) || { id: r.user_id },
+    by: r.banned_by ? users.get(r.banned_by) || null : null,
+    reason: r.reason,
+    created_at: new Date(r.created_at).toISOString(),
+  }));
+}
+
+/** Lets a removed person join again (they are not added back). */
+async function unbanMember(actorId, chatIdRaw, targetIdRaw) {
+  const chat = await requireMember(chatIdRaw, actorId);
+  requireRight(chat, 'ban_users');
+  const targetId = v.id(targetIdRaw, 'user_id');
+  if (!(await unbanRow(chat.id, targetId))) throw notFound('not_banned', 'This person isn’t removed from here');
+  await logEvent(chat.id, actorId, 'member_unbanned', targetId);
+  return { ok: true };
+}
+
 async function removeMember(actorId, chatIdRaw, targetIdRaw) {
   const chat = await requireMember(chatIdRaw, actorId);
   const targetId = v.id(targetIdRaw, 'user_id');
@@ -652,6 +704,7 @@ async function removeMember(actorId, chatIdRaw, targetIdRaw) {
     throw forbidden('not_allowed', 'You cannot remove this member');
   }
   await removeUserFromGroup(chat.id, targetId, { by: actorId, reason: 'removed' });
+  await ban(chat.id, targetId, actorId); // no coming back by invite link until an admin unbans
   await require('./notice.service').notify(targetId, 'group', `Removed from ${chat.title}`, `An admin removed you from “${chat.title}”.`);
   return { ok: true };
 }
@@ -945,6 +998,12 @@ async function joinByInvite(userId, code) {
 
 async function joinChat(userId, chat) {
   const existing = await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, userId]);
+  if (!existing) {
+    if (chat.admin_ok) await unbanRow(chat.id, userId); // an admin approved them
+    else if (await isBanned(chat.id, userId)) {
+      throw forbidden('banned_from_chat', `An admin removed you from this ${chat.type === 'channel' ? 'channel' : 'group'}`);
+    }
+  }
   if (!existing && chat.join_approval) {
     await db.query(
       'INSERT INTO chat_join_requests (chat_id, user_id, invite_code) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
@@ -1063,7 +1122,7 @@ async function resolveJoinRequest(userId, chatIdRaw, targetIdRaw, approve) {
   if (!req) throw notFound('request_not_found', 'This join request no longer exists');
   if (approve) {
     const full = await db.one('SELECT * FROM chats WHERE id = $1', [chat.id]);
-    await joinChat(targetId, { ...full, join_approval: false, via_invite: req.invite_code || null });
+    await joinChat(targetId, { ...full, join_approval: false, via_invite: req.invite_code || null, admin_ok: true });
   }
   await emitUpdated(chat.id);
   return { ok: true };
@@ -1333,6 +1392,10 @@ async function sweepCaptcha() {
 
 module.exports = {
   raidShield,
+  ban,
+  isBanned,
+  listBanned,
+  unbanMember,
   setMemberTag,
   similarChannels,
   onlineCount,

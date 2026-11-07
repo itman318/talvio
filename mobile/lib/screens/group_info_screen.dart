@@ -652,6 +652,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               maxSubtitleLines: 1,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GroupProtectionScreen(chatId: chat.id))),
             ),
+          if (chat.can('ban_users'))
+            SettingsTile(
+              icon: Icons.person_off_rounded,
+              color: const Color(0xFFE5484D),
+              title: 'Removed people',
+              subtitle: 'They can’t come back by link until you unban them',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BannedMembersScreen(chat: chat))),
+            ),
           SettingsSwitchTile(
             icon: Icons.no_encryption_gmailerrorred_rounded,
             color: Brand.rose,

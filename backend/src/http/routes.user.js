@@ -199,6 +199,8 @@ router.put('/chats/:id/members/:userId/role', h(async (req, res) => {
 router.post('/chats/:id/members/:userId/restrict', h(async (req, res) => {
   res.json(await chatService.restrictMember(req.userId, req.params.id, req.params.userId, req.body.minutes));
 }));
+router.get('/chats/:id/banned', h(async (req, res) => res.json(await chatService.listBanned(req.userId, req.params.id))));
+router.delete('/chats/:id/banned/:userId', h(async (req, res) => res.json(await chatService.unbanMember(req.userId, req.params.id, req.params.userId))));
 router.get('/chats/:id/events', h(async (req, res) => res.json(await chatService.listEvents(req.userId, req.params.id, req.query))));
 router.put('/chats/:id/draft', h(async (req, res) => res.json(await chatService.setDraft(req.userId, req.params.id, req.body.text))));
 router.get('/channels/directory', h(async (req, res) => res.json(await chatService.directory(req.userId, req.query))));

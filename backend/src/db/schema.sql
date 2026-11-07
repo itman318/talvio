@@ -1189,3 +1189,17 @@ ALTER TABLE chats ADD COLUMN IF NOT EXISTS anti_mentions BOOLEAN NOT NULL DEFAUL
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS raid_shield BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS guard_penalty VARCHAR(8) NOT NULL DEFAULT 'none';
 CREATE INDEX IF NOT EXISTS chat_events_guard_idx ON chat_events (chat_id, target_id, created_at) WHERE action LIKE 'guard_%';
+
+-- removed members stay out (no rejoining by invite link) until an admin unbans them
+CREATE TABLE IF NOT EXISTS chat_bans (
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  banned_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  reason     VARCHAR(16) NOT NULL DEFAULT 'removed',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (chat_id, user_id)
+);
+
+-- admin panel: switch a sticker pack off, or decide Plus-only by hand (kept across restarts)
+ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS premium_by_admin BOOLEAN NOT NULL DEFAULT FALSE;

@@ -54,7 +54,7 @@ async function myPacks(userId) {
   const packs = await db.many(
     `SELECT p.*, (u.user_id IS NOT NULL) AS installed FROM sticker_packs p
      LEFT JOIN user_sticker_packs u ON u.pack_id = p.id AND u.user_id = $1
-     WHERE p.is_official OR u.user_id IS NOT NULL OR p.owner_id = $1
+     WHERE (p.is_official OR u.user_id IS NOT NULL OR p.owner_id = $1) AND NOT p.is_disabled
      ORDER BY p.is_official DESC, p.is_premium ASC, u.added_at NULLS LAST, p.id`,
     [userId],
   );
@@ -64,7 +64,7 @@ async function myPacks(userId) {
 
 async function getPack(userId, idRaw) {
   const p = await db.one('SELECT * FROM sticker_packs WHERE id = $1', [v.id(idRaw, 'pack_id')]);
-  if (!p || (!p.is_public && !p.is_official && p.owner_id !== userId)) throw notFound('pack_not_found', 'Sticker pack not found');
+  if (!p || p.is_disabled || (!p.is_public && !p.is_official && p.owner_id !== userId)) throw notFound('pack_not_found', 'Sticker pack not found');
   const installed = p.is_official || p.owner_id === userId
     || !!(await db.one('SELECT 1 FROM user_sticker_packs WHERE user_id = $1 AND pack_id = $2', [userId, p.id]));
   return packJson(p, (await stickersOf([p.id])).get(p.id) || [], installed);
@@ -73,7 +73,7 @@ async function getPack(userId, idRaw) {
 async function searchPacks(userId, q) {
   const term = String(q || '').trim().slice(0, 64);
   const rows = await db.many(
-    `SELECT * FROM sticker_packs WHERE (is_public OR is_official) AND ($1 = '' OR title ILIKE '%' || $1 || '%')
+    `SELECT * FROM sticker_packs WHERE (is_public OR is_official) AND NOT is_disabled AND ($1 = '' OR title ILIKE '%' || $1 || '%')
      ORDER BY is_official DESC, installs DESC, id DESC LIMIT 30`,
     [term.replace(/[\\%_]/g, (c) => `\\${c}`)],
   );
@@ -138,7 +138,7 @@ async function deletePack(userId, idRaw) {
 /** For message sending: the sticker → its media and pack. */
 async function stickerForSend(idRaw, userId = null) {
   const s = await db.one(
-    `SELECT s.*, p.title AS pack_title, p.is_premium FROM stickers s JOIN sticker_packs p ON p.id = s.pack_id WHERE s.id = $1`,
+    `SELECT s.*, p.title AS pack_title, p.is_premium FROM stickers s JOIN sticker_packs p ON p.id = s.pack_id WHERE s.id = $1 AND NOT p.is_disabled`,
     [v.id(idRaw, 'sticker_id')],
   );
   if (!s) throw notFound('sticker_not_found', 'This sticker is no longer available');
@@ -161,7 +161,8 @@ async function ensureOfficialPacks() {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     let pack = await db.one('SELECT * FROM sticker_packs WHERE slug = $1', [slug]);
     if (pack) {
-      await db.query('UPDATE sticker_packs SET is_premium = $2, title = $3 WHERE id = $1', [pack.id, manifest.premium === true, manifest.title]);
+      // Plus-only comes from pack.json unless an admin decided it in the panel
+      await db.query('UPDATE sticker_packs SET is_premium = CASE WHEN premium_by_admin THEN is_premium ELSE $2 END, title = $3 WHERE id = $1', [pack.id, manifest.premium === true, manifest.title]);
       continue;
     }
     pack = await db.one('INSERT INTO sticker_packs (title, slug, is_official, is_public, is_premium) VALUES ($1, $2, TRUE, TRUE, $3) RETURNING *', [manifest.title, slug, manifest.premium === true]);

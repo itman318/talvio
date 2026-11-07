@@ -659,7 +659,9 @@ async function removeGroupMember(admin, chatIdRaw, userIdRaw, ip) {
   const m = await db.one('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, userId]);
   if (!m) throw notFound('member_not_found', 'Not a member');
   if (m.role === 'owner') throw forbidden('no_rights', 'Transfer ownership first, then remove this person');
-  await require('./chat.service').removeUserFromGroup(chatId, userId, { reason: 'removed' }); // eslint-disable-line global-require
+  const chatService = require('./chat.service'); // eslint-disable-line global-require
+  await chatService.removeUserFromGroup(chatId, userId, { reason: 'removed' });
+  await chatService.ban(chatId, userId, null, 'admin_panel'); // stays out until unbanned
   await log(admin.id, 'group.member_remove', 'chat', chatId, { user_id: userId }, ip);
   return { ok: true };
 }

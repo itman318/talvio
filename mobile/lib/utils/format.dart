@@ -113,6 +113,8 @@ String systemText(Message m, ChatStore store) {
       return '🛡 Group Guard: many people joined at once — new members now confirm they’re human';
     case 'guard_removed':
       return '🛡 Group Guard removed ${who(meta['user_id'])} after 3 warnings';
+    case 'team_notice':
+      return '📢 Hushavia team: ${meta['text'] ?? ''}';
     default:
       return 'Group updated';
   }

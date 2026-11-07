@@ -172,6 +172,25 @@ router.put('/pages/:slug', requireAdmin('settings'), h(async (req, res) => {
 }));
 
 // audit log
+// ------------------------------------------------------------------ full control: groups, content
+const ctl = require('../services/admincontrol.service');
+
+router.get('/groups/:id/detail', requireAdmin('groups.view'), h(async (req, res) => res.json(await ctl.groupDetail(req.params.id))));
+router.put('/groups/:id/settings', requireAdmin('groups.suspend'), h(async (req, res) => res.json(await ctl.setGroupSettings(req.admin, req.params.id, req.body, req.ip))));
+router.put('/groups/:id/members/:uid/role', requireAdmin('groups.transfer'), h(async (req, res) => res.json(await ctl.setGroupRole(req.admin, req.params.id, req.params.uid, req.body.role, req.ip))));
+router.delete('/groups/:id/bans/:uid', requireAdmin('groups.suspend'), h(async (req, res) => res.json(await ctl.unbanGroupMember(req.admin, req.params.id, req.params.uid, req.ip))));
+router.post('/groups/:id/invite/reset', requireAdmin('groups.suspend'), h(async (req, res) => res.json(await ctl.resetInvite(req.admin, req.params.id, req.ip))));
+router.post('/groups/:id/notice', requireAdmin('broadcast'), h(async (req, res) => res.json(await ctl.postNotice(req.admin, req.params.id, req.body, req.ip))));
+router.post('/users/:id/notice', requireAdmin('support'), h(async (req, res) => res.json(await ctl.noticeUser(req.admin, req.params.id, req.body, req.ip))));
+
+router.get('/sticker-packs', requireAdmin('media'), h(async (req, res) => res.json(await ctl.listStickerPacks(req.query))));
+router.put('/sticker-packs/:id', requireAdmin('media'), h(async (req, res) => res.json(await ctl.updateStickerPack(req.admin, req.params.id, req.body, req.ip))));
+router.delete('/sticker-packs/:id', requireAdmin('media'), h(async (req, res) => res.json(await ctl.deleteStickerPack(req.admin, req.params.id, req.ip))));
+router.get('/stories', requireAdmin('media'), h(async (req, res) => res.json(await ctl.listStories(req.query))));
+router.delete('/stories/:id', requireAdmin('media'), h(async (req, res) => res.json(await ctl.deleteStory(req.admin, req.params.id, req.ip))));
+router.get('/media', requireAdmin('media'), h(async (req, res) => res.json(await ctl.listMedia(req.query))));
+router.delete('/media/:id', requireAdmin('media'), h(async (req, res) => res.json(await ctl.deleteMedia(req.admin, req.params.id, req.ip))));
+
 router.get('/crashes', requireAdmin('logs.view'), h(async (req, res) => res.json(await require('../services/crash.service').list(req.query))));
 router.post('/crashes/:id/resolve', requireAdmin('logs.view'), h(async (req, res) => res.json(await require('../services/crash.service').resolve(req.params.id, req.body.resolved !== false))));
 router.get('/logs', requireAdmin('logs.view'), h(async (req, res) => res.json(await admin.listLogs(req.query))));
@@ -180,8 +199,10 @@ router.get('/logs', requireAdmin('logs.view'), h(async (req, res) => res.json(aw
 router.get('/media/:id', requireAdmin('media'), h(async (req, res) => {
   const m = await db.one('SELECT * FROM media WHERE id = $1', [v.id(req.params.id, 'media_id')]);
   if (!m) throw notFound('media_not_found', 'File not found');
+  let preview = null; // ?v=p → the small version (photo preview / video poster) for the panel's grids
+  if (req.query.v === 'p') preview = await require('../services/media.service').previewPath(m, 'p').catch(() => null); // eslint-disable-line global-require
   // eslint-disable-next-line global-require
-  require('./routes.user').sendMedia(res, m, false);
+  require('./routes.user').sendMedia(res, m, false, preview);
 }));
 
 module.exports = { router };

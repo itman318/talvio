@@ -160,9 +160,9 @@ class _RecentActionsScreenState extends State<RecentActionsScreen> {
       };
 
   (IconData, Color, String) _describe(Map<String, dynamic> e) {
-    final who = _name(e['actor']);
-    final target = _name(e['target']);
     final d = (e['details'] as Map?) ?? const {};
+    final who = e['actor'] is Map ? _name(e['actor']) : '${d['by'] ?? 'Someone'}';
+    final target = _name(e['target']);
     switch (e['action']) {
       case 'member_joined':
         return (Icons.login_rounded, Brand.green, '$who joined');
@@ -204,6 +204,8 @@ class _RecentActionsScreenState extends State<RecentActionsScreen> {
         return (Icons.check_circle_rounded, Brand.green, '$who published a post by $target');
       case 'post_declined':
         return (Icons.cancel_rounded, Colors.red, '$who declined a post by $target');
+      case 'member_unbanned':
+        return (Icons.person_add_alt_rounded, Brand.green, '$who let $target join again');
       case 'guard_blocked':
         return (Icons.shield_rounded, Brand.amber, '🛡 Guard stopped a message from $target · ${_ruleLabel(d['rule'])}');
       case 'guard_muted':
@@ -889,6 +891,82 @@ class MemberPermissionsScreen extends StatelessWidget {
           child: Text('Text messages are always allowed. Admins can send everything.', style: TextStyle(color: Brand.muted, fontSize: 12.5)),
         ),
       ]),
+    );
+  }
+}
+
+
+/// People removed from a group/channel: they can't rejoin by link until an admin unbans them.
+class BannedMembersScreen extends StatefulWidget {
+  const BannedMembersScreen({super.key, required this.chat});
+  final Chat chat;
+
+  @override
+  State<BannedMembersScreen> createState() => _BannedMembersScreenState();
+}
+
+class _BannedMembersScreenState extends State<BannedMembersScreen> {
+  List<Map<String, dynamic>>? _list;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await context.read<ChatStore>().api.get('/chats/${widget.chat.id}/banned') as List;
+      if (mounted) setState(() => _list = r.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+    } catch (e) {
+      if (mounted) {
+        setState(() => _list = []);
+        showError(context, e);
+      }
+    }
+  }
+
+  Future<void> _unban(AppUser u) async {
+    if (!await confirm(context, 'Unban ${u.name}?', 'They can join again with a link. They are not added back.', ok: 'Unban')) return;
+    if (!mounted) return;
+    try {
+      await context.read<ChatStore>().api.delete('/chats/${widget.chat.id}/banned/${u.id}');
+      if (!mounted) return;
+      setState(() => _list!.removeWhere((e) => (e['user'] as Map)['id'] == u.id));
+      showInfo(context, '${u.name} can join again');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = _list;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Removed people')),
+      body: list == null
+          ? const Center(child: CircularProgressIndicator())
+          : list.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text('Nobody is removed.\nPeople you remove appear here and can’t rejoin until you unban them.', textAlign: TextAlign.center, style: TextStyle(color: Brand.muted)),
+                  ),
+                )
+              : ListView(children: [
+                  for (final e in list)
+                    Builder(builder: (_) {
+                      final u = AppUser.fromJson(Map<String, dynamic>.from(e['user'] as Map));
+                      final by = e['by'] is Map ? AppUser.fromJson(Map<String, dynamic>.from(e['by'] as Map)).name : (e['reason'] == 'guard' ? '🛡 Group Guard' : e['reason'] == 'admin_panel' ? 'Hushavia team' : null);
+                      final when = DateTime.tryParse('${e['created_at']}')?.toLocal();
+                      return ListTile(
+                        leading: Avatar(id: u.id, name: u.name, url: u.avatarAbsolute, size: 42),
+                        title: Text(u.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text([if (by != null) 'Removed by $by', if (when != null) DateFormat('d MMM, HH:mm').format(when)].join(' · ')),
+                        trailing: TextButton(onPressed: () => _unban(u), child: const Text('Unban')),
+                      );
+                    }),
+                ]),
     );
   }
 }

@@ -15,6 +15,7 @@
     { id: 'groups', label: 'Groups & channels', perm: 'groups.view', icon: 'chat', section: 'Moderation' },
     { id: 'calls', label: 'Calls', perm: 'calls.view', icon: 'phone', section: 'Moderation' },
     { id: 'bots', label: 'Bots', perm: 'users.view', icon: 'bot', section: 'Moderation' },
+    { id: 'content', label: 'Stickers, stories & media', perm: 'media', icon: 'image', section: 'Moderation' },
     { id: 'revenue', label: 'Revenue', perm: 'payments', icon: 'trend', section: 'Business' },
     { id: 'payments', label: 'Payments', perm: 'payments', icon: 'card', section: 'Business' },
     { id: 'plans', label: 'Hushavia Plus plans', perm: 'payments', icon: 'star', section: 'Business' },
@@ -149,6 +150,7 @@
   }
 
   const fmtDate = (d) => (d ? new Date(d).toLocaleString() : '—');
+  const fmtSize = (n) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
   const fmtNum = (n) => Number(n || 0).toLocaleString();
   function fmtBytes(b) {
     const n = Number(b || 0);
@@ -547,6 +549,18 @@
             },
           }, 'Restrict (mute)'));
       }
+      if (can('support')) {
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: () => {
+            const title = el('input', { type: 'text', maxlength: 120, placeholder: 'e.g. Please follow the community rules' });
+            const text = el('textarea', { rows: 4, maxlength: 500, placeholder: 'Message (optional)' });
+            modal('Send a notice', [el('p', { class: 'muted' }, 'Arrives in the user’s app under the bell, from the Hushavia team.'),
+              el('div', { class: 'field' }, el('label', {}, 'Title'), title), el('div', { class: 'field' }, el('label', {}, 'Message'), text)], 'Send',
+            async () => !!(await action(() => api('POST', `/users/${id}/notice`, { title: title.value.trim(), text: text.value.trim() }), 'Notice sent')));
+          },
+        }, 'Send notice'));
+      }
       if (can('users.logout')) {
         actions.push(el('button', { class: 'btn', onclick: async () => { if (await action(() => api('POST', `/users/${id}/logout-all`), 'Logged out from all devices')) reload(); } }, 'Log out all devices'));
         if (u.has_password) {
@@ -810,6 +824,249 @@
 
   // ------------------------------------------------------------------ groups
   const groupsState = { q: '', status: 'all', type: 'all', page: 1 };
+
+  // ------------------------------------------------------------------ one group / channel: full control
+  const GUARD_LABELS = {
+    join_captcha: ['Human check', 'New members tap “I’m not a robot” within 5 minutes'],
+    raid_shield: ['Raid shield', '10+ joins in a minute turns the human check on'],
+    new_member_limits: ['Limit new members', 'No links, photos or files in their first 24 hours'],
+    anti_flood: ['Anti-flood', 'Max 5 messages in 10 seconds, no repeats'],
+    anti_links: ['Block links', 'Only admins can send links'],
+    anti_forward: ['Block forwarded messages', 'Stops ads forwarded from elsewhere'],
+    anti_mentions: ['Block mention spam', 'Max 5 @mentions per message'],
+    hide_service: ['Hide join & leave messages', ''],
+    join_approval: ['Approve new members', 'Join requests wait for an admin'],
+    protected_content: ['Protected content', 'No forwarding or saving'],
+    signatures: ['Sign posts', 'Show the admin’s name under posts'],
+    comments_enabled: ['Comments', 'Subscribers can comment under posts'],
+  };
+  const EVENT_TEXT = (e) => {
+    const who = e.actor ? e.actor.name : (e.details && e.details.by) || 'Group Guard';
+    const target = e.target ? e.target.name : '';
+    const d = e.details || {};
+    const map = {
+      member_joined: `${target} joined`, member_left: `${target} left`, member_added: `${who} added ${target}`,
+      member_removed: `${who} removed ${target}`, member_unbanned: `${who} let ${target} join again`,
+      member_restricted: `${who} muted ${target}`, member_unrestricted: `${who} unmuted ${target}`,
+      admin_set: `${who} made ${target} an admin`, admin_removed: `${who} removed admin rights of ${target}`,
+      message_deleted: `${who} deleted a message from ${target}${d.text ? `: “${d.text}”` : ''}`,
+      guard_blocked: `🛡 Guard stopped a message from ${target} (${d.rule || 'rule'})`,
+      guard_muted: `🛡 Guard muted ${target} for 24 h`, guard_removed: `🛡 Guard removed ${target}`,
+      raid_shield: `🛡 Raid shield: ${d.joins || 'many'} joins in a minute`,
+      settings_changed: `${who} changed settings`, info_changed: `${who} changed the info`,
+      message_pinned: `${who} pinned a message`, history_cleared: `${who} cleared the history`,
+    };
+    return map[e.action] || `${who}: ${e.action.replace(/_/g, ' ')}`;
+  };
+
+  async function manageGroup(g, refreshList) {
+    const d = await action(() => api('GET', `/groups/${g.id}/detail`));
+    if (!d) return;
+    const isGroup = d.type === 'group';
+    const editable = can('groups.suspend');
+    const inputs = {};
+    const keys = Object.keys(GUARD_LABELS).filter((k) => (isGroup ? !['signatures', 'comments_enabled'].includes(k)
+      : ['join_approval', 'protected_content', 'signatures', 'comments_enabled'].includes(k)));
+    const toggles = keys.map((k) => {
+      inputs[k] = el('input', { type: 'checkbox', checked: d.settings[k], id: `gs-${k}`, disabled: editable ? null : true });
+      return el('div', {}, el('label', { class: 'check', for: `gs-${k}` }, inputs[k], GUARD_LABELS[k][0]),
+        GUARD_LABELS[k][1] ? el('div', { class: 'muted', style: 'margin:-8px 0 10px 26px;font-size:12px' }, GUARD_LABELS[k][1]) : null);
+    });
+    const slow = el('select', { disabled: editable ? null : true }, [[0, 'Off'], [10, '10 s'], [30, '30 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 hour']]
+      .map(([v2, l]) => el('option', { value: v2, selected: d.settings.slow_mode_sec === v2 ? true : null }, l)));
+    const penalty = el('select', { disabled: editable ? null : true }, [['none', 'Only stop the message'], ['mute', 'Mute 24 hours'], ['remove', 'Remove from the group']]
+      .map(([v2, l]) => el('option', { value: v2, selected: d.settings.guard_penalty === v2 ? true : null }, l)));
+    const words = el('textarea', { rows: 3, placeholder: 'One word per line', disabled: editable ? null : true }, (d.settings.banned_words || []).join('\n'));
+
+    const invite = el('input', { type: 'text', readonly: true, value: d.invite_code ? `${location.origin}/join/${d.invite_code}` : '—', onclick: (e) => e.target.select() });
+    const banned = el('div', {});
+    const drawBans = (list) => banned.replaceChildren(list.length
+      ? table(['Person', 'Removed by', 'When', ''], list.map((b) => el('tr', {},
+        el('td', {}, b.user.name, b.user.username ? el('div', { class: 'muted' }, `@${b.user.username}`) : null),
+        el('td', { class: 'muted' }, b.by ? b.by.name : b.reason === 'guard' ? '🛡 Group Guard' : b.reason === 'admin_panel' ? 'Hushavia team' : '—'),
+        el('td', { class: 'muted' }, ago(b.created_at)),
+        el('td', {}, editable ? el('button', {
+          class: 'btn small',
+          onclick: async (ev) => { if (await action(() => api('DELETE', `/groups/${g.id}/bans/${b.user.id}`), 'They can join again')) ev.target.closest('tr').remove(); },
+        }, 'Unban') : null))), '')
+      : el('p', { class: 'muted' }, 'Nobody is removed.'));
+    drawBans(d.banned);
+    const log = table(['When', 'What'], d.events.map((e) => el('tr', {}, el('td', { class: 'muted', style: 'white-space:nowrap' }, ago(e.created_at)), el('td', {}, EVENT_TEXT(e)))), 'Nothing yet');
+
+    const c = d.counts;
+    const body = [
+      el('div', { class: 'btn-row', style: 'flex-wrap:wrap;gap:6px;margin-bottom:10px' },
+        el('span', { class: 'chip' }, `${fmtNum(c.members)} ${isGroup ? 'members' : 'subscribers'}`),
+        el('span', { class: 'chip' }, `${c.admins} admins`),
+        el('span', { class: 'chip' }, `${fmtNum(c.messages)} messages`),
+        el('span', { class: 'chip' }, `${fmtNum(c.messages_today)} today`),
+        c.requests ? el('span', { class: 'chip warn' }, `${c.requests} join requests`) : null,
+        d.is_suspended ? el('span', { class: 'chip bad' }, 'Suspended') : null),
+      el('h3', { style: 'margin:12px 0 8px;font-size:14px' }, isGroup ? '🛡 Group Guard & protection' : 'Channel settings'),
+      ...toggles,
+      isGroup ? el('div', { class: 'field' }, el('label', {}, 'Slow mode'), slow) : null,
+      isGroup ? el('div', { class: 'field' }, el('label', {}, 'After 3 warnings in 24 h'), penalty) : null,
+      isGroup ? el('div', { class: 'field' }, el('label', {}, 'Blocked words'), words) : null,
+      el('h3', { style: 'margin:16px 0 8px;font-size:14px' }, 'Invite link'),
+      el('div', { class: 'btn-row' }, invite, editable ? el('button', {
+        class: 'btn small',
+        onclick: async () => {
+          if (!confirm('Make a new link? The old one (and all extra links) stop working.')) return;
+          const r = await action(() => api('POST', `/groups/${g.id}/invite/reset`), 'New invite link');
+          if (r) invite.value = `${location.origin}/join/${r.invite_code}`;
+        },
+      }, 'New link') : null),
+      el('h3', { style: 'margin:16px 0 8px;font-size:14px' }, 'Removed people (can’t rejoin until unbanned)'),
+      banned,
+      can('broadcast') ? el('h3', { style: 'margin:16px 0 8px;font-size:14px' }, 'Notice from the Hushavia team') : null,
+      can('broadcast') ? (() => {
+        const t = el('textarea', { rows: 2, maxlength: 1000, placeholder: 'Shown inside the chat as a service message' });
+        return el('div', {}, t, el('button', {
+          class: 'btn small',
+          style: 'margin-top:6px',
+          onclick: async () => { if (t.value.trim() && await action(() => api('POST', `/groups/${g.id}/notice`, { text: t.value.trim() }), 'Notice posted')) t.value = ''; },
+        }, 'Post notice'));
+      })() : null,
+      el('h3', { style: 'margin:16px 0 8px;font-size:14px' }, 'Admin log (newest first)'),
+      el('div', { style: 'max-height:320px;overflow:auto' }, log),
+    ];
+    modal(`Manage · ${d.title}`, body, editable ? 'Save settings' : 'Done', async () => {
+      if (!editable) return true;
+      const out = {};
+      for (const k of keys) if (inputs[k].checked !== d.settings[k]) out[k] = inputs[k].checked;
+      if (isGroup) {
+        if (Number(slow.value) !== d.settings.slow_mode_sec) out.slow_mode_sec = Number(slow.value);
+        if (penalty.value !== d.settings.guard_penalty) out.guard_penalty = penalty.value;
+        const w = words.value.split('\n').map((x) => x.trim().toLowerCase()).filter((x) => x.length >= 2);
+        if (w.join('\n') !== (d.settings.banned_words || []).join('\n')) out.banned_words = w;
+      }
+      if (!Object.keys(out).length) return true;
+      const r = await action(() => api('PUT', `/groups/${g.id}/settings`, out), 'Settings saved');
+      if (r && refreshList) refreshList();
+      return !!r;
+    });
+  }
+
+  // ------------------------------------------------------------------ stickers, stories & media
+  const contentState = { tab: 'media', kind: '', q: '' };
+  const blobCache = new Map();
+  async function mediaBlob(id, small) {
+    const key = `${id}${small ? 'p' : ''}`;
+    if (!blobCache.has(key)) {
+      blobCache.set(key, fetch(`/api/admin/media/${id}${small ? '?v=p' : ''}`, { headers: { Authorization: `Bearer ${state.token}` } })
+        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('not found')))).then((b) => URL.createObjectURL(b))
+        .catch((e) => { blobCache.delete(key); throw e; }));
+    }
+    return blobCache.get(key);
+  }
+  function thumbImg(id, kind, thumb) {
+    const img = el('img', { alt: '', style: 'width:96px;height:96px;object-fit:cover;border-radius:10px;background:#0002;cursor:zoom-in',
+      src: thumb ? `data:image/jpeg;base64,${thumb}` : null });
+    if (kind === 'image' || kind === 'video' || kind === 'avatar' || kind === 'sticker') {
+      mediaBlob(id, true).then((u) => { img.src = u; }).catch(() => {});
+      img.addEventListener('click', async () => {
+        try {
+          const u = await mediaBlob(id, false);
+          const big = kind === 'video' ? el('video', { src: u, controls: true, autoplay: true, style: 'max-width:100%;max-height:70vh' }) : el('img', { src: u, style: 'max-width:100%;max-height:70vh' });
+          modal('Preview', [big], 'Close', async () => true);
+        } catch (_) { toast('File not available', true); }
+      });
+    }
+    return img;
+  }
+
+  async function pageContent() {
+    const tabs = el('div', { class: 'btn-row', style: 'margin-bottom:12px' }, [['media', 'Media'], ['stories', 'Stories'], ['stickers', 'Sticker packs']].map(([id, l]) =>
+      el('button', { class: `btn${contentState.tab === id ? ' primary' : ''}`, onclick: () => { contentState.tab = id; pageContent(); } }, l)));
+    const box = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+    main.replaceChildren(head('Stickers, stories & media'), tabs, box);
+
+    if (contentState.tab === 'media') {
+      const kind = el('select', { onchange: (e) => { contentState.kind = e.target.value; pageContent(); } },
+        [['', 'All files'], ['image', 'Photos'], ['video', 'Videos'], ['avatar', 'Profile photos'], ['voice', 'Voice'], ['file', 'Files'], ['sticker', 'Stickers']]
+          .map(([v2, l]) => el('option', { value: v2, selected: contentState.kind === v2 ? true : null }, l)));
+      let before = null;
+      const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px' });
+      const more = el('button', { class: 'btn', style: 'margin-top:12px' }, 'Load more');
+      async function loadMore() {
+        const q = new URLSearchParams({ limit: 60, ...(contentState.kind ? { kind: contentState.kind } : {}), ...(before ? { before } : {}) });
+        const list = await action(() => api('GET', `/media?${q}`));
+        if (!list) return;
+        for (const m of list) {
+          grid.append(el('div', { class: 'card', style: 'display:flex;gap:10px;padding:10px' },
+            thumbImg(m.id, m.kind, m.thumb),
+            el('div', { style: 'min-width:0;flex:1;font-size:12px' },
+              el('div', {}, el('span', { class: 'chip' }, m.kind), ' ', fmtSize(m.size)),
+              el('div', { class: 'muted', style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, m.user ? `${m.user.name}${m.user.username ? ` @${m.user.username}` : ''}` : '—'),
+              el('div', { class: 'muted' }, ago(m.created_at), m.in_messages ? ` · in ${m.in_messages} msg` : ''),
+              m.user ? el('button', { class: 'btn small', style: 'margin-top:6px', onclick: () => openUser(m.user.id) }, 'User') : null,
+              m.size > 0 ? el('button', {
+                class: 'btn small danger',
+                style: 'margin-top:6px;margin-left:4px',
+                onclick: (ev) => modal('Remove this file everywhere?', [el('p', {}, 'Messages with it are deleted for everyone, and it is removed from profile photos and stories. The file is erased. This cannot be undone.')], 'Remove', async () => {
+                  const r = await action(() => api('DELETE', `/media/${m.id}`), 'File removed everywhere');
+                  if (r) ev.target.closest('.card').remove();
+                  return !!r;
+                }, true),
+              }, 'Remove') : el('div', { class: 'chip bad', style: 'margin-top:6px' }, 'Removed'))));
+        }
+        before = list.length ? list[list.length - 1].id : before;
+        more.style.display = list.length < 60 ? 'none' : '';
+      }
+      more.addEventListener('click', loadMore);
+      box.replaceChildren(el('div', { class: 'toolbar' }, kind), grid, more);
+      await loadMore();
+      return;
+    }
+
+    if (contentState.tab === 'stories') {
+      const list = await action(() => api('GET', '/stories'));
+      if (!list) return;
+      const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px' }, list.map((s) =>
+        el('div', { class: 'card', style: 'display:flex;gap:10px;padding:10px' },
+          thumbImg(s.media_id, s.kind, null),
+          el('div', { style: 'min-width:0;flex:1;font-size:12px' },
+            el('div', {}, s.user.name, s.user.username ? el('span', { class: 'muted' }, ` @${s.user.username}`) : null),
+            s.caption ? el('div', { style: 'white-space:pre-wrap' }, s.caption) : null,
+            el('div', { class: 'muted' }, `${ago(s.created_at)} · ${s.views} views · ${s.privacy}`),
+            el('button', {
+              class: 'btn small danger',
+              style: 'margin-top:6px',
+              onclick: async (ev) => { if (confirm('Delete this story?') && await action(() => api('DELETE', `/stories/${s.id}`), 'Story deleted')) ev.target.closest('.card').remove(); },
+            }, 'Delete')))));
+      box.replaceChildren(el('p', { class: 'muted' }, `${list.length} active stories`), list.length ? grid : el('p', { class: 'muted' }, 'No active stories.'));
+      return;
+    }
+
+    const search = el('input', { type: 'text', placeholder: 'Search packs', value: contentState.q, style: 'flex:1;min-width:220px',
+      oninput: debounce((e) => { contentState.q = e.target.value.trim(); pageContent(); }, 350) });
+    const packs = await action(() => api('GET', `/sticker-packs?${new URLSearchParams({ q: contentState.q })}`));
+    if (!packs) return;
+    const rows = packs.map((p) => {
+      const cover = el('img', { alt: '', style: 'width:44px;height:44px;object-fit:contain', src: p.cover_url || null });
+      return el('tr', {},
+        el('td', {}, cover),
+        el('td', {}, p.title, p.official ? el('span', { class: 'chip info', style: 'margin-left:6px' }, 'Official') : null,
+          p.premium ? el('span', { class: 'chip warn', style: 'margin-left:6px' }, '⭐ Plus') : null,
+          p.disabled ? el('span', { class: 'chip bad', style: 'margin-left:6px' }, 'Off') : null,
+          el('div', { class: 'muted' }, p.owner ? `by ${p.owner.name}` : p.slug || '')),
+        el('td', { class: 'num' }, p.stickers),
+        el('td', { class: 'num' }, fmtNum(p.installs)),
+        el('td', {}, el('div', { class: 'btn-row' },
+          el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PUT', `/sticker-packs/${p.id}`, { premium: !p.premium }), p.premium ? 'Free for everyone' : 'Now Plus-only')) pageContent(); } }, p.premium ? 'Make free' : 'Make Plus-only'),
+          el('button', { class: `btn small${p.disabled ? '' : ' danger'}`, onclick: async () => { if (await action(() => api('PUT', `/sticker-packs/${p.id}`, { disabled: !p.disabled }), p.disabled ? 'Pack switched on' : 'Pack switched off')) pageContent(); } }, p.disabled ? 'Switch on' : 'Switch off'),
+          p.official ? null : el('button', {
+            class: 'btn small danger',
+            onclick: () => modal(`Delete “${p.title}”?`, [el('p', {}, 'The pack disappears for everyone. Stickers already sent stay in chats.')], 'Delete', async () => {
+              const r = await action(() => api('DELETE', `/sticker-packs/${p.id}`), 'Pack deleted');
+              if (r) pageContent();
+              return !!r;
+            }, true),
+          }, 'Delete'))));
+    });
+    box.replaceChildren(el('div', { class: 'toolbar' }, search), table(['', 'Pack', 'Stickers', 'Installs', ''], rows, 'No packs'));
+  }
+
   async function pageGroups() {
     const search = el('input', { type: 'text', placeholder: 'Search title or @username', value: groupsState.q, style: 'flex:1;min-width:220px' });
     const type = el('select', {}, [['all', 'Groups & channels'], ['group', 'Groups'], ['channel', 'Channels']]
@@ -839,6 +1096,7 @@
               },
             }, 'Suspend'));
         }
+        acts.push(el('button', { class: 'btn small primary', onclick: () => manageGroup(g, load) }, 'Manage'));
         acts.push(el('button', {
           class: 'btn small',
           onclick: async () => {
@@ -871,9 +1129,20 @@
               el('td', { class: 'muted' }, new Date(m.joined_at).toLocaleDateString()),
               el('td', {}, el('div', { class: 'btn-row' },
                 el('button', { class: 'btn small', onclick: () => openUser(m.id) }, 'Open'),
+                can('groups.transfer') && m.role !== 'owner' ? el('button', {
+                  class: 'btn small',
+                  onclick: async (ev) => {
+                    const to = m.role === 'admin' ? 'member' : 'admin';
+                    if (await action(() => api('PUT', `/groups/${g.id}/members/${m.id}/role`, { role: to }), to === 'admin' ? 'Now an admin' : 'Admin rights removed')) {
+                      m.role = to;
+                      ev.target.textContent = to === 'admin' ? 'Remove admin' : 'Make admin';
+                      ev.target.closest('tr').querySelector('.chip').textContent = to;
+                    }
+                  },
+                }, m.role === 'admin' ? 'Remove admin' : 'Make admin') : null,
                 can('groups.suspend') && m.role !== 'owner' ? el('button', {
                   class: 'btn small danger',
-                  onclick: async (ev) => { if (await action(() => api('DELETE', `/groups/${g.id}/members/${m.id}`), 'Removed from the group')) ev.target.closest('tr').remove(); },
+                  onclick: async (ev) => { if (await action(() => api('DELETE', `/groups/${g.id}/members/${m.id}`), 'Removed — they can’t rejoin until unbanned (Manage → Removed people)')) ev.target.closest('tr').remove(); },
                 }, 'Remove') : null))));
             modal(`Members · ${g.title}`, [table(['Member', 'Role', 'Joined', ''], rows, 'No members')], 'Done', async () => true);
           },
@@ -970,6 +1239,7 @@
     message_delete_window_hours: ['Delete-for-everyone window (hours)', '0 = no limit. Group admins can always delete.'],
     min_app_version: ['Minimum app version', 'Older apps are asked to update.'],
     latest_app_version: ['Latest app version', 'Apps below this see an optional update notice.'],
+    app_update_notes: ['“What’s new” for in-app updates', 'Shown above the Update button when a new build is out (e.g. “Faster photos, Group Guard…”). Leave empty for none.'],
     support_username: ['Support username', 'Shown in the app for help (without @).'],
     banned_words: ['Banned words & phrases', 'One per line. Matches whole words, any case (Urdu works too).'],
     banned_words_action: ['When a banned word is used', '“Block” stops the message. “Flag” sends it but opens an automatic report.'],
@@ -1016,6 +1286,7 @@
   };
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
+    ['App updates', ['app_update_notes']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions']],
@@ -1645,6 +1916,7 @@
     groups: pageGroups,
     calls: pageCalls,
     bots: pageBots,
+    content: pageContent,
     revenue: pageRevenue,
     payments: pagePayments,
     plans: pagePlans,

@@ -315,3 +315,77 @@ test('Group Guard: forwarded spam, mention spam, 3 strikes and the raid shield',
   assert.equal((await chats.getChat(O.id, g.id)).join_captcha, true);
   assert.equal((await db.one(`SELECT count(*)::int AS n FROM messages WHERE chat_id = $1 AND meta->>'event' = 'raid_shield'`, [g.id])).n, 1);
 });
+
+test('removed members stay out until unbanned; admin panel has full control of a group', async () => {
+  const { hashPassword } = require('../src/utils/crypto'); // eslint-disable-line global-require
+  const ctl = require('../src/services/admincontrol.service'); // eslint-disable-line global-require
+  const stickers = require('../src/services/sticker.service'); // eslint-disable-line global-require
+  const root = await db.one(`INSERT INTO admins (email, password_hash, name, role) VALUES ('rootp@example.com', $1, 'Root', 'super_admin') RETURNING *`, [hashPassword('x-very-long-password')]);
+  const O = await signup('+923260000061', 'Omar', 'omar_b');
+  const S = await signup('+923260000062', 'Saba', 'saba_b');
+  const T = await signup('+923260000063', 'Talha', 'talha_b');
+  const { chat: g } = await chats.createGroup(O.id, { title: 'Ban test', member_ids: [S.id, T.id] });
+  const code = (await chats.getChat(O.id, g.id)).invite_code;
+
+  // removed → can't come back by link; unban → can
+  await chats.removeMember(O.id, g.id, S.id);
+  await rejects(chats.joinByInvite(S.id, code), 'banned_from_chat');
+  const list = await chats.listBanned(O.id, g.id);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].user.id, S.id);
+  await rejects(chats.listBanned(T.id, g.id), 'not_admin');
+  await chats.unbanMember(O.id, g.id, S.id);
+  await chats.joinByInvite(S.id, code);
+
+  // an admin adding a removed person brings them back (and unbans them)
+  await chats.removeMember(O.id, g.id, S.id);
+  const added = await chats.addMembers(O.id, g.id, [S.id]);
+  assert.deepEqual(added.added, [S.id]);
+  assert.equal(await chats.isBanned(g.id, S.id), false);
+
+  // admin panel: settings, admins, removal, unban, invite reset, notices
+  const d = await ctl.groupDetail(g.id);
+  assert.equal(d.settings.anti_links, false);
+  assert.equal(d.counts.members, 3);
+  await ctl.setGroupSettings(root, g.id, { anti_links: true, raid_shield: true, slow_mode_sec: 30, guard_penalty: 'mute', banned_words: ['Scam'] });
+  const d2 = await ctl.groupDetail(g.id);
+  assert.equal(d2.settings.anti_links, true);
+  assert.equal(d2.settings.slow_mode_sec, 30);
+  assert.deepEqual(d2.settings.banned_words, ['scam']);
+  await rejects(ctl.setGroupSettings(root, g.id, { slow_mode_sec: 7 }), 'invalid_input');
+  await rejects(ctl.setGroupSettings(root, g.id, { signatures: true }), 'invalid_input'); // channels only
+
+  await ctl.setGroupRole(root, g.id, T.id, 'admin');
+  assert.equal((await chats.getMembers(O.id, g.id)).find((m) => m.user.id === T.id).role, 'admin');
+  await rejects(ctl.setGroupRole(root, g.id, O.id, 'member'), 'no_rights');
+  await ctl.setGroupRole(root, g.id, T.id, 'member');
+
+  await require('../src/services/admin.service').removeGroupMember(root, g.id, S.id); // eslint-disable-line global-require
+  await rejects(chats.joinByInvite(S.id, code), 'banned_from_chat');
+  assert.equal((await ctl.groupDetail(g.id)).banned[0].reason, 'admin_panel');
+  await ctl.unbanGroupMember(root, g.id, S.id);
+
+  const fresh = await ctl.resetInvite(root, g.id);
+  assert.notEqual(fresh.invite_code, code);
+  await rejects(chats.joinByInvite(S.id, code), 'invite_invalid');
+
+  await ctl.postNotice(root, g.id, { text: 'Please keep it friendly' });
+  assert.equal((await db.one(`SELECT count(*)::int AS n FROM messages WHERE chat_id = $1 AND meta->>'event' = 'team_notice'`, [g.id])).n, 1);
+  await ctl.noticeUser(root, T.id, { title: 'Hello from the team', text: 'Welcome!' });
+  assert.equal((await db.one("SELECT count(*)::int AS n FROM notices WHERE user_id = $1 AND kind = 'team'", [T.id])).n, 1);
+  assert.ok((await db.one("SELECT count(*)::int AS n FROM admin_logs WHERE admin_id = $1", [root.id])).n >= 8, 'every action is in the activity log');
+
+  // sticker packs: switch off / Plus-only by hand
+  await stickers.ensureOfficialPacks();
+  const packs = await ctl.listStickerPacks({});
+  const free = packs.find((p) => p.official && !p.premium);
+  await ctl.updateStickerPack(root, free.id, { disabled: true });
+  assert.ok(!(await stickers.myPacks(T.id)).some((p) => p.id === free.id), 'switched-off pack is gone for users');
+  await ctl.updateStickerPack(root, free.id, { disabled: false, premium: true });
+  await stickers.ensureOfficialPacks(); // a restart keeps the admin's choice
+  assert.equal((await ctl.listStickerPacks({})).find((p) => p.id === free.id).premium, true);
+  await rejects(ctl.deleteStickerPack(root, free.id), 'official_pack');
+  await ctl.updateStickerPack(root, free.id, { premium: false });
+  assert.ok(Array.isArray(await ctl.listStories({})));
+  assert.ok(Array.isArray(await ctl.listMedia({ kind: 'image' })));
+});
