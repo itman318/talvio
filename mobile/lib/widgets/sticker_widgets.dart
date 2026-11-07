@@ -1249,7 +1249,7 @@ Widget netImage(String url, {BoxFit? fit, ImageErrorWidgetBuilder? errorBuilder}
       imageUrl: url, // stickers are kept on the phone: a pack opens instantly the second time
       fit: fit,
       fadeInDuration: const Duration(milliseconds: 120),
-      errorWidget: errorBuilder == null ? null : (ctx, _, err) => errorBuilder(ctx, err ?? 'error', null),
+      errorWidget: errorBuilder == null ? null : (ctx, _, err) => errorBuilder(ctx, err, null),
     );
 
 // ------------------------------------------------------------------ emoji → sticker suggestions
