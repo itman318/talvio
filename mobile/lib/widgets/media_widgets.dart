@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
@@ -52,8 +53,13 @@ class MessageImage extends StatefulWidget {
   State<MessageImage> createState() => _MessageImageState();
 }
 
+/// Telegram-style photo bubble: the tiny inline thumb shows blurred at once, the bubble-size
+/// preview (a few dozen KB) fades in over it, and the full photo is fetched only when opened.
 class _MessageImageState extends State<MessageImage> {
-  Future<File>? _file;
+  File? _shown;
+  bool _isFull = false;
+  bool _loading = false;
+  bool _failed = false;
   bool _tapToLoad = false;
 
   @override
@@ -62,22 +68,83 @@ class _MessageImageState extends State<MessageImage> {
     _decide();
   }
 
+  @override
+  void didUpdateWidget(covariant MessageImage old) {
+    super.didUpdateWidget(old);
+    // the upload finished: the message got its server media id
+    if (old.message.media?.id != widget.message.media?.id && _shown == null) _decide();
+  }
+
+  bool get _hasLocal {
+    final p = widget.message.localFilePath;
+    return p != null && File(p).existsSync();
+  }
+
   /// Own uploads and cached photos show at once; others follow the auto-download setting.
   Future<void> _decide() async {
     final msg = widget.message;
+    if (_hasLocal) {
+      setState(() {
+        _shown = File(msg.localFilePath!);
+        _isFull = true;
+      });
+      return;
+    }
+    final m = msg.media;
+    if (m == null || m.id == 0) return;
     final services = context.read<AppServices>();
-    final prefs = context.read<AppPrefs>();
-    final local = msg.localFilePath != null && File(msg.localFilePath!).existsSync();
-    final cached = local || msg.media == null || msg.media!.id == 0 ? null : await services.media.cached(msg.media!);
-    final auto = local || cached != null || await prefs.autoDownloadPhotos();
+    final full = await services.media.cached(m);
+    final have = full ?? await services.media.cachedPreview(m);
     if (!mounted) return;
+    if (have != null) {
+      setState(() {
+        _shown = have;
+        _isFull = full != null;
+      });
+      return;
+    }
+    final auto = await context.read<AppPrefs>().autoDownloadPhotos();
+    if (!mounted) return;
+    if (auto) {
+      _load();
+    } else {
+      setState(() => _tapToLoad = true);
+    }
+  }
+
+  Future<void> _load() async {
+    final m = widget.message.media;
+    if (m == null || _loading) return;
     setState(() {
-      if (auto) {
-        _file = resolveMediaFile(context, msg);
-      } else {
-        _tapToLoad = true;
-      }
+      _tapToLoad = false;
+      _failed = false;
+      _loading = true;
     });
+    try {
+      final f = await context.read<AppServices>().media.preview(m);
+      final full = await context.read<AppServices>().media.cached(m);
+      if (!mounted) return;
+      setState(() {
+        _shown = f;
+        _isFull = full != null;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
+  void _open() {
+    final f = _shown;
+    if (f == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FullImageScreen(file: f, full: _isFull ? null : resolveMediaFile(context, widget.message)),
+    ));
   }
 
   @override
@@ -86,51 +153,67 @@ class _MessageImageState extends State<MessageImage> {
     final ratio = (m.width != null && m.height != null && m.height! > 0) ? m.width! / m.height! : 4 / 3;
     final w = widget.maxWidth;
     final h = (w / ratio).clamp(120.0, 360.0);
+    final thumb = m.thumbBytes;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
     return SizedBox(
       width: w,
       height: h,
-      child: _tapToLoad
-          ? InkWell(
-              onTap: () => setState(() {
-                _tapToLoad = false;
-                _file = resolveMediaFile(context, widget.message);
-              }),
+      child: Stack(fit: StackFit.expand, children: [
+        // 1) instant: the blurred inline thumb (or a soft placeholder)
+        if (thumb != null)
+          ClipRect(
+            child: ImageFiltered(
+              imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8, tileMode: TileMode.clamp),
+              child: Image.memory(thumb, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.low),
+            ),
+          )
+        else
+          const ColoredBox(color: Color(0x1F000000)),
+        // 2) the real picture fades in over it; decode only the pixels the bubble shows
+        if (_shown != null)
+          GestureDetector(
+            onTap: _open,
+            child: Image.file(
+              _shown!,
+              key: ValueKey(_shown!.path),
+              fit: BoxFit.cover,
+              width: w,
+              height: h,
+              gaplessPlayback: true,
+              cacheWidth: (math.max(w, h * ratio) * dpr).round(),
+              frameBuilder: (ctx, child, frame, sync) => sync
+                  ? child
+                  : AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: const Duration(milliseconds: 180), child: child),
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          )
+        else if (_tapToLoad || _failed)
+          InkWell(
+            onTap: _load,
+            child: Center(
               child: Container(
-                color: Brand.faint,
-                child: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.download_rounded, color: Colors.white, size: 36),
-                    Text(fileSize(m.size), style: const TextStyle(color: Colors.white)),
-                  ]),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(_failed ? Icons.refresh_rounded : Icons.download_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text(_failed ? 'Retry' : fileSize(m.size), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ]),
               ),
-            )
-          : FutureBuilder<File>(
-        future: _file,
-        builder: (ctx, snap) {
-          if (snap.hasData) {
-            return GestureDetector(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FullImageScreen(file: snap.data!))),
-              // decode only the pixels the bubble shows (not the whole 2000+ px photo): smooth scrolling, less memory
-              child: Image.file(
-                snap.data!,
-                fit: BoxFit.cover,
-                width: w,
-                height: h,
-                gaplessPlayback: true,
-                cacheWidth: (math.max(w, h * ratio) * MediaQuery.devicePixelRatioOf(context)).round(),
+            ),
+          )
+        else
+          const Center(
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
+                child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
               ),
-            );
-          }
-          if (snap.hasError) {
-            return InkWell(
-              onTap: () => setState(() => _file = resolveMediaFile(context, widget.message)),
-              child: const Center(child: Icon(Icons.refresh)),
-            );
-          }
-          return Container(color: Colors.black12, child: const Center(child: CircularProgressIndicator(strokeWidth: 2)));
-        },
-      ),
+            ),
+          ),
+      ]),
     );
   }
 }
@@ -150,27 +233,73 @@ Future<String> saveToGallery(File file, {bool video = false}) async {
   }
 }
 
-class FullImageScreen extends StatelessWidget {
-  const FullImageScreen({super.key, required this.file, this.canSave});
+class FullImageScreen extends StatefulWidget {
+  const FullImageScreen({super.key, required this.file, this.full, this.canSave});
   final File file;
+  /// The full-size photo while [file] is only the preview: swapped in when it arrives.
+  final Future<File>? full;
   final bool? canSave; // null: allowed unless a protected chat is open
+
+  @override
+  State<FullImageScreen> createState() => _FullImageScreenState();
+}
+
+class _FullImageScreenState extends State<FullImageScreen> {
+  late File _file = widget.file;
+  bool _loadingFull = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final full = widget.full;
+    if (full != null) {
+      _loadingFull = true;
+      full.then((f) {
+        if (mounted) {
+          setState(() {
+            _file = f;
+            _loadingFull = false;
+          });
+        }
+      }).catchError((Object _) {
+        if (mounted) setState(() => _loadingFull = false);
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    var f = _file;
+    if (_loadingFull && widget.full != null) {
+      showInfo(context, 'Getting the full-quality photo…');
+      try {
+        f = await widget.full!;
+      } catch (_) {}
+    }
+    final msg = await saveToGallery(f);
+    if (mounted) showInfo(context, msg);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, actions: [
-        if (canSave ?? ScreenGuard.protectedOpen == 0)
-          IconButton(
-            tooltip: 'Save to gallery',
-            icon: const Icon(Icons.download_rounded),
-            onPressed: () async {
-              final msg = await saveToGallery(file);
-              if (context.mounted) showInfo(context, msg);
-            },
-          ),
-      ]),
-      body: Center(child: InteractiveViewer(maxScale: 5, child: Image.file(file))),
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        bottom: _loadingFull
+            ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator(minHeight: 2, backgroundColor: Colors.transparent))
+            : null,
+        actions: [
+          if (widget.canSave ?? ScreenGuard.protectedOpen == 0)
+            IconButton(tooltip: 'Save to gallery', icon: const Icon(Icons.download_rounded), onPressed: _save),
+        ],
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          maxScale: 5,
+          child: Image.file(_file, key: ValueKey(_file.path), gaplessPlayback: true),
+        ),
+      ),
     );
   }
 }

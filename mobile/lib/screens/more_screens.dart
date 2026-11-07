@@ -272,6 +272,7 @@ class _ContactsSyncScreenState extends State<ContactsSyncScreen> {
     });
     try {
       if (!await FlutterContacts.requestPermission(readonly: true)) {
+        if (!mounted) return;
         setState(() => _error = 'Allow access to contacts to find friends who use the app.');
         return;
       }

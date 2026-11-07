@@ -201,7 +201,8 @@ async function serializeRows(viewerId, rows) {
       via_bot: m.via_bot_id && users.get(m.via_bot_id) ? { id: m.via_bot_id, username: users.get(m.via_bot_id).username } : null,
       type: m.type,
       text: m.text,
-      media: m.media_id ? mediaService.serialize(mediaMap.get(m.media_id)) : null,
+      // view-once photos never carry the inline preview
+      media: m.media_id ? mediaService.serialize(mediaMap.get(m.media_id), { noThumb: !!(m.meta && m.meta.view_once) }) : null,
       poll: m.type === 'poll' ? polls.get(m.id) || null : null,
       reply_to: r
         ? {

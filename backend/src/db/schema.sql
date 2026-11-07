@@ -1178,3 +1178,7 @@ CREATE INDEX IF NOT EXISTS buttonbot_posts_user_idx ON buttonbot_posts (user_id,
 
 -- ---------------------------------------------------------------- sticker packs only Hushavia Plus members can send
 ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- fast photos: tiny inline preview sent with the message (bubble-size WebP lives next to the file)
+ALTER TABLE media ADD COLUMN IF NOT EXISTS thumb TEXT;
+ALTER TABLE media ADD COLUMN IF NOT EXISTS thumb_failed BOOLEAN NOT NULL DEFAULT FALSE;

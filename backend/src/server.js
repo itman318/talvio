@@ -23,13 +23,14 @@ push.init();
 require('./services/sticker.service').ensureOfficialPacks().catch((err) => console.error('sticker packs:', err.message)); // eslint-disable-line no-console
 
 server.listen(config.port, () => {
-  require('./services/botforge.service').ensure().catch((err) => console.error('botfather setup error', err)); // eslint-disable-line no-console
   require('./services/botforge.service').ensure()
     .then(() => require('./services/idbot.service').ensure())
     .then(() => require('./services/sysbots.service').ensure())
     .catch((err) => console.error('id bot setup error', err)); // eslint-disable-line no-console
   // eslint-disable-next-line no-console
   console.log(`Hushavia API listening on http://localhost:${config.port}  (admin panel: /admin)`);
+  // older photos get their instant previews a few hundred at a time, a minute after start
+  setTimeout(() => require('./services/media.service').backfillThumbs().catch(() => {}), 60000).unref();
   if (config.otp.devMode) console.log('OTP dev mode is ON — codes are returned in the API response'); // eslint-disable-line no-console
 });
 

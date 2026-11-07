@@ -11,6 +11,7 @@ class MediaCache {
 
   final ApiClient api;
   final Map<int, Future<File>> _inflight = {};
+  final Map<int, Future<File>> _previewInflight = {};
   Directory? _dir;
 
   Future<Directory> _cacheDir() async {
@@ -46,6 +47,33 @@ class MediaCache {
     return api.download(m.url, target);
   }
 
+  File _previewFile(Directory dir, MediaInfo m) => File('${dir.path}/p${m.id}.webp');
+
+  /// The bubble-size version of a photo, if it is already on the phone.
+  Future<File?> cachedPreview(MediaInfo m) async {
+    if (!m.hasPreview) return null;
+    final f = _previewFile(await _cacheDir(), m);
+    return await f.exists() ? f : null;
+  }
+
+  /// The best copy already on the phone (full photo, else its preview) — no network.
+  Future<File?> best(MediaInfo m) async => await cached(m) ?? await cachedPreview(m);
+
+  /// Bubble-size photo (a few dozen KB): the full photo when it is already here, else the preview.
+  Future<File> preview(MediaInfo m) async {
+    if (!m.hasPreview) return get(m);
+    final full = await cached(m);
+    if (full != null) return full;
+    return _previewInflight[m.id] ??= () async {
+      final target = _previewFile(await _cacheDir(), m);
+      if (await target.exists()) return target;
+      return api.download(m.previewUrl, target);
+    }()
+        .whenComplete(() {
+      _previewInflight.remove(m.id);
+    });
+  }
+
   Future<int> sizeBytes() async {
     final dir = await _cacheDir();
     var total = 0;
@@ -65,8 +93,10 @@ class MediaCache {
   /// Deletes one cached file (view-once media after it was opened).
   Future<void> remove(MediaInfo m) async {
     try {
-      final f = File('${(await _cacheDir()).path}/${_safeName(m)}');
-      if (await f.exists()) await f.delete();
+      final dir = await _cacheDir();
+      for (final f in [File('${dir.path}/${_safeName(m)}'), _previewFile(dir, m)]) {
+        if (await f.exists()) await f.delete();
+      }
     } catch (_) {}
   }
 

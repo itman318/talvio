@@ -8,6 +8,7 @@ const settings = require('./settings.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, notFound } = require('../utils/errors');
+const images = require('../utils/images');
 
 const KINDS = ['image', 'video', 'voice', 'file', 'avatar', 'sticker'];
 const SAFE_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
@@ -39,7 +40,7 @@ function optInt(value, max) {
   return Number.isFinite(n) && n >= 0 && n <= max ? n : null;
 }
 
-function serialize(m) {
+function serialize(m, opts = {}) {
   if (!m) return null;
   return {
     id: m.id,
@@ -50,6 +51,7 @@ function serialize(m) {
     duration: m.duration_sec,
     width: m.width,
     height: m.height,
+    ...(m.thumb && !opts.noThumb ? { thumb: m.thumb } : {}),
     url: m.is_public ? `/api/media/${m.id}/public` : `/api/media/${m.id}`,
   };
 }
@@ -95,11 +97,53 @@ async function registerUpload(userId, file, body) {
         kind === 'avatar' || kind === 'sticker',
       ],
     );
+    if (kind === 'image') await addPhotoInfo(row);
     return serialize(row);
   } catch (err) {
     removeFile(file);
     throw err;
   }
+}
+
+function timeout(ms) {
+  return new Promise((resolve) => setTimeout(() => resolve(null), ms).unref());
+}
+
+/** Fills the tiny inline thumb (and real size) of a photo; makes the bubble preview in the background. */
+async function addPhotoInfo(row) {
+  if (!images.available() || !images.PREVIEWABLE.includes(row.mime)) return row;
+  const abs = path.resolve(config.uploadDir, row.storage_path);
+  try {
+    const info = await Promise.race([images.analyze(abs, row.mime), timeout(4000)]);
+    if (info && info.thumb) {
+      const width = row.width || info.width;
+      const height = row.height || info.height;
+      await db.query('UPDATE media SET thumb = $2, width = $3, height = $4 WHERE id = $1', [row.id, info.thumb, width, height]);
+      Object.assign(row, { thumb: info.thumb, width, height });
+    }
+  } catch (_) {
+    // a photo sharp can't read still sends — just without the instant preview
+  }
+  images.preview(abs, row.mime, Number(row.size_bytes)).catch(() => {});
+  return row;
+}
+
+/** Older photos: adds thumbs a few at a time in the background (after a deploy). */
+async function backfillThumbs(limit = 300) {
+  if (!images.available()) return 0;
+  const rows = await db.many(
+    `SELECT * FROM media WHERE kind = 'image' AND thumb IS NULL AND NOT thumb_failed
+     AND mime = ANY($1::text[]) ORDER BY id DESC LIMIT $2`,
+    [images.PREVIEWABLE, limit],
+  );
+  let n = 0;
+  for (const r of rows) {
+    const before = r.thumb;
+    await addPhotoInfo(r);
+    if (r.thumb && !before) n += 1;
+    else await db.query('UPDATE media SET thumb_failed = TRUE WHERE id = $1', [r.id]);
+  }
+  return n;
 }
 
 /** Returns the media row if the user may download it, otherwise throws 404. */
@@ -134,6 +178,13 @@ async function getAccessible(userId, mediaIdRaw) {
   return m;
 }
 
+/** Bubble-size version of a photo when one exists (or can be made), else the original. */
+async function previewPath(m, variant = 'p') {
+  const abs = absolutePath(m);
+  if (m.kind !== 'image' && m.kind !== 'avatar') return abs;
+  return (await images.preview(abs, m.mime, Number(m.size_bytes), variant)) || abs;
+}
+
 async function getPublic(mediaIdRaw) {
   const m = await db.one('SELECT * FROM media WHERE id = $1 AND is_public', [v.id(mediaIdRaw, 'media_id')]);
   if (!m) throw notFound('media_not_found', 'File not found');
@@ -151,4 +202,4 @@ function isInlineSafe(m) {
   return SAFE_IMAGE_MIMES.includes(m.mime) || m.mime.startsWith('video/') || m.mime.startsWith('audio/');
 }
 
-module.exports = { KINDS, serialize, registerUpload, getAccessible, getPublic, absolutePath, isInlineSafe };
+module.exports = { KINDS, serialize, registerUpload, backfillThumbs, previewPath, getAccessible, getPublic, absolutePath, isInlineSafe };

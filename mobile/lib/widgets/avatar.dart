@@ -46,7 +46,8 @@ class Avatar extends StatelessWidget {
       borderRadius: BorderRadius.circular(size * 0.34),
       // kept on the phone (a picture's address never changes), so lists open with faces already there
       child: CachedNetworkImage(
-        imageUrl: url!,
+        // lists: the server's 256 px avatar (a few KB) instead of the uploaded 1024 px photo
+        imageUrl: size <= 96 && url!.contains('/api/media/') && !url!.contains('?') ? '${url!}?v=s' : url!,
         cacheManager: imageStore,
         width: size,
         height: size,

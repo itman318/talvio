@@ -209,7 +209,10 @@ class _ThumbState extends State<_Thumb> {
   void initState() {
     super.initState();
     final m = widget.message;
-    if (m.type == 'image' && m.media != null) _file = resolveMediaFile(context, m);
+    if (m.type == 'image' && m.media != null) {
+      final local = m.localFilePath;
+      _file = local != null && File(local).existsSync() ? Future.value(File(local)) : context.read<AppServices>().media.preview(m.media!);
+    }
   }
 
   @override
@@ -236,7 +239,7 @@ class _ThumbState extends State<_Thumb> {
       future: _file,
       builder: (_, snap) => snap.hasData
           ? InkWell(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FullImageScreen(file: snap.data!))),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FullImageScreen(file: snap.data!, full: resolveMediaFile(context, m)))),
               child: Image.file(snap.data!, fit: BoxFit.cover, cacheWidth: 300),
             )
           : const ColoredBox(color: Color(0x14000000)),

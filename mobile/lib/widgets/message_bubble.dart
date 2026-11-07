@@ -630,13 +630,34 @@ class DateChip extends StatelessWidget {
 }
 
 
-final _pictographic = RegExp(r'[\p{Extended_Pictographic}\p{Regional_Indicator}]', unicode: true);
-final _emojiOnly = RegExp(r'^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0F\u20E3#*0-9])+$', unicode: true);
+/// Emoji test by code point (no regex Unicode properties: not every Android runtime has them).
+bool _isPictographic(int r) =>
+    (r >= 0x1F000 && r <= 0x1FAFF) || // emoji, flags, skin tones, symbols & pictographs
+    (r >= 0x2600 && r <= 0x27BF) || // misc symbols, dingbats (☀ ❤ ✅)
+    (r >= 0x2300 && r <= 0x23FF) || // ⌚ ⏰
+    (r >= 0x2B00 && r <= 0x2BFF) || // ⭐ ⬆
+    (r >= 0x2190 && r <= 0x21FF) || // arrows
+    (r >= 0x25A0 && r <= 0x25FF) || // ▶ ◀
+    r == 0x00A9 || r == 0x00AE || r == 0x203C || r == 0x2049 || r == 0x2122 || r == 0x2139 ||
+    r == 0x24C2 || r == 0x2934 || r == 0x2935 || r == 0x3030 || r == 0x303D || r == 0x3297 || r == 0x3299;
+
+bool _isEmojiGlue(int r) =>
+    r == 0x200D || r == 0xFE0F || r == 0xFE0E || r == 0x20E3 || (r >= 0xE0020 && r <= 0xE007F) || // ZWJ, variation, keycap, tags
+    r == 0x23 || r == 0x2A || (r >= 0x30 && r <= 0x39); // # * 0-9 (keycaps)
 
 /// 1–3 emoji and nothing else → how many (shown big, without a bubble); otherwise 0.
 int bigEmojiCount(String text) {
   final t = text.replaceAll(RegExp(r'\s'), '');
-  if (t.isEmpty || t.length > 48 || !_pictographic.hasMatch(t) || !_emojiOnly.hasMatch(t)) return 0;
+  if (t.isEmpty || t.length > 48) return 0;
+  var pictographic = false;
+  for (final r in t.runes) {
+    if (_isPictographic(r)) {
+      pictographic = true;
+    } else if (!_isEmojiGlue(r)) {
+      return 0;
+    }
+  }
+  if (!pictographic) return 0;
   final n = t.characters.length;
   return n <= 3 ? n : 0;
 }

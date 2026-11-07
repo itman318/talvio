@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import '../config.dart';
 
 int _int(dynamic v) => v is int ? v : (v as num?)?.toInt() ?? int.parse('$v');
@@ -156,6 +159,8 @@ class MediaInfo {
   final int? width;
   final int? height;
   final String url;
+  /// Tiny base64 JPEG (≈40 px) sent inside the message: drawn blurred at once, before any download.
+  final String? thumb;
 
   MediaInfo({
     required this.id,
@@ -167,7 +172,23 @@ class MediaInfo {
     this.width,
     this.height,
     required this.url,
+    this.thumb,
   });
+
+  Uint8List? _thumbBytes;
+  Uint8List? get thumbBytes {
+    final t = thumb;
+    if (t == null || t.isEmpty) return null;
+    try {
+      return _thumbBytes ??= base64Decode(t);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Photos have a bubble-size WebP on the server (5–10× smaller than the photo itself).
+  bool get hasPreview => kind == 'image' && mime != 'image/gif' && id > 0;
+  String get previewUrl => '$url${url.contains('?') ? '&' : '?'}v=p';
 
   factory MediaInfo.fromJson(Map<String, dynamic> j) => MediaInfo(
         id: _int(j['id']),
@@ -179,6 +200,7 @@ class MediaInfo {
         width: _intOrNull(j['width']),
         height: _intOrNull(j['height']),
         url: j['url'] as String,
+        thumb: j['thumb'] as String?,
       );
 }
 

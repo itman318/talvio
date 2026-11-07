@@ -272,7 +272,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
     });
     final story = _story;
     try {
-      final f = await context.read<AppServices>().media.get(story.media);
+      // photos: the ≤1280 px version is sharp on a phone screen and opens several times faster
+      final media = context.read<AppServices>().media;
+      final f = story.media.kind == 'video' ? await media.get(story.media) : await media.preview(story.media);
       if (!mounted || story != _story) return;
       if (story.media.kind == 'video') {
         final c = VideoPlayerController.file(f);
@@ -684,7 +686,7 @@ class StoryThumb extends StatelessWidget {
           : m.kind == 'video'
               ? Container(color: Colors.black87, alignment: Alignment.center, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: icon))
               : FutureBuilder<File>(
-                  future: context.read<AppServices>().media.get(m),
+                  future: context.read<AppServices>().media.preview(m),
                   builder: (_, snap) => snap.hasData ? Image.file(snap.data!, fit: BoxFit.cover, cacheWidth: 200) : fallback(Icons.photo_rounded),
                 ),
     );

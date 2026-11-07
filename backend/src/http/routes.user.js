@@ -96,7 +96,8 @@ router.post('/auth/refresh', h(async (req, res) => {
 }));
 
 router.get('/media/:id/public', h(async (req, res) => {
-  sendMedia(res, await mediaService.getPublic(req.params.id), true);
+  const m = await mediaService.getPublic(req.params.id);
+  sendMedia(res, m, true, req.query.v === 'p' || req.query.v === 's' ? await mediaService.previewPath(m, req.query.v) : null);
 }));
 
 // ------------------------------------------------------------------ authenticated
@@ -398,8 +399,10 @@ router.post('/media', h(async (req, res, next) => {
   });
 }));
 
+// ?v=p → bubble-size WebP of a photo, ?v=s → small avatar (both fall back to the original)
 router.get('/media/:id', h(async (req, res) => {
-  sendMedia(res, await mediaService.getAccessible(req.userId, req.params.id), false);
+  const m = await mediaService.getAccessible(req.userId, req.params.id);
+  sendMedia(res, m, false, req.query.v === 'p' || req.query.v === 's' ? await mediaService.previewPath(m, req.query.v) : null);
 }));
 
 // ------------------------------------------------------------------ helpers
@@ -409,8 +412,10 @@ function parseIdParam(value) {
   return n;
 }
 
-function sendMedia(res, m, isPublic) {
-  const abs = mediaService.absolutePath(m);
+function sendMedia(res, m, isPublic, previewAbs = null) {
+  const original = mediaService.absolutePath(m);
+  const abs = previewAbs || original;
+  const isPreview = abs !== original;
   const inline = mediaService.isInlineSafe(m);
   const filename = encodeURIComponent(m.original_name || `file-${m.id}`);
   res.sendFile(
@@ -418,9 +423,10 @@ function sendMedia(res, m, isPublic) {
     {
       dotfiles: 'deny',
       headers: {
-        'Content-Type': inline ? m.mime : 'application/octet-stream',
+        'Content-Type': isPreview ? 'image/webp' : inline ? m.mime : 'application/octet-stream',
         'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${filename}`,
-        'Cache-Control': isPublic ? 'public, max-age=86400' : 'private, max-age=86400',
+        // a media id never changes its bytes: let phones and browsers keep it
+        'Cache-Control': `${isPublic ? 'public' : 'private'}, max-age=31536000, immutable`,
         'X-Content-Type-Options': 'nosniff',
       },
     },

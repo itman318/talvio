@@ -892,12 +892,16 @@
     return out;
   }
 
+  // bubble: the server's small WebP (?v=p); the viewer swaps in the full photo
   function imageNode(url, cls) {
     const img = el('img', { class: cls || '', alt: 'Photo', loading: 'lazy' });
-    mediaUrl(url).then((u) => { img.src = u; }).catch(() => { img.alt = 'Photo not available'; });
+    const small = url && url.startsWith('/api/media/') && !url.includes('?') ? `${url}?v=p` : url;
+    mediaUrl(small).then((u) => { img.src = u; }).catch(() => { img.alt = 'Photo not available'; });
     img.addEventListener('click', () => {
-      const v = el('div', { class: 'viewer', onclick: () => v.remove() }, el('img', { src: img.src, alt: '' }));
+      const big = el('img', { src: img.src, alt: '' });
+      const v = el('div', { class: 'viewer', onclick: () => v.remove() }, big);
       document.body.append(v);
+      if (small !== url) mediaUrl(url).then((u) => { big.src = u; }).catch(() => {});
     });
     return img;
   }

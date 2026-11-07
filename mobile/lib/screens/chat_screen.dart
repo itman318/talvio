@@ -1691,7 +1691,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ok: chat.isMulti ? 'Leave' : 'Delete',
             danger: true,
           );
-          if (ok) {
+          if (ok && mounted) {
             final messenger = ScaffoldMessenger.of(context);
             final name = chat.title;
             await _store.leaveOrDelete(chatId);
@@ -2126,7 +2126,7 @@ class _ChatScreenState extends State<ChatScreen> {
       controller: _scroll,
       reverse: true,
       // build a screen's worth of older messages ahead: scrolling up stays smooth
-      cacheExtent: 900,
+      cacheExtent: 1600, // photos a screen above/below start loading early
       padding: EdgeInsets.only(top: top, bottom: bottom),
       itemCount: messages.length + (hasMore ? 1 : 0) + (_ad != null ? 1 : 0),
       itemBuilder: (ctx, idx) {

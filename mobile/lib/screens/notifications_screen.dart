@@ -66,6 +66,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _local(String key, bool v) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool(key, v);
+    if (!mounted) return;
     setState(() {
       if (key == 'notif_sound') _sound = v;
       if (key == 'notif_vibrate') _vibrate = v;
