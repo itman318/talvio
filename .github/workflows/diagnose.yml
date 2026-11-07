@@ -36,6 +36,9 @@ jobs:
           node /root/diagnose.js
           echo "--- push notifications"
           journalctl -u hushavia --since "-2d" --no-pager | grep -i "push notifications" | tail -3
+          echo "--- fast photos"
+          (cd /opt/hushavia/app && node -e "try{const s=require('sharp');console.log('sharp: ok', s.versions.sharp)}catch(e){console.log('sharp: MISSING', e.message)}")
+          sudo -u postgres psql -d hushavia -tAc "SELECT 'photos with thumb: '||count(*) FILTER (WHERE thumb IS NOT NULL)||' / '||count(*) FROM media WHERE kind='image'" 2>/dev/null
           echo "--- recent server errors"
           journalctl -u hushavia --since "-3d" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT|unhandled|TypeError" | grep -v OTP_DEV_MODE | tail -40 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
           echo "--- classic bot api (fake token → expect 401 JSON)"
