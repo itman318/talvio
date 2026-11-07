@@ -276,7 +276,7 @@ test('Group Guard: forwarded spam, mention spam, 3 strikes and the raid shield',
   const P = await signup('+923260000044', 'Pari', 'pari_g');
   const { chat: g } = await chats.createGroup(O.id, { title: 'Guard test', member_ids: [M.id, N.id, P.id] });
   const mn = await chats.getOrCreatePrivate(P.id, N.id);
-  const ad = await messages.sendMessage(N.id, mn.id, { text: 'cheap followers at spam.example' });
+  const ad = await messages.sendMessage(N.id, mn.id, { text: 'cheap followers at https://spam-followers.pk' });
 
   // links can no longer slip in through "forward"
   await chats.updateGroup(O.id, g.id, { anti_links: true });
