@@ -11,6 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../config.dart';
 import '../core/prefs.dart';
 import '../core/screen_guard.dart';
 import '../core/services.dart';
@@ -312,46 +313,101 @@ class MessageVideo extends StatefulWidget {
   State<MessageVideo> createState() => _MessageVideoState();
 }
 
+/// Video bubble: the poster frame shows at once (blurred thumb → sharp poster), it plays by streaming
+/// on tap — no waiting for the whole file — and downloads in the background when the setting allows.
 class _MessageVideoState extends State<MessageVideo> {
-  bool? _ready; // null = checking / downloading
+  File? _poster;
+  bool _downloading = false;
+  bool _onPhone = false;
 
   @override
   void initState() {
     super.initState();
-    if (!widget.message.isLocal) {
-      autoFetchMedia(context, widget.message, 'videos').then((ok) {
-        if (mounted) setState(() => _ready = ok);
-      });
+    final message = widget.message;
+    final m = message.media;
+    if (message.isLocal || m == null) return;
+    final services = context.read<AppServices>();
+    if (m.hasPreview) {
+      services.media.preview(m).then((f) {
+        if (mounted) setState(() => _poster = f);
+      }).catchError((Object _) {});
     }
+    services.media.cached(m).then((f) {
+      if (!mounted) return;
+      if (f != null) {
+        setState(() => _onPhone = true);
+        return;
+      }
+      setState(() => _downloading = true);
+      autoFetchMedia(context, message, 'videos').then((ok) {
+        if (mounted) {
+          setState(() {
+            _downloading = false;
+            _onPhone = ok;
+          });
+        }
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final message = widget.message;
     final m = message.media!;
+    final ratio = (m.width != null && m.height != null && m.height! > 0) ? m.width! / m.height! : 16 / 9;
+    const w = 240.0;
+    final h = (w / ratio).clamp(135.0, 320.0);
+    final thumb = m.thumbBytes;
     return InkWell(
-      onTap: message.isLocal
-          ? null
-          : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VideoScreen(message: message))),
-      child: Container(
-        width: 240,
-        height: 150,
-        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(_ready == false ? Icons.download_for_offline_rounded : Icons.play_circle_fill, color: Colors.white, size: 52),
-            if (_ready == null && !message.isLocal)
+      onTap: message.isLocal ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VideoScreen(message: message))),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: w,
+          height: h,
+          child: Stack(fit: StackFit.expand, children: [
+            const ColoredBox(color: Colors.black87),
+            if (thumb != null)
+              ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8, tileMode: TileMode.clamp),
+                child: Image.memory(thumb, fit: BoxFit.cover, gaplessPlayback: true),
+              ),
+            if (_poster != null)
+              Image.file(
+                _poster!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                cacheWidth: (w * MediaQuery.devicePixelRatioOf(context)).round(),
+                frameBuilder: (ctx, child, frame, sync) =>
+                    sync ? child : AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: const Duration(milliseconds: 180), child: child),
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            Center(
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36),
+              ),
+            ),
+            if (_downloading)
               const Positioned(right: 10, top: 10, child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70))),
             Positioned(
               left: 8,
               bottom: 6,
-              child: Text(
-                [if (m.duration != null) duration(m.duration!), fileSize(m.size)].join(' · '),
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(8)),
+                child: Text(
+                  [
+                    if (m.duration != null) duration(m.duration!),
+                    if (!_onPhone) fileSize(m.size),
+                  ].join(' · '),
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
-          ],
+          ]),
         ),
       ),
     );
@@ -369,6 +425,7 @@ class VideoScreen extends StatefulWidget {
 class _VideoScreenState extends State<VideoScreen> {
   VideoPlayerController? _c;
   String? _error;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -376,49 +433,131 @@ class _VideoScreenState extends State<VideoScreen> {
     _load();
   }
 
+  /// On the phone already → plays the file. Otherwise streams it from the server (starts in a
+  /// second, like Telegram); if streaming fails, downloads it and plays the file.
   Future<void> _load() async {
+    final msg = widget.message;
+    final services = context.read<AppServices>();
+    VideoPlayerController? c;
     try {
-      final f = await resolveMediaFile(context, widget.message);
-      final c = VideoPlayerController.file(f);
-      await c.initialize();
-      await c.play();
+      final local = msg.localFilePath != null && File(msg.localFilePath!).existsSync() ? File(msg.localFilePath!) : null;
+      final file = local ?? (msg.media == null ? null : await services.media.cached(msg.media!));
+      if (file != null) {
+        c = VideoPlayerController.file(file);
+        await c.initialize();
+      } else {
+        try {
+          c = VideoPlayerController.networkUrl(
+            Uri.parse(AppConfig.absolute(msg.media!.url)),
+            httpHeaders: services.api.authHeaders,
+          );
+          await c.initialize().timeout(const Duration(seconds: 20));
+        } catch (_) {
+          await c?.dispose();
+          if (!mounted) return;
+          c = VideoPlayerController.file(await resolveMediaFile(context, msg));
+          await c.initialize();
+        }
+      }
       if (!mounted) {
         await c.dispose();
         return;
       }
+      c.addListener(_tick);
+      await c.play();
       setState(() => _c = c);
-    } catch (e) {
+    } catch (_) {
+      await c?.dispose();
       if (mounted) setState(() => _error = 'Could not play this video');
+    }
+  }
+
+  void _tick() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    showInfo(context, 'Saving the video…');
+    try {
+      final f = await resolveMediaFile(context, widget.message);
+      final msg = await saveToGallery(f, video: true);
+      if (mounted) showInfo(context, msg);
+    } catch (_) {
+      if (mounted) showInfo(context, 'Couldn’t save the video');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   @override
   void dispose() {
+    _c?.removeListener(_tick);
     _c?.dispose();
     super.dispose();
   }
 
+  String _time(Duration d) => duration(d.inSeconds);
+
   @override
   Widget build(BuildContext context) {
     final c = _c;
+    final thumb = widget.message.media?.thumbBytes;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, actions: [
+        if (ScreenGuard.protectedOpen == 0 && !widget.message.isLocal)
+          IconButton(
+            tooltip: 'Save to gallery',
+            icon: _saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.download_rounded),
+            onPressed: _save,
+          ),
+      ]),
       body: Center(
         child: _error != null
             ? Text(_error!, style: const TextStyle(color: Colors.white))
             : c == null
-                ? const CircularProgressIndicator()
+                ? Stack(alignment: Alignment.center, children: [
+                    if (thumb != null)
+                      ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Image.memory(thumb, fit: BoxFit.contain, width: double.infinity),
+                      ),
+                    const CircularProgressIndicator(color: Colors.white),
+                  ])
                 : GestureDetector(
-                    onTap: () {
-                      c.value.isPlaying ? c.pause() : c.play();
-                      setState(() {});
-                    },
+                    onTap: () => c.value.isPlaying ? c.pause() : c.play(),
                     child: AspectRatio(
                       aspectRatio: c.value.aspectRatio,
-                      child: Stack(alignment: Alignment.bottomCenter, children: [
+                      child: Stack(alignment: Alignment.center, children: [
                         VideoPlayer(c),
-                        VideoProgressIndicator(c, allowScrubbing: true),
+                        if (c.value.isBuffering) const CircularProgressIndicator(color: Colors.white70),
+                        if (!c.value.isPlaying && !c.value.isBuffering)
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 44),
+                          ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Row(children: [
+                                Text(_time(c.value.position), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                const Spacer(),
+                                Text(_time(c.value.duration), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              ]),
+                            ),
+                            VideoProgressIndicator(c, allowScrubbing: true, padding: const EdgeInsets.fromLTRB(10, 6, 10, 10)),
+                          ]),
+                        ),
                       ]),
                     ),
                   ),

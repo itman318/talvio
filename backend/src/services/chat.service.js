@@ -112,6 +112,7 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
           (SELECT count(*) FROM voice_chat_participants vp WHERE vp.voice_chat_id = vc.id AND vp.left_at IS NULL))
           FROM voice_chats vc WHERE vc.chat_id = c.id AND vc.ended_at IS NULL LIMIT 1) AS voice_chat,
        c.join_captcha, c.anti_flood, c.anti_links, c.hide_service, c.banned_words, c.member_perms, cm.captcha_until AS my_captcha_until,
+       c.anti_forward, c.anti_mentions, c.raid_shield, c.guard_penalty,
        (SELECT l.title FROM chats l WHERE l.id = c.linked_chat_id) AS linked_title,
        (SELECT ch.id FROM chats ch WHERE ch.linked_chat_id = c.id LIMIT 1) AS linked_channel_id,
        CASE WHEN c.type = 'channel' AND cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM post_queue q WHERE q.chat_id = c.id) ELSE 0 END AS queue_count,
@@ -198,6 +199,10 @@ async function serializeChats(userId, rows) {
       anti_flood: !!r.anti_flood,
       anti_links: !!r.anti_links,
       hide_service: !!r.hide_service,
+      anti_forward: !!r.anti_forward,
+      anti_mentions: !!r.anti_mentions,
+      raid_shield: !!r.raid_shield,
+      guard_penalty: r.guard_penalty || 'none',
       banned_words: ADMIN_ROLES.includes(r.my_role) ? r.banned_words || [] : [],
       member_perms: { media: true, links: true, polls: true, stickers: true, voice: true, ...(r.member_perms || {}) },
       needs_captcha: !!r.my_captcha_until,
@@ -466,7 +471,8 @@ async function updateGroup(userId, chatIdRaw, body) {
 }
 
 const EXTRA_KEYS = ['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id',
-  'join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'banned_words', 'member_perms'];
+  'join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'banned_words', 'member_perms',
+  'anti_forward', 'anti_mentions', 'raid_shield', 'guard_penalty'];
 
 /** Welcome text, rules, member limits, protected content, reactions, category, discussion group. */
 async function updateExtras(userId, chat, body) {
@@ -486,7 +492,11 @@ async function updateExtras(userId, chat, body) {
     set('new_member_limits', v.bool(body.new_member_limits, 'new_member_limits'));
   }
   if (body.protected_content !== undefined) set('protected_content', v.bool(body.protected_content, 'protected_content'));
-  for (const k of ['join_captcha', 'anti_flood', 'anti_links', 'hide_service']) {
+  if (body.guard_penalty !== undefined) {
+    if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
+    set('guard_penalty', v.oneOf(body.guard_penalty, ['none', 'mute', 'remove'], 'guard_penalty'));
+  }
+  for (const k of ['join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'anti_forward', 'anti_mentions', 'raid_shield']) {
     if (body[k] !== undefined) {
       if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
       set(k, v.bool(body[k], k));
@@ -956,6 +966,7 @@ async function joinChat(userId, chat) {
     );
     await logEvent(chat.id, userId, 'member_joined', userId);
     if (chat.type === 'group') {
+      if (!chat.join_captcha && await raidShield(chat.id)) chat.join_captcha = true;
       if (chat.join_captcha) {
         // new member proves they're human within 5 minutes (until then they can only read)
         await db.query(`UPDATE chat_members SET captcha_until = now() + interval '5 minutes' WHERE chat_id = $1 AND user_id = $2`, [chat.id, userId]);
@@ -970,6 +981,23 @@ async function joinChat(userId, chat) {
     }
   }
   return getChat(userId, chat.id);
+}
+
+/**
+ * Raid shield: 10+ people joining within a minute turns on "I'm not a robot" for new members
+ * (the admins are told in the group). Returns true when it just switched on.
+ */
+async function raidShield(chatId) {
+  const c = await db.one('SELECT raid_shield, join_captcha FROM chats WHERE id = $1', [chatId]);
+  if (!c || !c.raid_shield || c.join_captcha) return !!(c && c.join_captcha);
+  const r = await db.one("SELECT count(*)::int AS n FROM chat_members WHERE chat_id = $1 AND joined_at > now() - interval '60 seconds'", [chatId]);
+  if (r.n < 10) return false;
+  const on = await db.one('UPDATE chats SET join_captcha = TRUE WHERE id = $1 AND NOT join_captcha RETURNING id', [chatId]);
+  if (on) {
+    await logEvent(chatId, null, 'raid_shield', null, { joins: r.n });
+    await lazyMessages().createSystemMessage(chatId, null, { event: 'raid_shield', joins: r.n });
+  }
+  return true;
 }
 
 // ------------------------------------------------------------------ invite links & join requests
@@ -1303,6 +1331,7 @@ async function sweepCaptcha() {
 }
 
 module.exports = {
+  raidShield,
   setMemberTag,
   similarChannels,
   onlineCount,

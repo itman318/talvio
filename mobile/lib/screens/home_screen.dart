@@ -1,4 +1,5 @@
 import 'global_search_screen.dart';
+import '../widgets/update_widgets.dart';
 import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
@@ -230,13 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          if (auth.updateAvailable)
-            Container(
-              width: double.infinity,
-              color: Theme.of(context).colorScheme.primaryContainer,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: const Text('A new version of the app is available. Please update from the store.'),
-            ),
+          const UpdateBanner(), // in-app updates: checks, downloads and installs the newest Hushavia
           ...store.announcements.map((a) => Container(
                 width: double.infinity,
                 color: const Color(0xFFFFF4D6),

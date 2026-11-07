@@ -46,6 +46,7 @@ void _android() {
     'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
     'android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+    'android.permission.REQUEST_INSTALL_PACKAGES', // in-app updates
   ];
   for (final p in perms) {
     if (!xml.contains(p)) {

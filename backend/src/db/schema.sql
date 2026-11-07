@@ -1182,3 +1182,10 @@ ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL D
 -- fast photos: tiny inline preview sent with the message (bubble-size WebP lives next to the file)
 ALTER TABLE media ADD COLUMN IF NOT EXISTS thumb TEXT;
 ALTER TABLE media ADD COLUMN IF NOT EXISTS thumb_failed BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Group Guard: forwarded messages, @mention spam, raid shield, penalty after 3 warnings
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS anti_forward BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS anti_mentions BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS raid_shield BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS guard_penalty VARCHAR(8) NOT NULL DEFAULT 'none';
+CREATE INDEX IF NOT EXISTS chat_events_guard_idx ON chat_events (chat_id, target_id, created_at) WHERE action LIKE 'guard_%';

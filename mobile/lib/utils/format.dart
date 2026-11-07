@@ -109,6 +109,10 @@ String systemText(Message m, ChatStore store) {
       return '${who(meta['user_id'])} joined the group via invite link';
     case 'owner_changed':
       return '${who(meta['user_id'])} is now the group owner';
+    case 'raid_shield':
+      return '🛡 Group Guard: many people joined at once — new members now confirm they’re human';
+    case 'guard_removed':
+      return '🛡 Group Guard removed ${who(meta['user_id'])} after 3 warnings';
     default:
       return 'Group updated';
   }

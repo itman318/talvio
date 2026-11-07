@@ -77,6 +77,9 @@ function emojiStatus(u) {
 }
 
 /** `{ emoji, duration_sec? }` → [emoji, until] ; null / '' clears it. */
+/** Emoji statuses only Hushavia Plus members can wear (shown with a glow). Same list in the app. */
+const PLUS_STATUS = ['💠', '🪐', '🦋', '🐉', '🦄', '🌟', '🔮', '🪷', '🏵️', '🎖️', '🥇', '💫', '🌌', '🧿', '🕊️', '🫧'];
+
 function parseEmojiStatus(raw) {
   if (raw === null || raw === '' || (raw && raw.emoji === null)) return [null, null];
   const emoji = String((raw && typeof raw === 'object' ? raw.emoji : raw) || '').trim();
@@ -208,6 +211,9 @@ async function updateProfile(userId, body) {
   if (body.birthday !== undefined) add('birthday', parseBirthday(body.birthday));
   if (body.emoji_status !== undefined) {
     const [emoji, until] = parseEmojiStatus(body.emoji_status);
+    if (emoji && PLUS_STATUS.includes(emoji) && !(await require('./payment.service').limitsFor(userId)).premium) { // eslint-disable-line global-require
+      throw forbidden('premium_required', 'This status is part of Hushavia Plus');
+    }
     add('emoji_status', emoji);
     add('emoji_status_until', until);
   }

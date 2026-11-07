@@ -636,15 +636,18 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             SettingsTile(
               icon: Icons.security_rounded,
               color: const Color(0xFF12A150),
-              title: 'Group protection',
+              title: 'Group Guard',
               subtitle: () {
                 final on = [
                   if (chat.joinCaptcha) 'Human check',
+                  if (chat.raidShield) 'Raid shield',
                   if (chat.antiFlood) 'Anti-flood',
                   if (chat.antiLinks) 'No links',
+                  if (chat.antiForward) 'No forwards',
+                  if (chat.guardPenalty != 'none') '3 strikes',
                   if (chat.bannedWords.isNotEmpty) '${chat.bannedWords.length} blocked words',
                 ];
-                return on.isEmpty ? 'Human check, spam filter, blocked words' : on.join(' · ');
+                return on.isEmpty ? 'Human check, raid shield, spam filter, 3 strikes' : on.join(' · ');
               }(),
               maxSubtitleLines: 1,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GroupProtectionScreen(chatId: chat.id))),

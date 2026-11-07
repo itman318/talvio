@@ -150,6 +150,15 @@ class _RecentActionsScreenState extends State<RecentActionsScreen> {
 
   static String _name(dynamic u) => u is Map ? AppUser.fromJson(Map<String, dynamic>.from(u)).name : 'Someone';
 
+  static String _ruleLabel(dynamic rule) => switch ('$rule') {
+        'no_links' => 'link',
+        'banned_word' => 'banned word',
+        'flood' => 'flooding',
+        'no_forwards' => 'forwarded message',
+        'mentions' => 'too many mentions',
+        _ => 'rule',
+      };
+
   (IconData, Color, String) _describe(Map<String, dynamic> e) {
     final who = _name(e['actor']);
     final target = _name(e['target']);
@@ -195,6 +204,14 @@ class _RecentActionsScreenState extends State<RecentActionsScreen> {
         return (Icons.check_circle_rounded, Brand.green, '$who published a post by $target');
       case 'post_declined':
         return (Icons.cancel_rounded, Colors.red, '$who declined a post by $target');
+      case 'guard_blocked':
+        return (Icons.shield_rounded, Brand.amber, '🛡 Guard stopped a message from $target · ${_ruleLabel(d['rule'])}');
+      case 'guard_muted':
+        return (Icons.shield_rounded, Colors.red, '🛡 Guard muted $target for 24 hours (3 warnings)');
+      case 'guard_removed':
+        return (Icons.shield_rounded, Colors.red, '🛡 Guard removed $target (3 warnings)');
+      case 'raid_shield':
+        return (Icons.shield_rounded, Brand.violet, '🛡 Raid shield: ${d['joins'] ?? 'many'} joins in a minute — human check turned on');
       default:
         return (Icons.history_rounded, Brand.muted, '$who: ${e['action']}');
     }
@@ -682,6 +699,34 @@ class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
     await _set({'banned_words': {...current, ...words}.toList()});
   }
 
+  Future<void> _pickPenalty(String current) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('Every message Guard stops is a warning. On the 3rd warning in 24 hours:', style: TextStyle(color: Brand.muted)),
+          ),
+          for (final o in const [
+            ('none', Icons.block_rounded, 'Only stop the message'),
+            ('mute', Icons.volume_off_rounded, 'Mute for 24 hours'),
+            ('remove', Icons.person_remove_rounded, 'Remove from the group'),
+          ])
+            ListTile(
+              leading: Icon(o.$2, color: o.$1 == 'none' ? Brand.muted : Colors.red),
+              title: Text(o.$3),
+              trailing: o.$1 == current ? const Icon(Icons.check_rounded, color: Brand.primary) : null,
+              onTap: () => Navigator.pop(ctx, o.$1),
+            ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (picked != null && picked != current) await _set({'guard_penalty': picked});
+  }
+
   @override
   Widget build(BuildContext context) {
     final chat = context.watch<ChatStore>().chatById(widget.chatId);
@@ -689,7 +734,7 @@ class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
     final words = chat.bannedWords;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Group protection'),
+        title: const Text('🛡 Group Guard'),
         bottom: _busy ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator(minHeight: 2)) : null,
       ),
       body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
@@ -701,6 +746,14 @@ class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
             subtitle: 'People who join must tap “I’m not a robot” within 5 minutes or they are removed',
             value: chat.joinCaptcha,
             onChanged: (v) => _set({'join_captcha': v}),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.shield_moon_rounded,
+            color: Brand.violet,
+            title: 'Raid shield',
+            subtitle: 'If 10+ people join within a minute, the human check turns on by itself',
+            value: chat.raidShield,
+            onChanged: (v) => _set({'raid_shield': v}),
           ),
           SettingsSwitchTile(
             icon: Icons.shield_rounded,
@@ -735,6 +788,32 @@ class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
             subtitle: 'Only admins can send links',
             value: chat.antiLinks,
             onChanged: (v) => _set({'anti_links': v}),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.forward_rounded,
+            color: const Color(0xFF3E7BFA),
+            title: 'Block forwarded messages',
+            subtitle: 'Stops ads forwarded from other channels and groups',
+            value: chat.antiForward,
+            onChanged: (v) => _set({'anti_forward': v}),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.alternate_email_rounded,
+            color: const Color(0xFFE5873D),
+            title: 'Block mention spam',
+            subtitle: 'No more than 5 @mentions in one message',
+            value: chat.antiMentions,
+            onChanged: (v) => _set({'anti_mentions': v}),
+          ),
+        ]),
+        SettingsGroup(title: '3 strikes', children: [
+          SettingsTile(
+            icon: Icons.gavel_rounded,
+            color: Colors.red,
+            title: 'After 3 warnings in 24 hours',
+            subtitle: const {'mute': 'Mute the member for 24 hours', 'remove': 'Remove the member from the group'}[chat.guardPenalty] ??
+                'Only stop the message (no penalty)',
+            onTap: () => _pickPenalty(chat.guardPenalty),
           ),
         ]),
         SettingsGroup(title: 'Blocked words', children: [

@@ -79,3 +79,44 @@ test('files sharp cannot read still upload (no thumb, original served)', async (
   await media.backfillThumbs(); // marks it, never loops on it
   assert.equal((await db.one('SELECT thumb_failed FROM media WHERE id = $1', [up.id])).thumb_failed, true);
 });
+
+test('a video gets a poster frame, its real size and length', { skip: (!images.available() || !images.hasFfmpeg()) && 'sharp/ffmpeg not installed' }, async () => {
+  const { execFileSync } = require('child_process'); // eslint-disable-line global-require
+  const p = path.join(process.env.UPLOAD_DIR, `clip-${Date.now()}.mp4`);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=25', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', p]);
+  const up = await media.registerUpload(A, { path: p, size: fs.statSync(p).size, mimetype: 'video/mp4', originalname: 'clip.mp4' }, { kind: 'video' });
+  assert.ok(up.thumb, 'inline thumb');
+  assert.equal(up.width, 640);
+  assert.equal(up.height, 360);
+  assert.equal(up.duration, 3);
+  const row = await db.one('SELECT * FROM media WHERE id = $1', [up.id]);
+  assert.ok((await media.previewPath(row)).endsWith('.p.webp'), 'poster served as the preview');
+});
+
+test('a video without a poster never serves itself as the "preview"', async () => {
+  const p = path.join(process.env.UPLOAD_DIR, 'broken.mp4');
+  fs.writeFileSync(p, Buffer.alloc(5000, 3));
+  const up = await media.registerUpload(A, { path: p, size: 5000, mimetype: 'video/mp4', originalname: 'broken.mp4' }, { kind: 'video' });
+  const row = await db.one('SELECT * FROM media WHERE id = $1', [up.id]);
+  await assert.rejects(media.previewPath(row), (e) => e.code === 'no_preview');
+});
+
+test('Plus perks: animated profile photos and Plus emoji statuses', { skip: (!images.available() || !images.hasFfmpeg()) && 'sharp/ffmpeg not installed' }, async () => {
+  const { execFileSync } = require('child_process'); // eslint-disable-line global-require
+  const gif = () => {
+    const p = path.join(process.env.UPLOAD_DIR, `av-${Date.now()}.gif`);
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=200x200:rate=5', '-t', '1', p]);
+    return { path: p, size: fs.statSync(p).size, mimetype: 'image/gif', originalname: 'me.gif' };
+  };
+  await assert.rejects(media.registerUpload(B, gif(), { kind: 'avatar' }), (e) => e.code === 'premium_required');
+  await assert.rejects(users.updateProfile(B, { emoji_status: '🦄' }), (e) => e.code === 'premium_required');
+  await users.updateProfile(B, { emoji_status: '😎' }); // the ordinary ones stay free
+
+  await settings.update({ feature_premium: true }, null);
+  await db.query("UPDATE users SET premium_until = now() + interval '30 days' WHERE id = $1", [B]);
+  const av = await media.registerUpload(B, gif(), { kind: 'avatar' });
+  const row = await db.one('SELECT * FROM media WHERE id = $1', [av.id]);
+  assert.equal(media.absolutePath(row), await media.previewPath(row, 'p'), 'the animated original is kept');
+  const me = await users.updateProfile(B, { emoji_status: '🦄' });
+  assert.equal((me.emoji_status || {}).emoji, '🦄');
+});

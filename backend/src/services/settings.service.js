@@ -16,6 +16,7 @@ const DEFINITIONS = {
   message_delete_window_hours: { type: 'integer', default: 48, min: 0, max: 8760 },
   min_app_version: { type: 'string', default: '1.0.0', max: 20 },
   latest_app_version: { type: 'string', default: '1.0.0', max: 20 },
+  app_update_notes: { type: 'string', default: '', max: 1000 }, // "What's new" shown with an in-app update
   support_username: { type: 'string', default: '', max: 32 },
 
   // ---- moderation (Phase 2)

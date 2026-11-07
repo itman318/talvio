@@ -96,6 +96,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
     'no_ads': Icons.block_rounded,
     'stickers': Icons.emoji_emotions_rounded,
     'themes': Icons.palette_rounded,
+    'animated_avatar': Icons.gif_box_rounded,
+    'plus_status': Icons.auto_awesome_rounded,
     'pins': Icons.push_pin_rounded,
     'accounts': Icons.switch_account_rounded,
     'bio': Icons.notes_rounded,

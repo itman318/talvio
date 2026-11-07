@@ -268,3 +268,50 @@ test('groups: sender badges, member tags; similar channels', async () => {
   const sim = await chats.similarChannels(I.id, a.id);
   assert.equal(sim.channels[0].chat_id, b.id);
 });
+
+test('Group Guard: forwarded spam, mention spam, 3 strikes and the raid shield', async () => {
+  const O = await signup('+923260000041', 'Owais', 'owais_g');
+  const M = await signup('+923260000042', 'Mehak', 'mehak_g');
+  const N = await signup('+923260000043', 'Nimra', 'nimra_g');
+  const P = await signup('+923260000044', 'Pari', 'pari_g');
+  const { chat: g } = await chats.createGroup(O.id, { title: 'Guard test', member_ids: [M.id, N.id, P.id] });
+  const mn = await chats.getOrCreatePrivate(P.id, N.id);
+  const ad = await messages.sendMessage(N.id, mn.id, { text: 'cheap followers at spam.example' });
+
+  // links can no longer slip in through "forward"
+  await chats.updateGroup(O.id, g.id, { anti_links: true });
+  await rejects(messages.forwardMessages(P.id, { from_chat_id: mn.id, message_ids: [ad.id], to_chat_ids: [g.id] }), 'no_links');
+  await chats.updateGroup(O.id, g.id, { anti_links: false, anti_forward: true, anti_mentions: true, guard_penalty: 'mute', raid_shield: true });
+  const hi = await messages.sendMessage(N.id, mn.id, { text: 'hello' });
+  await rejects(messages.forwardMessages(P.id, { from_chat_id: mn.id, message_ids: [hi.id], to_chat_ids: [g.id] }), 'no_forwards');
+  const info = await chats.getChat(O.id, g.id);
+  assert.equal(info.guard_penalty, 'mute');
+  assert.equal(info.anti_forward, true);
+
+  // 3rd warning in a day → muted for 24 h; the admin log shows it
+  await assert.rejects(messages.sendMessage(M.id, g.id, { text: '@aaa @bbb @ccc @ddd @eee @fff' }), /warning 1 of 3/);
+  await assert.rejects(messages.sendMessage(M.id, g.id, { text: '@aaa @bbb @ccc @ddd @eee @fff' }), /warning 2 of 3/);
+  await assert.rejects(messages.sendMessage(M.id, g.id, { text: '@aaa @bbb @ccc @ddd @eee @fff' }), /muted in this group for 24 hours/);
+  await rejects(messages.sendMessage(M.id, g.id, { text: 'hi' }), 'restricted');
+  const log = await chats.listEvents(O.id, g.id);
+  assert.ok(log.some((e) => e.action === 'guard_muted' && e.target.id === M.id));
+  assert.equal(log.filter((e) => e.action === 'guard_blocked' && e.target.id === M.id).length, 3);
+  await messages.sendMessage(O.id, g.id, { text: '@aaa @bbb @ccc @ddd @eee @fff admins are never limited' });
+
+  // "remove" penalty
+  await chats.updateGroup(O.id, g.id, { guard_penalty: 'remove' });
+  for (let i = 0; i < 2; i += 1) await rejects(messages.sendMessage(N.id, g.id, { text: '@a1a @b1b @c1c @d1d @e1e @f1f' }), 'mentions');
+  await assert.rejects(messages.sendMessage(N.id, g.id, { text: '@a1a @b1b @c1c @d1d @e1e @f1f' }), /removed from the group/);
+  assert.equal((await db.one('SELECT count(*)::int AS n FROM chat_members WHERE chat_id = $1 AND user_id = $2', [g.id, N.id])).n, 0);
+
+  // raid shield: the 10th join within a minute switches on the human check
+  const code = (await chats.getChat(O.id, g.id)).invite_code;
+  let last;
+  for (let i = 0; i < 10; i += 1) {
+    const u = await signup(`+9232600005${String(i).padStart(2, '0')}`, `Raider${i}`);
+    last = await chats.joinByInvite(u.id, code);
+  }
+  assert.equal(last.needs_captcha, true);
+  assert.equal((await chats.getChat(O.id, g.id)).join_captcha, true);
+  assert.equal((await db.one(`SELECT count(*)::int AS n FROM messages WHERE chat_id = $1 AND meta->>'event' = 'raid_shield'`, [g.id])).n, 1);
+});

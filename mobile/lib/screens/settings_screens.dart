@@ -1,11 +1,14 @@
 import 'read_later_screen.dart';
 import 'login_activity_screen.dart';
+import '../core/updater.dart';
+import '../widgets/update_widgets.dart';
 import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
 import 'notifications_screen.dart';
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -365,6 +368,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const BrandMark(size: 28),
               const SizedBox(height: 6),
               Text('${AppConfig.appName} v${AppConfig.appVersion}', style: const TextStyle(color: Brand.muted, fontSize: 12)),
+              TextButton.icon(
+                icon: const Icon(Icons.system_update_rounded, size: 18),
+                label: const Text('Check for updates'),
+                onPressed: () async {
+                  final up = AppUpdater.instance;
+                  await up.check(context.read<AppServices>().api, force: true);
+                  if (!context.mounted) return;
+                  if (up.hasUpdate) {
+                    await showUpdateSheet(context);
+                  } else {
+                    showInfo(context, AppUpdater.currentBuild == 0 ? 'Updates work in the release app' : '✅ You have the newest Hushavia');
+                  }
+                },
+              ),
             ]),
           ),
           const SizedBox(height: 16),
@@ -510,6 +527,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       builder: (ctx) => SafeArea(
         child: Wrap(children: [
           ListTile(leading: const Icon(Icons.photo), title: const Text('Choose photo'), onTap: () => Navigator.pop(ctx, 'pick')),
+          ListTile(
+            leading: const Icon(Icons.gif_box_rounded, color: Brand.premium),
+            title: const Text('Animated photo (GIF)'),
+            subtitle: const Text('Moves on your profile · Hushavia Plus ⭐'),
+            onTap: () => Navigator.pop(ctx, 'gif'),
+          ),
           if (hasAvatar) ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Remove photo'), onTap: () => Navigator.pop(ctx, 'remove')),
         ]),
       ),
@@ -519,6 +542,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
         if (x == null) return;
         final m = await api.upload(x.path, kind: 'avatar');
+        final u = await api.put('/me/avatar', {'media_id': m['id']});
+        auth.setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+      } else if (a == 'gif') {
+        if (auth.me?.limits?['animated_avatar'] != true) {
+          if (mounted) {
+            await showPlusFeature(context,
+                icon: Icons.gif_box_rounded,
+                title: 'Animated profile photo',
+                text: 'Use a GIF or animated picture as your profile photo — it moves on your profile for everyone. Part of Hushavia Plus.');
+          }
+          return;
+        }
+        final r = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: const ['gif', 'webp']);
+        final path = r?.files.single.path;
+        if (path == null) return;
+        if (mounted) showInfo(context, 'Uploading your animated photo…');
+        final m = await api.upload(path, kind: 'avatar');
         final u = await api.put('/me/avatar', {'media_id': m['id']});
         auth.setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
       } else if (a == 'remove') {

@@ -762,6 +762,9 @@ async function assertGroupRules(userId, chat, prepared) {
       throw forbidden('banned_word', 'Your message contains a word that isn’t allowed in this group');
     }
   }
+  if (chat.anti_mentions && (text.match(/@[A-Za-z0-9_]{3,}/g) || []).length > 5) {
+    throw forbidden('mentions', 'Too many @mentions in one message');
+  }
   if (chat.anti_flood) {
     if (!rateLimit.hit(`flood:${chat.id}:${userId}`, 5, 10 * 1000).allowed) {
       throw forbidden('flood', 'Slow down — you are sending too fast in this group');
@@ -773,6 +776,46 @@ async function assertGroupRules(userId, chat, prepared) {
       );
       if (same.n >= 2) throw forbidden('flood', 'Please don’t send the same message again and again');
     }
+  }
+}
+
+const GUARD_RULES = ['no_links', 'banned_word', 'flood', 'no_forwards', 'mentions'];
+
+/**
+ * Group Guard: runs the group's rules; a broken rule is written to the admin log and counts as a
+ * warning — with a penalty set, the 3rd warning in 24 h mutes the member for a day or removes them.
+ */
+async function guarded(userId, chat, check) {
+  try {
+    await check();
+  } catch (err) {
+    if (chat.type !== 'group' || !GUARD_RULES.includes(err.code)) throw err;
+    await chatService.logEvent(chat.id, null, 'guard_blocked', userId, { rule: err.code });
+    const penalty = chat.guard_penalty || 'none';
+    if (penalty === 'none') throw err;
+    const { n } = await db.one(
+      `SELECT count(*)::int AS n FROM chat_events
+       WHERE chat_id = $1 AND target_id = $2 AND action = 'guard_blocked' AND created_at > now() - interval '24 hours'
+         AND created_at > COALESCE((SELECT max(created_at) FROM chat_events
+           WHERE chat_id = $1 AND target_id = $2 AND action IN ('guard_muted', 'guard_removed')), 'epoch')`,
+      [chat.id, userId],
+    );
+    if (n < 3) {
+      err.message = `${err.message} (warning ${n} of 3)`;
+      throw err;
+    }
+    if (penalty === 'mute') {
+      await db.query("UPDATE chat_members SET restricted_until = now() + interval '1 day' WHERE chat_id = $1 AND user_id = $2", [chat.id, userId]);
+      await chatService.logEvent(chat.id, null, 'guard_muted', userId, { rule: err.code });
+      bus.emit('chat:updated', { chatId: chat.id, memberIds: [userId] });
+      err.message = `${err.message}. After 3 warnings you are muted in this group for 24 hours`;
+    } else {
+      await chatService.logEvent(chat.id, null, 'guard_removed', userId, { rule: err.code });
+      await createSystemMessage(chat.id, null, { event: 'guard_removed', user_id: userId });
+      await chatService.removeUserFromGroup(chat.id, userId, { reason: 'removed' });
+      err.message = `${err.message}. After 3 warnings you were removed from the group`;
+    }
+    throw err;
   }
 }
 
@@ -830,7 +873,7 @@ async function sendMessage(userId, chatIdRaw, body = {}, internal = {}) {
     return { queued: { id: q.id } };
   }
 
-  await assertGroupRules(userId, chat, prepared);
+  await guarded(userId, chat, () => assertGroupRules(userId, chat, prepared));
 
   // groups can keep links and media away from brand-new members for 24 h
   if (chat.type === 'group' && chat.new_member_limits && chat.my_role === 'member' && chat.my_joined_at
@@ -950,6 +993,13 @@ async function forwardMessages(userId, body = {}) {
     if (chat.type === 'group' && chat.new_member_limits && chat.my_role === 'member' && chat.my_joined_at
         && Date.now() - new Date(chat.my_joined_at).getTime() < 24 * 3600 * 1000) {
       throw forbidden('new_member_limits', 'New members can forward messages here after 24 hours');
+    }
+    // the group's rules apply to forwarded messages too (links, banned words, media…)
+    if (chat.type === 'group' && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
+      await guarded(userId, chat, async () => {
+        if (chat.anti_forward) throw forbidden('no_forwards', 'Forwarded messages aren’t allowed in this group');
+        for (const r of rows) await assertGroupRules(userId, chat, { type: r.type, text: r.text || '' });
+      });
     }
     targetChats.push(chat);
   }

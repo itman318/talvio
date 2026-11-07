@@ -39,6 +39,11 @@ const router = express.Router();
 
 // ------------------------------------------------------------------ public
 router.get('/app-config', h(async (req, res) => res.json(await settings.publicConfig())));
+// in-app updates: ?build=<the app's build number>&abi=<CPU type>
+router.get('/app/update', h(async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await require('../services/appupdate.service').check({ build: req.query.build, abi: String(req.query.abi || '') }));
+}));
 router.get('/pages/:slug', h(async (req, res) => res.json(await contentService.get(req.params.slug))));
 
 router.use(ipGate);

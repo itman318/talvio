@@ -105,8 +105,13 @@ class _ChatThemeScreenState extends State<ChatThemeScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: [t.light.first, t.mine.last.computeLuminance() > 0.5 ? t.mineDark.first : t.mine.last], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                            gradient: plusThemes.contains(t.id)
+                                ? LinearGradient(colors: [t.mine.first, t.mine.last], begin: Alignment.topLeft, end: Alignment.bottomRight)
+                                : LinearGradient(colors: [t.light.first, t.mine.last.computeLuminance() > 0.5 ? t.mineDark.first : t.mine.last], begin: Alignment.topLeft, end: Alignment.bottomRight),
                           ),
+                          child: plusThemes.contains(t.id) && context.watch<AuthState>().me?.limits?['exclusive_themes'] != true
+                              ? const Icon(Icons.lock_rounded, color: Colors.white, size: 18)
+                              : null,
                         ),
                       ),
                       const SizedBox(height: 4),

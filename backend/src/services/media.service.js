@@ -7,7 +7,7 @@ const db = require('../db');
 const settings = require('./settings.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
-const { badRequest, notFound } = require('../utils/errors');
+const { badRequest, notFound, forbidden } = require('../utils/errors');
 const images = require('../utils/images');
 
 const KINDS = ['image', 'video', 'voice', 'file', 'avatar', 'sticker'];
@@ -20,7 +20,7 @@ function mimeAllowed(kind, mime, originalName) {
     case 'image':
       return SAFE_IMAGE_MIMES.includes(mime);
     case 'avatar':
-      return ['image/jpeg', 'image/png', 'image/webp'].includes(mime);
+      return ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime); // GIF / animated WebP: Plus
     case 'sticker':
       return ['image/png', 'image/webp', 'image/gif'].includes(mime);
     case 'video':
@@ -74,6 +74,12 @@ async function registerUpload(userId, file, body) {
       throw badRequest('invalid_file_type', `This file type is not allowed for ${kind}`);
     }
     if (kind === 'sticker' && file.size > 1024 * 1024) throw badRequest('file_too_large', 'A sticker must be smaller than 1 MB');
+    if (kind === 'avatar' && (mime === 'image/gif' || (mime === 'image/webp' && (await images.isAnimated(file.path))))) {
+      if (file.size > 8 * 1024 * 1024) throw badRequest('file_too_large', 'An animated profile photo must be smaller than 8 MB');
+      if (!(await require('./payment.service').limitsFor(userId)).animated_avatar) { // eslint-disable-line global-require
+        throw forbidden('premium_required', 'Animated profile photos are part of Hushavia Plus');
+      }
+    }
     const maxMb = (await require('./payment.service').limitsFor(userId)).upload_mb; // lazy: avoids circular import
     if (file.size > maxMb * 1024 * 1024) {
       throw badRequest('file_too_large', `File is larger than ${maxMb} MB`);
@@ -98,6 +104,7 @@ async function registerUpload(userId, file, body) {
       ],
     );
     if (kind === 'image') await addPhotoInfo(row);
+    if (kind === 'video') await addVideoInfo(row);
     return serialize(row);
   } catch (err) {
     removeFile(file);
@@ -128,18 +135,37 @@ async function addPhotoInfo(row) {
   return row;
 }
 
+/** Video: poster frame (served as ?v=p), inline thumb, and size/length when the phone didn't send them. */
+async function addVideoInfo(row) {
+  const abs = path.resolve(config.uploadDir, row.storage_path);
+  try {
+    const info = await Promise.race([images.videoPoster(abs), timeout(8000)]);
+    if (info && info.thumb) {
+      const width = row.width || info.width;
+      const height = row.height || info.height;
+      const duration = row.duration_sec || info.duration;
+      await db.query('UPDATE media SET thumb = $2, width = $3, height = $4, duration_sec = $5 WHERE id = $1', [row.id, info.thumb, width, height, duration]);
+      Object.assign(row, { thumb: info.thumb, width, height, duration_sec: duration });
+    }
+  } catch (_) {
+    // the video still sends, just without a poster
+  }
+  return row;
+}
+
 /** Older photos: adds thumbs a few at a time in the background (after a deploy). */
 async function backfillThumbs(limit = 300) {
   if (!images.available()) return 0;
   const rows = await db.many(
-    `SELECT * FROM media WHERE kind = 'image' AND thumb IS NULL AND NOT thumb_failed
-     AND mime = ANY($1::text[]) ORDER BY id DESC LIMIT $2`,
-    [images.PREVIEWABLE, limit],
+    `SELECT * FROM media WHERE thumb IS NULL AND NOT thumb_failed
+     AND ((kind = 'image' AND mime = ANY($1::text[])) OR (kind = 'video' AND $3::boolean)) ORDER BY id DESC LIMIT $2`,
+    [images.PREVIEWABLE, limit, images.hasFfmpeg()],
   );
   let n = 0;
   for (const r of rows) {
     const before = r.thumb;
-    await addPhotoInfo(r);
+    if (r.kind === 'video') await addVideoInfo(r);
+    else await addPhotoInfo(r);
     if (r.thumb && !before) n += 1;
     else await db.query('UPDATE media SET thumb_failed = TRUE WHERE id = $1', [r.id]);
   }
@@ -181,6 +207,12 @@ async function getAccessible(userId, mediaIdRaw) {
 /** Bubble-size version of a photo when one exists (or can be made), else the original. */
 async function previewPath(m, variant = 'p') {
   const abs = absolutePath(m);
+  if (m.kind === 'video') {
+    // a video's preview is its poster frame — never the video itself
+    const poster = images.previewPathFor(abs, 'p');
+    if (variant === 'p' && fs.existsSync(poster)) return poster;
+    throw notFound('no_preview', 'This video has no preview');
+  }
   if (m.kind !== 'image' && m.kind !== 'avatar') return abs;
   return (await images.preview(abs, m.mime, Number(m.size_bytes), variant)) || abs;
 }

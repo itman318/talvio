@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'config.dart';
+import 'core/updater.dart';
+import 'widgets/update_widgets.dart';
 import 'core/chat_lock.dart';
 import 'core/chat_passcode.dart';
 import 'core/crash_reporter.dart';
@@ -343,10 +345,21 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
           body: '${auth.appConfig['maintenance_message'] ?? 'Please try again soon.'}',
           action: FilledButton(onPressed: auth.init, child: const Text('Try again')),
         ),
-      AuthStatus.updateRequired => const MessageScreen(
+      AuthStatus.updateRequired => MessageScreen(
           icon: Icons.system_update,
           title: 'Update required',
-          body: 'This version of the app is no longer supported. Please update it from the Play Store / App Store.',
+          body: 'This version of Hushavia is no longer supported. Get the new one — it takes a minute.',
+          action: Builder(
+            builder: (ctx) => FilledButton.icon(
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Update now'),
+              onPressed: () async {
+                final up = AppUpdater.instance;
+                await up.check(ctx.read<AppServices>().api, force: true);
+                if (ctx.mounted && up.hasUpdate) await showUpdateSheet(ctx);
+              },
+            ),
+          ),
         ),
     };
 

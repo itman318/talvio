@@ -187,7 +187,8 @@ class MediaInfo {
   }
 
   /// Photos have a bubble-size WebP on the server (5–10× smaller than the photo itself).
-  bool get hasPreview => kind == 'image' && mime != 'image/gif' && id > 0;
+  /// Videos: their poster frame (only when the server made one — it has a thumb then).
+  bool get hasPreview => id > 0 && ((kind == 'image' && mime != 'image/gif') || (kind == 'video' && thumb != null));
   String get previewUrl => '$url${url.contains('?') ? '&' : '?'}v=p';
 
   factory MediaInfo.fromJson(Map<String, dynamic> j) => MediaInfo(
@@ -738,6 +739,11 @@ class Chat {
   bool get antiFlood => extra['anti_flood'] == true;
   bool get antiLinks => extra['anti_links'] == true;
   bool get hideService => extra['hide_service'] == true;
+  bool get antiForward => extra['anti_forward'] == true;
+  bool get antiMentions => extra['anti_mentions'] == true;
+  bool get raidShield => extra['raid_shield'] == true;
+  /// Group Guard penalty after 3 warnings in 24 h: 'none' | 'mute' | 'remove'
+  String get guardPenalty => '${extra['guard_penalty'] ?? 'none'}';
   bool get needsCaptcha => extra['needs_captcha'] == true;
 
   /// Live voice chat going on here: {id, title, count}, or null.

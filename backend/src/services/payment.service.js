@@ -53,6 +53,8 @@ async function limitsFor(userId) {
     extra_accounts: premium ? 3 : 0,
     exclusive_stickers: premium,
     exclusive_themes: premium,
+    animated_avatar: premium,
+    plus_status: premium,
     ads: !premium,
   };
 }
@@ -65,7 +67,9 @@ async function perks() {
     { key: 'folders', title: `${PREMIUM_FOLDERS} chat folders`, text: `Instead of ${FREE_FOLDERS}` },
     { key: 'no_ads', title: 'No sponsored messages', text: 'No ads in channels' },
     { key: 'stickers', title: 'Premium sticker packs', text: 'Hushi (16 stickers: Salam, Eid Mubarak, Good morning…) and animated Tavi' },
-    { key: 'themes', title: 'Exclusive chat themes', text: 'Aurora Gold, Midnight Neon and more' },
+    { key: 'themes', title: '8 exclusive chat themes', text: 'Emerald Palace, Royal Velvet, Cyber Pulse, Sakura, Aurora Gold and more' },
+    { key: 'animated_avatar', title: 'Animated profile photo', text: 'A GIF that moves on your profile' },
+    { key: 'plus_status', title: 'Glowing Plus statuses', text: '16 rare emoji statuses (🦄 🐉 🪐 💠…) that glow next to your name' },
     { key: 'pins', title: `Pin ${PREMIUM_PINS} chats`, text: `Instead of ${FREE_PINS}` },
     { key: 'accounts', title: 'Up to 3 more accounts', text: 'On the same phone' },
     { key: 'bio', title: `Longer bio — ${PREMIUM_BIO} characters`, text: `Instead of ${FREE_BIO}, with links` },

@@ -23,7 +23,7 @@ if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split("."
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
   apt-get install -y -qq nodejs >/dev/null
 fi
-for pkg in postgresql nginx coturn ufw; do
+for pkg in postgresql nginx coturn ufw ffmpeg; do # ffmpeg: video posters
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
     log "Installing $pkg"
     apt-get update -qq

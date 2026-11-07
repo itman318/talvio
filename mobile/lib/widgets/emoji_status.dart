@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../screens/premium_screens.dart' show showPlusFeature;
 import '../state/auth_state.dart';
 import '../theme/brand.dart';
 
 /// The emoji next to someone's name (nothing when they have none).
+/// Plus members' status glows softly where it is shown large (profile, chat header).
 class EmojiStatusBadge extends StatelessWidget {
   const EmojiStatusBadge(this.user, {super.key, this.size = 16, this.padLeft = 4});
   final AppUser? user;
@@ -16,14 +18,55 @@ class EmojiStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final e = user?.statusEmoji;
     if (e == null) return const SizedBox.shrink();
+    final text = Text(e, style: TextStyle(fontSize: size, height: 1.1));
     return Padding(
       padding: EdgeInsets.only(left: padLeft),
-      child: Text(e, style: TextStyle(fontSize: size, height: 1.1)),
+      child: user!.isPremium && size >= 18 ? _Glow(child: text) : text,
     );
   }
 }
 
+class _Glow extends StatefulWidget {
+  const _Glow({required this.child});
+  final Widget child;
+
+  @override
+  State<_Glow> createState() => _GlowState();
+}
+
+class _GlowState extends State<_Glow> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        child: widget.child,
+        builder: (_, child) {
+          final t = Curves.easeInOut.transform(_c.value);
+          return Transform.scale(
+            scale: 1 + 0.08 * t,
+            child: DecoratedBox(
+              decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+                BoxShadow(color: const Color(0xFFFFC94D).withValues(alpha: 0.25 + 0.35 * t), blurRadius: 10 + 8 * t),
+              ]),
+              child: child,
+            ),
+          );
+        },
+      );
+}
+
+/// Statuses only Hushavia Plus members can wear (same list on the server).
+const plusStatuses = ['💠', '🪐', '🦋', '🐉', '🦄', '🌟', '🔮', '🪷', '🏵️', '🎖️', '🥇', '💫', '🌌', '🧿', '🕊️', '🫧'];
+
 const _groups = <String, List<String>>{
+  '⭐ Plus': plusStatuses,
   'Mood': ['😀', '😎', '🥳', '😴', '🤒', '🤔', '😇', '🤩', '😡', '🥲', '😌', '🫡', '🤯', '🥶', '🤫', '😈'],
   'Busy': ['💼', '💻', '📚', '✍️', '📞', '🎧', '🚗', '✈️', '🏋️', '🏃', '🍽️', '☕', '🕌', '🛌', '🎮', '🔕'],
   'Vibes': ['🔥', '⭐', '💎', '🚀', '❤️', '💯', '⚡', '🌙', '☀️', '🌈', '🍀', '🎯', '👑', '🏆', '💰', '📈'],
@@ -62,6 +105,13 @@ class _PickerState extends State<_Picker> {
 
   Future<void> _set(String? emoji) async {
     if (_busy) return;
+    if (emoji != null && plusStatuses.contains(emoji) && context.read<AuthState>().me?.limits?['plus_status'] != true) {
+      await showPlusFeature(context,
+          icon: Icons.auto_awesome_rounded,
+          title: 'Plus statuses ✨',
+          text: 'Rare emoji statuses that glow next to your name — only for Hushavia Plus members.');
+      return;
+    }
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -131,6 +181,7 @@ class _PickerState extends State<_Picker> {
                   children: [
                     for (final e in g.value)
                       InkWell(
+                        key: ValueKey(e),
                         borderRadius: BorderRadius.circular(12),
                         onTap: _busy ? null : () => _set(e),
                         child: Container(

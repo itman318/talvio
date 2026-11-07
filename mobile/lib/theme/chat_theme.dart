@@ -52,10 +52,20 @@ const chatThemes = <ChatThemeDef>[
       Color(0xFF1A1240), [Color(0xFF00B4DB), Color(0xFF8E2DE2)], [Color(0xFF0098C2), Color(0xFF7A26CC)]),
   ChatThemeDef('rose_quartz', 'Rose Quartz', [Color(0xFFFFEEF3), Color(0xFFF3E9FF)], [Color(0xFF1C0D15), Color(0xFF1B1028)], Color(0xFFF7DCE6),
       Color(0xFF2E1A2A), [Color(0xFFE96FA4), Color(0xFFA77BF3)], [Color(0xFFD35B90), Color(0xFF9167DE)]),
+  ChatThemeDef('emerald', 'Emerald Palace', [Color(0xFFE6F6EE), Color(0xFFF6EFD9)], [Color(0xFF04140D), Color(0xFF14130A)], Color(0xFFCFE9DA),
+      Color(0xFF16301F), [Color(0xFF0B7A55), Color(0xFFC9A04A)], [Color(0xFF0A6A4A), Color(0xFFB08A3C)]),
+  ChatThemeDef('velvet', 'Royal Velvet', [Color(0xFFF2E9FA), Color(0xFFFAF1DE)], [Color(0xFF12061E), Color(0xFF1C1208)], Color(0xFFE4D3F2),
+      Color(0xFF2A1640), [Color(0xFF5B1F8C), Color(0xFFB8862B)], [Color(0xFF4F1A7A), Color(0xFFA27524)]),
+  ChatThemeDef('cyber', 'Cyber Pulse', [Color(0xFFEFF9FF), Color(0xFFFFEAF8)], [Color(0xFF03030A), Color(0xFF0A0216)], Color(0xFFD9F0FB),
+      Color(0xFF18103A), [Color(0xFFFF2E93), Color(0xFF00D4FF)], [Color(0xFFE0207F), Color(0xFF00B4DA)]),
+  ChatThemeDef('sakura', 'Sakura', [Color(0xFFFFF0F4), Color(0xFFFDF7FA)], [Color(0xFF1A0C12), Color(0xFF140E14)], Color(0xFFF8DCE5),
+      Color(0xFF331B26), [Color(0xFFFF8FB1), Color(0xFFF15C8E)], [Color(0xFFE0759A), Color(0xFFD64C7C)]),
+  ChatThemeDef('arctic', 'Arctic Mint', [Color(0xFFE8FBF7), Color(0xFFEAF2FF)], [Color(0xFF041615), Color(0xFF07101F)], Color(0xFFCDEFE8),
+      Color(0xFF103230), [Color(0xFF13C2A3), Color(0xFF3F7CF4)], [Color(0xFF0FA68B), Color(0xFF3468D6)]),
 ];
 
 /// Themes only Hushavia Plus members can pick.
-const plusThemes = {'aurora_gold', 'neon', 'rose_quartz'};
+const plusThemes = {'aurora_gold', 'neon', 'rose_quartz', 'emerald', 'velvet', 'cyber', 'sakura', 'arctic'};
 
 ChatThemeDef chatThemeById(String id) => chatThemes.firstWhere((t) => t.id == id, orElse: () => chatThemes.first);
 
