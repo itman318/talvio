@@ -197,7 +197,7 @@ async function noticeUser(admin, userIdRaw, body = {}, ip) {
   if (!u) throw notFound('user_not_found', 'User not found');
   const title = v.str(body.title, { field: 'title', min: 1, max: 120 });
   const text = v.str(body.text, { field: 'text', max: 500 }) || '';
-  await require('./notice.service').notify(userId, 'team', title, text); // eslint-disable-line global-require
+  await require('./notice.service').notify(userId, 'system', title, text); // eslint-disable-line global-require
   await log(admin.id, 'user.notice', 'user', userId, { title }, ip);
   return { ok: true };
 }

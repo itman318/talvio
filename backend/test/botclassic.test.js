@@ -235,8 +235,13 @@ test('helper bots: support requests in a chat, team replies come back; account s
   assert.ok(t);
   assert.match((await last(s.id, ids.support)).text, new RegExp(`Request #${t.id} received`));
   await messages.sendMessage(U.id, s.id, { text: 'It happens on Wi-Fi only' });
-  await flush(400);
-  assert.match((await last(s.id, ids.support)).text, new RegExp(`Added to request #${t.id}`));
+  // the bot answers in the background: wait for its reply (a fixed pause was flaky on slow runners)
+  let reply = '';
+  for (let i = 0; i < 40 && !new RegExp(`Added to request #${t.id}`).test(reply); i += 1) {
+    await flush(100);
+    reply = (await last(s.id, ids.support)).text;
+  }
+  assert.match(reply, new RegExp(`Added to request #${t.id}`));
   const n = await db.one('SELECT count(*)::int AS n FROM support_messages WHERE ticket_id = $1', [t.id]);
   assert.equal(n.n, 2);
   // the team answers in the admin panel → delivered in the bot chat

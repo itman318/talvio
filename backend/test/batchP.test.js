@@ -372,7 +372,7 @@ test('removed members stay out until unbanned; admin panel has full control of a
   await ctl.postNotice(root, g.id, { text: 'Please keep it friendly' });
   assert.equal((await db.one(`SELECT count(*)::int AS n FROM messages WHERE chat_id = $1 AND meta->>'event' = 'team_notice'`, [g.id])).n, 1);
   await ctl.noticeUser(root, T.id, { title: 'Hello from the team', text: 'Welcome!' });
-  assert.equal((await db.one("SELECT count(*)::int AS n FROM notices WHERE user_id = $1 AND kind = 'team'", [T.id])).n, 1);
+  assert.equal((await db.one("SELECT count(*)::int AS n FROM notices WHERE user_id = $1 AND title = 'Hello from the team'", [T.id])).n, 1);
   assert.ok((await db.one("SELECT count(*)::int AS n FROM admin_logs WHERE admin_id = $1", [root.id])).n >= 8, 'every action is in the activity log');
 
   // sticker packs: switch off / Plus-only by hand
