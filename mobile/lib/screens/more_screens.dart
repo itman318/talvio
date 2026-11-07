@@ -519,15 +519,19 @@ class _LockScreenState extends State<LockScreen> {
     } catch (_) {}
   }
 
+  /// Digits in my PIN (4–6); 6 until it is known (older PINs — learnt at the first unlock).
+  int get _len => context.read<AppPrefs>().pinLength ?? 6;
+
   void _tap(String d) {
-    if (_pin.length >= 6) return;
+    final len = _len;
+    if (_pin.length >= len) return;
     setState(() {
       _pin += d;
       _wrong = false;
     });
     if (_pin.length >= 4 && context.read<AppPrefs>().checkPin(_pin)) {
       widget.onUnlocked();
-    } else if (_pin.length == 6) {
+    } else if (_pin.length == len) {
       HapticFeedback.heavyImpact();
       setState(() {
         _pin = '';
@@ -561,7 +565,7 @@ class _LockScreenState extends State<LockScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              6,
+              context.watch<AppPrefs>().pinLength ?? 6,
               (i) => Container(
                 margin: const EdgeInsets.all(6),
                 width: 14,

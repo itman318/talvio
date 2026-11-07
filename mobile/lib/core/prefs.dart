@@ -19,6 +19,9 @@ class AppPrefs extends ChangeNotifier {
   bool biometric = false;
   int lockAfterMinutes = 1; // 0 = immediately
   String? _pinHash;
+  /// How many digits the PIN has (4–6), so the lock screen shows that many dots; null for PINs set
+  /// before this was saved — learnt at the next unlock.
+  int? pinLength;
 
   /// Auto-download, per network: which kinds ('photos', 'videos', 'files') download by themselves.
   Set<String> autoWifi = {'photos', 'videos', 'files'};
@@ -55,6 +58,7 @@ class AppPrefs extends ChangeNotifier {
       } catch (_) {}
     }
     _pinHash = p.getString('pin_hash');
+    pinLength = p.getInt('pin_len');
     lockEnabled = _pinHash != null && (p.getBool('lock_enabled') ?? false);
     biometric = p.getBool('lock_biometric') ?? false;
     lockAfterMinutes = p.getInt('lock_after') ?? 1;
@@ -213,21 +217,32 @@ class AppPrefs extends ChangeNotifier {
   // ------------------------------------------------------------------ app lock
   static String _hash(String pin) => sha256.convert(utf8.encode('chatapp-lock:$pin')).toString();
 
-  bool checkPin(String pin) => _pinHash != null && _hash(pin) == _pinHash;
+  bool checkPin(String pin) {
+    final ok = _pinHash != null && _hash(pin) == _pinHash;
+    if (ok && pinLength != pin.length) {
+      pinLength = pin.length;
+      _p?.setInt('pin_len', pin.length);
+    }
+    return ok;
+  }
 
   Future<void> enableLock(String pin) async {
     _pinHash = _hash(pin);
+    pinLength = pin.length;
     lockEnabled = true;
     await _p?.setString('pin_hash', _pinHash!);
+    await _p?.setInt('pin_len', pin.length);
     await _p?.setBool('lock_enabled', true);
     notifyListeners();
   }
 
   Future<void> disableLock() async {
     _pinHash = null;
+    pinLength = null;
     lockEnabled = false;
     biometric = false;
     await _p?.remove('pin_hash');
+    await _p?.remove('pin_len');
     await _p?.setBool('lock_enabled', false);
     await _p?.setBool('lock_biometric', false);
     notifyListeners();
