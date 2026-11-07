@@ -624,12 +624,13 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
     return { removed: true, chatDeleted: false, newOwner, chatType };
   });
   if (!outcome.removed) return outcome;
-  if (!outcome.chatDeleted) await logEvent(chatId, by || userId, reason === 'removed' ? 'member_removed' : 'member_left', userId);
+  // Group Guard writes its own log line ("Guard removed X")
+  if (!outcome.chatDeleted && reason !== 'guard') await logEvent(chatId, by || userId, reason === 'removed' ? 'member_removed' : 'member_left', userId);
   bus.emit('chat:removed', { chatId, userIds: [userId] });
   if (!outcome.chatDeleted) {
     const event = reason === 'removed' ? 'member_removed' : 'member_left';
     const quiet = reason === 'left' && (await db.one('SELECT hide_service FROM chats WHERE id = $1', [chatId]) || {}).hide_service;
-    if (outcome.chatType === 'group' && !quiet) {
+    if (outcome.chatType === 'group' && !quiet && reason !== 'guard') { // Guard posts its own notice
       await lazyMessages().createSystemMessage(chatId, by || userId, { event, user_id: userId });
     }
     if (outcome.newOwner) {

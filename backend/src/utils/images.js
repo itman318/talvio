@@ -27,8 +27,13 @@ const PREVIEWABLE = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'ima
 
 // one photo at a time, so a burst of uploads never starves the API of CPU
 let chain = Promise.resolve();
-function queued(fn) {
-  const run = chain.then(fn, fn);
+function queued(fn, limitMs = 30000) {
+  // a stuck file gives up after limitMs, so it never blocks every photo after it
+  const job = () => Promise.race([
+    fn(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('image job timed out')), limitMs).unref()),
+  ]);
+  const run = chain.then(job, job);
   chain = run.catch(() => {});
   return run;
 }

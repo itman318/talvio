@@ -161,15 +161,12 @@ async function backfillThumbs(limit = 300) {
      AND ((kind = 'image' AND mime = ANY($1::text[])) OR (kind = 'video' AND $3::boolean)) ORDER BY id DESC LIMIT $2`,
     [images.PREVIEWABLE, limit, images.hasFfmpeg()],
   );
-  let n = 0;
   for (const r of rows) {
-    const before = r.thumb;
     if (r.kind === 'video') await addVideoInfo(r);
     else await addPhotoInfo(r);
-    if (r.thumb && !before) n += 1;
-    else await db.query('UPDATE media SET thumb_failed = TRUE WHERE id = $1', [r.id]);
+    if (!r.thumb) await db.query('UPDATE media SET thumb_failed = TRUE WHERE id = $1', [r.id]);
   }
-  return n;
+  return rows.length; // rows looked at: 0 = nothing left
 }
 
 /** Returns the media row if the user may download it, otherwise throws 404. */
@@ -217,6 +214,12 @@ async function previewPath(m, variant = 'p') {
   return (await images.preview(abs, m.mime, Number(m.size_bytes), variant)) || abs;
 }
 
+/** Part of a view-once message? Then nothing may keep a copy (no browser cache). */
+async function isViewOnce(mediaId) {
+  const r = await db.one("SELECT 1 AS x FROM messages WHERE media_id = $1 AND COALESCE((meta->>'view_once')::boolean, FALSE) LIMIT 1", [mediaId]);
+  return !!r;
+}
+
 async function getPublic(mediaIdRaw) {
   const m = await db.one('SELECT * FROM media WHERE id = $1 AND is_public', [v.id(mediaIdRaw, 'media_id')]);
   if (!m) throw notFound('media_not_found', 'File not found');
@@ -234,4 +237,4 @@ function isInlineSafe(m) {
   return SAFE_IMAGE_MIMES.includes(m.mime) || m.mime.startsWith('video/') || m.mime.startsWith('audio/');
 }
 
-module.exports = { KINDS, serialize, registerUpload, backfillThumbs, previewPath, getAccessible, getPublic, absolutePath, isInlineSafe };
+module.exports = { KINDS, isViewOnce, serialize, registerUpload, backfillThumbs, previewPath, getAccessible, getPublic, absolutePath, isInlineSafe };

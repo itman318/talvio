@@ -15,6 +15,11 @@ const messageService = require('./services/message.service');
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
+// last safety net: one forgotten promise must never take the whole server down
+process.on('unhandledRejection', (err) => {
+  console.error('unhandled rejection:', err && err.stack ? err.stack : err); // eslint-disable-line no-console
+});
+
 const app = createApp();
 const server = http.createServer(app);
 socket.init(server);
@@ -30,7 +35,12 @@ server.listen(config.port, () => {
   // eslint-disable-next-line no-console
   console.log(`Hushavia API listening on http://localhost:${config.port}  (admin panel: /admin)`);
   // older photos get their instant previews a few hundred at a time, a minute after start
-  setTimeout(() => require('./services/media.service').backfillThumbs().catch(() => {}), 60000).unref();
+  setTimeout(async () => {
+    try {
+      // a few hundred at a time until every older photo/video has its preview
+      for (let i = 0; i < 50 && (await require('./services/media.service').backfillThumbs(200)) > 0; i += 1);
+    } catch (_) { /* next start */ }
+  }, 60000).unref();
   if (config.otp.devMode) console.log('OTP dev mode is ON — codes are returned in the API response'); // eslint-disable-line no-console
 });
 

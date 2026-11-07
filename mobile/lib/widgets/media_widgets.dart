@@ -122,8 +122,9 @@ class _MessageImageState extends State<MessageImage> {
       _loading = true;
     });
     try {
-      final f = await context.read<AppServices>().media.preview(m);
-      final full = await context.read<AppServices>().media.cached(m);
+      final media = context.read<AppServices>().media;
+      final f = await media.preview(m);
+      final full = await media.cached(m);
       if (!mounted) return;
       setState(() {
         _shown = f;

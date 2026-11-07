@@ -407,7 +407,8 @@ router.post('/media', h(async (req, res, next) => {
 // ?v=p → bubble-size WebP of a photo, ?v=s → small avatar (both fall back to the original)
 router.get('/media/:id', h(async (req, res) => {
   const m = await mediaService.getAccessible(req.userId, req.params.id);
-  sendMedia(res, m, false, req.query.v === 'p' || req.query.v === 's' ? await mediaService.previewPath(m, req.query.v) : null);
+  const noStore = await mediaService.isViewOnce(m.id);
+  sendMedia(res, m, false, req.query.v === 'p' || req.query.v === 's' ? await mediaService.previewPath(m, req.query.v) : null, noStore);
 }));
 
 // ------------------------------------------------------------------ helpers
@@ -417,7 +418,7 @@ function parseIdParam(value) {
   return n;
 }
 
-function sendMedia(res, m, isPublic, previewAbs = null) {
+function sendMedia(res, m, isPublic, previewAbs = null, noStore = false) {
   const original = mediaService.absolutePath(m);
   const abs = previewAbs || original;
   const isPreview = abs !== original;
@@ -431,7 +432,7 @@ function sendMedia(res, m, isPublic, previewAbs = null) {
         'Content-Type': isPreview ? 'image/webp' : inline ? m.mime : 'application/octet-stream',
         'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${filename}`,
         // a media id never changes its bytes: let phones and browsers keep it
-        'Cache-Control': `${isPublic ? 'public' : 'private'}, max-age=31536000, immutable`,
+        'Cache-Control': noStore ? 'no-store' : `${isPublic ? 'public' : 'private'}, max-age=31536000, immutable`,
         'X-Content-Type-Options': 'nosniff',
       },
     },
