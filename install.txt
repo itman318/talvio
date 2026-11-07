@@ -1,0 +1,18 @@
+Performing Streamed Install
+Success
+package=com.hushavia.app
+  bash arg: -p
+  bash arg: com.hushavia.app
+  bash arg: -c
+  bash arg: android.intent.category.LAUNCHER
+  bash arg: 1
+args: [-p, com.hushavia.app, -c, android.intent.category.LAUNCHER, 1]
+ arg: "-p"
+ arg: "com.hushavia.app"
+ arg: "-c"
+ arg: "android.intent.category.LAUNCHER"
+ arg: "1"
+data="com.hushavia.app"
+data="android.intent.category.LAUNCHER"
+Events injected: 1
+## Network stats: elapsed time=103ms (0ms mobile, 0ms wifi, 103ms not connected)

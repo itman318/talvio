@@ -1,0 +1,174 @@
+11-07 09:53:52.136  1482  3333 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+11-07 09:53:52.136  1482  3333 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+11-07 09:53:52.219  4943  4943 W GrowthKit: java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+11-07 09:53:52.221  4943  4943 W Notifications: java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+11-07 09:53:52.255  1482  1502 W ModernMediaScanner: Failed to visit /data/data/com.android.providers.downloads/cache/params_expdate_c45e5b7.dat: java.nio.file.NoSuchFileException: /data/data/com.android.providers.downloads/cache/params_expdate_c45e5b7.dat
+11-07 09:53:52.652  4943  4943 W GrowthKit: java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+11-07 09:53:52.653  4943  4943 W Notifications: java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+11-07 09:53:52.782  1143  4712 I PTCommittedOperation: Receive new configuration for com.google.android.client_error_logging
+11-07 09:53:52.800  1801  2016 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+11-07 09:53:52.800  1801  2016 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+11-07 09:53:53.217  1143  1958 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-07 09:53:53.249  1429  2696 W GCM-GMS : Failed to get registration: java.io.IOException: INTERNAL_SERVER_ERROR
+11-07 09:53:53.261  1143  1958 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-07 09:53:53.416  4511  4590 W ConnectionTracker: Exception thrown while unbinding
+11-07 09:53:53.416  4511  4590 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: tel@e38298
+11-07 09:53:53.569  1143  2207 E angh    : Phenotype API error. Event # caox@9d566a22, EventCode: 5 [CONTEXT service_id=51 ]
+11-07 09:53:53.569  1143  2207 E AsyncOperation: OperationException[Status{statusCode=Stale snapshot (change count changed - expected 2  but was 1), resolution=null}]
+11-07 09:53:53.987  1801  2036 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+11-07 09:53:53.987  1801  2036 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+11-07 09:53:54.130  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.chatsession.IChatSession: Service not registered: aeed@94e19a2
+11-07 09:53:54.130  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@94e19a2
+11-07 09:53:54.130  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.events.IEvent: Service not registered: aeed@a293f69
+11-07 09:53:54.130  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@a293f69
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.contacts.IContactsManagement: Service not registered: aeed@15e428f
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@15e428f
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.filetransfer.IFileTransfer: Service not registered: aeed@40d6925
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@40d6925
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.locationsharing.ILocationSharing: Service not registered: aeed@20678ab
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@20678ab
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.ims.IImsConnectionTracker: Service not registered: aeed@f5072a1
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@f5072a1
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.profile.IRcsProfile: Service not registered: aeed@cb1f487
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@cb1f487
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.businessinfo.IBusinessInfo: Service not registered: aeed@16097dd
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@16097dd
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.rcs.client.messaging.IMessaging: Service not registered: aeed@3af5223
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@3af5223
+11-07 09:53:54.131  2710  2710 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.transportcontrol.ITransportControl: Service not registered: aeed@e53d4d9
+11-07 09:53:54.131  2710  2710 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@e53d4d9
+11-07 09:53:54.132  4983  5288 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:53:54.132  4983  5288 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:53:54.447  1801  2036 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+11-07 09:53:54.447  1801  2036 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+11-07 09:53:54.459  4511  4942 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+11-07 09:53:54.459  4511  4942 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+11-07 09:53:54.605  1143  2974 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-07 09:53:54.723   427   427 V installd: DexInv: --- END '/data/app/~~vQJhbXAv-Sfi-px9jGCOUQ==/com.hushavia.app-4wOSIupuZtAO71q0oH2LNg==/base.apk' (success) ---
+11-07 09:53:54.736   501   557 V BackupManagerService: [UserID:0] restoreAtInstall pkg=com.hushavia.app token=1 restoreSet=0
+11-07 09:53:54.880   731  5305 E BackupHelper: java.io.FileNotFoundException: /data/user_de/0/com.google.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
+11-07 09:53:54.880   731  5305 E BackupHelper: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-07 09:53:54.927  4775  4881 W ConnectionTracker: Exception thrown while unbinding
+11-07 09:53:54.927  4775  4881 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: lm@dfc9e15
+11-07 09:53:55.129  1509  1509 I GsaVoiceInteractionSrv: O received Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) }
+11-07 09:53:55.130  1482  1482 I MediaProvider: Invalidating LocalCallingIdentity cache for package com.hushavia.app. Reason: package android.intent.action.PACKAGE_ADDED
+11-07 09:53:55.151   698   698 D AvrcpMediaPlayerList: Name of package changed: com.hushavia.app
+11-07 09:53:55.359  1143  2974 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-07 09:53:55.457  2710  3506 E BugleRcsEngine: [128] xdj.a: File not found.: java.io.FileNotFoundException: /data/user/0/com.google.android.apps.messaging/files/httpft_pending: open failed: ENOENT (No such file or directory)
+11-07 09:53:55.457  2710  3506 E BugleRcsEngine: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+11-07 09:53:55.470  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.chatsession.IChatSession: Service not registered: aeed@94e19a2
+11-07 09:53:55.470  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@94e19a2
+11-07 09:53:55.470  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.events.IEvent: Service not registered: aeed@a293f69
+11-07 09:53:55.470  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@a293f69
+11-07 09:53:55.470  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.contacts.IContactsManagement: Service not registered: aeed@15e428f
+11-07 09:53:55.470  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@15e428f
+11-07 09:53:55.470  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.filetransfer.IFileTransfer: Service not registered: aeed@40d6925
+11-07 09:53:55.470  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@40d6925
+11-07 09:53:55.470  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.locationsharing.ILocationSharing: Service not registered: aeed@20678ab
+11-07 09:53:55.470  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@20678ab
+11-07 09:53:55.471  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.ims.IImsConnectionTracker: Service not registered: aeed@f5072a1
+11-07 09:53:55.471  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@f5072a1
+11-07 09:53:55.471  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.profile.IRcsProfile: Service not registered: aeed@cb1f487
+11-07 09:53:55.471  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@cb1f487
+11-07 09:53:55.471  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.businessinfo.IBusinessInfo: Service not registered: aeed@16097dd
+11-07 09:53:55.471  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@16097dd
+11-07 09:53:55.471  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.rcs.client.messaging.IMessaging: Service not registered: aeed@3af5223
+11-07 09:53:55.471  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@3af5223
+11-07 09:53:55.471  2710  3010 W RcsClientLib: Unexpected error when trying to unbind com.google.android.ims.rcsservice.transportcontrol.ITransportControl: Service not registered: aeed@e53d4d9
+11-07 09:53:55.471  2710  3010 W RcsClientLib: java.lang.IllegalArgumentException: Service not registered: aeed@e53d4d9
+11-07 09:53:55.551  1143  2042 W Auth    : java.io.IOException: Couldn't create ClientAuthInfo
+11-07 09:53:55.637  1801  2034 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:2318)
+11-07 09:53:55.637  1801  2034 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+11-07 09:53:55.650   913   991 D ModelWriter: java.lang.Exception
+11-07 09:53:55.679  1143  2042 W Auth    : java.io.IOException: Couldn't create ClientAuthInfo
+11-07 09:53:55.790  4983  5288 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:53:55.790  4983  5288 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:53:55.921   501  1864 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) } to com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver
+11-07 09:53:55.922   501   540 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+11-07 09:53:55.922   501   540 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) } to com.google.android.gms/.gass.chimera.PackageChangeBroadcastReceiver
+11-07 09:53:55.922   501   540 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+11-07 09:53:55.922   501   540 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+11-07 09:53:55.922   501   540 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 (has extras) } to com.google.android.ims/.receivers.RcsAutoStartReceiver
+11-07 09:53:56.042  5366  5366 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+11-07 09:53:56.054  5366  5366 I AndroidRuntime: Using default boot image
+11-07 09:53:56.054  5366  5366 I AndroidRuntime: Leaving lock profiling enabled
+11-07 09:53:56.172  1143  2372 E angh    : Phenotype API error. Event # caox@d964dec8, EventCode: 5 [CONTEXT service_id=51 ]
+11-07 09:53:56.172  1143  2372 E AsyncOperation: OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+11-07 09:53:56.224  1143  2372 E angh    : Phenotype API error. Event # caox@dd88e008, EventCode: 5 [CONTEXT service_id=51 ]
+11-07 09:53:56.224  1143  2372 E AsyncOperation: OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+11-07 09:53:56.294  4983  5017 W ConnectionTracker: Exception thrown while unbinding
+11-07 09:53:56.294  4983  5017 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: lbw@32942e2
+11-07 09:53:56.319  5366  5366 D AndroidRuntime: Calling main entry com.android.commands.monkey.Monkey
+11-07 09:53:56.319  5366  5366 W Monkey  : args: [-p, com.hushavia.app, -c, android.intent.category.LAUNCHER, 1]
+11-07 09:53:56.319  5366  5366 W Monkey  :  arg: "com.hushavia.app"
+11-07 09:53:56.319  5366  5366 W Monkey  : data="com.hushavia.app"
+11-07 09:53:56.376   501  2900 I ActivityTaskManager: START u0 {act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10200000 cmp=com.hushavia.app/com.hushavia.chatapp.MainActivity} from uid 2000
+11-07 09:53:56.512  5366  5366 I AndroidRuntime: VM exiting with result code 0.
+11-07 09:53:56.517  1143  2372 E angh    : Phenotype API error. Event # caox@210581a5, EventCode: 5 [CONTEXT service_id=51 ]
+11-07 09:53:56.517  1143  2372 E AsyncOperation: OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+11-07 09:53:56.527   501   541 I ActivityManager: Start proc 5414:com.hushavia.app/u0a167 for pre-top-activity {com.hushavia.app/com.hushavia.chatapp.MainActivity}
+11-07 09:53:56.569  5414  5414 W om.hushavia.ap: Unexpected CPU variant for X86 using defaults: x86_64
+11-07 09:53:56.604  5414  5414 I om.hushavia.ap: The ClassLoaderContext is a special shared library.
+11-07 09:53:56.645   913   991 D ModelWriter: java.lang.Exception
+11-07 09:53:56.683  5414  5443 I TetheringManager: registerTetheringEventCallback:com.hushavia.app
+11-07 09:53:56.766  5414  5452 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+11-07 09:53:56.766  5414  5452 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+11-07 09:53:56.774  5414  5452 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+11-07 09:53:56.744  5414  5414 W om.hushavia.app: type=1400 audit(0.0:55): avc: denied { read } for name="max_map_count" dev="proc" ino=105332 scontext=u:r:untrusted_app:s0:c167,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.hushavia.app
+11-07 09:53:57.024  5414  5414 D com.llfbandit.app_links: Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10200000 cmp=com.hushavia.app/com.hushavia.chatapp.MainActivity }
+11-07 09:53:57.056  5414  5414 W om.hushavia.ap: Accessing hidden method Landroid/view/SurfaceControl$Builder;->setHidden(Z)Landroid/view/SurfaceControl$Builder; (blacklist, linking, denied)
+11-07 09:53:57.252  1429  3203 I ChromeSync: [Sync,SyncIntentOperation] Handling the intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 cmp=com.google.android.gms/.chimera.GmsIntentOperationService (has extras) }.
+11-07 09:53:57.269  1429  3203 I ChromeSync: [Persistence,AffiliationManager] One of affiliation or grouping data for android://uaaI9B0F3zYV3zUJRamNvlx_BW2mtbI8EcSqTGs_3dc7hEuljEnzk-8DecSaJsnoK_nXgmy9zLAWctCwE0gR2A==@com.hushavia.app/ was not found. Marking affiliation data as stale...
+11-07 09:53:57.310  1143  4697 W GCM     : Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+11-07 09:53:57.310  1143  5280 W GCM     : Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.hushavia.app flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+11-07 09:53:57.630   913   991 D ModelWriter: java.lang.Exception
+11-07 09:53:57.652  5414  5414 D FlutterGeolocator: Creating service.
+11-07 09:53:57.653  5414  5414 D FlutterGeolocator: Binding to location service.
+11-07 09:53:57.704  5414  5414 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+11-07 09:53:57.912   501  2900 W TelephonyPermissions: reportAccessDeniedToReadIdentifiers:com.hushavia.app:getSerial:-1
+11-07 09:53:58.037  5414  5414 D FlutterGeolocator: Flutter engine connected. Connected engine count 1
+11-07 09:53:58.055   429   429 I keystore: del USRPKEY_com.hushavia.app.FlutterSecureStoragePluginKey 10167
+11-07 09:53:58.056   429   429 I keystore: del USRSKEY_com.hushavia.app.FlutterSecureStoragePluginKey 10167
+11-07 09:53:58.056   429   429 I keystore: del USRCERT_com.hushavia.app.FlutterSecureStoragePluginKey 10167
+11-07 09:53:58.056   429   429 I keystore: del CACERT_com.hushavia.app.FlutterSecureStoragePluginKey 10167
+11-07 09:53:58.130  5414  5414 I FLTFireBGExecutor: Creating background FlutterEngine instance, with args: []
+11-07 09:53:58.176  5414  5414 D FlutterGeolocator: Flutter engine connected. Connected engine count 2
+11-07 09:53:58.176  5414  5414 I FLTFireMsgService: FlutterFirebaseMessagingBackgroundService started!
+11-07 09:53:58.177  5414  5414 W FlutterWebRTCPlugin: audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+11-07 09:53:58.271  5414  5500 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+11-07 09:53:58.272  5414  5500 E flutter : [ERROR:flutter/impeller/toolkit/egl/egl.cc(56)] EGL Error: Success (12288) in ../../../flutter/impeller/toolkit/egl/display.cc:161
+11-07 09:53:58.328  5414  5500 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+11-07 09:53:58.478  4983  5288 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:53:58.478  4983  5288 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:53:58.495   501   539 D ArtManagerInternalImpl: /data/misc/iorapd/com.hushavia.app/14226/com.hushavia.chatapp.MainActivity/compiled_traces/compiled_trace.pb doesn't exist
+11-07 09:53:58.526   501   539 I ActivityTaskManager: Displayed com.hushavia.app/com.hushavia.chatapp.MainActivity: +2s113ms
+11-07 09:53:58.659  1801  2065 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+11-07 09:53:58.659  1801  2065 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+11-07 09:53:59.056  1801  2065 W CorpusConfigHelper: android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+11-07 09:53:59.056  1801  2065 W CorpusConfigHelper: 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+11-07 09:53:59.432  1340  1340 I AndroidIME: AbstractIme.onActivate():84 DummyIme.onActivate() : EditorInfo = Package = com.hushavia.app : Type = PhoneNumber : Learning = Disable : Suggestion = Hide : AutoCorrection = Disable : Microphone = Hide : NoPersonalizedLearning = Disable : AutoStartVoiceInput = Disable, IncognitoMode = false
+11-07 09:54:01.056  1482  3333 W ModernMediaScanner: Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+11-07 09:54:01.058  1482  3333 W ModernMediaScanner: Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+11-07 09:54:01.490   428  5409 I iorapd  : Perfetto TraceBuffer saved to file: /data/misc/iorapd/com.hushavia.app/14226/com.hushavia.chatapp.MainActivity/raw_traces/1794045241487532592.perfetto_trace.pb
+11-07 09:54:01.781  4511  4942 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+11-07 09:54:01.781  4511  4942 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+11-07 09:54:02.687  5414  5529 D ProfileInstaller: Installing profile for com.hushavia.app
+11-07 09:54:03.650  1429  2225 W GCM-GMS : Failed to get registration: java.io.IOException: INTERNAL_SERVER_ERROR
+11-07 09:54:04.477  4983  5288 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:04.477  4983  5288 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:13.148  4511  4942 W YouTube : abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+11-07 09:54:13.148  4511  4942 W YouTube : Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+11-07 09:54:22.924   501  1644 W ActivityManager: android.os.DeadObjectException
+11-07 09:54:22.927  4386  5206 W GH.DelegateICarSupplier: java.lang.IllegalArgumentException: Service not registered: bdx@e155b3
+11-07 09:54:30.874  1429  4621 W ChimeraConfigurator: Error syncing flags: qiy: COMMIT_TIMEOUT
+11-07 09:54:32.200  5594  5638 E AwarenessRouterSyncMgr: Exception while syncing fences
+11-07 09:54:32.200  5594  5638 E AwarenessRouterSyncMgr: java.util.concurrent.ExecutionException: java.lang.IllegalStateException: Account associated with identity was null
+11-07 09:54:32.200  5594  5638 E AwarenessRouterSyncMgr: Caused by: java.lang.IllegalStateException: Account associated with identity was null
+11-07 09:54:35.791  5594  5732 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:35.791  5594  5732 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:37.335  5594  5732 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:37.335  5594  5732 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:37.480  5594  5628 W ConnectionTracker: Exception thrown while unbinding
+11-07 09:54:37.480  5594  5628 W ConnectionTracker: java.lang.IllegalArgumentException: Service not registered: lbw@7583a53
+11-07 09:54:40.838  5594  5732 W YouTubeMusic: rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+11-07 09:54:40.838  5594  5732 W YouTubeMusic: Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
