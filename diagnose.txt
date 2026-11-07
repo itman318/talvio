@@ -1,0 +1,117 @@
+from GitHub (US): health 0.247940s
+--- server
+ 09:27:05 up 13 days,  4:25,  1 user,  load average: 0.48, 0.33, 0.14
+               total        used        free      shared  buff/cache   available
+Mem:            3819         769         676          29        2698        3050
+/dev/sda1        38G  6.3G   30G  18% /
+--- outbound (DNS + https)
+api.brevo.com: dns 0.002192s total 0.155478s code 404
+fcm.googleapis.com: dns 0.002920s total 0.098656s code 404
+www.google.com: dns 0.002119s total 0.120413s code 200
+--- local endpoint timings
+auth/email/request 200 115ms
+auth/email/verify 200 25ms
+--- slowest GET endpoints
+    22ms  200  /search
+    19ms  200  /me/export
+    16ms  200  /chats
+    13ms  200  /search/messages
+    12ms  200  /me
+    12ms  200  /secret-chats/pending
+    12ms  200  /stickers/packs
+    11ms  200  /me/privacy/exceptions
+    11ms  200  /bots
+    11ms  200  /bookmarks
+    10ms  200  /me/login-activity
+    10ms  200  /channels/directory
+    10ms  200  /premium
+    10ms  200  /bots/inline
+    10ms  200  /stickers/search
+--- push notifications
+Nov 06 11:29:57 ubuntu-4gb-hel1-2 node[350110]: Push notifications enabled (FCM)
+Nov 07 08:00:37 ubuntu-4gb-hel1-2 node[377823]: Push notifications enabled (FCM)
+Nov 07 09:25:42 ubuntu-4gb-hel1-2 node[382990]: Push notifications enabled (FCM)
+--- fast photos
+sharp: ok 0.33.5
+video with thumb: 5 / 5
+image with thumb: 60 / 60
+ffmpeg: ok
+videos: id=75 mime=video/mp4 size=4552928 failed=false thumb=true
+videos: id=72 mime=video/mp4 size=4037465 failed=false thumb=true
+videos: id=67 mime=video/mp4 size=12565498 failed=false thumb=true
+videos: id=46 mime=video/mp4 size=777653 failed=false thumb=true
+videos: id=30 mime=video/mp4 size=791457 failed=false thumb=true
+newest video probe: "mov,mp4,m4a,3gp,3g2,mj2",30.789705
+app update: {"update":true,"force":false,"current_build":1,"latest_build":223,"version":"1.1.223","url":"https://github.com/itman318/talvio/releases/download/android-latest/hushavia.apk","size":60375349,"sha256":"922467c6964e1749201351c1b263ac3f6bf05149b6fa4d52f0354f91061ac899","notes":"","published_at":"2026-1
+--- recent server errors
+--- classic bot api (fake token → expect 401 JSON)
+{"ok":false,"error_code":401,"description":"Unauthorized: Invalid bot token"}
+{"ok":false,"error_code":401,"description":"Unauthorized: Invalid bot token"}
+--- built-in bots
+5000000290|HushaviaIDBot|active
+5000000085|BotForge|active
+--- recent replies (type, reply target, first bytes of the target)
+2510|13|text|2509|text|5000000158|57|53676420617965206861696e|
+2496|13|text|2492|text|5000000027|29|41616a206a61207261686120|
+2492|13|text|2490|text|5000000158|66|41646869207365207a696164|
+2489|13|text|2487|text|5000000158|18|4d65206162207468616b2067|
+2486|13|text|2482|text|5000000158|782|68747470733a2f2f7777772e|
+2415|13|text|2414|text|5000000158|3|476c6f|
+--- geo lookup
+{"ip":"39.32.0.10","city":"Rawalpindi","country":"Pakistan","countryCode":"PK","timezone":"Asia/Karachi","label":"Rawalpindi, Pakistan"}
+/etc/cron.d/hushavia-backup
+--- ids
+users|5000000027|5000000600|33
+chats|1|1000003366|23
+user_ids_v1|2026-10-31 14:09:04.334955+00
+-rw-r--r-- 1 root root 178897 Nov  7 08:00 before-deploy-20261107-080034.sql.gz
+-rw-r--r-- 1 root root 192706 Nov  7 09:25 before-deploy-20261107-092529.sql.gz
+-rw-r--r-- 1 root root 176030 Nov  7 03:15 daily-20261107.sql.gz
+--- recent sessions (no tokens)
+103|5000000600|11-07 09:27:06|11-07 09:27:06|11-07 09:27|01-06|f
+102|5000000595|11-07 09:26:19|11-07 09:26:20|11-07 09:26|01-06|f
+101|5000000562|11-07 08:02:07|11-07 08:02:07|11-07 08:02|01-06|f
+100|5000000550|11-07 07:57:47|11-07 07:57:48|11-07 07:57|01-06|f
+99|5000000027|11-07 04:58:37||11-07 09:26|01-06|t
+98|5000000027|11-07 01:55:52|11-07 04:58:27|11-07 04:56|01-06|f
+97|5000000027|11-06 10:36:41||11-07 01:50|01-06|f
+96|5000000531|11-06 10:36:18|11-06 10:36:19|11-06 10:36|01-05|f
+95|5000000229|11-06 10:31:26|11-06 10:36:33|11-06 10:36|01-05|f
+94|5000000027|11-06 10:30:19|11-06 10:31:10|11-06 10:30|01-05|f
+93|5000000158|11-06 08:11:19||11-07 09:25|01-06|t
+92|5000000027|11-06 06:59:17|11-06 10:30:11|11-06 10:30|01-05|f
+91|5000000477|11-06 06:01:03|11-06 06:01:03|11-06 06:01|01-05|f
+90|5000000158|11-06 04:41:05|11-06 08:01:19|11-06 07:59|01-05|f
+89|5000000027|11-05 21:13:24|11-06 07:21:05|11-06 06:58|01-05|f
+--- auth requests (last 2h)
+[07/Nov/2026:04:10:56 "POST /api/auth/refresh 200
+[07/Nov/2026:04:31:20 "POST /api/auth/refresh 200
+[07/Nov/2026:04:31:57 "POST /api/auth/refresh 200
+[07/Nov/2026:04:47:03 "POST /api/auth/refresh 200
+[07/Nov/2026:04:53:40 "POST /api/auth/refresh 200
+[07/Nov/2026:04:58:27 "POST /api/auth/logout 200
+[07/Nov/2026:04:58:31 "POST /api/auth/email/request 200
+[07/Nov/2026:04:58:37 "POST /api/auth/email/verify 200
+[07/Nov/2026:04:58:48 "GET /api/me/sessions 200
+[07/Nov/2026:05:09:23 "POST /api/auth/refresh 200
+[07/Nov/2026:05:14:21 "POST /api/auth/refresh 200
+[07/Nov/2026:05:14:21 "POST /api/auth/refresh 200
+[07/Nov/2026:05:29:08 "POST /api/auth/refresh 200
+[07/Nov/2026:05:30:45 "POST /api/auth/refresh 200
+[07/Nov/2026:05:31:46 "POST /api/auth/refresh 200
+[07/Nov/2026:05:56:57 "POST /api/auth/refresh 200
+[07/Nov/2026:06:13:06 "POST /api/auth/refresh 200
+[07/Nov/2026:06:15:21 "POST /api/auth/refresh 200
+[07/Nov/2026:06:15:22 "POST /api/auth/refresh 200
+[07/Nov/2026:06:25:47 "POST /api/auth/refresh 200
+[07/Nov/2026:07:28:02 "POST /api/auth/refresh 200
+[07/Nov/2026:07:48:39 "POST /api/auth/refresh 200
+[07/Nov/2026:07:48:40 "POST /api/auth/refresh 200
+[07/Nov/2026:07:52:06 "POST /api/auth/refresh 200
+[07/Nov/2026:08:23:30 "POST /api/auth/refresh 200
+[07/Nov/2026:08:47:12 "POST /api/auth/refresh 200
+[07/Nov/2026:09:03:10 "POST /api/auth/refresh 200
+[07/Nov/2026:09:18:42 "POST /api/auth/refresh 200
+[07/Nov/2026:09:18:43 "POST /api/auth/refresh 200
+[07/Nov/2026:09:20:05 "POST /api/auth/refresh 200
+--- nginx slow / failed requests
