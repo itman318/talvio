@@ -362,7 +362,221 @@ async function deleteMedia(admin, idRaw, ip) {
   return { ok: true, messages_deleted: msgs.length };
 }
 
+
+// ------------------------------------------------------------------ system health
+function dirSize(dir) {
+  let total = 0;
+  try {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) total += dirSize(p);
+      else if (e.isFile()) total += fs.statSync(p).size;
+    }
+  } catch (_) { /* unreadable */ }
+  return total;
+}
+
+/** Server health and the switches that matter before launch. */
+async function systemStatus() {
+  const os = require('os'); // eslint-disable-line global-require
+  const images = require('../utils/images'); // eslint-disable-line global-require
+  let disk = null;
+  try {
+    const st = fs.statfsSync(config.uploadDir);
+    disk = { free: st.bavail * st.bsize, total: st.blocks * st.bsize };
+  } catch (_) { /* old node */ }
+  const dbSize = await db.one('SELECT pg_database_size(current_database())::bigint AS n').catch(() => ({ n: null }));
+  const media = await db.one('SELECT count(*)::int AS files, COALESCE(sum(size_bytes), 0)::bigint AS bytes FROM media');
+  let latest = null;
+  try {
+    latest = JSON.parse(fs.readFileSync(path.join(config.downloadDir, 'latest.json'), 'utf8'));
+  } catch (_) { /* no build uploaded yet */ }
+  const presence = require('./presence'); // eslint-disable-line global-require
+  const mail = config.mail.provider;
+  const mailReady = mail === 'brevo' ? !!config.mail.brevoKey : mail === 'resend' ? !!config.mail.resendKey : mail === 'smtp' ? !!config.mail.smtpHost : false;
+  return {
+    node: process.version,
+    uptime_sec: Math.round(process.uptime()),
+    memory: { rss: process.memoryUsage().rss, total: os.totalmem(), free: os.freemem() },
+    load: os.loadavg(),
+    cpus: os.cpus().length,
+    disk,
+    db_bytes: dbSize.n ? Number(dbSize.n) : null,
+    media: { files: media.files, bytes: Number(media.bytes) },
+    downloads_bytes: dirSize(config.downloadDir),
+    online_users: presence.onlineCount(),
+    tools: { sharp: images.available(), ffmpeg: images.hasFfmpeg() },
+    mail: { provider: mail, ready: mailReady, from: config.mail.from },
+    otp_dev_mode: !!config.otp.devMode,
+    push_ready: !!config.firebaseServiceAccountPath && fs.existsSync(config.firebaseServiceAccountPath),
+    latest_app: latest ? {
+      build: latest.build,
+      version: `1.1.${latest.build}`,
+      published_at: latest.published_at || null,
+      files: Object.entries(latest.files || {}).map(([name, f]) => ({ name, url: `/download/${f.file}`, size: f.size })),
+    } : null,
+  };
+}
+
+// ------------------------------------------------------------------ message search (groups & channels only)
+/** Finds messages in groups and channels (private chats stay private). */
+async function searchMessages(query = {}) {
+  const q = String(query.q || '').trim();
+  const userId = query.user_id ? v.id(query.user_id, 'user_id') : null;
+  const chatId = query.chat_id ? v.id(query.chat_id, 'chat_id') : null;
+  if (q.length < 2 && !userId && !chatId) throw badRequest('invalid_input', 'Type at least 2 letters, or pick a user or group');
+  const params = [];
+  const where = ["c.type IN ('group', 'channel')", 'm.deleted_at IS NULL', "m.type NOT IN ('system', 'call')"];
+  if (q.length >= 2) {
+    params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
+    where.push(`m.text ILIKE $${params.length}`);
+  }
+  if (userId) {
+    params.push(userId);
+    where.push(`m.sender_id = $${params.length}`);
+  }
+  if (chatId) {
+    params.push(chatId);
+    where.push(`m.chat_id = $${params.length}`);
+  }
+  if (query.before) {
+    params.push(v.id(query.before, 'before'));
+    where.push(`m.id < $${params.length}`);
+  }
+  const rows = await db.many(
+    `SELECT m.id, m.chat_id, m.type, m.text, m.created_at, m.media_id, c.title, c.type AS chat_type,
+            u.id AS user_id, u.first_name, u.last_name, u.username
+     FROM messages m JOIN chats c ON c.id = m.chat_id LEFT JOIN users u ON u.id = m.sender_id
+     WHERE ${where.join(' AND ')} ORDER BY m.id DESC LIMIT 100`,
+    params,
+  );
+  return rows.map((m) => ({
+    id: Number(m.id),
+    chat: { id: Number(m.chat_id), title: m.title, type: m.chat_type },
+    type: m.type,
+    text: m.text || '',
+    media_id: m.media_id ? Number(m.media_id) : null,
+    user: m.user_id ? userJson({ id: m.user_id, first_name: m.first_name, last_name: m.last_name, username: m.username }) : null,
+    created_at: new Date(m.created_at).toISOString(),
+  }));
+}
+
+// ------------------------------------------------------------------ one user: groups, spam clean-up
+async function userChats(userIdRaw) {
+  const userId = v.id(userIdRaw, 'user_id');
+  const rows = await db.many(
+    `SELECT c.id, c.title, c.type, c.username, cm.role, cm.joined_at,
+            (SELECT count(*)::int FROM chat_members x WHERE x.chat_id = c.id) AS members,
+            (SELECT count(*)::int FROM messages m WHERE m.chat_id = c.id AND m.sender_id = $1 AND m.deleted_at IS NULL) AS sent
+     FROM chat_members cm JOIN chats c ON c.id = cm.chat_id
+     WHERE cm.user_id = $1 AND c.type IN ('group', 'channel') ORDER BY cm.joined_at DESC LIMIT 500`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), title: r.title, type: r.type, username: r.username, role: r.role,
+    members: r.members, sent: r.sent, joined_at: new Date(r.joined_at).toISOString(),
+  }));
+}
+
+/**
+ * Spam clean-up: deletes everything a user wrote in groups and channels (for everyone),
+ * and with remove_from_groups also takes them out of every group (where they aren't the owner).
+ */
+async function purgeUser(admin, userIdRaw, body = {}, ip) {
+  const userId = v.id(userIdRaw, 'user_id');
+  const u = await db.one('SELECT id FROM users WHERE id = $1', [userId]);
+  if (!u) throw notFound('user_not_found', 'User not found');
+  const msgs = await db.many(
+    `UPDATE messages m SET deleted_at = now(), text = '', media_id = NULL, meta = NULL
+     FROM chats c WHERE c.id = m.chat_id AND c.type IN ('group', 'channel') AND m.sender_id = $1 AND m.deleted_at IS NULL
+     RETURNING m.id, m.chat_id`,
+    [userId],
+  );
+  const byChat = new Map();
+  for (const r of msgs) {
+    if (!byChat.has(r.chat_id)) byChat.set(r.chat_id, []);
+    byChat.get(r.chat_id).push(r.id);
+  }
+  for (const [chatId, ids] of byChat) {
+    const members = (await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1', [chatId])).map((r) => r.user_id);
+    bus.emit('message:deleted', { chatId, messageIds: ids, userIds: members });
+  }
+  let removed = 0;
+  if (body.remove_from_groups === true) {
+    const chats = await db.many(
+      `SELECT cm.chat_id FROM chat_members cm JOIN chats c ON c.id = cm.chat_id
+       WHERE cm.user_id = $1 AND c.type IN ('group', 'channel') AND cm.role <> 'owner'`,
+      [userId],
+    );
+    for (const c of chats) {
+      await chatService().removeUserFromGroup(c.chat_id, userId, { reason: 'removed' });
+      await chatService().ban(c.chat_id, userId, null, 'admin_panel');
+      removed += 1;
+    }
+  }
+  await log(admin.id, 'user.purge', 'user', userId, { messages: msgs.length, removed_from: removed }, ip);
+  return { ok: true, messages_deleted: msgs.length, removed_from: removed };
+}
+
+// ------------------------------------------------------------------ bots
+const SYSTEM_BOTS = ['botforge', 'hushaviaidbot', 'hushaviasupportbot', 'hushaviaspambot', 'hushaviacodes', 'hushaviabuttonsbot'];
+
+async function botDetail(botIdRaw) {
+  const id = v.id(botIdRaw, 'bot_id');
+  const b = await db.one(
+    `SELECT b.*, u.username, u.first_name, u.bio, u.created_at AS user_created_at, u.status AS user_status,
+            o.id AS o_id, o.first_name AS o_first, o.last_name AS o_last, o.username AS o_username,
+            (SELECT count(*)::int FROM chat_members cm WHERE cm.user_id = b.user_id) AS chats,
+            (SELECT count(*)::int FROM chat_members cm JOIN chats c ON c.id = cm.chat_id WHERE cm.user_id = b.user_id AND c.type = 'private') AS users,
+            (SELECT count(*)::int FROM messages m WHERE m.sender_id = b.user_id AND m.created_at > now() - interval '1 day') AS sent_today,
+            (SELECT count(*)::int FROM bot_updates x WHERE x.bot_id = b.user_id) AS pending
+     FROM bots b JOIN users u ON u.id = b.user_id LEFT JOIN users o ON o.id = b.owner_id WHERE b.user_id = $1`,
+    [id],
+  );
+  if (!b) throw notFound('bot_not_found', 'Bot not found');
+  return {
+    id: Number(b.user_id),
+    username: b.username,
+    name: b.first_name,
+    about: b.bio || '',
+    status: b.status,
+    deleted: b.user_status === 'deleted',
+    disabled_reason: b.disabled_reason || null,
+    webhook: b.webhook_url ? b.webhook_url.replace(/\/\/([^/@]*@)/, '//***@') : null,
+    system: SYSTEM_BOTS.includes(String(b.username || '').toLowerCase()),
+    owner: b.o_id ? userJson({ id: b.o_id, first_name: b.o_first, last_name: b.o_last, username: b.o_username }) : null,
+    chats: b.chats,
+    users: b.users,
+    sent_today: b.sent_today,
+    pending_updates: b.pending,
+    created_at: new Date(b.user_created_at).toISOString(),
+  };
+}
+
+async function deleteBotAdmin(admin, botIdRaw, ip) {
+  const d = await botDetail(botIdRaw);
+  if (d.system) throw forbidden('system_bot', 'Hushavia’s own bots can’t be deleted — switch it off instead');
+  if (d.deleted) return { ok: true };
+  await db.tx(async (c) => {
+    await c.query("UPDATE users SET status = 'deleted', username = NULL, first_name = 'Deleted Bot', updated_at = now() WHERE id = $1", [d.id]);
+    await c.query("UPDATE bots SET status = 'disabled', token_hash = $2, webhook_url = NULL WHERE user_id = $1", [d.id, require('crypto').randomBytes(32).toString('hex')]); // eslint-disable-line global-require
+    await c.query('DELETE FROM bot_updates WHERE bot_id = $1', [d.id]);
+  });
+  if (d.owner) {
+    await require('./notice.service').notify(d.owner.id, 'system', `Your bot @${d.username} was removed`, // eslint-disable-line global-require
+      'The Hushavia team removed it for breaking the rules.').catch(() => {});
+  }
+  await log(admin.id, 'bot.delete', 'user', d.id, { username: d.username }, ip);
+  return { ok: true };
+}
+
 module.exports = {
+  systemStatus,
+  searchMessages,
+  userChats,
+  purgeUser,
+  botDetail,
+  deleteBotAdmin,
   groupDetail,
   setGroupSettings,
   setGroupRole,

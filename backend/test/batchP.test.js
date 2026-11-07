@@ -389,3 +389,43 @@ test('removed members stay out until unbanned; admin panel has full control of a
   assert.ok(Array.isArray(await ctl.listStories({})));
   assert.ok(Array.isArray(await ctl.listMedia({ kind: 'image' })));
 });
+
+test('admin panel: server status, message search (groups only), a user’s groups, spam clean-up, bots', async () => {
+  const { hashPassword } = require('../src/utils/crypto'); // eslint-disable-line global-require
+  const ctl = require('../src/services/admincontrol.service'); // eslint-disable-line global-require
+  const root = await db.one(`INSERT INTO admins (email, password_hash, name, role) VALUES ('rootq2@example.com', $1, 'Root', 'super_admin') RETURNING *`, [hashPassword('x-very-long-password')]);
+  const st = await ctl.systemStatus();
+  assert.equal(typeof st.otp_dev_mode, 'boolean');
+  assert.ok(st.memory.total > 0);
+
+  const O = await signup('+923260000071', 'Owner', 'owner_s');
+  const X = await signup('+923260000072', 'Xspam', 'xspam_s');
+  const { chat: g } = await chats.createGroup(O.id, { title: 'Search me', member_ids: [X.id] });
+  await messages.sendMessage(X.id, g.id, { text: 'buy cheap followers now' });
+  const dm = await chats.getOrCreatePrivate(O.id, X.id);
+  await messages.sendMessage(X.id, dm.id, { text: 'cheap followers private' });
+  const found = await ctl.searchMessages({ q: 'cheap followers' });
+  assert.equal(found.length, 1, 'private chats are never searched');
+  assert.equal(found[0].chat.id, g.id);
+  await rejects(ctl.searchMessages({ q: 'a' }), 'invalid_input');
+  assert.equal((await ctl.searchMessages({ user_id: X.id })).length, 1);
+
+  const theirs = await ctl.userChats(X.id);
+  assert.equal(theirs.length, 1);
+  assert.equal(theirs[0].sent, 1);
+  const purged = await ctl.purgeUser(root, X.id, { remove_from_groups: true });
+  assert.equal(purged.messages_deleted, 1);
+  assert.equal(purged.removed_from, 1);
+  assert.equal((await ctl.searchMessages({ q: 'cheap followers' })).length, 0);
+  await rejects(chats.joinByInvite(X.id, (await chats.getChat(O.id, g.id)).invite_code), 'banned_from_chat');
+  assert.ok((await db.one('SELECT text FROM messages WHERE chat_id = $1 ORDER BY id DESC LIMIT 1', [dm.id])).text.includes('private'), 'private chat untouched');
+
+  const made = await bots.createBot(O.id, { name: 'Spam bot', username: 'spammy_test_bot' });
+  const botId = made.bot ? made.bot.id : made.id;
+  const bd = await ctl.botDetail(botId);
+  assert.equal(bd.system, false);
+  await ctl.deleteBotAdmin(root, botId);
+  assert.equal((await ctl.botDetail(botId)).deleted, true);
+  const forge = await db.one("SELECT id FROM users WHERE lower(username) = 'botforge'");
+  if (forge) await rejects(ctl.deleteBotAdmin(root, forge.id), 'system_bot');
+});

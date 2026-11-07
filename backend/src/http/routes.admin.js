@@ -191,6 +191,13 @@ router.delete('/stories/:id', requireAdmin('media'), h(async (req, res) => res.j
 router.get('/media', requireAdmin('media'), h(async (req, res) => res.json(await ctl.listMedia(req.query))));
 router.delete('/media/:id', requireAdmin('media'), h(async (req, res) => res.json(await ctl.deleteMedia(req.admin, req.params.id, req.ip))));
 
+router.get('/system', requireAdmin('settings'), h(async (req, res) => res.json(await ctl.systemStatus())));
+router.get('/messages/search', requireAdmin('reports'), h(async (req, res) => res.json(await ctl.searchMessages(req.query))));
+router.get('/users/:id/chats', requireAdmin('users.view'), h(async (req, res) => res.json(await ctl.userChats(req.params.id))));
+router.post('/users/:id/purge', requireAdmin('users.ban'), h(async (req, res) => res.json(await ctl.purgeUser(req.admin, req.params.id, req.body, req.ip))));
+router.get('/bots/:id', requireAdmin('users.view'), h(async (req, res) => res.json(await ctl.botDetail(req.params.id))));
+router.delete('/bots/:id', requireAdmin('users.ban'), h(async (req, res) => res.json(await ctl.deleteBotAdmin(req.admin, req.params.id, req.ip))));
+
 router.get('/crashes', requireAdmin('logs.view'), h(async (req, res) => res.json(await require('../services/crash.service').list(req.query))));
 router.post('/crashes/:id/resolve', requireAdmin('logs.view'), h(async (req, res) => res.json(await require('../services/crash.service').resolve(req.params.id, req.body.resolved !== false))));
 router.get('/logs', requireAdmin('logs.view'), h(async (req, res) => res.json(await admin.listLogs(req.query))));

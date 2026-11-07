@@ -16,12 +16,14 @@
     { id: 'calls', label: 'Calls', perm: 'calls.view', icon: 'phone', section: 'Moderation' },
     { id: 'bots', label: 'Bots', perm: 'users.view', icon: 'bot', section: 'Moderation' },
     { id: 'content', label: 'Stickers, stories & media', perm: 'media', icon: 'image', section: 'Moderation' },
+    { id: 'msgsearch', label: 'Message search', perm: 'reports', icon: 'chat', section: 'Moderation' },
     { id: 'revenue', label: 'Revenue', perm: 'payments', icon: 'trend', section: 'Business' },
     { id: 'payments', label: 'Payments', perm: 'payments', icon: 'card', section: 'Business' },
     { id: 'plans', label: 'Hushavia Plus plans', perm: 'payments', icon: 'star', section: 'Business' },
     { id: 'ads', label: 'Sponsored messages', perm: 'payments', icon: 'megaphone', section: 'Business' },
     { id: 'support', label: 'Support', perm: 'support', icon: 'buoy', section: 'Communication' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast', icon: 'send', section: 'Communication' },
+    { id: 'system', label: 'Server & app status', perm: 'settings', icon: 'activity', section: 'System' },
     { id: 'settings', label: 'Settings', perm: 'settings', icon: 'sliders', section: 'System' },
     { id: 'pages', label: 'Pages & FAQ', perm: 'settings', icon: 'file', section: 'System' },
     { id: 'admins', label: 'Admin team', perm: 'admins', icon: 'shieldCheck', section: 'System' },
@@ -549,6 +551,24 @@
             },
           }, 'Restrict (mute)'));
       }
+      actions.push(el('button', { class: 'btn', onclick: () => userChatsModal(id) }, 'Groups & channels'));
+      if (can('reports')) actions.push(el('button', { class: 'btn', onclick: () => { msgSearchState.user_id = id; msgSearchState.q = ''; closeDrawer(); state.page = 'msgsearch'; location.hash = 'msgsearch'; renderLayout(); } }, 'Their group messages'));
+      if (can('users.ban')) {
+        actions.push(el('button', {
+          class: 'btn danger',
+          onclick: () => {
+            const rm = el('input', { type: 'checkbox', id: 'purge-rm', checked: true });
+            modal('Clean up spam from this user?', [
+              el('p', {}, 'Deletes everything they wrote in groups and channels — for everyone. Private chats are not touched.'),
+              el('label', { class: 'check', for: 'purge-rm' }, rm, 'Also remove them from all groups (they can’t rejoin until unbanned)'),
+            ], 'Clean up', async () => {
+              const r = await action(() => api('POST', `/users/${id}/purge`, { remove_from_groups: rm.checked }));
+              if (r) toast(`${r.messages_deleted} messages deleted${r.removed_from ? `, removed from ${r.removed_from} groups` : ''}`);
+              return !!r;
+            }, true);
+          },
+        }, 'Clean up spam'));
+      }
       if (can('support')) {
         actions.push(el('button', {
           class: 'btn',
@@ -824,6 +844,134 @@
 
   // ------------------------------------------------------------------ groups
   const groupsState = { q: '', status: 'all', type: 'all', page: 1 };
+
+
+  // ------------------------------------------------------------------ a user's groups, a bot's details
+  async function userChatsModal(id) {
+    const list = await action(() => api('GET', `/users/${id}/chats`));
+    if (!list) return;
+    const rows = list.map((c) => el('tr', {},
+      el('td', {}, c.title, c.username ? el('div', { class: 'muted' }, `@${c.username}`) : null),
+      el('td', {}, el('span', { class: 'chip' }, c.type)),
+      el('td', {}, el('span', { class: `chip${c.role === 'member' ? '' : ' info'}` }, c.role)),
+      el('td', { class: 'num' }, fmtNum(c.members)),
+      el('td', { class: 'num' }, fmtNum(c.sent)),
+      el('td', { class: 'muted' }, ago(c.joined_at)),
+      el('td', {}, can('groups.view') ? el('button', { class: 'btn small', onclick: () => manageGroup({ id: c.id, title: c.title }) }, 'Manage') : null)));
+    modal('Groups & channels', [table(['Name', 'Type', 'Role', 'Members', 'Their messages', 'Joined', ''], rows, 'Not in any group or channel')], 'Done', async () => true);
+  }
+
+  async function botModal(id) {
+    const b = await action(() => api('GET', `/bots/${id}`));
+    if (!b) return;
+    const kv = (k, v2) => el('tr', {}, el('td', { class: 'muted', style: 'width:150px' }, k), el('td', {}, v2 ?? '—'));
+    const body = [
+      el('table', { class: 'table' }, el('tbody', {},
+        kv('Bot', `${b.name} @${b.username || '—'}`),
+        kv('Owner', b.owner ? el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(b.owner.id); } }, `${b.owner.name}${b.owner.username ? ` @${b.owner.username}` : ''}`) : (b.system ? 'Hushavia (official)' : '—')),
+        kv('Status', el('span', { class: `chip ${b.status === 'active' && !b.deleted ? 'ok' : 'bad'}` }, b.deleted ? 'deleted' : b.status)),
+        b.disabled_reason ? kv('Reason', b.disabled_reason) : null,
+        kv('About', b.about),
+        kv('Mode', b.webhook || 'Polling (getUpdates)'),
+        kv('In chats', fmtNum(b.chats)),
+        kv('Users talking to it', fmtNum(b.users)),
+        kv('Sent today', fmtNum(b.sent_today)),
+        kv('Waiting updates', fmtNum(b.pending_updates)),
+        kv('Created', new Date(b.created_at).toLocaleString()))),
+    ];
+    if (can('users.ban') && !b.system && !b.deleted) {
+      body.push(el('button', {
+        class: 'btn danger',
+        style: 'margin-top:10px',
+        onclick: () => modal(`Delete @${b.username}?`, [el('p', {}, 'The bot stops working for good, its token dies and its @username is freed. The owner gets a notice.')], 'Delete bot', async () => {
+          const r = await action(() => api('DELETE', `/bots/${b.id}`), 'Bot deleted');
+          if (r) pageBots();
+          return !!r;
+        }, true),
+      }, 'Delete bot'));
+    }
+    modal(`Bot · @${b.username || b.id}`, body, 'Done', async () => true);
+  }
+
+  // ------------------------------------------------------------------ message search (groups & channels)
+  const msgSearchState = { q: '', user_id: null };
+  async function pageMsgSearch() {
+    const q = el('input', { type: 'search', placeholder: 'Words to find in groups & channels (e.g. a scam link)', value: msgSearchState.q, style: 'flex:1;min-width:260px' });
+    const userBox = msgSearchState.user_id ? el('span', { class: 'chip info' }, `User #${msgSearchState.user_id} `,
+      el('a', { href: '#', onclick: (e) => { e.preventDefault(); msgSearchState.user_id = null; pageMsgSearch(); } }, '✕')) : null;
+    const go2 = el('button', { class: 'btn primary' }, 'Search');
+    const box = el('div', {}, el('p', { class: 'muted' }, 'Private chats are never searched — only groups and channels.'));
+    main.replaceChildren(head('Message search'), el('div', { class: 'toolbar' }, q, userBox, go2), box);
+    let before = null;
+    let all = [];
+    async function run(more) {
+      msgSearchState.q = q.value.trim();
+      if (!more) { before = null; all = []; }
+      const p = new URLSearchParams({ ...(msgSearchState.q ? { q: msgSearchState.q } : {}), ...(msgSearchState.user_id ? { user_id: msgSearchState.user_id } : {}), ...(before ? { before } : {}) });
+      const list = await action(() => api('GET', `/messages/search?${p}`));
+      if (!list) return;
+      all = all.concat(list);
+      before = list.length ? list[list.length - 1].id : before;
+      const rows = all.map((m) => el('tr', {},
+        el('td', { class: 'muted', style: 'white-space:nowrap' }, ago(m.created_at)),
+        el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); manageGroup({ id: m.chat.id, title: m.chat.title }); } }, m.chat.title), el('div', { class: 'muted' }, m.chat.type)),
+        el('td', {}, m.user ? el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(m.user.id); } }, m.user.name) : '—', m.user && m.user.username ? el('div', { class: 'muted' }, `@${m.user.username}`) : null),
+        el('td', { style: 'max-width:480px;white-space:pre-wrap;word-break:break-word' }, m.type === 'text' ? m.text : `[${m.type}] ${m.text}`),
+        el('td', {}, el('button', {
+          class: 'btn small danger',
+          onclick: async (ev) => { if (await action(() => api('DELETE', `/messages/${m.id}`), 'Deleted for everyone')) ev.target.closest('tr').remove(); },
+        }, 'Delete'))));
+      const moreBtn = list.length === 100 ? el('button', { class: 'btn', style: 'margin-top:10px', onclick: () => run(true) }, 'Load more') : null;
+      box.replaceChildren(...[table(['When', 'Where', 'From', 'Message', ''], rows, 'Nothing found'), moreBtn].filter(Boolean));
+    }
+    go2.addEventListener('click', () => run(false));
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(false); });
+    if (msgSearchState.q.length >= 2 || msgSearchState.user_id) run(false);
+  }
+
+  // ------------------------------------------------------------------ server & app status
+  async function pageSystem() {
+    main.replaceChildren(head('Server & app status'), el('div', { class: 'muted' }, 'Loading…'));
+    const d = await action(() => api('GET', '/system'));
+    if (!d) return;
+    const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
+    const card = (title, rows) => el('div', { class: 'card', style: 'max-width:620px;margin-bottom:12px' },
+      el('h3', { style: 'margin:0 0 10px;font-size:15px' }, title),
+      el('table', { class: 'table' }, el('tbody', {}, rows.filter(Boolean).map(([k, v2]) => el('tr', {}, el('td', { class: 'muted', style: 'width:200px' }, k), el('td', {}, v2))))));
+    const ok = (b, good, bad) => el('span', { class: `chip ${b ? 'ok' : 'bad'}` }, b ? good : bad);
+    const warnings = [];
+    if (d.otp_dev_mode) warnings.push('OTP dev mode is ON — login codes are returned by the API. Anyone could log in as anyone. Set up an email provider and turn it off before launch.');
+    if (!d.mail.ready) warnings.push('No email provider is set up — email login codes can’t be delivered.');
+    if (!d.push_ready) warnings.push('Push notifications are not set up (Firebase) — phones won’t get notifications while the app is closed.');
+    if (d.disk && d.disk.free / d.disk.total < 0.15) warnings.push(`Disk almost full — only ${fmtSize(d.disk.free)} free.`);
+    const up = d.uptime_sec >= 86400 ? `${Math.floor(d.uptime_sec / 86400)} d ${Math.floor((d.uptime_sec % 86400) / 3600)} h` : `${Math.floor(d.uptime_sec / 3600)} h ${Math.floor((d.uptime_sec % 3600) / 60)} min`;
+    main.replaceChildren(...[head('Server & app status'),
+      warnings.length ? el('div', { class: 'card', style: 'max-width:620px;margin-bottom:12px;border-left:4px solid #d93025' },
+        el('h3', { style: 'margin:0 0 8px;font-size:15px;color:#d93025' }, '⚠ Needs attention'), warnings.map((w) => el('p', { style: 'margin:6px 0' }, w))) : null,
+      card('App (Android)', [
+        ['Latest build on the server', d.latest_app ? `${d.latest_app.version} · ${d.latest_app.published_at ? new Date(d.latest_app.published_at).toLocaleString() : ''}` : 'none yet'],
+        ...(d.latest_app ? d.latest_app.files.map((f) => [f.name === 'hushavia.apk' ? 'Download (most phones, 64-bit)' : 'Download (older 32-bit phones)', el('a', { href: f.url }, `${f.url.split('/').pop()} · ${fmtSize(f.size)}`)]) : []),
+        ['In-app updates', 'Phones see the newest build within ~2 minutes. Set the minimum version in Settings to force an update.'],
+      ]),
+      card('Sign-in & notifications', [
+        ['Login codes', d.otp_dev_mode ? el('span', { class: 'chip bad' }, 'DEV MODE — not safe') : el('span', { class: 'chip ok' }, 'Real codes')],
+        ['Email provider', el('span', {}, ok(d.mail.ready, d.mail.provider, `${d.mail.provider} — not set up`), el('div', { class: 'muted' }, d.mail.from))],
+        ['Push notifications', ok(d.push_ready, 'Firebase ready', 'Not set up')],
+      ]),
+      card('Server', [
+        ['Online now', fmtNum(d.online_users)],
+        ['Up for', up],
+        ['Disk', d.disk ? `${fmtSize(d.disk.total - d.disk.free)} used of ${fmtSize(d.disk.total)} (${pct(d.disk.total - d.disk.free, d.disk.total)}) · ${fmtSize(d.disk.free)} free` : '—'],
+        ['Memory', `${fmtSize(d.memory.total - d.memory.free)} of ${fmtSize(d.memory.total)} in use · app ${fmtSize(d.memory.rss)}`],
+        ['CPU load (1/5/15 min)', `${d.load.map((x) => x.toFixed(2)).join(' / ')} on ${d.cpus} cores`],
+        ['Database', d.db_bytes ? fmtSize(d.db_bytes) : '—'],
+        ['Uploaded files', `${fmtNum(d.media.files)} files · ${fmtSize(d.media.bytes)}`],
+        ['App downloads folder', fmtSize(d.downloads_bytes)],
+        ['Photo previews (sharp)', ok(d.tools.sharp, 'on', 'missing')],
+        ['Video posters (ffmpeg)', ok(d.tools.ffmpeg, 'on', 'missing')],
+        ['Node.js', d.node],
+      ])].filter(Boolean));
+  }
 
   // ------------------------------------------------------------------ one group / channel: full control
   const GUARD_LABELS = {
@@ -1745,7 +1893,8 @@
             return !!r;
           }, true);
         },
-      }, b.status === 'active' ? 'Disable' : 'Enable') : null)));
+      }, b.status === 'active' ? 'Disable' : 'Enable') : null,
+      el('button', { class: 'btn small', style: 'margin-left:4px', onclick: () => botModal(b.id) }, 'Details'))));
     box.replaceChildren(table(['Bot', 'Owner', 'Chats', 'Mode', 'Queue', 'Status', 'Last used', ''], rows, 'No bots yet'),
       pager(data, (p) => { botsState.page = p; pageBots(); }));
   }
@@ -1917,6 +2066,8 @@
     calls: pageCalls,
     bots: pageBots,
     content: pageContent,
+    msgsearch: pageMsgSearch,
+    system: pageSystem,
     revenue: pageRevenue,
     payments: pagePayments,
     plans: pagePlans,
