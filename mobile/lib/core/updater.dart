@@ -64,7 +64,7 @@ class AppUpdater extends ChangeNotifier {
     if (!force && _lastCheck != null && DateTime.now().difference(_lastCheck!) < const Duration(hours: 3)) return info;
     _lastCheck = DateTime.now();
     try {
-      final r = await api.get('/app/update', query: {'build': '$currentBuild', 'abi': await _abi()});
+      final r = await api.get('/app/update', query: {'build': '$currentBuild', 'abi': await _abi(), if (force) 'fresh': '1'});
       info = UpdateInfo(Map<String, dynamic>.from(r as Map));
       notifyListeners();
     } catch (_) {}

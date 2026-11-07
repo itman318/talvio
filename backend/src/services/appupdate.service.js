@@ -10,7 +10,8 @@ const settings = require('./settings.service');
 
 const REPO = process.env.APP_RELEASE_REPO || 'itman318/talvio';
 const TAG = process.env.APP_RELEASE_TAG || 'android-latest';
-const TTL_MS = 10 * 60 * 1000;
+const TTL_MS = 2 * 60 * 1000; // a new build reaches phones within ~2 minutes
+const FRESH_MS = 20 * 1000; // "Check for updates" button: ask GitHub again if older than this
 
 let cache = { at: 0, data: null };
 
@@ -28,8 +29,9 @@ function parseRelease(r) {
   return { build, version: `1.1.${build}`, published_at: r.published_at || r.created_at || null, assets };
 }
 
-async function latest() {
-  if (cache.at && Date.now() - cache.at < TTL_MS) return cache.data; // fresh (even "nothing")
+async function latest({ fresh = false } = {}) {
+  const age = Date.now() - cache.at;
+  if (cache.at && age < (fresh ? FRESH_MS : TTL_MS)) return cache.data; // fresh (even "nothing")
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${TAG}`, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'hushavia-server' },
@@ -56,9 +58,9 @@ function olderThan(a, b) {
 }
 
 /** What the phone (build N, CPU type abi) should do. */
-async function check({ build, abi } = {}) {
+async function check({ build, abi, fresh = false } = {}) {
   const current = Math.max(0, parseInt(build, 10) || 0);
-  const l = await latest();
+  const l = await latest({ fresh });
   const notes = String((await settings.get('app_update_notes')) || '');
   const minVersion = await settings.get('min_app_version');
   const force = olderThan(`1.1.${current}`, minVersion);
