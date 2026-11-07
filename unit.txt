@@ -1,0 +1,150 @@
+  type: 'test'
+  ...
+# Subtest: reports: create with snapshot, dedupe
+ok 148 - reports: create with snapshot, dedupe
+  ---
+  duration_ms: 14.497801
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000001 → 844783
+# [OTP dev mode] +923001000001 → 337513
+# Subtest: admin: login, dashboard, users, ban, reports, settings, logs
+ok 149 - admin: login, dashboard, users, ban, reports, settings, logs
+  ---
+  duration_ms: 328.096255
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000004 → 585345
+# Subtest: account deletion frees phone, leaves groups, keeps history as Deleted Account
+ok 150 - account deletion frees phone, leaves groups, keeps history as Deleted Account
+  ---
+  duration_ms: 27.227663
+  type: 'test'
+  ...
+# Subtest: saved messages (chat with yourself)
+ok 151 - saved messages (chat with yourself)
+  ---
+  duration_ms: 26.791848
+  type: 'test'
+  ...
+# Subtest: markAllDelivered on reconnect
+ok 152 - markAllDelivered on reconnect
+  ---
+  duration_ms: 26.123614
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000001 → 027167
+# [OTP dev mode] +923781000002 → 156519
+# [OTP dev mode] +923781000003 → 506814
+# [OTP dev mode] +923781000004 → 578671
+# Subtest: call links skip calls privacy but not blocks; second call waits, third is busy
+ok 153 - call links skip calls privacy but not blocks; second call waits, third is busy
+  ---
+  duration_ms: 632.554206
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000005 → 656981
+# [OTP dev mode] +923781000005 → 165661
+# Subtest: new login tells the other devices
+ok 154 - new login tells the other devices
+  ---
+  duration_ms: 105.364053
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000006 → 324790
+# [OTP dev mode] +923781000007 → 146263
+# [OTP dev mode] +923781000008 → 648684
+# Subtest: birthday: shown by privacy + exceptions, upcoming list
+ok 155 - birthday: shown by privacy + exceptions, upcoming list
+  ---
+  duration_ms: 53.160284
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000009 → 653866
+# [OTP dev mode] +923781000010 → 788372
+# Subtest: last seen / avatar exceptions: never share with
+ok 156 - last seen / avatar exceptions: never share with
+  ---
+  duration_ms: 38.263773
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000011 → 343918
+# [OTP dev mode] +923781000012 → 920423
+# Subtest: read receipts off: no blue ticks either way in private chats
+ok 157 - read receipts off: no blue ticks either way in private chats
+  ---
+  duration_ms: 64.183908
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000013 → 289481
+# [OTP dev mode] +923781000014 → 029940
+# [OTP dev mode] +923781000015 → 977137
+# Subtest: story reactions go to the chat; highlights keep expired stories on the profile
+ok 158 - story reactions go to the chat; highlights keep expired stories on the profile
+  ---
+  duration_ms: 90.685518
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000016 → 599437
+# [OTP dev mode] +923781000017 → 329005
+# [OTP dev mode] +923781000018 → 451554
+# [OTP dev mode] +923781000019 → 717349
+# Subtest: poll deadline: closes by itself; story mentions; live locations of a chat
+ok 159 - poll deadline: closes by itself; story mentions; live locations of a chat
+  ---
+  duration_ms: 129.368987
+  type: 'test'
+  ...
+# [OTP dev mode] asad1@hushavia.test → 879586
+# [OTP dev mode] bina2@hushavia.test → 592609
+# Subtest: official pack is installed once and everyone has it
+ok 160 - official pack is installed once and everyone has it
+  ---
+  duration_ms: 568.012493
+  type: 'test'
+  ...
+# Subtest: send a sticker; the other person can see it
+ok 161 - send a sticker; the other person can see it
+  ---
+  duration_ms: 24.560159
+  type: 'test'
+  ...
+# Subtest: own pack: create, add sticker (only sticker uploads), share, install, delete
+ok 162 - own pack: create, add sticker (only sticker uploads), share, install, delete
+  ---
+  duration_ms: 32.510335
+  type: 'test'
+  ...
+# Subtest: GIF messages only from Tenor
+ok 163 - GIF messages only from Tenor
+  ---
+  duration_ms: 18.98331
+  type: 'test'
+  ...
+# Subtest: premium sticker pack: everyone sees it, only Plus members send it
+ok 164 - premium sticker pack: everyone sees it, only Plus members send it
+  ---
+  duration_ms: 10.072491
+  type: 'test'
+  ...
+# Subtest: cut keeps emoji whole
+ok 165 - cut keeps emoji whole
+  ---
+  duration_ms: 1.182025
+  type: 'test'
+  ...
+# Subtest: geo: where an IP is, and readable device names
+ok 166 - geo: where an IP is, and readable device names
+  ---
+  duration_ms: 146.142189
+  type: 'test'
+  ...
+1..166
+# tests 166
+# suites 0
+# pass 166
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 55835.349401
