@@ -6,6 +6,9 @@
  * works the same for everyone and GitHub's rate limits never reach the phones.
  */
 
+const fs = require('fs');
+const path = require('path');
+const config = require('../config');
 const settings = require('./settings.service');
 
 const REPO = process.env.APP_RELEASE_REPO || 'itman318/talvio';
@@ -29,7 +32,30 @@ function parseRelease(r) {
   return { build, version: `1.1.${build}`, published_at: r.published_at || r.created_at || null, assets };
 }
 
+/**
+ * Our own server first: CI copies every build to downloadDir with latest.json
+ * { build, published_at, files: { "hushavia.apk": { file, size, sha256 }, ... } }.
+ */
+function fromOwnServer() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(config.downloadDir, 'latest.json'), 'utf8'));
+    const build = parseInt(j.build, 10);
+    if (!build) return null;
+    const assets = {};
+    for (const [name, f] of Object.entries(j.files || {})) {
+      if (f && /^[A-Za-z0-9._-]+\.apk$/.test(f.file || '') && fs.existsSync(path.join(config.downloadDir, f.file))) {
+        assets[name] = { url: `/download/${f.file}`, size: f.size || null, sha256: f.sha256 || null };
+      }
+    }
+    return Object.keys(assets).length ? { build, version: `1.1.${build}`, published_at: j.published_at || null, assets } : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function latest({ fresh = false } = {}) {
+  const own = fromOwnServer();
+  if (own) return own;
   const age = Date.now() - cache.at;
   if (cache.at && age < (fresh ? FRESH_MS : TTL_MS)) return cache.data; // fresh (even "nothing")
   try {
@@ -58,14 +84,14 @@ function olderThan(a, b) {
 }
 
 /** What the phone (build N, CPU type abi) should do. */
-async function check({ build, abi, fresh = false } = {}) {
+async function check({ build, abi, fresh = false, base = '' } = {}) {
   const current = Math.max(0, parseInt(build, 10) || 0);
   const l = await latest({ fresh });
   const notes = String((await settings.get('app_update_notes')) || '');
   const minVersion = await settings.get('min_app_version');
   const force = olderThan(`1.1.${current}`, minVersion);
   if (!l || !current) return { update: false, force, current_build: current };
-  const asset = l.assets[ABI_FILES[abi] || 'hushavia.apk'] || l.assets['hushavia.apk'];
+  const asset = l.assets[ABI_FILES[abi] || 'hushavia.apk']; // never another CPU's APK: it wouldn't install
   if (!asset || l.build <= current) return { update: false, force, current_build: current, latest_build: l.build };
   return {
     update: true,
@@ -73,7 +99,7 @@ async function check({ build, abi, fresh = false } = {}) {
     current_build: current,
     latest_build: l.build,
     version: l.version,
-    url: asset.url,
+    url: asset.url.startsWith('/') ? `${base}${asset.url}` : asset.url, // the phone needs a full address
     size: asset.size,
     sha256: asset.sha256,
     notes,

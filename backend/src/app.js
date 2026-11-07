@@ -42,6 +42,19 @@ function createApp() {
   app.use('/pay', require('./http/routes.pay'));
 
   app.use('/api/admin', adminRoutes.router);
+  // APKs for in-app updates: /download/hushavia-228.apk (a build's file never changes)
+  app.use('/download', express.static(config.downloadDir, {
+    index: false,
+    dotfiles: 'deny',
+    setHeaders: (res, file) => {
+      if (file.endsWith('.apk')) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   app.use('/api', userRoutes.router);
 
   // pages always load fresh (their css / js links carry a ?v= version, so those can be cached)

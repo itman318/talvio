@@ -72,6 +72,8 @@ const config = {
   },
 
   uploadDir: path.resolve(env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads')),
+  // Android APKs for in-app updates (CI copies each build here, with latest.json)
+  downloadDir: path.resolve(env.DOWNLOAD_DIR || path.join(path.dirname(path.resolve(env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads'))), 'downloads')),
   // Hard ceiling for a single upload; the admin "max_upload_mb" setting can only lower it.
   uploadHardLimitMb: 2048,
 

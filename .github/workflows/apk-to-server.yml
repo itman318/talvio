@@ -1,0 +1,75 @@
+# In-app updates: after every Android build, the APKs go to our own server
+# (/var/lib/hushavia/downloads, served at /download/…) with latest.json — phones never need GitHub.
+# Also runnable by hand: Actions → "APK to server" → Run workflow.
+name: APK to server
+
+on:
+  workflow_run:
+    workflows: ['Android APK']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-to-server
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Get the newest APKs (android-latest release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          R="${{ github.repository }}"
+          TITLE=$(gh release view android-latest -R "$R" --json name -q .name)
+          N=$(echo "$TITLE" | grep -oE '#[0-9]+' | tr -d '#')
+          [ -n "$N" ] || { echo "no build number in: $TITLE"; exit 1; }
+          echo "N=$N" >> "$GITHUB_ENV"
+          mkdir dl
+          gh release download android-latest -R "$R" -p hushavia.apk -p hushavia-arm32.apk -D dl
+          mv dl/hushavia.apk "dl/hushavia-$N.apk"
+          mv dl/hushavia-arm32.apk "dl/hushavia-arm32-$N.apk"
+          python3 - "$N" <<'PY'
+          import hashlib, json, os, sys, datetime
+          n = int(sys.argv[1])
+          def info(f):
+              p = os.path.join('dl', f)
+              return {'file': f, 'size': os.path.getsize(p), 'sha256': hashlib.sha256(open(p, 'rb').read()).hexdigest()}
+          data = {
+              'build': n,
+              'published_at': datetime.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
+              'files': {'hushavia.apk': info(f'hushavia-{n}.apk'), 'hushavia-arm32.apk': info(f'hushavia-arm32-{n}.apk')},
+          }
+          json.dump(data, open('dl/latest.json', 'w'), indent=1)
+          print(json.dumps(data, indent=1))
+          PY
+
+      - name: Upload to the server
+        env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          API_BASE: ${{ vars.API_BASE }}
+        run: |
+          set -e
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
+          if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
+          sudo apt-get install -y -qq sshpass >/dev/null
+          O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
+          D=/var/lib/hushavia/downloads
+          sshpass -e ssh $O root@"$HOST" "mkdir -p $D"
+          # the APKs first, latest.json last: phones only hear about a build once its files are there
+          sshpass -e scp $O dl/*.apk root@"$HOST":$D/
+          sshpass -e scp $O dl/latest.json root@"$HOST":$D/latest.json.new
+          sshpass -e ssh $O root@"$HOST" "cd $D && mv latest.json.new latest.json && chmod 755 $D && chmod 644 * \
+            && chown -R hushavia:hushavia $D 2>/dev/null; \
+            ls -1t hushavia-[0-9]*.apk | tail -n +4 | xargs -r rm -f; ls -1t hushavia-arm32-*.apk | tail -n +4 | xargs -r rm -f; ls -la"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://$HOST/download/hushavia-$N.apk" -r 0-99 || true)
+          echo "download check: HTTP $code"
+          echo "update check: $(curl -s "http://$HOST/api/app/update?build=1&abi=arm64-v8a" | head -c 300)"

@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgres://chat:chat@127.0.0.1:5432/chatapp_test';
+process.env.DOWNLOAD_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'hushavia-dl-'));
 
 const db = require('../src/db');
 const settings = require('../src/services/settings.service');
@@ -56,4 +57,25 @@ test('admin minimum version forces the update', async () => {
   await settings.update({ min_app_version: '1.1.41' }, null);
   assert.equal((await updates.check({ build: '40', abi: 'arm64-v8a' })).force, true);
   assert.equal((await updates.check({ build: '41', abi: 'arm64-v8a' })).force, false);
+});
+
+test('own server first: latest.json + the APK in the downloads folder, full address for the phone', async () => {
+  const dir = process.env.DOWNLOAD_DIR;
+  fs.writeFileSync(path.join(dir, 'hushavia-230.apk'), 'apk');
+  fs.writeFileSync(path.join(dir, 'latest.json'), JSON.stringify({
+    build: 230,
+    files: {
+      'hushavia.apk': { file: 'hushavia-230.apk', size: 3, sha256: 'ff' },
+      'hushavia-arm32.apk': { file: 'hushavia-arm32-230.apk', size: 3 }, // file missing → not offered
+    },
+  }));
+  updates._setRelease(release); // GitHub says 42 — our own file wins
+  const r = await updates.check({ build: '228', abi: 'arm64-v8a', base: 'http://37.27.154.66' });
+  assert.equal(r.update, true);
+  assert.equal(r.version, '1.1.230');
+  assert.equal(r.url, 'http://37.27.154.66/download/hushavia-230.apk');
+  assert.equal(r.sha256, 'ff');
+  const arm32 = await updates.check({ build: '228', abi: 'armeabi-v7a', base: 'http://x' });
+  assert.equal(arm32.update, false, 'a 32-bit phone is never offered the 64-bit APK');
+  fs.unlinkSync(path.join(dir, 'latest.json'));
 });

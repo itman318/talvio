@@ -42,7 +42,7 @@ router.get('/app-config', h(async (req, res) => res.json(await settings.publicCo
 // in-app updates: ?build=<the app's build number>&abi=<CPU type>
 router.get('/app/update', h(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json(await require('../services/appupdate.service').check({ build: req.query.build, abi: String(req.query.abi || ''), fresh: req.query.fresh === '1' }));
+  res.json(await require('../services/appupdate.service').check({ build: req.query.build, abi: String(req.query.abi || ''), fresh: req.query.fresh === '1', base: `${req.protocol}://${req.get('host')}` }));
 }));
 router.get('/pages/:slug', h(async (req, res) => res.json(await contentService.get(req.params.slug))));
 
