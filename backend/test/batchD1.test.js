@@ -209,6 +209,7 @@ test('webhook delivery with secret header; getUpdates refused while a webhook is
     });
   });
   await new Promise((r) => server.listen(0, r));
+  try {
   const url = `http://127.0.0.1:${server.address().port}/hook`;
   await bots.callMethod(token, 'updates', { offset: 1e12 });
   await bots.callMethod(token, 'webhook.set', { url, secret_token: 'shh_123' });
@@ -219,9 +220,17 @@ test('webhook delivery with secret header; getUpdates refused while a webhook is
   assert.equal(received[0].secret, 'shh_123');
   assert.equal(received[0].body.message.text, 'via webhook');
   assert.ok(received[0].body.update_id > 0);
-  assert.equal((await bots.callMethod(token, 'webhook.info')).pending_update_count, 0);
-  server.close();
-  await bots.callMethod(token, 'webhook.delete', { drop_pending_updates: true });
+  // the delivery is marked done right after the bot server answers: wait for it
+  let pending = 1;
+  for (let i = 0; i < 40 && pending; i++) {
+    pending = (await bots.callMethod(token, 'webhook.info')).pending_update_count;
+    if (pending) await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.equal(pending, 0);
+  } finally {
+    server.close(); // a failed check must never leave the test process hanging
+    await bots.callMethod(token, 'webhook.delete', { drop_pending_updates: true });
+  }
 });
 
 test('mini app init data is signed so the bot server can verify it; web_app_data reaches the bot', async () => {

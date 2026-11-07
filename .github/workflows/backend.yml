@@ -51,7 +51,7 @@ jobs:
           mkdir -p ../ci-backend
           psql -h localhost -U chat -d chatapp -c 'CREATE DATABASE chatapp_test' >/dev/null
           set -o pipefail
-          TEST_DATABASE_URL=postgres://chat:chat@localhost:5432/chatapp_test npm test > ../ci-backend/unit-full.txt 2>&1; rc=$?
+          TEST_DATABASE_URL=postgres://chat:chat@localhost:5432/chatapp_test timeout 900 npm test > ../ci-backend/unit-full.txt 2>&1; rc=$?
           tail -150 ../ci-backend/unit-full.txt > ../ci-backend/unit.txt
           # every failing test with its error, so it can be read without the full log
           grep -n -A40 '^not ok' ../ci-backend/unit-full.txt > ../ci-backend/unit-failures.txt || true

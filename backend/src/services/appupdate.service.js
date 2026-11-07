@@ -29,7 +29,7 @@ function parseRelease(r) {
 }
 
 async function latest() {
-  if (cache.data && Date.now() - cache.at < TTL_MS) return cache.data;
+  if (cache.at && Date.now() - cache.at < TTL_MS) return cache.data; // fresh (even "nothing")
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${TAG}`, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'hushavia-server' },
