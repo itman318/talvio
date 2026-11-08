@@ -129,6 +129,36 @@ jobs:
           mkdir -p ../ci-report/mascot
           MASCOT_OUT=$PWD/../ci-report/mascot flutter test test/mascot_preview_test.dart 2>&1 | tail -40 | tee ../ci-report/mascot.txt
 
+      # Maven Central mirrors go FIRST: when Central (or the GitHub downloads behind some of its files)
+      # answers 504, the build takes the same files from Google's / Aliyun's copy instead.
+      - name: Maven mirrors
+        if: steps.analyze.outcome == 'success' && !inputs.analyze_only
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/mirrors.gradle <<'GRADLE'
+          def mirrors = [
+            'https://maven-central.storage-download.googleapis.com/maven2/',
+            'https://maven.aliyun.com/repository/central',
+          ]
+          def putFirst = { repos ->
+            mirrors.reverse().eachWithIndex { u, i ->
+              def r = repos.maven { url = u; name = "centralMirror${i}" }
+              repos.remove(r)
+              repos.addFirst(r)
+            }
+          }
+          settingsEvaluated { s ->
+            putFirst(s.pluginManagement.repositories)
+            putFirst(s.dependencyResolutionManagement.repositories)
+          }
+          allprojects {
+            putFirst(buildscript.repositories)
+            putFirst(repositories)
+          }
+          GRADLE
+          sed -i 's/^          //' ~/.gradle/init.d/mirrors.gradle
+          cat ~/.gradle/init.d/mirrors.gradle
+
       - name: Get Gradle (several mirrors, retries)
         if: steps.analyze.outcome == 'success' && !inputs.analyze_only
         working-directory: mobile/android
