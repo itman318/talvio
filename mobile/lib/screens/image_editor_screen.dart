@@ -172,7 +172,10 @@ class _Snapshot {
 }
 
 class _ImageEditorScreenState extends State<ImageEditorScreen> {
-  ui.Image? _image;
+  ui.Image? _image; // full size (≤ 2560 px) — used only when saving
+  ui.Image? _view; // screen size (≤ 1280 px): what the editor draws, so dragging stays smooth
+  ui.Image? _thumb; // ≈160 px for the filter previews
+  int _rev = 0; // bumps when drawings/texts change (repaint only then)
   _Tool _tool = _Tool.none;
   final List<_Stroke> _strokes = [];
   final List<_TextItem> _texts = [];
@@ -201,6 +204,13 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     _load();
   }
 
+  /// Drawings/texts may have changed → the overlay repaints (not while only the crop box moves).
+  @override
+  void setState(VoidCallback fn) {
+    if (_tool != _Tool.crop) _rev++;
+    super.setState(fn);
+  }
+
   Future<void> _load() async {
     final bytes = await File(widget.path).readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
@@ -215,7 +225,29 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             Paint()..filterQuality = FilterQuality.high);
       });
     }
-    if (mounted) setState(() => _image = frame);
+    await _setImage(frame);
+  }
+
+  /// Keeps the full picture for saving and makes the light copies the editor draws.
+  Future<void> _setImage(ui.Image full) async {
+    Future<ui.Image> shrink(int maxSide) async {
+      final long = math.max(full.width, full.height);
+      if (long <= maxSide) return full;
+      final s = maxSide / long;
+      return _redraw((full.width * s).round(), (full.height * s).round(), (c, w, h) {
+        c.drawImageRect(full, Rect.fromLTWH(0, 0, full.width.toDouble(), full.height.toDouble()), Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+            Paint()..filterQuality = FilterQuality.medium);
+      });
+    }
+
+    final view = await shrink(1280);
+    final thumb = await shrink(160);
+    if (!mounted) return;
+    setState(() {
+      _image = full;
+      _view = view;
+      _thumb = thumb;
+    });
   }
 
   Future<ui.Image> _redraw(int w, int h, void Function(Canvas c, int w, int h) paint) {
@@ -276,10 +308,9 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     }
     _undo.clear();
     _redo.clear();
-    setState(() {
-      _image = rotated;
-      _changed = true;
-    });
+    _changed = true;
+    _rev++;
+    await _setImage(rotated);
   }
 
   /// Mirror left ↔ right.
@@ -302,10 +333,9 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       t.angle = -t.angle;
     }
     _crop = Rect.fromLTRB(1 - _crop.right, _crop.top, 1 - _crop.left, _crop.bottom);
-    setState(() {
-      _image = flipped;
-      _changed = true;
-    });
+    _changed = true;
+    _rev++;
+    await _setImage(flipped);
   }
 
   double? _ratioFor(String a) {
@@ -512,7 +542,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   // ------------------------------------------------------------------ UI
   @override
   Widget build(BuildContext context) {
-    final image = _image;
+    final image = _view;
     return PopScope(
       canPop: !_dirty,
       onPopInvokedWithResult: (didPop, _) async {
@@ -574,7 +604,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             ? const Center(child: CircularProgressIndicator())
             : Column(children: [
                 Expanded(child: LayoutBuilder(builder: (ctx, box) => _canvas(image, box))),
-                AnimatedSize(duration: const Duration(milliseconds: 180), curve: Curves.easeOut, child: _panel(image)),
+                AnimatedSize(duration: const Duration(milliseconds: 180), curve: Curves.easeOut, child: _panel(_thumb ?? image)),
                 _toolBar(),
               ]),
       ),
@@ -663,13 +693,18 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           onScaleEnd: (_) => _grab = null,
           child: Stack(clipBehavior: Clip.none, children: [
             Positioned.fill(
-              child: ColorFiltered(
-                colorFilter: ColorFilter.matrix(look.matrix()),
-                child: RawImage(image: image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
+              child: RepaintBoundary(
+                child: Stack(fit: StackFit.expand, children: [
+                  ColorFiltered(
+                    colorFilter: ColorFilter.matrix(look.matrix()),
+                    child: RawImage(image: image, fit: BoxFit.fill, filterQuality: FilterQuality.low),
+                  ),
+                  if (look.vignette > 0) IgnorePointer(child: CustomPaint(painter: _VignettePainter(look.vignette))),
+                ]),
               ),
             ),
-            if (look.vignette > 0) Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _VignettePainter(look.vignette)))),
-            if (!_showOriginal) Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _OverlayPainter(_strokes, _texts)))),
+            if (!_showOriginal)
+              Positioned.fill(child: RepaintBoundary(child: IgnorePointer(child: CustomPaint(painter: _OverlayPainter(_strokes, _texts, _rev))))),
             if (_tool == _Tool.crop)
               Positioned.fill(child: _CropOverlay(rect: _crop, size: size, lock: _lock, onChanged: (r) => setState(() => _crop = r)))
             else if (_crop != const Rect.fromLTRB(0, 0, 1, 1))
@@ -1068,9 +1103,10 @@ class _VignettePainter extends CustomPainter {
 }
 
 class _OverlayPainter extends CustomPainter {
-  _OverlayPainter(this.strokes, this.texts);
+  _OverlayPainter(this.strokes, this.texts, [this.rev = 0]);
   final List<_Stroke> strokes;
   final List<_TextItem> texts;
+  final int rev;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1140,7 +1176,7 @@ class _OverlayPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _OverlayPainter old) => old.rev != rev || old.strokes.length != strokes.length || old.texts.length != texts.length;
 }
 
 /// Darkens everything outside the crop rectangle.

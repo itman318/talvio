@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
+import 'package:image/image.dart' as img;
 import '../theme/brand.dart';
 import '../theme/chat_theme.dart';
 import 'package:open_filex/open_filex.dart';
@@ -41,6 +42,26 @@ Future<bool> autoFetchMedia(BuildContext context, Message m, String kind) async 
     return true;
   } catch (_) {
     return false;
+  }
+}
+
+/// The inline thumb (≈40 px) blurred ONCE and kept: drawing it costs nothing per frame
+/// (a live blur filter on every photo made chats slow to open and scroll).
+final Map<int, Uint8List> _blurredThumbs = {};
+
+Uint8List? blurredThumb(MediaInfo m) {
+  final hit = _blurredThumbs[m.id];
+  if (hit != null) return hit;
+  final raw = m.thumbBytes;
+  if (raw == null) return null;
+  try {
+    final src = img.decodeImage(raw);
+    if (src == null) return raw;
+    final out = Uint8List.fromList(img.encodePng(img.gaussianBlur(src, radius: 2), level: 1));
+    if (_blurredThumbs.length > 400) _blurredThumbs.remove(_blurredThumbs.keys.first);
+    return _blurredThumbs[m.id] = out;
+  } catch (_) {
+    return raw;
   }
 }
 
@@ -155,21 +176,16 @@ class _MessageImageState extends State<MessageImage> {
     final ratio = (m.width != null && m.height != null && m.height! > 0) ? m.width! / m.height! : 4 / 3;
     final w = widget.maxWidth;
     final h = (w / ratio).clamp(120.0, 360.0);
-    final thumb = m.thumbBytes;
+    final thumb = _shown == null ? blurredThumb(m) : null;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     return SizedBox(
       width: w,
       height: h,
       child: Stack(fit: StackFit.expand, children: [
-        // 1) instant: the blurred inline thumb (or a soft placeholder)
+        // 1) instant: the blurred inline thumb (or a soft placeholder) — gone once the photo is there
         if (thumb != null)
-          ClipRect(
-            child: ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8, tileMode: TileMode.clamp),
-              child: Image.memory(thumb, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.low),
-            ),
-          )
-        else
+          Image.memory(thumb, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium)
+        else if (_shown == null)
           const ColoredBox(color: Color(0x1F000000)),
         // 2) the real picture fades in over it; decode only the pixels the bubble shows
         if (_shown != null)
@@ -358,7 +374,7 @@ class _MessageVideoState extends State<MessageVideo> {
     final ratio = (m.width != null && m.height != null && m.height! > 0) ? m.width! / m.height! : 16 / 9;
     const w = 240.0;
     final h = (w / ratio).clamp(135.0, 320.0);
-    final thumb = m.thumbBytes;
+    final thumb = blurredThumb(m);
     return InkWell(
       onTap: message.isLocal ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VideoScreen(message: message))),
       child: ClipRRect(
@@ -368,11 +384,7 @@ class _MessageVideoState extends State<MessageVideo> {
           height: h,
           child: Stack(fit: StackFit.expand, children: [
             const ColoredBox(color: Colors.black87),
-            if (thumb != null)
-              ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8, tileMode: TileMode.clamp),
-                child: Image.memory(thumb, fit: BoxFit.cover, gaplessPlayback: true),
-              ),
+            if (thumb != null && _poster == null) Image.memory(thumb, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.medium),
             if (_poster != null)
               Image.file(
                 _poster!,
@@ -504,7 +516,7 @@ class _VideoScreenState extends State<VideoScreen> {
   @override
   Widget build(BuildContext context) {
     final c = _c;
-    final thumb = widget.message.media?.thumbBytes;
+    final thumb = widget.message.media == null ? null : blurredThumb(widget.message.media!);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, actions: [
@@ -522,11 +534,7 @@ class _VideoScreenState extends State<VideoScreen> {
             ? Text(_error!, style: const TextStyle(color: Colors.white))
             : c == null
                 ? Stack(alignment: Alignment.center, children: [
-                    if (thumb != null)
-                      ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Image.memory(thumb, fit: BoxFit.contain, width: double.infinity),
-                      ),
+                    if (thumb != null) Image.memory(thumb, fit: BoxFit.contain, width: double.infinity, filterQuality: FilterQuality.medium),
                     const CircularProgressIndicator(color: Colors.white),
                   ])
                 : GestureDetector(
