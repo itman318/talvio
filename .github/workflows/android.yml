@@ -140,7 +140,13 @@ jobs:
             'https://maven-central.storage-download.googleapis.com/maven2/',
             'https://maven.aliyun.com/repository/central',
           ]
-          def putFirst = { repos ->
+          def putFirst = { repos, plugins ->
+            // an empty plugin list means "Gradle's defaults": keep them when we add ours
+            if (plugins && repos.isEmpty()) {
+              repos.gradlePluginPortal()
+              repos.google()
+              repos.mavenCentral()
+            }
             mirrors.reverse().eachWithIndex { u, i ->
               def r = repos.maven { url = u; name = "centralMirror${i}" }
               repos.remove(r)
@@ -148,8 +154,8 @@ jobs:
             }
           }
           settingsEvaluated { s ->
-            putFirst(s.pluginManagement.repositories)
-            putFirst(s.dependencyResolutionManagement.repositories)
+            putFirst(s.pluginManagement.repositories, true)
+            if (!s.dependencyResolutionManagement.repositories.isEmpty()) putFirst(s.dependencyResolutionManagement.repositories, false)
           }
           GRADLE
           sed -i 's/^          //' ~/.gradle/init.d/mirrors.gradle
