@@ -47,6 +47,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   final List<_Stroke> _strokes = [];
   final List<_TextItem> _texts = [];
   Rect _crop = const Rect.fromLTRB(0, 0, 1, 1); // normalised
+  String _aspect = 'free'; // free | original | 1:1 | 4:3 | 3:4 | 16:9 | 9:16
   Color _color = const Color(0xFFE53935);
   double _brush = 0.012;
   bool _changed = false;
@@ -106,6 +107,76 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       _changed = true;
     });
   }
+
+  /// Mirror left ↔ right.
+  Future<void> _flip() async {
+    final src = _image;
+    if (src == null) return;
+    final flipped = await _redraw(src, src.width, src.height, (c, w, h) {
+      c.translate(w.toDouble(), 0);
+      c.scale(-1, 1);
+      c.drawImage(src, Offset.zero, Paint());
+    });
+    Offset m(Offset p) => Offset(1 - p.dx, p.dy);
+    for (final st in _strokes) {
+      for (var i = 0; i < st.points.length; i++) {
+        st.points[i] = m(st.points[i]);
+      }
+    }
+    for (final t in _texts) {
+      t.pos = m(t.pos);
+    }
+    _crop = Rect.fromLTRB(1 - _crop.right, _crop.top, 1 - _crop.left, _crop.bottom);
+    setState(() {
+      _image = flipped;
+      _changed = true;
+    });
+  }
+
+  /// Width/height of the crop box in pixels for an aspect choice (null = free).
+  double? _ratioFor(String a) {
+    final im = _image;
+    if (im == null) return null;
+    return switch (a) {
+      'original' => im.width / im.height,
+      '1:1' => 1,
+      '4:3' => 4 / 3,
+      '3:4' => 3 / 4,
+      '16:9' => 16 / 9,
+      '9:16' => 9 / 16,
+      _ => null,
+    };
+  }
+
+  /// The same ratio in normalised (0..1) crop space.
+  double? get _lock {
+    final r = _ratioFor(_aspect);
+    final im = _image;
+    if (r == null || im == null) return null;
+    return r * im.height / im.width;
+  }
+
+  void _setAspect(String a) {
+    setState(() {
+      _aspect = a;
+      final n = _lock;
+      if (n == null) return;
+      // the biggest box of that shape, centred on the current crop
+      final c = _crop.center;
+      var w = 1.0, h = w / n;
+      if (h > 1) {
+        h = 1;
+        w = h * n;
+      }
+      var l = (c.dx - w / 2).clamp(0.0, 1 - w), t = (c.dy - h / 2).clamp(0.0, 1 - h);
+      _crop = Rect.fromLTWH(l, t, w, h);
+    });
+  }
+
+  void _resetCrop() => setState(() {
+        _crop = const Rect.fromLTRB(0, 0, 1, 1);
+        _aspect = 'free';
+      });
 
   Future<void> _addText() async {
     final ctrl = TextEditingController();
@@ -214,6 +285,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           : Column(children: [
               Expanded(child: LayoutBuilder(builder: (ctx, box) => _canvas(image, box))),
               if (_tool == _Tool.draw || _tool == _Tool.text) _colorBar(),
+              if (_tool == _Tool.crop) _cropBar(),
               _toolBar(),
             ]),
     );
@@ -221,10 +293,12 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
 
   Widget _canvas(ui.Image image, BoxConstraints box) {
     final ratio = image.width / image.height;
-    var w = box.maxWidth - 24;
+    // room around the picture so crop handles are easy to grab (and away from the phone's back-swipe edge)
+    final pad = _tool == _Tool.crop ? 64.0 : 24.0;
+    var w = box.maxWidth - pad;
     var h = w / ratio;
-    if (h > box.maxHeight - 24) {
-      h = box.maxHeight - 24;
+    if (h > box.maxHeight - pad) {
+      h = box.maxHeight - pad;
       w = h * ratio;
     }
     final size = Size(w, h);
@@ -264,12 +338,43 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           child: Stack(children: [
             Positioned.fill(child: RawImage(image: image, fit: BoxFit.fill)),
             Positioned.fill(child: CustomPaint(painter: _OverlayPainter(_strokes, _texts))),
-            if (_tool == _Tool.crop) Positioned.fill(child: _CropOverlay(rect: _crop, size: size, onChanged: (r) => setState(() => _crop = r)))
+            if (_tool == _Tool.crop) Positioned.fill(child: _CropOverlay(rect: _crop, size: size, lock: _lock, onChanged: (r) => setState(() => _crop = r)))
             else if (_crop != const Rect.fromLTRB(0, 0, 1, 1)) Positioned.fill(child: CustomPaint(painter: _ShadePainter(_crop))),
           ]),
         ),
       ),
     );
+  }
+
+  Widget _cropBar() {
+    const opts = [('free', 'Free'), ('original', 'Original'), ('1:1', 'Square'), ('4:3', '4:3'), ('3:4', '3:4'), ('16:9', '16:9'), ('9:16', '9:16')];
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        IconButton(tooltip: 'Rotate', onPressed: _rotate, icon: const Icon(Icons.rotate_90_degrees_cw_outlined, color: Colors.white)),
+        IconButton(tooltip: 'Mirror', onPressed: _flip, icon: const Icon(Icons.flip, color: Colors.white)),
+        TextButton(onPressed: _resetCrop, child: const Text('Reset', style: TextStyle(color: Colors.white70))),
+      ]),
+      SizedBox(
+        height: 44,
+        child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), children: [
+          for (final o in opts)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ChoiceChip(
+                label: Text(o.$2),
+                selected: _aspect == o.$1,
+                onSelected: (_) => _setAspect(o.$1),
+                labelStyle: TextStyle(color: _aspect == o.$1 ? Colors.white : Colors.white70, fontWeight: FontWeight.w600),
+                selectedColor: Brand.primary,
+                backgroundColor: Colors.white12,
+                side: BorderSide.none,
+                showCheckmark: false,
+              ),
+            ),
+        ]),
+      ),
+      const SizedBox(height: 4),
+    ]);
   }
 
   Widget _colorBar() {
@@ -314,7 +419,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     return SafeArea(
       top: false,
       child: Row(children: [
-        b(Icons.crop, 'Crop', () => setState(() => _tool = _tool == _Tool.crop ? _Tool.none : _Tool.crop), active: _tool == _Tool.crop),
+        b(Icons.crop, _tool == _Tool.crop ? 'Done' : 'Crop', () => setState(() => _tool = _tool == _Tool.crop ? _Tool.none : _Tool.crop), active: _tool == _Tool.crop),
         b(Icons.rotate_90_degrees_cw_outlined, 'Rotate', _rotate),
         b(Icons.brush_outlined, 'Draw', () => setState(() => _tool = _tool == _Tool.draw ? _Tool.none : _Tool.draw), active: _tool == _Tool.draw),
         b(Icons.text_fields, 'Text', _addText, active: _tool == _Tool.text),
@@ -393,47 +498,131 @@ class _ShadePainter extends CustomPainter {
   bool shouldRepaint(covariant _ShadePainter old) => old.crop != crop;
 }
 
-/// Crop rectangle with four corner handles (drag the middle to move it).
+/// Crop box like Telegram: drag any corner or edge (big touch areas), drag inside to move,
+/// rule-of-thirds grid while cropping, optional fixed shape ([lock] = width/height in 0..1 space).
 class _CropOverlay extends StatelessWidget {
-  const _CropOverlay({required this.rect, required this.size, required this.onChanged});
+  const _CropOverlay({required this.rect, required this.size, required this.onChanged, this.lock});
   final Rect rect;
   final Size size;
+  final double? lock;
   final ValueChanged<Rect> onChanged;
 
-  static const _min = 0.1;
+  static const _minPx = 48.0;
+
+  Rect _drag(Offset d, {bool l = false, bool t = false, bool r = false, bool b = false}) {
+    final minW = _minPx / size.width, minH = _minPx / size.height;
+    var left = rect.left, top = rect.top, right = rect.right, bottom = rect.bottom;
+    if (l) left = (left + d.dx).clamp(0.0, right - minW);
+    if (r) right = (right + d.dx).clamp(left + minW, 1.0);
+    if (t) top = (top + d.dy).clamp(0.0, bottom - minH);
+    if (b) bottom = (bottom + d.dy).clamp(top + minH, 1.0);
+    final n = lock;
+    if (n == null) return Rect.fromLTRB(left, top, right, bottom);
+    // fixed shape: follow the bigger movement, keep the opposite side (or the centre for edges) in place
+    var w = right - left, h = bottom - top;
+    final horizontal = (l || r) && (!(t || b) || d.dx.abs() * size.width >= d.dy.abs() * size.height);
+    if (horizontal) {
+      h = w / n;
+    } else {
+      w = h * n;
+    }
+    // shrink to fit the picture
+    double ax = l ? rect.right : (r ? rect.left : rect.center.dx);
+    double ay = t ? rect.bottom : (b ? rect.top : rect.center.dy);
+    double maxW = l ? ax : (r ? 1 - ax : 2 * math.min(ax, 1 - ax));
+    double maxH = t ? ay : (b ? 1 - ay : 2 * math.min(ay, 1 - ay));
+    if (w > maxW) {
+      w = maxW;
+      h = w / n;
+    }
+    if (h > maxH) {
+      h = maxH;
+      w = h * n;
+    }
+    final nl = l ? ax - w : (r ? ax : ax - w / 2);
+    final nt = t ? ay - h : (b ? ay : ay - h / 2);
+    return Rect.fromLTWH(nl, nt, w, h);
+  }
 
   @override
   Widget build(BuildContext context) {
     final r = Rect.fromLTRB(rect.left * size.width, rect.top * size.height, rect.right * size.width, rect.bottom * size.height);
-    Widget handle(Alignment a, void Function(Offset delta) move) => Positioned(
-          left: (a.x < 0 ? r.left : r.right) - 18,
-          top: (a.y < 0 ? r.top : r.bottom) - 18,
+    Offset norm(Offset d) => Offset(d.dx / size.width, d.dy / size.height);
+    const hit = 44.0;
+    Widget zone(Rect area, {bool l = false, bool t = false, bool rr = false, bool b = false}) => Positioned.fromRect(
+          rect: area,
           child: GestureDetector(
-            onPanUpdate: (d) => move(Offset(d.delta.dx / size.width, d.delta.dy / size.height)),
-            child: Container(width: 36, height: 36, alignment: Alignment.center, child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))),
+            behavior: HitTestBehavior.translucent,
+            onPanUpdate: (d) => onChanged(_drag(norm(d.delta), l: l, t: t, r: rr, b: b)),
           ),
         );
-    double cl(double v) => v.clamp(0.0, 1.0);
-    return Stack(children: [
+    return Stack(clipBehavior: Clip.none, children: [
       Positioned.fill(child: CustomPaint(painter: _ShadePainter(rect))),
+      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _CropFramePainter(r)))),
+      // move: drag inside (kept inside the picture instead of stopping at the edge)
       Positioned.fromRect(
-        rect: r,
+        rect: r.deflate(hit / 2),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onPanUpdate: (d) {
-            final dx = d.delta.dx / size.width;
-            final dy = d.delta.dy / size.height;
-            final moved = rect.shift(Offset(dx, dy));
-            if (moved.left >= 0 && moved.top >= 0 && moved.right <= 1 && moved.bottom <= 1) onChanged(moved);
+            final dd = norm(d.delta);
+            final dx = dd.dx.clamp(-rect.left, 1 - rect.right);
+            final dy = dd.dy.clamp(-rect.top, 1 - rect.bottom);
+            onChanged(rect.shift(Offset(dx, dy)));
           },
         ),
       ),
-      handle(Alignment.topLeft, (d) => onChanged(Rect.fromLTRB(cl(math.min(rect.left + d.dx, rect.right - _min)), cl(math.min(rect.top + d.dy, rect.bottom - _min)), rect.right, rect.bottom))),
-      handle(Alignment.topRight, (d) => onChanged(Rect.fromLTRB(rect.left, cl(math.min(rect.top + d.dy, rect.bottom - _min)), cl(math.max(rect.right + d.dx, rect.left + _min)), rect.bottom))),
-      handle(Alignment.bottomLeft, (d) => onChanged(Rect.fromLTRB(cl(math.min(rect.left + d.dx, rect.right - _min)), rect.top, rect.right, cl(math.max(rect.bottom + d.dy, rect.top + _min))))),
-      handle(Alignment.bottomRight, (d) => onChanged(Rect.fromLTRB(rect.left, rect.top, cl(math.max(rect.right + d.dx, rect.left + _min)), cl(math.max(rect.bottom + d.dy, rect.top + _min))))),
+      // edges
+      zone(Rect.fromLTRB(r.left + hit / 2, r.top - hit / 2, r.right - hit / 2, r.top + hit / 2), t: true),
+      zone(Rect.fromLTRB(r.left + hit / 2, r.bottom - hit / 2, r.right - hit / 2, r.bottom + hit / 2), b: true),
+      zone(Rect.fromLTRB(r.left - hit / 2, r.top + hit / 2, r.left + hit / 2, r.bottom - hit / 2), l: true),
+      zone(Rect.fromLTRB(r.right - hit / 2, r.top + hit / 2, r.right + hit / 2, r.bottom - hit / 2), rr: true),
+      // corners (on top: they win where they overlap the edges)
+      zone(Rect.fromCenter(center: r.topLeft, width: hit * 1.4, height: hit * 1.4), l: true, t: true),
+      zone(Rect.fromCenter(center: r.topRight, width: hit * 1.4, height: hit * 1.4), rr: true, t: true),
+      zone(Rect.fromCenter(center: r.bottomLeft, width: hit * 1.4, height: hit * 1.4), l: true, b: true),
+      zone(Rect.fromCenter(center: r.bottomRight, width: hit * 1.4, height: hit * 1.4), rr: true, b: true),
     ]);
   }
+}
+
+/// White frame, thick corner brackets, edge ticks and a rule-of-thirds grid.
+class _CropFramePainter extends CustomPainter {
+  _CropFramePainter(this.r);
+  final Rect r;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grid = Paint()
+      ..color = Colors.white.withAlpha(110)
+      ..strokeWidth = 1;
+    for (var i = 1; i < 3; i++) {
+      final x = r.left + r.width * i / 3, y = r.top + r.height * i / 3;
+      canvas.drawLine(Offset(x, r.top), Offset(x, r.bottom), grid);
+      canvas.drawLine(Offset(r.left, y), Offset(r.right, y), grid);
+    }
+    canvas.drawRect(r, Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5);
+    final thick = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    final c = math.min(22.0, math.min(r.width, r.height) / 3);
+    for (final (p, dx, dy) in [(r.topLeft, 1.0, 1.0), (r.topRight, -1.0, 1.0), (r.bottomLeft, 1.0, -1.0), (r.bottomRight, -1.0, -1.0)]) {
+      canvas.drawLine(p, p + Offset(c * dx, 0), thick);
+      canvas.drawLine(p, p + Offset(0, c * dy), thick);
+    }
+    final t = math.min(16.0, math.min(r.width, r.height) / 4);
+    canvas.drawLine(Offset(r.center.dx - t, r.top), Offset(r.center.dx + t, r.top), thick);
+    canvas.drawLine(Offset(r.center.dx - t, r.bottom), Offset(r.center.dx + t, r.bottom), thick);
+    canvas.drawLine(Offset(r.left, r.center.dy - t), Offset(r.left, r.center.dy + t), thick);
+    canvas.drawLine(Offset(r.right, r.center.dy - t), Offset(r.right, r.center.dy + t), thick);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CropFramePainter old) => old.r != r;
 }
 
 class _RawImage {
