@@ -162,7 +162,15 @@ jobs:
           # one small APK per phone type (like Telegram): 64-bit phones (almost all) get hushavia.apk,
           # older 32-bit Android gets hushavia-arm32.apk, the x86_64 one is only for the emulator.
           # debug symbols are kept out of the app (smaller download).
-          { flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 --split-debug-info=build/symbols $DEFINES &&
+          # GitHub/Maven downloads sometimes answer 504: try the build up to 3 times (downloads already done are cached)
+          build_apk() {
+            for i in 1 2 3; do
+              flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 --split-debug-info=build/symbols $DEFINES && return 0
+              echo "build try $i failed — retrying in $((i * 45)) s"; sleep $((i * 45))
+            done
+            return 1
+          }
+          { build_apk &&
             { [ "$SIGNED" != release ] || flutter build appbundle --release --split-debug-info=build/symbols $DEFINES; }; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
       - name: Save report to ci-logs branch
