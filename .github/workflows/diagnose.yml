@@ -45,6 +45,8 @@ jobs:
           [ -n "$V" ] && echo "newest video probe: $(ffprobe -v error -show_entries format=format_name,duration -of csv=p=0 "/var/lib/hushavia/uploads/$V" 2>&1 | head -c 200)"
           grep -n "uploadDir\|UPLOAD_DIR" /opt/hushavia/app/.env 2>/dev/null | sed 's/=.*/=…/' | head -2
           echo "app update: $(curl -s 'http://127.0.0.1:4000/api/app/update?build=1&abi=arm64-v8a' | head -c 300)"
+          echo "--- recent upload / sticker requests (status, size)"
+          grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
           echo "--- recent server errors"
           journalctl -u hushavia --since "-3d" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT|unhandled|TypeError" | grep -v OTP_DEV_MODE | tail -40 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
           echo "--- classic bot api (fake token → expect 401 JSON)"
