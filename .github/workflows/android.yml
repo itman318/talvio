@@ -151,10 +151,6 @@ jobs:
             putFirst(s.pluginManagement.repositories)
             putFirst(s.dependencyResolutionManagement.repositories)
           }
-          allprojects {
-            putFirst(buildscript.repositories)
-            putFirst(repositories)
-          }
           GRADLE
           sed -i 's/^          //' ~/.gradle/init.d/mirrors.gradle
           cat ~/.gradle/init.d/mirrors.gradle
