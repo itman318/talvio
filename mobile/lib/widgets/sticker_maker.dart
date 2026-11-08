@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,10 @@ class StickerMakerScreen extends StatefulWidget {
   State<StickerMakerScreen> createState() => _StickerMakerScreenState();
 }
 
+class _Unreadable implements Exception {
+  const _Unreadable();
+}
+
 class _StickerMakerScreenState extends State<StickerMakerScreen> {
   static const _emojis = ['😀', '😂', '😍', '😎', '🤔', '😢', '😡', '👍', '🙏', '🎉', '❤️', '🔥', '👋', '😴', '☕', '🌙', '🥳', '😮'];
 
@@ -51,20 +56,48 @@ class _StickerMakerScreenState extends State<StickerMakerScreen> {
   Future<void> _prepare() async {
     try {
       final bytes = await File(widget.path).readAsBytes();
-      _photo = await Isolate.run(() {
-        final src = img.decodeImage(bytes);
-        if (src == null) throw Exception('This picture could not be read');
-        final oriented = img.bakeOrientation(src);
-        final scale = 768 / math.max(oriented.width, oriented.height);
-        final small = scale < 1 ? img.copyResize(oriented, width: (oriented.width * scale).round(), height: (oriented.height * scale).round()) : oriented;
-        return Uint8List.fromList(img.encodePng(small, level: 1));
-      });
+      Uint8List? photo;
+      try {
+        photo = await Isolate.run(() {
+          final src = img.decodeImage(bytes);
+          if (src == null) return null;
+          final oriented = img.bakeOrientation(src);
+          final scale = 768 / math.max(oriented.width, oriented.height);
+          final small = scale < 1 ? img.copyResize(oriented, width: (oriented.width * scale).round(), height: (oriented.height * scale).round()) : oriented;
+          return Uint8List.fromList(img.encodePng(small, level: 1));
+        });
+      } catch (_) {
+        photo = null;
+      }
+      // formats the Dart decoder doesn't know (HEIC, some WebP…): let Android decode it
+      photo ??= await _decodeNative(bytes);
+      if (photo == null) throw const _Unreadable();
+      _photo = photo;
       await _render();
     } catch (e) {
       if (mounted) {
-        showError(context, e);
+        showInfo(context, e is _Unreadable ? 'This picture can’t be opened — please try another one' : 'Couldn’t make a sticker from this picture — please try another one');
         Navigator.pop(context);
       }
+    }
+  }
+
+  /// Decodes with the phone's own image decoder, at most 768 px, as PNG.
+  static Future<Uint8List?> _decodeNative(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodecWithSize(
+        await ui.ImmutableBuffer.fromUint8List(bytes),
+        getTargetSize: (w, h) {
+          final scale = 768 / math.max(w, h);
+          return scale < 1 ? ui.TargetImageSize(width: (w * scale).round(), height: (h * scale).round()) : ui.TargetImageSize(width: w, height: h);
+        },
+      );
+      final frame = await codec.getNextFrame();
+      final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);
+      frame.image.dispose();
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
     }
   }
 
@@ -124,7 +157,13 @@ class _StickerMakerScreenState extends State<StickerMakerScreen> {
     final source = _removeBg ? _cutout! : _photo!;
     final shape = _shape;
     final outline = _outline;
-    final out = await Isolate.run(() => _compose(source, shape, outline));
+    Uint8List out;
+    try {
+      out = await Isolate.run(() => _compose(source, shape, outline));
+    } catch (_) {
+      out = source; // the outline/shape step failed: still offer the picture itself
+      _note = 'Couldn’t add the outline to this picture';
+    }
     if (!mounted) return;
     setState(() {
       _preview = out;

@@ -470,7 +470,8 @@ class FavoriteStickers {
 Future<bool> makeStickerFromPhoto(BuildContext context, {int? packId}) async {
   final api = context.read<AppServices>().api;
   final me = context.read<AuthState>().me?.id;
-  final x = await ImagePicker().pickImage(source: ImageSource.gallery);
+  // the phone shrinks it first: big camera photos (50 MP, HEIC) open fast and never run out of memory
+  final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1280, maxHeight: 1280, requestFullMetadata: false);
   if (x == null || !context.mounted) return false;
   final made = await Navigator.push<MadeSticker>(context, MaterialPageRoute(builder: (_) => StickerMakerScreen(path: x.path)));
   if (made == null || !context.mounted) return false;
