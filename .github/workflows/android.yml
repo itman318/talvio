@@ -61,8 +61,8 @@ jobs:
           cache: true
 
       # Gradle itself (≈200 MB) is kept between builds: a GitHub download hiccup can't stop a build
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Restore Gradle cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.gradle/wrapper/dists
@@ -129,21 +129,34 @@ jobs:
           mkdir -p ../ci-report/mascot
           MASCOT_OUT=$PWD/../ci-report/mascot flutter test test/mascot_preview_test.dart 2>&1 | tail -40 | tee ../ci-report/mascot.txt
 
-      - name: Get Gradle (retries, official mirror)
+      - name: Get Gradle (several mirrors, retries)
         if: steps.analyze.outcome == 'success' && !inputs.analyze_only
         working-directory: mobile/android
         run: |
           P=gradle/wrapper/gradle-wrapper.properties
-          URL=$(grep distributionUrl $P | cut -d= -f2- | sed 's#\\:#:#g')
-          VER=$(echo "$URL" | grep -oE 'gradle-[0-9.]+-(all|bin)')
+          VER=$(grep distributionUrl $P | grep -oE 'gradle-[0-9.]+' | head -1)
           echo "wrapper wants: $VER"
-          # services.gradle.org is the official address (it serves the same file)
-          sed -i "s#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/${VER}.zip#" $P
-          for i in 1 2 3 4 5; do
-            ./gradlew --version >/dev/null 2>&1 && { echo "gradle ready (try $i)"; exit 0; }
-            echo "gradle download failed (try $i) — waiting"; sleep $((i * 20))
+          # the "bin" zip is enough to build (half the size); try the official CDN and well-known mirrors
+          for i in 1 2 3; do
+            for base in https://services.gradle.org/distributions https://downloads.gradle.org/distributions https://mirrors.cloud.tencent.com/gradle https://mirrors.aliyun.com/macports/distfiles/gradle; do
+              sed -i "s#^distributionUrl=.*#distributionUrl=${base}/${VER}-bin.zip#" $P
+              if timeout 600 ./gradlew --version >/dev/null 2>&1; then echo "gradle ready from $base (round $i)"; exit 0; fi
+              echo "no luck from $base"
+            done
+            sleep $((i * 30))
           done
           echo "gradle could not be downloaded"; exit 1
+
+      # keep Gradle and the libraries even if the build fails later (next build skips the downloads)
+      - name: Save Gradle cache
+        continue-on-error: true
+        if: always() && steps.analyze.outcome == 'success' && !inputs.analyze_only
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.gradle/wrapper/dists
+            ~/.gradle/caches/modules-2
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/pubspec.yaml') }}-${{ github.run_id }}
 
       - name: Build APK
         id: build
@@ -172,6 +185,16 @@ jobs:
           }
           { build_apk &&
             { [ "$SIGNED" != release ] || flutter build appbundle --release --split-debug-info=build/symbols $DEFINES; }; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
+
+      - name: Save Gradle cache (libraries)
+        if: always() && steps.analyze.outcome == 'success' && !inputs.analyze_only
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.gradle/wrapper/dists
+            ~/.gradle/caches/modules-2
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/pubspec.yaml') }}-${{ github.run_id }}-post
 
       - name: Save report to ci-logs branch
         if: always()
