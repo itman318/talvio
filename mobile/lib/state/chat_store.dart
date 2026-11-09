@@ -199,7 +199,7 @@ class ChatStore extends ChangeNotifier {
       final raw = await f.readAsString();
       final data = await compute(_decodeList, raw);
       if (gen != _session || chatsLoaded) return; // the server answered first
-      chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+      chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).where((c) => !_hidingChats.contains(c.id)).toList();
       for (final c in chats) {
         if (c.peer != null) userCache[c.peer!.id] = c.peer!;
       }
@@ -263,7 +263,7 @@ class ChatStore extends ChangeNotifier {
       }());
     }
     unawaited(refreshNoticeCount());
-    chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).toList();
+    chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).where((c) => !_hidingChats.contains(c.id)).toList();
     for (final c in chats) {
       if (c.serverDraft.isNotEmpty && c.id != activeChatId) onDraftSynced?.call(c.id, c.serverDraft, false);
     }
@@ -321,6 +321,7 @@ class ChatStore extends ChangeNotifier {
 
   void _upsertChat(Chat c) {
     if (c.peer != null) userCache[c.peer!.id] = c.peer!;
+    if (_hidingChats.contains(c.id)) return; // being deleted (undo window)
     chats.removeWhere((x) => x.id == c.id);
     if (!c.isArchived && (c.lastMessage != null || c.isGroup || c.id == activeChatId)) chats.add(c);
     _sortChats();
@@ -342,7 +343,105 @@ class ChatStore extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------ messages
-  List<Message> messagesOf(int chatId) => _messages[chatId] ?? const [];
+  List<Message> messagesOf(int chatId) {
+    final list = _messages[chatId] ?? const <Message>[];
+    final hide = _hidingMsgs[chatId];
+    final upTo = _hidingHistory[chatId];
+    if ((hide == null || hide.isEmpty) && upTo == null) return list;
+    return list.where((m) => !(hide?.contains(m.id) ?? false) && (upTo == null || m.isLocal || m.id > upTo)).toList();
+  }
+
+  // ------------------------------------------------------------------ undo window (Telegram-style)
+  // Deleting messages, clearing a history or deleting a chat happens on screen at once; the server
+  // is asked only when the 5-second "Undo" bar is gone, so Undo brings everything back instantly.
+  final Map<int, Set<int>> _hidingMsgs = {};
+  final Map<int, int> _hidingHistory = {}; // chat → newest message id when it was cleared
+  final Set<int> _hidingChats = {};
+
+  bool isHidingHistory(int chatId) => _hidingHistory.containsKey(chatId);
+
+  void hideMessages(int chatId, List<int> ids) {
+    (_hidingMsgs[chatId] ??= {}).addAll(ids);
+    notifyListeners();
+  }
+
+  void unhideMessages(int chatId, List<int> ids) {
+    _hidingMsgs[chatId]?.removeAll(ids);
+    notifyListeners();
+  }
+
+  Future<void> commitDeleteMessages(int chatId, List<int> ids, {required bool forEveryone}) async {
+    try {
+      await deleteMessages(chatId, ids, forEveryone: forEveryone);
+    } finally {
+      _hidingMsgs[chatId]?.removeAll(ids);
+      notifyListeners();
+    }
+  }
+
+  /// Hides the whole history now; returns what Undo needs.
+  (Message?, int) hideHistory(int chatId) {
+    final list = _messages[chatId] ?? const <Message>[];
+    var top = 0;
+    for (final m in list) {
+      if (!m.isLocal && m.id > top) top = m.id;
+    }
+    _hidingHistory[chatId] = top;
+    final chat = chatById(chatId);
+    final snap = (chat?.lastMessage, chat?.unreadCount ?? 0);
+    if (chat != null) {
+      chat.lastMessage = null;
+      chat.unreadCount = 0;
+    }
+    notifyListeners();
+    return snap;
+  }
+
+  void unhideHistory(int chatId, (Message?, int) snap) {
+    _hidingHistory.remove(chatId);
+    final chat = chatById(chatId);
+    if (chat != null) {
+      chat.lastMessage = snap.$1;
+      chat.unreadCount = snap.$2;
+    }
+    notifyListeners();
+  }
+
+  Future<void> commitClearHistory(int chatId, {required bool forEveryone}) async {
+    try {
+      await clearHistory(chatId, forEveryone: forEveryone);
+    } finally {
+      _hidingHistory.remove(chatId);
+      notifyListeners();
+    }
+  }
+
+  /// Takes a chat off the list now; returns it for Undo.
+  Chat? hideChat(int chatId) {
+    final c = chatById(chatId);
+    _hidingChats.add(chatId);
+    chats.removeWhere((x) => x.id == chatId);
+    notifyListeners();
+    return c;
+  }
+
+  void unhideChat(Chat c) {
+    _hidingChats.remove(c.id);
+    chats.removeWhere((x) => x.id == c.id);
+    chats.add(c);
+    _sortChats();
+    notifyListeners();
+  }
+
+  Future<void> commitLeaveOrDelete(Chat c) async {
+    try {
+      await leaveOrDelete(c.id);
+      _hidingChats.remove(c.id);
+    } catch (_) {
+      unhideChat(c); // didn't work: put it back
+      rethrow;
+    }
+  }
   bool isLoaded(int chatId) => _messages.containsKey(chatId);
   bool hasMore(int chatId) => _hasMore[chatId] ?? true;
 

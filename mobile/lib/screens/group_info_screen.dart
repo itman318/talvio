@@ -18,6 +18,7 @@ import 'more_screens.dart';
 import 'new_chat_screen.dart';
 import 'user_profile_screen.dart';
 import 'group_admin_screens.dart';
+import '../widgets/undo_bar.dart';
 import 'chat_screen.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
@@ -882,12 +883,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               danger: true,
               onTap: () async {
                 if (!await confirm(context, 'Leave $what?', 'You will stop receiving messages from “${chat.title}”.', ok: 'Leave', danger: true)) return;
-                try {
-                  await _store.leaveOrDelete(chat.id);
-                  if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-                } catch (e) {
-                  if (context.mounted) showError(context, e);
-                }
+                if (!context.mounted) return;
+                final store = _store;
+                final hidden = store.hideChat(chat.id) ?? chat;
+                showUndoBar(
+                  context,
+                  icon: Icons.logout_rounded,
+                  text: 'You left “${chat.title}”',
+                  commit: () => store.commitLeaveOrDelete(hidden),
+                  undo: () => store.unhideChat(hidden),
+                );
+                Navigator.of(context).popUntil((r) => r.isFirst);
               },
             ),
           ]),

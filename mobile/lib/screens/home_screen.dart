@@ -1,5 +1,6 @@
 import 'global_search_screen.dart';
 import '../widgets/update_widgets.dart';
+import '../widgets/undo_bar.dart';
 import '../widgets/mascot.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
@@ -698,7 +699,16 @@ Future<void> showChatActions(BuildContext context, Chat chat) async {
           ok: chat.isMulti ? 'Leave' : 'Delete',
           danger: true,
         );
-        if (ok) await store.leaveOrDelete(chat.id);
+        if (ok && context.mounted) {
+          final hidden = store.hideChat(chat.id) ?? chat;
+          showUndoBar(
+            context,
+            icon: chat.isMulti ? Icons.logout_rounded : Icons.delete_outline_rounded,
+            text: chat.isMulti ? 'You left “${chat.title}”' : 'Chat with ${chat.title} deleted',
+            commit: () => store.commitLeaveOrDelete(hidden),
+            undo: () => store.unhideChat(hidden),
+          );
+        }
         break;
     }
   } catch (e) {

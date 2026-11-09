@@ -7,6 +7,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
+import '../widgets/undo_bar.dart';
 import '../widgets/mascot.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
@@ -136,6 +137,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _emojiOnly; // the message box holds exactly one emoji
   bool _unlocked = ChatLock.isOpen; // locked chats: fingerprint first
   final Set<int> _selected = {}; // multi-select (message ids)
+  final Set<int> _vanishing = {}; // messages shrinking away (deleted)
   Message? _quote; // private reply
   StreamSubscription<String>? _noticeSub;
   int _panelTab = 0; // emoji panel: 0 emoji · 1 stickers · 2 GIFs
@@ -1458,30 +1460,8 @@ class _ChatScreenState extends State<ChatScreen> {
         await Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: ids)));
         break;
       case 'delete':
-        final myId = _store.myId;
-        final allMine = list.every((m) => m.senderId == myId);
-        final canAll = !chat.isSavedMessages && (allMine || chat.type == 'private' || chat.can('delete_messages'));
-        final String? choice = chat.isMulti && canAll
-            ? (await confirm(context, 'Delete ${list.length} message${list.length == 1 ? '' : 's'}?', 'They will be removed for everyone.', ok: 'Delete', danger: true) ? 'all' : null)
-            : await showDialog<String>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text('Delete ${list.length} message${list.length == 1 ? '' : 's'}?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(ctx, 'me'), child: const Text('Delete for me')),
-              if (canAll) TextButton(onPressed: () => Navigator.pop(ctx, 'all'), child: const Text('Delete for everyone', style: TextStyle(color: Colors.red))),
-            ],
-          ),
-        );
-        if (choice == null) return;
-        try {
-          await _store.deleteMessages(chatId, list.map((m) => m.id).toList(), forEveryone: choice == 'all');
-        } catch (e) {
-          if (mounted) showError(context, e);
-          return;
-        }
-        break;
+        await _deleteWithUndo(chat, list);
+        return;
     }
     if (mounted) setState(_selected.clear);
   }
@@ -1508,39 +1488,86 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Future<void> _delete(Message m, Chat chat, bool mine) async {
-    final canForEveryone = mine || (chat.type == 'private' && !chat.isSavedMessages) || chat.can('delete_messages');
-    // groups & channels: whoever may delete removes it for everyone, no "for me / for everyone" question
-    if (chat.isMulti && canForEveryone) {
-      if (!await confirm(context, 'Delete this message?', 'It will be removed for everyone in “${chat.title}”.', ok: 'Delete', danger: true)) return;
-      try {
-        await _store.deleteMessages(chatId, [m.id], forEveryone: true);
-      } catch (e) {
-        if (mounted) showError(context, e);
-      }
+  Future<void> _delete(Message m, Chat chat, bool mine) => _deleteWithUndo(chat, [m]);
+
+  /// Telegram-style: ask once (with "Also delete for …" in private chats), the messages shrink away
+  /// at once, and an Undo bar counts down 5 s before the server is asked.
+  Future<void> _deleteWithUndo(Chat chat, List<Message> list) async {
+    if (list.isEmpty) return;
+    final choice = await _askDelete(chat, list);
+    if (choice == null || !mounted) return;
+    final ids = list.map((m) => m.id).toList();
+    final store = _store;
+    final cid = chatId;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _vanishing.addAll(ids);
+      _selected.clear();
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 230));
+    store.hideMessages(cid, ids);
+    if (mounted) setState(() => _vanishing.removeAll(ids));
+    if (!mounted) {
+      await store.commitDeleteMessages(cid, ids, forEveryone: choice == 'all');
       return;
     }
-    final choice = await showDialog<String>(
+    final n = ids.length;
+    showUndoBar(
+      context,
+      text: '${n == 1 ? 'Message' : '$n messages'} deleted${choice == 'all' && !chat.isSavedMessages ? ' for everyone' : ''}',
+      commit: () => store.commitDeleteMessages(cid, ids, forEveryone: choice == 'all'),
+      undo: () => store.unhideMessages(cid, ids),
+    );
+  }
+
+  /// null = cancelled, 'me' = only for me, 'all' = for everyone.
+  Future<String?> _askDelete(Chat chat, List<Message> list) async {
+    final myId = _store.myId;
+    final n = list.length;
+    final what = n == 1 ? 'this message' : '$n messages';
+    final allMine = list.every((m) => m.senderId == myId);
+    if (chat.isSavedMessages) {
+      return await confirm(context, 'Delete $what?', 'You can undo it for a few seconds.', ok: 'Delete', danger: true) ? 'me' : null;
+    }
+    final canAll = (allMine && !chat.isChannel) || chat.type == 'private' || chat.can('delete_messages');
+    if (chat.isMulti) {
+      if (canAll) {
+        return await confirm(context, 'Delete $what?', n == 1 ? 'It will be removed for everyone in “${chat.title}”.' : 'They will be removed for everyone in “${chat.title}”.', ok: 'Delete', danger: true) ? 'all' : null;
+      }
+      return await confirm(context, 'Delete $what?', 'It will be removed for you only.', ok: 'Delete', danger: true) ? 'me' : null;
+    }
+    final peer = chat.peer;
+    var both = false;
+    return showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete message?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'me'), child: Text(chat.isSavedMessages ? 'Delete' : 'Delete for me')),
-          if (canForEveryone && !chat.isSavedMessages)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'all'),
-              child: const Text('Delete for everyone', style: TextStyle(color: Colors.red)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFE5484D)),
+          title: Text('Delete $what?'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(both && peer != null ? 'It will be removed for you and ${peer.name}.' : 'It will be removed for you.'),
+            if (canAll && peer != null && !chat.isBot) ...[
+              const SizedBox(height: 6),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: both,
+                onChanged: (v) => setD(() => both = v == true),
+                title: Text('Also delete for ${peer.name}'),
+              ),
+            ],
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE5484D)),
+              onPressed: () => Navigator.pop(ctx, both ? 'all' : 'me'),
+              child: const Text('Delete'),
             ),
-        ],
+          ],
+        ),
       ),
     );
-    if (choice == null) return;
-    try {
-      await _store.deleteMessages(chatId, [m.id], forEveryone: choice == 'all');
-    } catch (e) {
-      if (mounted) showError(context, e);
-    }
   }
 
   // ------------------------------------------------------------------ chat menu
@@ -1652,9 +1679,18 @@ class _ChatScreenState extends State<ChatScreen> {
           break;
         case 'clear':
           final r = await _askClearHistory(chat);
-          if (r != null) {
-            await _store.clearHistory(chatId, forEveryone: r);
-            if (mounted) showInfo(context, r ? '🧹 Chat history cleared for everyone' : '🧹 Chat history cleared');
+          if (r != null && mounted) {
+            final store = _store;
+            final cid = chatId;
+            HapticFeedback.mediumImpact();
+            final snap = store.hideHistory(cid);
+            showUndoBar(
+              context,
+              icon: Icons.cleaning_services_outlined,
+              text: r ? 'History cleared for everyone' : 'History cleared',
+              commit: () => store.commitClearHistory(cid, forEveryone: r),
+              undo: () => store.unhideHistory(cid, snap),
+            );
           }
           break;
         case 'block':
@@ -1692,13 +1728,16 @@ class _ChatScreenState extends State<ChatScreen> {
             danger: true,
           );
           if (ok && mounted) {
-            final messenger = ScaffoldMessenger.of(context);
-            final name = chat.title;
-            await _store.leaveOrDelete(chatId);
-            if (mounted) Navigator.pop(context);
-            messenger
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(content: Text(chat.isMulti ? 'You left “$name”' : '🗑 Chat with $name deleted')));
+            final store = _store;
+            final hidden = store.hideChat(chatId) ?? chat;
+            showUndoBar(
+              context,
+              icon: chat.isMulti ? Icons.logout_rounded : Icons.delete_outline_rounded,
+              text: chat.isMulti ? 'You left “${chat.title}”' : 'Chat with ${chat.title} deleted',
+              commit: () => store.commitLeaveOrDelete(hidden),
+              undo: () => store.unhideChat(hidden),
+            );
+            Navigator.pop(context);
           }
           break;
       }
@@ -2147,13 +2186,15 @@ class _ChatScreenState extends State<ChatScreen> {
           }
           final items = messages.sublist(i, j + 1).reversed.toList();
           final mineA = chat.isChannel ? m.isLocal : m.senderId == store.myId;
-          return AlbumBubble(
+          return _Vanish(
+            on: items.any((x) => _vanishing.contains(x.id)),
+            child: AlbumBubble(
             key: ValueKey('album-${m.albumId}'),
             items: items,
             isMine: mineA,
             senderName: chat.isGroup && !mineA ? m.sender?.name : null,
             onLongPress: () => _messageMenu(m, chat),
-          );
+          ));
         }
         final older = older0;
         final newDay = older == null ||
@@ -2178,7 +2219,9 @@ class _ChatScreenState extends State<ChatScreen> {
         final showSender = chat.isGroup && !mine && (older == null || older.senderId != m.senderId || older.isSystem || newDay);
         final selecting = _selected.isNotEmpty;
         final picked = _selected.contains(m.id);
-        return Column(
+        return _Vanish(
+          on: _vanishing.contains(m.id),
+          child: Column(
           children: [
             if (newDay) DateChip(date: m.createdAt),
             if (m.id == _unreadMarkerId) _unreadDivider(),
@@ -2225,7 +2268,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               ),
           ],
-        );
+        ));
       },
     );
   }
@@ -2374,7 +2417,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// A fresh chat: a friendly card with Tali and one-tap greetings.
   Widget _emptyChat(Chat chat) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final cleared = _store.clearedBy(chat.id); // who cleared this chat's history (this session), or null
+    final cleared = _store.clearedBy(chat.id) ?? (_store.isHidingHistory(chat.id) ? _store.myId : null); // who cleared it (this session), or null
     final canSend = !chat.isChannel || chat.canPost;
     return SingleChildScrollView(
       child: Container(
@@ -3190,4 +3233,29 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+}
+
+
+/// A deleted message folds away (height and opacity) before it leaves the list.
+class _Vanish extends StatelessWidget {
+  const _Vanish({required this.on, required this.child});
+  final bool on;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: 1, end: on ? 0 : 1),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInCubic,
+        child: child,
+        builder: (_, v, c) => v >= 1
+            ? c!
+            : ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: v,
+                  child: Opacity(opacity: v, child: Transform.scale(scale: 0.92 + 0.08 * v, child: c)),
+                ),
+              ),
+      );
 }
