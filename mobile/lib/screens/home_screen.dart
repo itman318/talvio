@@ -752,7 +752,7 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
             itemBuilder: (_, i) => ListTile(
               leading: Avatar(id: list[i].id, name: list[i].title, url: list[i].avatarAbsolute),
               title: Text(list[i].title),
-              subtitle: Text(list[i].lastMessage?.preview ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(list[i].lastMessage?.preview ?? (list[i].historyCleared ? 'History was cleared' : ''), maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: IconButton(
                 icon: const Icon(Icons.unarchive),
                 tooltip: 'Unarchive',

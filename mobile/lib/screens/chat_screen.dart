@@ -1688,7 +1688,14 @@ class _ChatScreenState extends State<ChatScreen> {
               context,
               icon: Icons.cleaning_services_outlined,
               text: r ? 'History cleared for everyone' : 'History cleared',
-              commit: () => store.commitClearHistory(cid, forEveryone: r),
+              commit: () async {
+                try {
+                  await store.commitClearHistory(cid, forEveryone: r);
+                } catch (_) {
+                  store.unhideHistory(cid, snap); // didn't work: show the messages again
+                  rethrow;
+                }
+              },
               undo: () => store.unhideHistory(cid, snap),
             );
           }

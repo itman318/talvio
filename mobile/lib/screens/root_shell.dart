@@ -46,7 +46,7 @@ class _RootShellState extends State<RootShell> {
     if (n == null || !mounted) return;
     final m = ScaffoldMessenger.of(context);
     m.hideCurrentSnackBar();
-    m.showSnackBar(SnackBar(
+    final bar = m.showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 5),
       content: Row(children: [
@@ -56,6 +56,9 @@ class _RootShellState extends State<RootShell> {
       ]),
       action: SnackBarAction(label: 'View', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticesScreen()))),
     ));
+    // a bar with a button no longer goes away by itself on newer Flutter
+    final t = Timer(const Duration(seconds: 5), bar.close);
+    bar.closed.then((_) => t.cancel());
   }
 
   @override
