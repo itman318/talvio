@@ -173,7 +173,12 @@ test('BotForge creates and manages bots from a chat', async () => {
   const list = await send('/mybots');
   await bots.pressButton(B.id, list.id, { data: `bot:${me.id}` });
   await flush();
-  const card = await db.one('SELECT text, reply_markup FROM messages WHERE id = $1', [list.id]);
+  // the card is edited in the background: wait for it (up to 3 s)
+  let card = await db.one('SELECT text, reply_markup FROM messages WHERE id = $1', [list.id]);
+  for (let i = 0; i < 30 && !/@price_alert_bot/.test(card.text); i += 1) {
+    await flush(100);
+    card = await db.one('SELECT text, reply_markup FROM messages WHERE id = $1', [list.id]);
+  }
   assert.match(card.text, /@price_alert_bot/);
   await bots.pressButton(B.id, list.id, { data: `priv:${me.id}` });
   // the button runs in the background: wait for it (up to 3 s) instead of a fixed pause
