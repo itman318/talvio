@@ -294,6 +294,13 @@ test('clear history: only me, or both sides in a private chat; admins only in gr
   assert.equal(await count(A.id), 0);
   assert.equal(await count(C.id), 0, 'cleared for both');
   assert.equal(sent.length, 1);
+  // the chat stays in the list and says "History was cleared"
+  const inList = (await chats.listChats(C.id)).find((x) => x.id === chat.id);
+  assert.ok(inList, 'cleared chat stays in the list');
+  assert.equal(inList.history_cleared, true);
+  assert.equal(inList.last_message, null);
+  await messages.sendMessage(C.id, chat.id, { text: 'four' });
+  assert.equal((await chats.listChats(C.id)).find((x) => x.id === chat.id).history_cleared, false);
   // groups: a member can't clear for everyone
   const { chat: g } = await chats.createGroup(A.id, { title: 'Clear test', member_ids: [C.id] });
   await rejects(chats.clearHistory(C.id, g.id, { for_everyone: true }), 'no_rights');

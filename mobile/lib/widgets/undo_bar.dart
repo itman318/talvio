@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -38,7 +40,13 @@ void showUndoBar(
       },
     ),
   ));
+  // Newer Flutter keeps a bar with an action on screen until it's closed by hand, so close it
+  // ourselves when the countdown ends (otherwise it sits at "1" and nothing is committed).
+  final timer = Timer(duration, () {
+    if (!undone) bar.close();
+  });
   bar.closed.then((_) async {
+    timer.cancel();
     if (undone) return;
     try {
       await commit();

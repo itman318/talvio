@@ -552,7 +552,10 @@ class ChatTile extends StatelessWidget {
                               alignment: PlaceholderAlignment.middle,
                               child: Padding(padding: const EdgeInsets.only(right: 4), child: Icon(kindIcon, size: 16, color: Brand.muted)),
                             ),
-                          ...taliSpans(preview.replaceAll('\n', ' '), null, scale: 1.15),
+                                          if (last == null && chat.historyCleared)
+                            const TextSpan(text: 'History was cleared', style: TextStyle(color: Brand.primary, fontWeight: FontWeight.w500))
+                          else
+                            ...taliSpans(preview.replaceAll('\n', ' '), null, scale: 1.15),
                         ]),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

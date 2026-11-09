@@ -354,7 +354,7 @@ class ChatStore extends ChangeNotifier {
     if (c.peer != null) userCache[c.peer!.id] = c.peer!;
     if (_hidingChats.contains(c.id)) return; // being deleted (undo window)
     chats.removeWhere((x) => x.id == c.id);
-    if (!c.isArchived && (c.lastMessage != null || c.isGroup || c.id == activeChatId)) chats.add(c);
+    if (!c.isArchived && (c.lastMessage != null || c.historyCleared || c.isGroup || c.id == activeChatId)) chats.add(c);
     _sortChats();
     notifyListeners();
   }
@@ -411,7 +411,7 @@ class ChatStore extends ChangeNotifier {
   }
 
   /// Hides the whole history now; returns what Undo needs.
-  (Message?, int) hideHistory(int chatId) {
+  (Message?, int, bool) hideHistory(int chatId) {
     final list = _messages[chatId] ?? const <Message>[];
     var top = 0;
     for (final m in list) {
@@ -419,21 +419,23 @@ class ChatStore extends ChangeNotifier {
     }
     _hidingHistory[chatId] = top;
     final chat = chatById(chatId);
-    final snap = (chat?.lastMessage, chat?.unreadCount ?? 0);
+    final snap = (chat?.lastMessage, chat?.unreadCount ?? 0, chat?.historyCleared ?? false);
     if (chat != null) {
       chat.lastMessage = null;
       chat.unreadCount = 0;
+      chat.historyCleared = true;
     }
     notifyListeners();
     return snap;
   }
 
-  void unhideHistory(int chatId, (Message?, int) snap) {
+  void unhideHistory(int chatId, (Message?, int, bool) snap) {
     _hidingHistory.remove(chatId);
     final chat = chatById(chatId);
     if (chat != null) {
       chat.lastMessage = snap.$1;
       chat.unreadCount = snap.$2;
+      chat.historyCleared = snap.$3;
     }
     notifyListeners();
   }
@@ -1027,6 +1029,7 @@ class ChatStore extends ChangeNotifier {
     if (chat != null) {
       chat.lastMessage = null;
       chat.unreadCount = 0;
+      chat.historyCleared = true;
     }
     notifyListeners();
   }

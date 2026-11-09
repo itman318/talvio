@@ -623,6 +623,8 @@ class Chat {
   /// Newer settings straight from the server (rights, rules, welcome, reactions, linked chat…), see getters below.
   final Map<String, dynamic> extra;
   Message? lastMessage;
+  /// My view of the history was cleared (shown as "History was cleared" in the list).
+  bool historyCleared;
   DateTime? lastMessageAt;
   final DateTime createdAt;
 
@@ -666,6 +668,7 @@ class Chat {
     this.isLocked = false,
     Map<String, dynamic>? extra,
     this.lastMessage,
+    this.historyCleared = false,
     this.lastMessageAt,
     required this.createdAt,
   }) : extra = extra ?? {};
@@ -710,6 +713,7 @@ class Chat {
         isRequest: j['is_request'] == true,
         isLocked: j['is_locked'] == true,
         lastMessage: j['last_message'] == null ? null : Message.fromJson(Map<String, dynamic>.from(j['last_message'] as Map)),
+        historyCleared: j['history_cleared'] == true,
         lastMessageAt: _date(j['last_message_at']),
         createdAt: _date(j['created_at']) ?? DateTime.now(),
       );

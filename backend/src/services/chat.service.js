@@ -107,7 +107,7 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
        c.slow_mode_sec, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
        c.welcome_text, c.rules, c.new_member_limits, c.protected_content, c.allowed_reactions, c.category, c.linked_chat_id,
-       cm.admin_rights AS my_rights, cm.admin_title AS my_title, cm.restricted_until AS my_restricted_until, cm.draft, cm.draft_at,
+       cm.admin_rights AS my_rights, cm.admin_title AS my_title, cm.cleared_before_id AS my_cleared_before, cm.restricted_until AS my_restricted_until, cm.draft, cm.draft_at,
        (SELECT json_build_object('id', vc.id, 'title', vc.title, 'count',
           (SELECT count(*) FROM voice_chat_participants vp WHERE vp.voice_chat_id = vc.id AND vp.left_at IS NULL))
           FROM voice_chats vc WHERE vc.chat_id = c.id AND vc.ended_at IS NULL LIMIT 1) AS voice_chat,
@@ -238,6 +238,7 @@ async function serializeChats(userId, rows) {
       is_request: !!r.is_request,
       is_locked: !!r.is_locked,
       last_message: r.last_visible_message_id ? lastMsgs.get(r.last_visible_message_id) || null : null,
+      history_cleared: !r.last_visible_message_id && Number(r.my_cleared_before) > 0,
       last_message_at: r.last_message_at ? new Date(r.last_message_at).toISOString() : null,
       created_at: new Date(r.created_at).toISOString(),
     };
