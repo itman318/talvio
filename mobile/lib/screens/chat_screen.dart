@@ -1757,7 +1757,9 @@ class _ChatScreenState extends State<ChatScreen> {
   // ------------------------------------------------------------------ UI
   @override
   Widget build(BuildContext context) {
-    final store = context.watch<ChatStore>();
+    // redraw only when THIS chat (or something global) changed — not for every event in other chats
+    context.select<ChatStore, int>((s) => s.revFor(chatId));
+    final store = context.read<ChatStore>();
     final chat = store.chatById(chatId) ?? _chat;
     if (chat == null) {
       return Scaffold(

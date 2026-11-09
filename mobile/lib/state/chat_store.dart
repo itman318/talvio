@@ -14,6 +14,33 @@ import '../models/models.dart';
 
 /// Holds chats, loaded messages, typing & presence, and handles realtime events.
 class ChatStore extends ChangeNotifier {
+  // ------------------------------------------------------------------ fine-grained redraws
+  // An open chat redraws only when something in THAT chat changed (or something global did):
+  // a message, typing or a tick in another chat no longer rebuilds the whole chat screen.
+  int _globalRev = 0;
+  final Map<int, int> _chatRev = {};
+  final Set<int> _scope = {};
+  bool _scoped = false;
+
+  /// Changes whenever this chat (or anything not tied to one chat) changed.
+  int revFor(int chatId) => _globalRev * 1000003 + (_chatRev[chatId] ?? 0);
+
+  /// Redraw for changes that only concern these chats.
+  void _touch(Iterable<int> chatIds) {
+    for (final id in chatIds) {
+      _chatRev[id] = (_chatRev[id] ?? 0) + 1;
+    }
+    _scoped = true;
+    notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_scoped) _globalRev++;
+    _scoped = false;
+    super.notifyListeners();
+  }
+
   ChatStore(this.services);
 
   final AppServices services;
@@ -197,7 +224,7 @@ class ChatStore extends ChangeNotifier {
       final f = await _chatCacheFile(meId);
       if (f == null || !await f.exists()) return;
       final raw = await f.readAsString();
-      final data = await compute(_decodeList, raw);
+      final data = await _decodeFast(raw);
       if (gen != _session || chatsLoaded) return; // the server answered first
       chats = data.map((j) => Chat.fromJson(Map<String, dynamic>.from(j as Map))).where((c) => !_hidingChats.contains(c.id)).toList();
       for (final c in chats) {
@@ -239,7 +266,7 @@ class ChatStore extends ChangeNotifier {
     try {
       final f = await _msgCacheFile(me, chatId);
       if (f == null || !await f.exists()) return;
-      final data = await compute(_decodeList, await f.readAsString());
+      final data = await _decodeFast(await f.readAsString());
       if (gen != _session || _messages.containsKey(chatId)) return; // the server answered first
       final list = data.map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
       _cacheSenders(list);
@@ -249,6 +276,10 @@ class ChatStore extends ChangeNotifier {
   }
 
   static List<dynamic> _decodeList(String raw) => jsonDecode(raw) as List;
+
+  /// Small saved lists decode right here (starting a background isolate costs more than the work);
+  /// only big ones go to the background.
+  static Future<List<dynamic>> _decodeFast(String raw) async => raw.length < 150000 ? _decodeList(raw) : compute(_decodeList, raw);
 
   Future<void> loadChats() async {
     final gen = _session;
@@ -917,14 +948,14 @@ class ChatStore extends ChangeNotifier {
     }
     final chat = chatById(m.chatId);
     if (chat != null && chat.lastMessage?.id == m.id) chat.lastMessage = m;
-    notifyListeners();
+    _touch([m.chatId]);
   }
 
   void _removeMessages(int chatId, List<int> ids) {
     _messages[chatId]?.removeWhere((m) => ids.contains(m.id));
     final chat = chatById(chatId);
     if (chat != null && ids.contains(chat.lastMessage?.id)) refreshChat(chatId);
-    notifyListeners();
+    _touch([chatId]);
   }
 
   // ------------------------------------------------------------------ chat actions
@@ -960,9 +991,22 @@ class ChatStore extends ChangeNotifier {
 
   /// Typing / online events arrive in bursts: redraw at most ~8 times a second instead of on every event.
   Timer? _soon;
-  void _notifySoon() {
+  void _notifySoon([Iterable<int>? chatIds]) {
+    if (chatIds == null) {
+      _scope.add(-1); // something global
+    } else {
+      _scope.addAll(chatIds);
+    }
     if (_soon?.isActive == true) return;
-    _soon = Timer(const Duration(milliseconds: 120), notifyListeners);
+    _soon = Timer(const Duration(milliseconds: 120), () {
+      final ids = Set.of(_scope);
+      _scope.clear();
+      if (ids.contains(-1)) {
+        notifyListeners();
+      } else {
+        _touch(ids);
+      }
+    });
   }
 
   Future<void> clearHistory(int chatId, {bool forEveryone = false}) async {
@@ -1272,7 +1316,7 @@ class ChatStore extends ChangeNotifier {
       final r = Map<String, dynamic>.from(await api.post('/chats/$chatId/views', {'message_ids': ids}) as Map);
       final views = Map<String, dynamic>.from(r['views'] as Map);
       views.forEach((k, v) => _findMessage(chatId, int.parse(k))?.views = (v as num).toInt());
-      notifyListeners();
+      _touch([chatId]);
     } catch (_) {
       sent.removeAll(ids);
     }
@@ -1619,7 +1663,7 @@ class ChatStore extends ChangeNotifier {
         if (vcChat != null) {
           final vc = d['voice_chat'];
           vcChat.extra['voice_chat'] = vc is Map ? {'id': vc['id'], 'title': vc['title'], 'count': (vc['participants'] as List?)?.length ?? 0} : null;
-          notifyListeners();
+          _touch([vcChat.id]);
         }
         break;
       case 'bookmarks:changed':
@@ -1635,7 +1679,7 @@ class ChatStore extends ChangeNotifier {
         for (final m in messagesOf(_int(d['chat_id']))) {
           if (m.id == _int(d['message_id'])) {
             m.played = true;
-            notifyListeners();
+            _touch([m.chatId]);
             break;
           }
         }
@@ -1648,14 +1692,14 @@ class ChatStore extends ChangeNotifier {
         if (chat != null) {
           chat.readUpTo = max(chat.readUpTo, _int(d['message_id']));
           chat.deliveredUpTo = max(chat.deliveredUpTo, chat.readUpTo);
-          notifyListeners();
+          _touch([chat.id]);
         }
         break;
       case 'receipt:delivered':
         final dChat = chatById(_int(d['chat_id']));
         if (dChat != null) {
           dChat.deliveredUpTo = max(dChat.deliveredUpTo, _int(d['message_id']));
-          notifyListeners();
+          _touch([dChat.id]);
         }
         break;
       case 'draft:updated':
@@ -1685,7 +1729,7 @@ class ChatStore extends ChangeNotifier {
           _typing.putIfAbsent(tChat, () => {})[uid] = DateTime.now().add(const Duration(seconds: 6));
           _typingAction.putIfAbsent(tChat, () => {})[uid] = action;
         }
-        _notifySoon();
+        _notifySoon([tChat]);
         break;
       case 'presence':
         _onPresence(_int(d['user_id']), d['online'] == true, d['last_seen'] as String?);
@@ -1700,7 +1744,7 @@ class ChatStore extends ChangeNotifier {
         final rm = _findMessage(_int(d['chat_id']), _int(d['message_id']));
         if (rm != null) {
           rm.reactions = ReactionCount.listFrom(d['reactions']);
-          notifyListeners();
+          _touch([rm.chatId]);
         }
         break;
       case 'message:poll':
@@ -1738,7 +1782,8 @@ class ChatStore extends ChangeNotifier {
       u.online = online;
       if (seen != null) u.lastSeen = seen;
     }
-    _notifySoon();
+    // only chats with this person redraw (their header shows "online"); groups count online members on their own
+    _notifySoon([for (final c in chats) if (c.peer?.id == userId) c.id]);
   }
 
   /// Inserts a message from the server into the loaded list (dedupes own optimistic copies).
@@ -1799,6 +1844,6 @@ class ChatStore extends ChangeNotifier {
       socket.emit('message:delivered', {'chat_id': m.chatId, 'message_id': m.id});
       if (activeChatId == m.chatId) markChatRead(m.chatId);
     }
-    notifyListeners();
+    _touch([m.chatId]);
   }
 }
