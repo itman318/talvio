@@ -613,6 +613,18 @@ class _WalletHomeState extends State<_WalletHome> {
                 setState(() {});
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.contacts_rounded),
+              title: const Text('Address book'),
+              subtitle: const Text('Saved addresses with names'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _AddressBookScreen(onSend: (addr) => _openSend(to: addr)))),
+                );
+              },
+            ),
             _ShareSwitch(store: w),
             ListTile(
               leading: const Icon(Icons.key_rounded),
@@ -785,6 +797,200 @@ class _WalletHomeState extends State<_WalletHome> {
             for (final t in _txs!.take(30)) _TxTile(tx: t, me: t.network == 'tron' ? w.address! : w.evmAddress!, hidden: _hidden, tronNet: w.net),
         ]),
       ),
+    );
+  }
+}
+
+// ======================================================================== address book
+class _AddressBookScreen extends StatefulWidget {
+  const _AddressBookScreen({required this.onSend});
+  final void Function(String address) onSend;
+  @override
+  State<_AddressBookScreen> createState() => _AddressBookScreenState();
+}
+
+class _AddressBookScreenState extends State<_AddressBookScreen> {
+  List<SavedAddress>? _list;
+  String _q = '';
+
+  AddressBook get _book => AddressBook(context.read<WalletStore>().userId);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final l = await _book.load();
+    if (mounted) setState(() => _list = l);
+  }
+
+  /// Add a new address, or rename [edit].
+  Future<void> _editor({SavedAddress? edit}) async {
+    final name = TextEditingController(text: edit?.name ?? '');
+    final addr = TextEditingController(text: edit?.address ?? '');
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) {
+          final a = addr.text.trim();
+          final valid = TronCrypto.isValidAddress(a) || EvmCrypto.isValidAddress(a);
+          final dup = edit == null && (_list ?? const []).any((x) => x.address.toLowerCase() == a.toLowerCase());
+          final look = edit == null && valid ? AddressBook.lookalike((_list ?? const []).map((x) => x.address), a) : null;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(edit == null ? 'New address' : 'Edit name', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: name,
+                autofocus: true,
+                maxLength: 40,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (_) => set(() {}),
+                decoration: const InputDecoration(labelText: 'Name', hintText: 'e.g. Ali — Binance'),
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: addr,
+                enabled: edit == null,
+                autocorrect: false,
+                onChanged: (_) => set(() {}),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: 'Address (T… or 0x…)',
+                  errorText: a.isEmpty ? null : (!valid ? 'Not a TRON or 0x address' : (dup ? 'Already saved' : null)),
+                  helperText: valid ? (a.startsWith('T') ? 'TRON' : 'Ethereum, BNB Chain, Polygon, Arbitrum, Base, Avalanche') : null,
+                  suffixIcon: edit != null
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.content_paste_rounded),
+                          onPressed: () async {
+                            final d = await Clipboard.getData('text/plain');
+                            final found = _addressFrom(d?.text ?? '');
+                            if (found != null) set(() => addr.text = found);
+                          },
+                        ),
+                ),
+              ),
+              if (look != null) ...[
+                const SizedBox(height: 10),
+                _Note(icon: Icons.gpp_maybe_rounded, color: _out, text: 'This looks like an address you already saved (${_short(look)}) but is different. Check it carefully.'),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(50)),
+                onPressed: name.text.trim().isEmpty || !valid || dup ? null : () => Navigator.pop(ctx, true),
+                child: const Text('Save'),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+    if (saved != true) return;
+    final a = addr.text.trim();
+    await _book.add(name.text, a.startsWith('0x') ? EvmCrypto.checksum(a.substring(2)) : a);
+    await _load();
+  }
+
+  void _actions(SavedAddress x) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            title: Text(x.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: SelectableText(x.address, style: const TextStyle(fontFamily: 'monospace')),
+          ),
+          ListTile(
+            leading: const Icon(Icons.arrow_upward_rounded),
+            title: const Text('Send to this address'),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+              widget.onSend(x.address);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.copy_rounded),
+            title: const Text('Copy address'),
+            onTap: () {
+              Navigator.pop(ctx);
+              Clipboard.setData(ClipboardData(text: x.address));
+              showInfo(context, 'Address copied');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_rounded),
+            title: const Text('Rename'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _editor(edit: x);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline_rounded, color: _out),
+            title: const Text('Delete', style: TextStyle(color: _out)),
+            onTap: () async {
+              Navigator.pop(ctx);
+              if (!await confirm(context, 'Delete ${x.name}?', 'Only the saved name and address go away.', ok: 'Delete', danger: true)) return;
+              await _book.remove(x.address);
+              await _load();
+            },
+          ),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = _list;
+    final q = _q.toLowerCase();
+    final shown = all?.where((x) => q.isEmpty || x.name.toLowerCase().contains(q) || x.address.toLowerCase().contains(q)).toList();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Address book')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _editor(),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Add'),
+      ),
+      body: all == null
+          ? const Center(child: CircularProgressIndicator())
+          : all.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text('No saved addresses yet.\nAdd the wallets you send to often — then pick them by name, without copying long addresses.',
+                        textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 15, height: 1.4)),
+                  ),
+                )
+              : ListView(padding: const EdgeInsets.only(bottom: 96), children: [
+                  if (all.length > 5)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      child: TextField(
+                        onChanged: (v) => setState(() => _q = v),
+                        decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Search names or addresses'),
+                      ),
+                    ),
+                  for (final x in shown!)
+                    ListTile(
+                      onTap: () => _actions(x),
+                      leading: CircleAvatar(
+                        backgroundColor: (x.isTron ? _trxColor : const Color(0xFF627EEA)).withValues(alpha: 0.15),
+                        child: Text(x.name.isEmpty ? '?' : x.name.substring(0, 1).toUpperCase(),
+                            style: TextStyle(color: x.isTron ? _trxColor : const Color(0xFF627EEA), fontWeight: FontWeight.w800)),
+                      ),
+                      title: Text(x.name),
+                      subtitle: Text('${x.isTron ? 'TRON' : 'EVM'} · ${_short(x.address)}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5)),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                ]),
     );
   }
 }
