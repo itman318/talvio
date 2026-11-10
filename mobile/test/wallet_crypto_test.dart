@@ -138,7 +138,7 @@ void main() {
     const btc = UtxoChain.btc;
     expect(TronCrypto.hex(UtxoCrypto.scriptFor('bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', btc)!), startsWith('0014'));
     expect(TronCrypto.hex(UtxoCrypto.scriptFor('bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297', btc)!), startsWith('5120'), reason: 'Taproot');
-    expect(TronCrypto.hex(UtxoCrypto.scriptFor('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', btc)!), '76a914${'7680adec8eabcabac676be9e83854ade0bd22cdb'}88ac');
+    expect(TronCrypto.hex(UtxoCrypto.scriptFor('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', btc)!), '76a914${'77bff20c60e522dfaa3350c39b030a5d004e839a'}88ac');
     expect(TronCrypto.hex(UtxoCrypto.scriptFor('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', btc)!), startsWith('a914'));
     expect(UtxoCrypto.isValidAddress('bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyv', btc), false, reason: 'checksum');
     expect(UtxoCrypto.isValidAddress('ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh', btc), false, reason: 'Litecoin address on Bitcoin');
