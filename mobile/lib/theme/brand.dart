@@ -92,6 +92,47 @@ class Brand {
     return base.copyWith(
       scaffoldBackgroundColor: bg,
       textTheme: text,
+      // screens glide in (a short slide + fade) instead of the heavier zoom
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      }),
+      // a clean, quick ripple (the sparkle one is slower to draw)
+      splashFactory: InkRipple.splashFactory,
+      splashColor: primary.withValues(alpha: dark ? 0.16 : 0.10),
+      highlightColor: primary.withValues(alpha: dark ? 0.08 : 0.05),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: dark ? primaryLight : primary,
+        selectionColor: primary.withValues(alpha: dark ? 0.45 : 0.24),
+        selectionHandleColor: dark ? primaryLight : primary,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: dark ? primaryLight : primary,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        indicatorColor: dark ? primaryLight : primary,
+        indicatorSize: TabBarIndicatorSize.label,
+        dividerColor: Colors.transparent,
+        labelStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w700, fontSize: 14.5),
+        unselectedLabelStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w600, fontSize: 14.5),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(color: dark ? const Color(0xFF262B49) : ink, borderRadius: BorderRadius.circular(10)),
+        textStyle: const TextStyle(fontFamily: font, color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w500),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        waitDuration: const Duration(milliseconds: 400),
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: const WidgetStatePropertyAll(3.5),
+        radius: const Radius.circular(4),
+        thumbColor: WidgetStatePropertyAll(scheme.onSurface.withValues(alpha: 0.22)),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: dark ? primaryLight : primary,
+        inactiveTrackColor: scheme.outlineVariant,
+        thumbColor: dark ? primaryLight : primary,
+        overlayColor: primary.withValues(alpha: 0.14),
+        trackHeight: 3.5,
+      ),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,

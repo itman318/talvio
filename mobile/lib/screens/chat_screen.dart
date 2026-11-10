@@ -38,6 +38,7 @@ import '../core/voice_playback.dart';
 import '../core/chat_lock.dart';
 import '../core/screen_guard.dart';
 import '../core/chat_passcode.dart';
+import '../core/scam_guard.dart';
 import '../core/prefs.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -652,6 +653,12 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) showError(context, e);
       }
       return;
+    }
+    final c = _store.chatById(chatId) ?? _chat;
+    if (!asDraft && c != null && _isStranger(c) && ScamGuard.looksLikeCode(text)) {
+      final ok = await confirm(context, 'Is this a login or bank code?',
+          '${c.title} is not in your contacts. ${ScamGuard.tip(ScamKind.code)}', ok: 'Send anyway', danger: true);
+      if (!ok || !mounted) return;
     }
     final reply = _replyTo;
     setState(() => _replyTo = null);
@@ -2084,6 +2091,95 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// A private chat with a real person who is not in my contacts (and isn't verified).
+  bool _isStranger(Chat chat) {
+    final p = chat.peer;
+    return chat.type == 'private' && p != null && !p.isContact && !p.isBot && !p.isVerified && !chat.isVerified && !chat.isSavedMessages && !chat.isBot;
+  }
+
+  /// Under a risky message from a stranger: a short warning; a tap explains and offers Block / Report.
+  Widget _scamNote(Chat chat, ScamKind kind) {
+    const warn = Color(0xFFE08A1E);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 1, 60, 6),
+        child: Material(
+          color: warn.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _scamSheet(chat, kind),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.shield_rounded, size: 16, color: warn),
+                const SizedBox(width: 6),
+                Flexible(child: Text(ScamGuard.title(kind), style: const TextStyle(color: warn, fontWeight: FontWeight.w700, fontSize: 12.5))),
+                const SizedBox(width: 2),
+                const Icon(Icons.chevron_right_rounded, size: 16, color: warn),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _scamSheet(Chat chat, ScamKind kind) {
+    final peer = chat.peer;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.shield_rounded, color: Color(0xFFE08A1E), size: 26),
+              const SizedBox(width: 10),
+              Expanded(child: Text(ScamGuard.title(kind), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+            ]),
+            const SizedBox(height: 10),
+            Text(ScamGuard.tip(kind), style: const TextStyle(fontSize: 14.5, height: 1.4)),
+            const SizedBox(height: 8),
+            Text('${chat.title} is not in your contacts.', style: const TextStyle(color: Brand.muted, fontSize: 13)),
+            const SizedBox(height: 16),
+            Row(children: [
+              if (peer != null)
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red, minimumSize: const Size.fromHeight(46)),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final api = context.read<AppServices>().api;
+                      try {
+                        await api.post('/blocks/${peer.id}');
+                        if (!mounted) return;
+                        showInfo(context, '${chat.title} is blocked');
+                        await showReportDialog(context, targetType: 'user', targetId: peer.id);
+                        _store.refreshChat(chatId);
+                      } catch (e) {
+                        if (mounted) showError(context, e);
+                      }
+                    },
+                    child: const Text('Block & report'),
+                  ),
+                ),
+              if (peer != null) const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK, I’ll be careful'),
+                ),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _unreadDivider() {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -2187,6 +2283,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final fwd = messages.take(40).where((m) => m.forwardedFromName != null).toList();
       if (fwd.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, fwd));
     }
+    final stranger = _isStranger(chat);
     final rowIndex = <Object, int>{};
     for (var i = 0; i < messages.length; i++) {
       final m = messages[i];
@@ -2310,6 +2407,8 @@ class _ChatScreenState extends State<ChatScreen> {
               ))),
               ),
               ),
+            if (stranger && !mine && !m.isSystem && m.text.isNotEmpty)
+              if (ScamGuard.check(m.text) case final kind?) _scamNote(chat, kind),
           ],
         ));
       },

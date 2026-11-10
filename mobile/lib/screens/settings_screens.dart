@@ -753,6 +753,29 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     return parts.join(' ');
   }
 
+  static const _shieldOn = {'phone': 'nobody', 'phone_search': 'contacts', 'group_add': 'contacts', 'calls': 'contacts'};
+  static const _shieldOff = {'phone': 'contacts', 'phone_search': 'everyone', 'group_add': 'everyone', 'calls': 'everyone'};
+
+  bool _shielded(Map p) => _shieldOn.entries.every((e) => p[e.key] == e.value);
+
+  /// One switch for the settings that keep strangers away (each can still be changed on its own below).
+  Future<void> _setShield(bool on) async {
+    if (on) {
+      final ok = await confirm(context, 'Turn on stranger protection?',
+          'Your phone number is hidden from everyone, and only your contacts can find you by number, call you or add you to groups. People can still reach you with your username.',
+          ok: 'Turn on');
+      if (!ok || !mounted) return;
+    }
+    try {
+      final u = await context.read<AppServices>().api.put('/me/privacy', on ? _shieldOn : _shieldOff);
+      if (!mounted) return;
+      context.read<AuthState>().setMe(AppUser.fromJson(Map<String, dynamic>.from(u as Map)));
+      showInfo(context, on ? 'Stranger protection is on' : 'Stranger protection is off');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   Future<void> _setBool(String key, bool v) async {
     try {
       final u = await context.read<AppServices>().api.put('/me/privacy', {key: v});
@@ -822,6 +845,17 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
+          SettingsGroup(title: 'Safety', children: [
+            SettingsTile(
+              icon: Icons.shield_rounded,
+              color: Brand.accent,
+              title: 'Stranger protection',
+              subtitle: 'Hide my number; only contacts can call me, find me by number or add me to groups',
+              maxSubtitleLines: 3,
+              trailingWidget: Switch(value: _shielded(p), onChanged: _setShield),
+              onTap: () => _setShield(!_shielded(p)),
+            ),
+          ]),
           SettingsGroup(title: 'Who can see and reach me', children: [
             for (final r in PrivacyScreen.rows.entries)
               SettingsTile(
