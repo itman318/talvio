@@ -47,6 +47,11 @@ jobs:
           echo "app update: $(curl -s 'http://127.0.0.1:4000/api/app/update?build=1&abi=arm64-v8a' | head -c 300)"
           echo "--- recent upload / sticker requests (status, size)"
           grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
+          echo "--- push log"
+          journalctl -u hushavia --since "-1d" --no-pager | grep -iE "push|firebase|fcm|messaging" | tail -15 | cut -c1-300
+          echo "firebase pkg: $(cd /opt/hushavia/app && node -p "require('firebase-admin/package.json').version" 2>&1 | tail -1)"
+          echo "sa file: $(ls -la /etc/hushavia/firebase.json 2>&1)"
+          echo "push tokens: $(sudo -u postgres psql -d hushavia -tAc "SELECT count(*) FROM push_tokens" 2>&1)"
           echo "--- security"
           echo "fail2ban: $(systemctl is-active fail2ban) · $(fail2ban-client status sshd 2>/dev/null | grep -E 'Currently banned|Total banned' | tr -s ' \t' ' ' | tr '\n' ' ')"
           echo "sandbox: $(systemctl show hushavia -p NoNewPrivileges -p ProtectSystem -p PrivateTmp | tr '\n' ' ')"
