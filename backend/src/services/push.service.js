@@ -17,11 +17,11 @@ function init() {
   if (!config.firebaseServiceAccountPath) return null;
   try {
     // eslint-disable-next-line global-require, import/no-dynamic-require
-    const admin = require('firebase-admin');
-    // eslint-disable-next-line global-require, import/no-dynamic-require
     const serviceAccount = require(path.resolve(config.firebaseServiceAccountPath));
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    messaging = admin.messaging();
+    // newer firebase-admin (13+) only has the modular API; older ones have both
+    const appMod = require('firebase-admin/app');
+    const app = appMod.getApps().length ? appMod.getApps()[0] : appMod.initializeApp({ credential: appMod.cert(serviceAccount) });
+    messaging = require('firebase-admin/messaging').getMessaging(app);
     // eslint-disable-next-line no-console
     console.log('Push notifications enabled (FCM)');
   } catch (err) {

@@ -49,7 +49,7 @@ jobs:
           grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
           echo "--- push log"
           journalctl -u hushavia --since "-1d" --no-pager | grep -iE "push|firebase|fcm|messaging" | tail -15 | cut -c1-300
-          echo "firebase pkg: $(cd /opt/hushavia/app && node -p "require('firebase-admin/package.json').version" 2>&1 | tail -1)"
+          echo "firebase pkg: $(cd /opt/hushavia/app && node -p "require('./node_modules/firebase-admin/package.json').version" 2>&1 | tail -1)"
           echo "sa file: $(ls -la /etc/hushavia/firebase.json 2>&1)"
           echo "push tokens: $(sudo -u postgres psql -d hushavia -tAc "SELECT count(*) FROM push_tokens" 2>&1)"
           echo "--- security"
