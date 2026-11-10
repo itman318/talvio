@@ -57,7 +57,7 @@ void main() {
         // ignore: avoid_print
         print('${c.name} ${t.symbol}: on chain ${info.symbol} / ${info.decimals} decimals');
         expect(info.decimals, t.decimals, reason: '${c.name} ${t.symbol} decimals');
-        expect(info.symbol.toUpperCase().contains(t.symbol), true, reason: '${c.name} ${t.symbol} symbol is ${info.symbol}');
+        expect(info.symbol.toUpperCase().replaceAll('₮', 'T').contains(t.symbol), true, reason: '${c.name} ${t.symbol} symbol is ${info.symbol}');
       }
       // a real transfer can be prepared (read only: not signed, not sent)
       try {

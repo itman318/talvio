@@ -36,32 +36,32 @@ class EvmChain {
 
   static const eth = EvmChain(
     id: 'eth', chainId: 1, name: 'Ethereum', symbol: 'ETH', coinName: 'Ethereum', gecko: 'ethereum', platform: 'ethereum',
-    rpcs: ['https://ethereum-rpc.publicnode.com', 'https://eth.llamarpc.com', 'https://rpc.ankr.com/eth'],
+    rpcs: ['https://ethereum-rpc.publicnode.com', 'https://eth.llamarpc.com', 'https://1rpc.io/eth'],
     explorer: 'https://etherscan.io', color: 0xFF627EEA, maxFeeNative: 0.05,
   );
   static const bsc = EvmChain(
     id: 'bsc', chainId: 56, name: 'BNB Chain', symbol: 'BNB', coinName: 'BNB', gecko: 'binancecoin', platform: 'binance-smart-chain',
-    rpcs: ['https://bsc-rpc.publicnode.com', 'https://bsc-dataseed.bnbchain.org', 'https://rpc.ankr.com/bsc'],
+    rpcs: ['https://bsc-rpc.publicnode.com', 'https://bsc-dataseed.bnbchain.org', 'https://1rpc.io/bnb'],
     explorer: 'https://bscscan.com', color: 0xFFF0B90B, maxFeeNative: 0.02,
   );
   static const polygon = EvmChain(
     id: 'polygon', chainId: 137, name: 'Polygon', symbol: 'POL', coinName: 'Polygon', gecko: 'polygon-ecosystem-token', platform: 'polygon-pos',
-    rpcs: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon-rpc.com', 'https://rpc.ankr.com/polygon'],
+    rpcs: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon-rpc.com', 'https://1rpc.io/matic'],
     explorer: 'https://polygonscan.com', color: 0xFF8247E5, maxFeeNative: 20,
   );
   static const arbitrum = EvmChain(
     id: 'arbitrum', chainId: 42161, name: 'Arbitrum', symbol: 'ETH', coinName: 'Ethereum', gecko: 'ethereum', platform: 'arbitrum-one',
-    rpcs: ['https://arbitrum-one-rpc.publicnode.com', 'https://arb1.arbitrum.io/rpc', 'https://rpc.ankr.com/arbitrum'],
+    rpcs: ['https://arbitrum-one-rpc.publicnode.com', 'https://arb1.arbitrum.io/rpc', 'https://1rpc.io/arb'],
     explorer: 'https://arbiscan.io', color: 0xFF28A0F0, maxFeeNative: 0.01,
   );
   static const base = EvmChain(
     id: 'base', chainId: 8453, name: 'Base', symbol: 'ETH', coinName: 'Ethereum', gecko: 'ethereum', platform: 'base',
-    rpcs: ['https://base-rpc.publicnode.com', 'https://mainnet.base.org', 'https://rpc.ankr.com/base'],
+    rpcs: ['https://base-rpc.publicnode.com', 'https://mainnet.base.org', 'https://1rpc.io/base'],
     explorer: 'https://basescan.org', color: 0xFF0052FF, maxFeeNative: 0.01,
   );
   static const avalanche = EvmChain(
     id: 'avalanche', chainId: 43114, name: 'Avalanche', symbol: 'AVAX', coinName: 'Avalanche', gecko: 'avalanche-2', platform: 'avalanche',
-    rpcs: ['https://avalanche-c-chain-rpc.publicnode.com', 'https://api.avax.network/ext/bc/C/rpc', 'https://rpc.ankr.com/avalanche'],
+    rpcs: ['https://avalanche-c-chain-rpc.publicnode.com', 'https://api.avax.network/ext/bc/C/rpc', 'https://1rpc.io/avax/c'],
     explorer: 'https://snowtrace.io', color: 0xFFE84142, maxFeeNative: 1,
   );
 
@@ -227,6 +227,11 @@ class EvmApi {
         _good[chain.id] = i;
         return r;
       } on _RpcError catch (e) {
+        // the endpoint itself refused (key needed, rate limit): try the next one
+        if (RegExp(r'unauthori|api key|rate limit|limit exceeded|too many|forbidden', caseSensitive: false).hasMatch(e.message)) {
+          last = WalletException('${chain.name} is busy. Try again in a moment.');
+          continue;
+        }
         throw WalletException(_friendly(e.message)); // the network answered: an error about THIS request
       } catch (e) {
         last = e;
@@ -332,7 +337,7 @@ class EvmApi {
 
   static String _friendly(String m) {
     final l = m.toLowerCase();
-    if (l.contains('insufficient funds')) return 'Not enough balance to pay the network fee';
+    if (l.contains('insufficient funds') || l.contains('outoffunds') || l.contains('out of funds')) return 'Not enough balance to pay the network fee';
     if (l.contains('execution reverted') || l.contains('transfer amount exceeds')) return 'The token refused this transfer (not enough balance?)';
     if (l.contains('nonce too low') || l.contains('already known')) return 'This transfer was already sent';
     return m.length > 140 ? '${m.substring(0, 140)}…' : m;
