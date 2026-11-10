@@ -7,7 +7,6 @@ import '../screens/wallet_screen.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
-import '../utils/format.dart';
 import '../wallet/evm.dart';
 import '../wallet/tron_crypto.dart';
 import '../wallet/verify.dart';

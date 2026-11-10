@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chatapp/wallet/evm.dart';
 import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
+import 'package:chatapp/wallet/verify.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 // Talks to the real TRON networks — READ ONLY: transactions are prepared and checked, never signed or sent.
 void main() {
@@ -70,4 +73,46 @@ void main() {
       }
     }, timeout: const Timeout(Duration(seconds: 120)));
   }
+
+  test('chat cards: a real TRON USDT transfer is confirmed, a faked amount is not', () async {
+    final r = await http.get(Uri.parse('https://api.trongrid.io/v1/accounts/$me/transactions/trc20?limit=5&contract_address=${TronNet.main.usdt}'));
+    final list = (jsonDecode(r.body)['data'] as List?) ?? const [];
+    if (list.isEmpty) return; // network busy: nothing to check against
+    final t = list.first as Map;
+    final card = {'kind': 'sent', 'network': 'tron', 'symbol': 'USDT', 'amount': '${t['value']}', 'decimals': 6, 'to': '${t['to']}', 'contract': TronNet.main.usdt, 'tx': '${t['transaction_id']}'};
+    final ok = await CryptoVerify.check(card);
+    // ignore: avoid_print
+    print('TRON real transfer → $ok');
+    expect(ok == CardCheck.confirmed || ok == CardCheck.pending, true, reason: '$ok');
+    final bad = await CryptoVerify.check({...card, 'amount': '${BigInt.parse('${t['value']}') + BigInt.one}'});
+    // ignore: avoid_print
+    print('TRON faked amount → $bad');
+    expect(bad, CardCheck.mismatch);
+  }, timeout: const Timeout(Duration(seconds: 90)));
+
+  test('chat cards: a real BNB Chain USDT transfer is confirmed, a faked receiver is not', () async {
+    final api = EvmApi(EvmChain.bsc);
+    final head = EvmApi.q(await api.call('eth_blockNumber', const []));
+    final logs = (await api.call('eth_getLogs', [
+      {
+        'fromBlock': '0x${(head - BigInt.from(3)).toRadixString(16)}',
+        'toBlock': '0x${head.toRadixString(16)}',
+        'address': '0x55d398326f99059fF775485246999027B3197955',
+        'topics': ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'],
+      }
+    ]) as List?) ?? const [];
+    if (logs.isEmpty) return;
+    final l = logs.first as Map;
+    final to = '0x${'${(l['topics'] as List)[2]}'.substring(26)}';
+    final card = {'kind': 'sent', 'network': 'bsc', 'symbol': 'USDT', 'amount': '${EvmApi.q(l['data'])}', 'decimals': 18, 'to': to,
+      'contract': '0x55d398326f99059fF775485246999027B3197955', 'tx': '${l['transactionHash']}'};
+    final ok = await CryptoVerify.check(card);
+    // ignore: avoid_print
+    print('BSC real transfer → $ok');
+    expect(ok == CardCheck.confirmed || ok == CardCheck.pending, true, reason: '$ok');
+    final bad = await CryptoVerify.check({...card, 'to': '0x9858EfFD232B4033E47d90003D41EC34EcaEda94'});
+    // ignore: avoid_print
+    print('BSC faked receiver → $bad');
+    expect(bad, CardCheck.mismatch);
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

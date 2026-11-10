@@ -13,7 +13,10 @@ class CryptoVerify {
   static Future<CardCheck> check(Map<String, dynamic> c) async {
     final tx = '${c['tx'] ?? ''}';
     if (tx.isEmpty) return CardCheck.mismatch;
-    final hit = _cache[tx];
+    // the answer belongs to the WHOLE card: the same real transaction id with another amount or
+    // receiver is a different (fake) card and is checked on its own
+    final key = '${c['network']}|$tx|${c['to']}|${c['amount']}|${c['contract'] ?? ''}'.toLowerCase();
+    final hit = _cache[key];
     // final answers are kept; "pending" is asked again after 20 seconds
     if (hit != null && (hit.$1 != CardCheck.pending || DateTime.now().difference(hit.$2) < const Duration(seconds: 20))) return hit.$1;
     CardCheck r;
@@ -22,7 +25,7 @@ class CryptoVerify {
     } catch (_) {
       r = CardCheck.pending; // network not reachable right now
     }
-    _cache[tx] = (r, DateTime.now());
+    _cache[key] = (r, DateTime.now());
     return r;
   }
 
