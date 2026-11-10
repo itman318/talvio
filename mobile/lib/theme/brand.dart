@@ -95,7 +95,6 @@ class Brand {
       // screens glide in (a short slide + fade) instead of the heavier zoom
       pageTransitionsTheme: const PageTransitionsTheme(builders: {
         TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       }),
       // a clean, quick ripple (the sparkle one is slower to draw)
       splashFactory: InkRipple.splashFactory,
