@@ -1312,8 +1312,20 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Receive', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Text(widget.asset == null ? 'Receive' : 'Receive ${widget.asset!.symbol}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
+          // opened from one coin: only that coin and its network — no network switch
+          if (widget.asset != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(20)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _TokenIcon.of(widget.asset!, size: 24),
+                const SizedBox(width: 8),
+                Text('${widget.asset!.name} · ${widget.asset!.networkName}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              ]),
+            )
+          else
           SegmentedButton<bool>(
             segments: const [
               ButtonSegment(value: false, label: Text('TRON')),
@@ -1325,7 +1337,7 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            widget.asset != null && widget.asset!.isTron != _evm
+            widget.asset != null
                 ? 'Send only ${widget.asset!.symbol} on ${widget.asset!.networkName} to this address'
                 : _evm ? 'One address for Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche' : 'USDT (TRC-20) and TRX',
             textAlign: TextAlign.center,
@@ -1347,7 +1359,11 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                child: _evm ? const _TokenIcon(color: Color(0xFF627EEA), glyph: 'Ξ', size: 38) : const _TokenIcon(color: _trxColor, glyph: 'T', size: 38),
+                child: widget.asset != null
+                    ? _TokenIcon(color: widget.asset!.color, glyph: widget.asset!.glyph, size: 38)
+                    : _evm
+                        ? const _TokenIcon(color: Color(0xFF627EEA), glyph: 'Ξ', size: 38)
+                        : const _TokenIcon(color: _trxColor, glyph: 'T', size: 38),
               ),
             ]),
           ),
@@ -1368,7 +1384,9 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
           _Note(
             icon: Icons.warning_amber_rounded,
             color: const Color(0xFFE08A1E),
-            text: _evm
+            text: widget.asset != null
+                ? 'Only ${widget.asset!.symbol} on ${widget.asset!.networkName} here. The same coin sent from another network is lost.'
+                : _evm
                 ? 'Tell the sender which network they use (e.g. BNB Chain). The coins arrive on that same network in your wallet.'
                 : 'Only TRON coins here (USDT TRC-20, TRX). Coins sent from another network to this address are lost.',
           ),
