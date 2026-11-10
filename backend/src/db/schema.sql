@@ -1242,3 +1242,11 @@ CREATE TABLE IF NOT EXISTS support_canned (
   created_by BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
+
+-- ------------------------------------------------------------------ wallet in chats
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact', 'crypto'));
+-- public wallet addresses a person CHOSE to share with the people they chat with (never keys)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_tron VARCHAR(40);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_evm VARCHAR(42);

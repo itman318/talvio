@@ -1,4 +1,5 @@
 import 'global_search_screen.dart';
+import '../widgets/crypto_card.dart';
 import '../widgets/update_widgets.dart';
 import '../widgets/undo_bar.dart';
 import '../widgets/mascot.dart';
@@ -619,6 +620,8 @@ class ChatTile extends StatelessWidget {
       return (Icons.location_on_rounded, m.meta?['live'] != null ? 'Live location' : (m.text.isNotEmpty ? m.text : 'Location'));
     case 'contact':
       return (Icons.person_rounded, '${(m.meta?['contact'] as Map?)?['name'] ?? 'Contact'}');
+    case 'crypto':
+      return (Icons.account_balance_wallet_rounded, cryptoLabel(m.meta).replaceFirst('💸 ', ''));
     case 'sticker':
       return (null, '${(m.meta?['sticker'] as Map?)?['emoji'] ?? '🙂'} Sticker');
     case 'call':

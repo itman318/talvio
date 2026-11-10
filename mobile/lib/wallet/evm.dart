@@ -257,6 +257,11 @@ class EvmApi {
     return j['result'];
   }
 
+  /// Any read-only call (used to check transfers shown in chats).
+  Future<dynamic> call(String method, List<Object?> params) => _rpc(method, params);
+
+  static BigInt q(dynamic hex) => _q(hex);
+
   static BigInt _q(dynamic hex) {
     final s = '$hex';
     if (!s.startsWith('0x') || s.length < 3) return BigInt.zero;

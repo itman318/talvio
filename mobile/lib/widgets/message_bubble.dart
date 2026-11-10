@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 
+import 'crypto_card.dart';
 import 'package:flutter/material.dart';
 
 import 'video_note.dart';
@@ -122,6 +123,8 @@ class MessageBubble extends StatelessWidget {
         return GifView(message: m);
       case 'contact':
         return ContactCardView(message: m, accent: accent);
+      case 'crypto':
+        return CryptoCard(message: m, isMine: isMine, chat: chat);
       case 'call':
         return CallLogBubble(message: m, isMine: isMine, peer: chat.peer, accent: accent);
       default:
@@ -564,6 +567,7 @@ String replyLabel(String type, String text, {bool deleted = false}) {
     'poll' => '📊 Poll',
     'location' => '📍 Location',
     'contact' => '👤 Contact',
+    'crypto' => '💸 Crypto',
     _ => '',
   };
   if (t.isNotEmpty) return t; // a caption says more than the kind

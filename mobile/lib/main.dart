@@ -3,6 +3,7 @@ import 'screens/user_profile_screen.dart';
 import 'screens/login_activity_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'wallet/watcher.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -307,6 +308,8 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
         context.read<CallManager>().checkActive();
         store.loadStories().catchError((_) {});
         store.loadAnnouncements().catchError((_) {});
+        final uid = auth.me?.id;
+        if (uid != null && auth.feature('wallet')) WalletWatcher.check(uid);
       }
     } else if (state == AppLifecycleState.paused) {
       store.setForeground(false);

@@ -523,3 +523,37 @@ test('more privacy: voice messages (with exceptions) and hiding "typing…"', as
   await users.updatePrivacy(C.id, { typing: true });
   assert.equal((await users.getMe(C.id)).privacy.typing, 'on');
 });
+
+test('wallet in chats: shared addresses, sent / request cards, bad cards refused, admin switch', async () => {
+  const wallet = require('../src/services/wallet.service');
+  const tron = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH';
+  const evm = '0x9858EfFD232B4033E47d90003D41EC34EcaEda94';
+  assert.equal(wallet.isTron(tron), true);
+  assert.equal(wallet.isTron('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdJ'), false, 'checksum');
+  // nothing shared until the person chooses to
+  assert.deepEqual(await wallet.getFor(B.id, A.id), { tron: null, evm: null });
+  await wallet.setMine(A.id, { share: true, tron, evm });
+  assert.deepEqual(await wallet.getFor(B.id, A.id), { tron, evm });
+  await rejects(wallet.setMine(A.id, { share: true, tron: 'Tnotanaddress' }), 'invalid_address');
+  await wallet.setMine(A.id, { share: false });
+  assert.deepEqual(await wallet.getFor(B.id, A.id), { tron: null, evm: null });
+
+  const chat = await chats.getOrCreatePrivate(A.id, B.id);
+  const tx = 'ab'.repeat(32);
+  const m = await messages.sendMessage(A.id, chat.id, { type: 'crypto', crypto: { kind: 'sent', network: 'tron', symbol: 'USDT', amount: '5000000', decimals: 6, to: tron, tx } });
+  assert.equal(m.type, 'crypto');
+  assert.equal(m.meta.crypto.amount, '5000000');
+  assert.equal(wallet.previewText(m.meta), '💸 Sent 5 USDT');
+  const r = await messages.sendMessage(B.id, chat.id, { type: 'crypto', crypto: { kind: 'request', network: 'bsc', symbol: 'USDT', amount: '2500000000000000000', decimals: 18, to: evm } });
+  assert.equal(wallet.previewText(r.meta), '💸 Request: 2.5 USDT');
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'crypto', crypto: { kind: 'sent', network: 'tron', symbol: 'USDT', amount: '5', decimals: 6, to: tron } }), 'invalid_tx');
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'crypto', crypto: { kind: 'request', network: 'tron', symbol: 'USDT', amount: '5', decimals: 6, to: evm } }), 'invalid_address');
+  await rejects(messages.sendMessage(A.id, chat.id, { type: 'crypto', crypto: { kind: 'request', network: 'eth', symbol: 'ETH', amount: '-1', decimals: 18, to: evm } }), 'invalid_amount');
+  await settings.update({ feature_wallet: false });
+  try {
+    await rejects(messages.sendMessage(A.id, chat.id, { type: 'crypto', crypto: { kind: 'request', network: 'eth', symbol: 'ETH', amount: '1', decimals: 18, to: evm } }), 'feature_disabled');
+    assert.equal((await settings.publicConfig()).features.wallet, false);
+  } finally {
+    await settings.update({ feature_wallet: true });
+  }
+});

@@ -161,6 +161,8 @@ router.delete('/me', h(async (req, res) => {
 
 // --- users, contacts, blocks
 router.get('/users/search', h(async (req, res) => res.json(await userService.searchUsers(req.userId, req.query.q))));
+router.put('/me/wallet', h(async (req, res) => res.json(await require('../services/wallet.service').setMine(req.userId, req.body))));
+router.get('/users/:id/wallet', h(async (req, res) => res.json(await require('../services/wallet.service').getFor(req.userId, req.params.id))));
 router.get('/users/:id', h(async (req, res) => res.json(await userService.getUser(req.userId, parseIdParam(req.params.id)))));
 
 router.get('/contacts', h(async (req, res) => res.json(await userService.listContacts(req.userId))));

@@ -507,6 +507,10 @@ class Message {
         return text.isNotEmpty ? 'GIF · $text' : 'GIF';
       case 'contact':
         return '👤 ${(meta?['contact'] as Map?)?['name'] ?? 'Contact'}';
+      case 'crypto':
+        final c = meta?['crypto'] as Map?;
+        if (c == null) return '💸 Crypto';
+        return c['kind'] == 'request' ? '💸 Payment request · ${c['symbol']}' : '💸 Sent ${c['symbol']}';
       case 'call':
         final c = callMeta ?? const {};
         final icon = c['video'] == true ? '📹' : '📞';

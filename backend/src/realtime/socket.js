@@ -152,6 +152,8 @@ function previewRaw(message) {
       return `${(message.meta && message.meta.sticker && message.meta.sticker.emoji) || '🙂'} Sticker`;
     case 'gif':
       return message.text ? `GIF · ${message.text}` : 'GIF';
+    case 'crypto':
+      return require('../services/wallet.service').previewText(message.meta); // eslint-disable-line global-require
     case 'contact':
       return `👤 ${(message.meta && message.meta.contact && message.meta.contact.name) || 'Contact'}`;
     default:

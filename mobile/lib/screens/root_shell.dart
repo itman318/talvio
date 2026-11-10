@@ -9,6 +9,7 @@ import 'my_profile_screen.dart';
 import '../core/proxy.dart';
 import 'proxy_screen.dart';
 import 'dart:async';
+import '../wallet/watcher.dart';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
@@ -64,6 +65,10 @@ class _RootShellState extends State<RootShell> {
   @override
   void initState() {
     super.initState();
+    // coins arriving in the wallet → a notification (checked on open and every few minutes)
+    final auth = context.read<AuthState>();
+    final uid = auth.me?.id;
+    if (uid != null) WalletWatcher.start(uid, () => auth.feature('wallet'));
     _store.lastNotice.addListener(_onNotice);
     // battery optimisation can delay notifications: explain once and offer to allow background running
     Future.delayed(const Duration(seconds: 4), () {
@@ -90,6 +95,7 @@ class _RootShellState extends State<RootShell> {
   void dispose() {
     _store.lastNotice.removeListener(_onNotice);
     _links?.cancel();
+    WalletWatcher.stop();
     super.dispose();
   }
 

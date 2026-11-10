@@ -7,12 +7,15 @@ import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/screen_guard.dart';
 import '../state/auth_state.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../core/services.dart';
+import '../wallet/address_book.dart';
 import '../wallet/evm.dart';
 import '../wallet/portfolio.dart';
 import '../wallet/tron_api.dart';
@@ -610,6 +613,7 @@ class _WalletHomeState extends State<_WalletHome> {
                 setState(() {});
               },
             ),
+            _ShareSwitch(store: w),
             ListTile(
               leading: const Icon(Icons.key_rounded),
               title: const Text('Show recovery phrase'),
@@ -783,6 +787,45 @@ class _WalletHomeState extends State<_WalletHome> {
       ),
     );
   }
+}
+
+/// "Friends can pay me in chats": shares ONLY the public addresses with people you chat with.
+class _ShareSwitch extends StatefulWidget {
+  const _ShareSwitch({required this.store});
+  final WalletStore store;
+  @override
+  State<_ShareSwitch> createState() => _ShareSwitchState();
+}
+
+class _ShareSwitchState extends State<_ShareSwitch> {
+  bool? _on;
+  String get _key => 'wallet_share_v1_${widget.store.userId}';
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((p) => mounted ? setState(() => _on = p.getBool(_key) ?? false) : null);
+  }
+
+  Future<void> _set(bool v) async {
+    final w = widget.store;
+    try {
+      await context.read<AppServices>().api.put('/me/wallet', {'share': v, 'tron': w.address, 'evm': w.evmAddress});
+      (await SharedPreferences.getInstance()).setBool(_key, v);
+      if (mounted) setState(() => _on = v);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        secondary: const Icon(Icons.forum_rounded),
+        title: const Text('Friends can pay me in chats'),
+        subtitle: const Text('Shares only your public addresses with people you chat with'),
+        value: _on ?? false,
+        onChanged: _on == null ? null : _set,
+      );
 }
 
 /// A TRON (T…) or EVM (0x…) address inside any text (QR codes often carry "ethereum:0x…?value=…").
@@ -1288,10 +1331,14 @@ class _AddTokenScreenState extends State<_AddTokenScreen> {
 
 // ======================================================================== send
 class _SendScreen extends StatefulWidget {
-  const _SendScreen({required this.asset, required this.feeAsset, this.to});
+  const _SendScreen({required this.asset, required this.feeAsset, this.to, this.amount, this.forChat = false, this.toName});
   final WalletAsset asset;
   final WalletAsset feeAsset; // the network's own coin (pays the fee)
   final String? to;
+  final BigInt? amount;
+  final String? toName; // the chat partner, when paying from a chat
+  /// Opened from a chat: on success the screen closes and hands back the card to post.
+  final bool forChat;
 
   @override
   State<_SendScreen> createState() => _SendScreenState();
@@ -1299,8 +1346,11 @@ class _SendScreen extends StatefulWidget {
 
 class _SendScreenState extends State<_SendScreen> {
   late final _to = TextEditingController(text: widget.to ?? '');
-  final _amount = TextEditingController();
+  late final _amount = TextEditingController(
+      text: widget.amount == null ? '' : Units.format(widget.amount!, decimals: widget.asset.decimals, maxFraction: widget.asset.decimals).replaceAll(',', ''));
   bool _busy = false;
+  List<SavedAddress> _book = const [];
+  List<String> _known = const []; // addresses sent to before (from this phone's history)
 
   WalletAsset get a => widget.asset;
 
@@ -1309,6 +1359,9 @@ class _SendScreenState extends State<_SendScreen> {
     super.initState();
     _to.addListener(() => setState(() {}));
     _amount.addListener(() => setState(() {}));
+    final uid = context.read<WalletStore>().userId;
+    AddressBook(uid).load().then((b) => mounted ? setState(() => _book = b) : null);
+    SentLog(uid).load().then((l) => mounted ? setState(() => _known = l.map((t) => t.to).toSet().toList()) : null);
   }
 
   @override
@@ -1388,7 +1441,12 @@ class _SendScreenState extends State<_SendScreen> {
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _ConfirmSheet(asset: a, feeAsset: widget.feeAsset, to: to, amount: amount, fee: q.fee, short: short),
+      builder: (ctx) => _ConfirmSheet(
+        asset: a, feeAsset: widget.feeAsset, to: to, amount: amount, fee: q.fee, short: short,
+        name: AddressBook.nameFor(_book, to) ?? widget.toName,
+        firstTime: AddressBook.nameFor(_book, to) == null && !_known.any((k) => k.toLowerCase() == to.toLowerCase()) && widget.toName == null,
+        lookalike: AddressBook.lookalike([..._book.map((b) => b.address), ..._known], to),
+      ),
     );
     if (go != true || !mounted) return;
     final phrase = await w.readPhrase(context, 'Confirm sending ${Units.format(amount, decimals: a.decimals)} ${a.symbol}');
@@ -1417,7 +1475,27 @@ class _SendScreenState extends State<_SendScreen> {
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       final url = a.isTron ? '${w.net.explorer}$id' : '${a.evm!.explorer}/tx/$id';
-      await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => _SentScreen(text: '${Units.format(amount, decimals: a.decimals)} ${a.symbol} to ${_short(to)}', url: url)));
+      if (a.isTron) {
+        await SentLog(w.userId).add(WalletTx(id: id, token: a.symbol, from: w.address!, to: to, amount: amount, time: DateTime.now(), ok: true, network: 'tron', decimals: a.decimals));
+      }
+      if (widget.forChat) {
+        Navigator.pop(context, <String, dynamic>{
+          'kind': 'sent', 'network': a.network, 'symbol': a.symbol, 'amount': '$amount', 'decimals': a.decimals, 'to': to,
+          if (a.contract != null) 'contract': a.contract, 'tx': id,
+        });
+        return;
+      }
+      await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _SentScreen(
+            text: '${Units.format(amount, decimals: a.decimals)} ${a.symbol} to ${AddressBook.nameFor(_book, to) ?? _short(to)}',
+            url: url,
+            saveAddress: AddressBook.nameFor(_book, to) == null ? to : null,
+            userId: w.userId,
+          ),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
@@ -1450,7 +1528,44 @@ class _SendScreenState extends State<_SendScreen> {
               labelText: 'To (${a.networkName} address, $hint)',
               errorText: _toError,
               errorMaxLines: 2,
+              helperText: AddressBook.nameFor(_book, _to.text.trim()),
               suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'Address book',
+                  icon: const Icon(Icons.contacts_rounded),
+                  onPressed: () async {
+                    final mine = _book.where((b) => b.isTron == a.isTron).toList();
+                    if (mine.isEmpty) {
+                      showInfo(context, 'No saved ${a.isTron ? 'TRON' : '0x'} addresses yet. They’re saved after you send.');
+                      return;
+                    }
+                    final pick = await showModalBottomSheet<String>(
+                      context: context,
+                      builder: (ctx) => SafeArea(
+                        child: ListView(shrinkWrap: true, children: [
+                          const Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 8), child: Text('Address book', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                          for (final b in mine)
+                            ListTile(
+                              leading: CircleAvatar(child: Text(b.name.isEmpty ? '?' : b.name.substring(0, 1).toUpperCase())),
+                              title: Text(b.name),
+                              subtitle: Text(_short(b.address), style: const TextStyle(fontFamily: 'monospace')),
+                              onTap: () => Navigator.pop(ctx, b.address),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded),
+                                onPressed: () async {
+                                  await AddressBook(context.read<WalletStore>().userId).remove(b.address);
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  final nb = await AddressBook(context.read<WalletStore>().userId).load();
+                                  if (mounted) setState(() => _book = nb);
+                                },
+                              ),
+                            ),
+                        ]),
+                      ),
+                    );
+                    if (pick != null) _to.text = pick;
+                  },
+                ),
                 IconButton(
                   tooltip: 'Paste',
                   icon: const Icon(Icons.content_paste_rounded),
@@ -1523,7 +1638,13 @@ class _Quote {
 }
 
 class _ConfirmSheet extends StatelessWidget {
-  const _ConfirmSheet({required this.asset, required this.feeAsset, required this.to, required this.amount, required this.fee, required this.short});
+  const _ConfirmSheet({
+    required this.asset, required this.feeAsset, required this.to, required this.amount, required this.fee, required this.short,
+    this.name, this.firstTime = false, this.lookalike,
+  });
+  final String? name;
+  final bool firstTime;
+  final String? lookalike; // a known address this one only LOOKS like
   final WalletAsset asset;
   final WalletAsset feeAsset;
   final String to;
@@ -1551,10 +1672,25 @@ class _ConfirmSheet extends StatelessWidget {
           Text('${Units.format(amount, decimals: asset.decimals)} ${asset.symbol}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
           if (asset.price != null) Text('≈ ${usd(Units.toDouble(amount, decimals: asset.decimals) * asset.price!)}', style: const TextStyle(color: Brand.muted)),
           const SizedBox(height: 14),
-          row('To', SelectableText(to, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600))),
+          row('To', Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            if (name != null) Text(name!, style: const TextStyle(fontWeight: FontWeight.w800)),
+            SelectableText(to, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600)),
+          ])),
           row('Network', Text(asset.networkName, style: const TextStyle(fontWeight: FontWeight.w600))),
           row('Network fee', Text('≈ $feeText ${feeAsset.symbol}${feeUsd != null ? '  (${usd(feeUsd)})' : ''}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600))),
           const SizedBox(height: 8),
+          if (lookalike != null) ...[
+            _Note(
+              icon: Icons.gpp_maybe_rounded,
+              color: _out,
+              text: 'Careful: this address only LOOKS like one you used before (${_short(lookalike!)}) — the middle is different. '
+                  'Scammers make look-alike addresses. Compare every character.',
+            ),
+            const SizedBox(height: 8),
+          ] else if (firstTime) ...[
+            const _Note(icon: Icons.fiber_new_rounded, color: Color(0xFFE08A1E), text: 'You haven’t sent to this address before. Check it with the person — or send a small amount first.'),
+            const SizedBox(height: 8),
+          ],
           if (short)
             _Note(
               icon: Icons.error_outline_rounded,
@@ -1589,9 +1725,11 @@ class _ConfirmSheet extends StatelessWidget {
 }
 
 class _SentScreen extends StatelessWidget {
-  const _SentScreen({required this.text, required this.url});
+  const _SentScreen({required this.text, required this.url, this.saveAddress, this.userId = 0});
   final String text;
   final String url;
+  final String? saveAddress;
+  final int userId;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -1619,6 +1757,31 @@ class _SentScreen extends StatelessWidget {
               const SizedBox(height: 4),
               const Text('It usually arrives within a minute.', style: TextStyle(color: Brand.faint)),
               const Spacer(),
+              if (saveAddress != null) ...[
+                TextButton.icon(
+                  onPressed: () async {
+                    final name = TextEditingController();
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Save this address'),
+                        content: TextField(controller: name, autofocus: true, maxLength: 40, decoration: const InputDecoration(hintText: 'Name, e.g. Ali’s wallet')),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+                        ],
+                      ),
+                    );
+                    if (ok == true && name.text.trim().isNotEmpty) {
+                      await AddressBook(userId).add(name.text, saveAddress!);
+                      if (context.mounted) showInfo(context, 'Saved to your address book');
+                    }
+                  },
+                  icon: const Icon(Icons.bookmark_add_rounded),
+                  label: const Text('Save address'),
+                ),
+                const SizedBox(height: 6),
+              ],
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
                 onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
@@ -1878,4 +2041,143 @@ class _ChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ChartPainter old) => old.pts != pts || old.touch != touch || old.color != color;
+}
+
+// ======================================================================== from a chat
+/// Opens the wallet (creating it if needed) and loads balances. Null when there's no usable wallet.
+Future<(WalletStore, List<WalletAsset>)?> _walletForChat(BuildContext context) async {
+  final auth = context.read<AuthState>();
+  if (!auth.feature('wallet')) {
+    showInfo(context, 'The wallet is switched off for now');
+    return null;
+  }
+  final w = WalletStore(auth.me?.id ?? 0);
+  await w.load();
+  if (!context.mounted) return null;
+  if (!w.exists) {
+    final ok = await confirm(context, 'Set up your wallet', 'To send or ask for crypto in chats, first create your own wallet. It takes a minute.', ok: 'Set up');
+    if (ok && context.mounted) await Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()));
+    return null;
+  }
+  final assets = Portfolio.build(tron: w.net, custom: w.customTokens);
+  showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+  try {
+    await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net);
+  } finally {
+    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+  }
+  return (w, assets);
+}
+
+/// "Send crypto" from a chat. Returns the card to post (kind: sent) or null.
+/// [peerUserId]: the other person in a private chat (their shared address is filled in);
+/// [request]: a payment request card being paid.
+Future<Map<String, dynamic>?> walletSendForChat(BuildContext context, {int? peerUserId, String? peerName, Map<String, dynamic>? request}) async {
+  final got = await _walletForChat(context);
+  if (got == null || !context.mounted) return null;
+  final (w, assets) = got;
+  WalletAsset? asset;
+  String? to;
+  BigInt? amount;
+  if (request != null) {
+    final contract = '${request['contract'] ?? ''}'.toLowerCase();
+    asset = assets.where((a) => a.network == '${request['network']}' && (contract.isEmpty ? a.isNative : (a.contract ?? '').toLowerCase() == contract)).firstOrNull;
+    // TRON USDT/TRX are keyed by symbol
+    asset ??= assets.where((a) => a.network == 'tron' && '${request['network']}' == 'tron' && a.symbol == '${request['symbol']}').firstOrNull;
+    if (asset == null) {
+      showInfo(context, 'This coin isn’t in your wallet. Add the token first.');
+      return null;
+    }
+    to = '${request['to']}';
+    amount = BigInt.tryParse('${request['amount']}');
+  } else {
+    Map<String, dynamic> shared = const {};
+    if (peerUserId != null) {
+      try {
+        shared = Map<String, dynamic>.from(await context.read<AppServices>().api.get('/users/$peerUserId/wallet') as Map);
+      } catch (_) {}
+    }
+    if (!context.mounted) return null;
+    var list = assets.where((a) => (a.balance ?? BigInt.zero) > BigInt.zero).toList()..sort((x, y) => y.value.compareTo(x.value));
+    if (list.isEmpty) {
+      showInfo(context, 'Your wallet is empty. Tap Receive in the wallet to add coins.');
+      return null;
+    }
+    asset = await _pickAsset(context, list, title: 'Send which coin?');
+    if (asset == null || !context.mounted) return null;
+    to = asset.isTron ? shared['tron'] as String? : shared['evm'] as String?;
+    if (to == null && peerName != null) {
+      showInfo(context, '$peerName hasn’t shared a ${asset.isTron ? 'TRON' : asset.networkName} address. Paste the address they gave you — or ask them to send you a request.');
+    }
+  }
+  if (!context.mounted) return null;
+  final feeAsset = assets.firstWhere((x) => x.network == asset!.network && x.isNative);
+  return Navigator.push<Map<String, dynamic>>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ChangeNotifierProvider.value(
+        value: w,
+        child: _SendScreen(asset: asset!, feeAsset: feeAsset, to: to, amount: amount, forChat: true, toName: peerName),
+      ),
+    ),
+  );
+}
+
+/// "Ask for crypto" from a chat: pick a coin and an amount; returns the request card (kind: request) or null.
+Future<Map<String, dynamic>?> walletRequestForChat(BuildContext context) async {
+  final auth = context.read<AuthState>();
+  if (!auth.feature('wallet')) {
+    showInfo(context, 'The wallet is switched off for now');
+    return null;
+  }
+  final w = WalletStore(auth.me?.id ?? 0);
+  await w.load();
+  if (!context.mounted) return null;
+  if (!w.exists) {
+    final ok = await confirm(context, 'Set up your wallet', 'To ask for crypto in chats, first create your own wallet. It takes a minute.', ok: 'Set up');
+    if (ok && context.mounted) await Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()));
+    return null;
+  }
+  final assets = Portfolio.build(tron: w.net, custom: w.customTokens);
+  final a = await _pickAsset(context, assets, title: 'Ask for which coin?');
+  if (a == null || !context.mounted) return null;
+  final ctl = TextEditingController();
+  final note = TextEditingController();
+  final amount = await showDialog<BigInt>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) {
+        final u = Units.parse(ctl.text, decimals: a.decimals);
+        return AlertDialog(
+          title: Text('Ask for ${a.symbol}'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('on ${a.networkName}', style: const TextStyle(color: Brand.muted)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              onChanged: (_) => set(() {}),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+              decoration: InputDecoration(suffixText: a.symbol, hintText: '0'),
+            ),
+            const SizedBox(height: 8),
+            TextField(controller: note, maxLength: 140, decoration: const InputDecoration(hintText: 'What for? (optional)')),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: u == null || u <= BigInt.zero ? null : () => Navigator.pop(ctx, u), child: const Text('Send request')),
+          ],
+        );
+      },
+    ),
+  );
+  if (amount == null) return null;
+  return {
+    'kind': 'request', 'network': a.network, 'symbol': a.symbol, 'amount': '$amount', 'decimals': a.decimals,
+    'to': a.isTron ? w.address! : w.evmAddress!,
+    if (a.contract != null) 'contract': a.contract,
+    if (note.text.trim().isNotEmpty) 'note': note.text.trim(),
+  };
 }

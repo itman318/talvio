@@ -13,7 +13,7 @@ const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
 const EFFECTS = ['confetti', 'hearts', 'balloons', 'fireworks'];
-const SEND_TYPES = ['text', 'image', 'video', 'voice', 'video_note', 'file', 'poll', 'location', 'sticker', 'gif', 'contact'];
+const SEND_TYPES = ['text', 'image', 'video', 'voice', 'video_note', 'file', 'poll', 'location', 'sticker', 'gif', 'contact', 'crypto'];
 const SLOW_MODE_VALUES = [0, 10, 30, 60, 300, 900, 3600];
 const MENTION_RE = /(^|[^A-Za-z0-9_@])@([A-Za-z][A-Za-z0-9_]{3,31})/g;
 const MEDIA_KINDS_FOR_TYPE = {
@@ -440,6 +440,9 @@ async function prepareMessage(userId, chat, body, internal = {}) {
     const st = await require('./sticker.service').stickerForSend(body.sticker_id, userId); // lazy: avoids circular import
     out.mediaId = st.media_id;
     out.meta = { sticker: { id: st.id, pack_id: st.pack_id, emoji: st.emoji, pack_title: st.pack_title } };
+    out.text = '';
+  } else if (type === 'crypto') {
+    out.meta = await require('./wallet.service').cardMeta(body); // eslint-disable-line global-require
     out.text = '';
   } else if (type === 'contact') {
     const c = body.contact || {};

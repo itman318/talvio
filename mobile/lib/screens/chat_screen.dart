@@ -1,4 +1,5 @@
 import 'voice_chat_screen.dart';
+import 'wallet_screen.dart' show walletSendForChat, walletRequestForChat;
 import '../state/voice_chat_manager.dart';
 import 'dart:async';
 import 'dart:io';
@@ -862,6 +863,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Video note', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),
       if (auth.feature('location')) ('location', Icons.location_on_rounded, 'Location', const [Color(0xFF4FD8A6), Color(0xFF10B37A)]),
       ('contact', Icons.person_rounded, 'Contact', const [Color(0xFF5FD0E6), Color(0xFF1597B8)]),
+      if (auth.feature('wallet') && !(_store.chatById(chatId)?.isChannel ?? false))
+        ('crypto', Icons.account_balance_wallet_rounded, 'Crypto', const [Color(0xFF3FD8C0), Color(0xFF12B89C)]),
       if (multi && auth.feature('polls')) ('poll', Icons.bar_chart_rounded, 'Poll', const [Color(0xFFF7D27E), Color(0xFFE0A43A)]),
     ];
     final choice = preset ??
@@ -919,6 +922,40 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (choice == 'location') {
       await _shareLocation();
+      return;
+    }
+    if (choice == 'crypto') {
+      if (!mounted) return;
+      final what = await showModalBottomSheet<String>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.arrow_upward_rounded),
+              title: const Text('Send crypto'),
+              subtitle: const Text('From your wallet, confirmed with your fingerprint'),
+              onTap: () => Navigator.pop(ctx, 'send'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.request_page_rounded),
+              title: const Text('Ask for crypto'),
+              subtitle: const Text('They pay with one tap'),
+              onTap: () => Navigator.pop(ctx, 'request'),
+            ),
+          ]),
+        ),
+      );
+      if (what == null || !mounted) return;
+      final chat = _store.chatById(chatId);
+      final card = what == 'send'
+          ? await walletSendForChat(context, peerUserId: chat?.isMulti == false ? chat?.peer?.id : null, peerName: chat?.isMulti == false ? chat?.peer?.firstName : null)
+          : await walletRequestForChat(context);
+      if (card == null) return;
+      try {
+        await _store.sendSpecial(chatId, 'crypto', {'crypto': card}, meta: {'crypto': card});
+      } catch (e) {
+        if (mounted) showError(context, e);
+      }
       return;
     }
     if (choice == 'contact') {

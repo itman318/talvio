@@ -142,6 +142,14 @@ class TronApi {
     return out;
   }
 
+  /// A transaction as the network has it (null when the network doesn't know it, yet).
+  Future<Map<String, dynamic>?> txById(String id) async {
+    final r = await _post('/wallet/gettransactionbyid', {'value': id, 'visible': true});
+    return r['txID'] == null ? null : r;
+  }
+
+  Future<Map<String, dynamic>> txInfo(String id) => _post('/wallet/gettransactioninfobyid', {'value': id});
+
   // ------------------------------------------------------------------ sending
   Future<PreparedTx> prepareUsdt(String from, String to, BigInt amount) async {
     final toBytes = TronCrypto.decodeAddress(to);
