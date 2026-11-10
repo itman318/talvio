@@ -277,7 +277,7 @@ class UtxoTx {
     const seq = [0xfd, 0xff, 0xff, 0xff]; // replace-by-fee allowed
     const version = 2;
     if (c.segwit) {
-      final prevouts = [for (final i in p.inputs) ..._txidLE(i.txid), ..._u32(i.vout)];
+      final prevouts = [for (final i in p.inputs) ...[..._txidLE(i.txid), ..._u32(i.vout)]];
       final hashPrevouts = UtxoCrypto.dsha(prevouts);
       final hashSequence = UtxoCrypto.dsha([for (final _ in p.inputs) ...seq]);
       final hashOutputs = UtxoCrypto.dsha([for (final o in outputs) ...o]);
