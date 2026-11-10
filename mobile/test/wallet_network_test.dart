@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:chatapp/wallet/evm.dart';
 import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
 
@@ -44,5 +45,29 @@ void main() {
       // ignore: avoid_print
       print('prices: $px');
     }, timeout: const Timeout(Duration(seconds: 90)));
+  }
+
+  for (final c in EvmChain.all) {
+    test('${c.name}: right network, and every built-in token is what we say (symbol + decimals)', () async {
+      final api = EvmApi(c);
+      final b = await api.balance('0x9858EfFD232B4033E47d90003D41EC34EcaEda94');
+      expect(b >= BigInt.zero, true);
+      for (final t in EvmToken.builtIn.where((t) => t.chain == c.id)) {
+        final info = await api.tokenInfo(t.address);
+        // ignore: avoid_print
+        print('${c.name} ${t.symbol}: on chain ${info.symbol} / ${info.decimals} decimals');
+        expect(info.decimals, t.decimals, reason: '${c.name} ${t.symbol} decimals');
+        expect(info.symbol.toUpperCase().contains(t.symbol), true, reason: '${c.name} ${t.symbol} symbol is ${info.symbol}');
+      }
+      // a real transfer can be prepared (read only: not signed, not sent)
+      try {
+        final p = await api.prepare(from: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94', to: '0x6Fac4D18c912343BF86fa7049364Dd4E424Ab9C0', amount: BigInt.one);
+        // ignore: avoid_print
+        print('${c.name} fee for a plain transfer: ${Units.format(p.fee, decimals: 18, maxFraction: 8)} ${c.symbol}');
+      } on WalletException catch (e) {
+        // ignore: avoid_print
+        print('${c.name} prepare: ${e.message}');
+      }
+    }, timeout: const Timeout(Duration(seconds: 120)));
   }
 }

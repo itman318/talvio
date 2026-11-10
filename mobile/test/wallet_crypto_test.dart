@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:chatapp/wallet/evm.dart';
 import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
 
@@ -93,6 +94,36 @@ void main() {
     expect(() => TxCheck.usdt(tx(to, five, fee: 900000000), from: me, to: to, amount: five, usdt: usdt, maxFee: 50000000), throwsA(isA<WalletException>()), reason: 'huge fee');
     final forged = tx(to, five)..['txID'] = '00' * 32;
     expect(() => TxCheck.usdt(forged, from: me, to: to, amount: five, usdt: usdt, maxFee: 50000000), throwsA(isA<WalletException>()), reason: 'id must be the hash');
+  });
+
+  test('EVM: phrase → address (m/44\'/60\'/0\'/0/i, EIP-55) — same as MetaMask / Trust Wallet', () {
+    expect(EvmCrypto.addressOf(EvmCrypto.privateKey(phrase)), '0x9858EfFD232B4033E47d90003D41EC34EcaEda94');
+    expect(EvmCrypto.addressOf(EvmCrypto.privateKey(phrase, index: 1)), '0x6Fac4D18c912343BF86fa7049364Dd4E424Ab9C0');
+    expect(EvmCrypto.isValidAddress('0x9858EfFD232B4033E47d90003D41EC34EcaEda94'), true);
+    expect(EvmCrypto.isValidAddress('0x9858effd232b4033e47d90003d41ec34ecaeda94'), true, reason: 'all lower case has no checksum');
+    expect(EvmCrypto.isValidAddress('0x9858EfFD232B4033E47d90003D41EC34EcaEda95'), false, reason: 'typo caught by EIP-55');
+    expect(EvmCrypto.isValidAddress('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'), false);
+  });
+
+  test('EVM: EIP-155 example transaction (from the EIP itself)', () {
+    final key = TronCrypto.fromHex('46' * 32);
+    expect(EvmCrypto.addressOf(key), '0x9d8A62f656a8d1615C1294fd71e9CFb3E4855A4F');
+    final unsigned = EvmCrypto.rlp([BigInt.from(9), BigInt.from(20000000000), BigInt.from(21000), TronCrypto.fromHex('35' * 20), BigInt.parse('1000000000000000000'), <int>[], 1, 0, 0]);
+    expect(TronCrypto.hex(unsigned), 'ec098504a817c800825208943535353535353535353535353535353535353535880de0b6b3a764000080018080');
+    expect(TronCrypto.hex(TronCrypto.keccak256(unsigned)), 'daf5a779ae972f972197303d7b574746c7ef83eadac0f2791ad23db92e4c8e53');
+    final raw = EvmCrypto.signLegacy(
+      chainId: 1, nonce: BigInt.from(9), gasPrice: BigInt.from(20000000000), gas: BigInt.from(21000),
+      to: TronCrypto.fromHex('35' * 20), value: BigInt.parse('1000000000000000000'), data: const [], priv: key,
+    );
+    expect(TronCrypto.hex(raw),
+        'f86c098504a817c800825208943535353535353535353535353535353535353535880de0b6b3a76400008025a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83');
+  });
+
+  test('EVM: token transfer data', () {
+    final d = EvmCrypto.transferData('0x9858EfFD232B4033E47d90003D41EC34EcaEda94', BigInt.from(1500000));
+    expect(TronCrypto.hex(d), 'a9059cbb0000000000000000000000009858effd232b4033e47d90003d41ec34ecaeda94000000000000000000000000000000000000000000000000000000000016e360');
+    expect(Units.format(BigInt.parse('1234500000000000000'), decimals: 18), '1.2345');
+    expect(Units.parse('0.5', decimals: 18), BigInt.parse('500000000000000000'));
   });
 }
 

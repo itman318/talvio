@@ -3,6 +3,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:convert';
+
+import 'evm.dart';
 import 'tron_api.dart';
 import 'tron_crypto.dart';
 
@@ -17,8 +20,14 @@ class WalletStore extends ChangeNotifier {
   String get _phraseKey => 'wallet_phrase_v1_$userId';
   String get _addrKey => 'wallet_addr_v1_$userId';
   String get _netKey => 'wallet_net_v1_$userId';
+  String get _evmKey => 'wallet_evm_v1_$userId';
+  String get _tokensKey => 'wallet_tokens_v1_$userId';
+  String get _hideKey => 'wallet_hide0_v1_$userId';
 
-  String? address;
+  String? address; // TRON
+  String? evmAddress; // the same 0x address on every EVM network
+  List<EvmToken> customTokens = [];
+  bool hideZero = true;
   TronNet net = TronNet.main;
   bool loaded = false;
 
@@ -28,12 +37,22 @@ class WalletStore extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     net = TronNet.byId(p.getString(_netKey));
     address = p.getString(_addrKey);
-    if (address == null && await _secure.containsKey(key: _phraseKey)) {
-      // address cache was cleared: rebuild it (the address is public, the phrase stays locked)
+    evmAddress = p.getString(_evmKey);
+    hideZero = p.getBool(_hideKey) ?? true;
+    try {
+      customTokens = [for (final j in jsonDecode(p.getString(_tokensKey) ?? '[]') as List) EvmToken.fromJson(j as Map)];
+    } catch (_) {
+      customTokens = [];
+    }
+    if ((address == null || evmAddress == null) && await _secure.containsKey(key: _phraseKey)) {
+      // address cache missing (or a wallet made before EVM support): rebuild it — addresses are public,
+      // the phrase stays locked in secure storage
       final phrase = await _secure.read(key: _phraseKey);
       if (phrase != null) {
         address = TronCrypto.addressOf(TronCrypto.privateKey(phrase));
+        evmAddress = EvmCrypto.addressOf(EvmCrypto.privateKey(phrase));
         await p.setString(_addrKey, address!);
+        await p.setString(_evmKey, evmAddress!);
       }
     }
     loaded = true;
@@ -53,17 +72,46 @@ class WalletStore extends ChangeNotifier {
     final p = TronCrypto.normalize(phrase);
     if (!TronCrypto.isValidPhrase(p)) throw WalletException('These words are not a valid recovery phrase');
     final addr = TronCrypto.addressOf(TronCrypto.privateKey(p));
+    final evm = EvmCrypto.addressOf(EvmCrypto.privateKey(p));
     await _secure.write(key: _phraseKey, value: p);
-    (await SharedPreferences.getInstance()).setString(_addrKey, addr);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_addrKey, addr);
+    await prefs.setString(_evmKey, evm);
     address = addr;
+    evmAddress = evm;
     notifyListeners();
   }
 
   /// Removes the wallet from this phone (the money stays on the network; the phrase brings it back).
   Future<void> remove() async {
     await _secure.delete(key: _phraseKey);
-    (await SharedPreferences.getInstance()).remove(_addrKey);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_addrKey);
+    await prefs.remove(_evmKey);
     address = null;
+    evmAddress = null;
+    notifyListeners();
+  }
+
+  Future<void> addToken(EvmToken t) async {
+    if (customTokens.any((x) => x.chain == t.chain && x.address.toLowerCase() == t.address.toLowerCase()) ||
+        EvmToken.builtIn.any((x) => x.chain == t.chain && x.address.toLowerCase() == t.address.toLowerCase())) {
+      throw WalletException('${t.symbol} is already in your wallet');
+    }
+    customTokens = [...customTokens, t];
+    (await SharedPreferences.getInstance()).setString(_tokensKey, jsonEncode([for (final x in customTokens) x.toJson()]));
+    notifyListeners();
+  }
+
+  Future<void> removeToken(EvmToken t) async {
+    customTokens = customTokens.where((x) => !(x.chain == t.chain && x.address == t.address)).toList();
+    (await SharedPreferences.getInstance()).setString(_tokensKey, jsonEncode([for (final x in customTokens) x.toJson()]));
+    notifyListeners();
+  }
+
+  Future<void> setHideZero(bool v) async {
+    hideZero = v;
+    (await SharedPreferences.getInstance()).setBool(_hideKey, v);
     notifyListeners();
   }
 

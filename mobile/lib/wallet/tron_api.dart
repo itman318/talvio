@@ -28,14 +28,17 @@ class WalletBalance {
 }
 
 class WalletTx {
-  WalletTx({required this.id, required this.token, required this.from, required this.to, required this.amount, required this.time, required this.ok});
+  WalletTx({required this.id, required this.token, required this.from, required this.to, required this.amount, required this.time, required this.ok,
+      this.network = 'tron', this.decimals = 6});
   final String id;
-  final String token; // 'USDT' | 'TRX'
+  final String token; // symbol: 'USDT' | 'TRX' | 'ETH' …
   final String from;
   final String to;
   final BigInt amount;
   final DateTime time;
   final bool ok;
+  final String network; // 'tron' | evm chain id
+  final int decimals;
 }
 
 /// A transaction ready to sign, with what it will cost.
@@ -377,24 +380,49 @@ class Prices {
   static final Map<String, (double, double, DateTime)> _now = {}; // id → (usd, change24h %, fetched)
   static final Map<String, (List<PricePoint>, DateTime)> _charts = {};
 
-  /// coin: 'tron' | 'tether'
-  static Future<Map<String, (double, double)>> current() async {
-    final fresh = _now.isNotEmpty && _now.values.every((v) => DateTime.now().difference(v.$3) < const Duration(minutes: 2));
-    if (!fresh) {
+  static Future<Map<String, (double, double)>> current() => byIds(const ['tron', 'tether']);
+
+  /// Dollar price and 24 h change (%) by CoinGecko id; cached for 2 minutes.
+  static Future<Map<String, (double, double)>> byIds(Iterable<String> ids) async {
+    final want = ids.toSet();
+    final stale = want.where((id) => _now[id] == null || DateTime.now().difference(_now[id]!.$3) > const Duration(minutes: 2)).toList();
+    if (stale.isNotEmpty) {
       try {
         final r = await http
-            .get(Uri.parse('https://api.coingecko.com/api/v3/simple/price?ids=tron,tether&vs_currencies=usd&include_24hr_change=true'))
+            .get(Uri.parse('https://api.coingecko.com/api/v3/simple/price?ids=${stale.join(',')}&vs_currencies=usd&include_24hr_change=true'))
             .timeout(const Duration(seconds: 12));
         if (r.statusCode == 200) {
           final j = Map<String, dynamic>.from(jsonDecode(r.body) as Map);
-          for (final id in ['tron', 'tether']) {
+          for (final id in stale) {
             final m = j[id] as Map?;
-            if (m != null) _now[id] = ((m['usd'] as num).toDouble(), ((m['usd_24h_change'] as num?) ?? 0).toDouble(), DateTime.now());
+            if (m != null && m['usd'] != null) _now[id] = ((m['usd'] as num).toDouble(), ((m['usd_24h_change'] as num?) ?? 0).toDouble(), DateTime.now());
           }
         }
       } catch (_) {}
     }
-    return {for (final e in _now.entries) e.key: (e.value.$1, e.value.$2)};
+    return {for (final id in want) if (_now[id] != null) id: (_now[id]!.$1, _now[id]!.$2)};
+  }
+
+  /// Prices of tokens added by address (key = lower-case address).
+  static Future<Map<String, (double, double)>> tokens(String platform, List<String> addresses) async {
+    if (addresses.isEmpty) return const {};
+    final key = (String a) => '$platform:${a.toLowerCase()}';
+    final stale = addresses.where((a) => _now[key(a)] == null || DateTime.now().difference(_now[key(a)]!.$3) > const Duration(minutes: 5)).toList();
+    if (stale.isNotEmpty) {
+      try {
+        final r = await http
+            .get(Uri.parse('https://api.coingecko.com/api/v3/simple/token_price/$platform?contract_addresses=${stale.join(',')}&vs_currencies=usd&include_24hr_change=true'))
+            .timeout(const Duration(seconds: 12));
+        if (r.statusCode == 200) {
+          final j = Map<String, dynamic>.from(jsonDecode(r.body) as Map);
+          for (final e in j.entries) {
+            final m = e.value as Map;
+            if (m['usd'] != null) _now[key(e.key)] = ((m['usd'] as num).toDouble(), ((m['usd_24h_change'] as num?) ?? 0).toDouble(), DateTime.now());
+          }
+        }
+      } catch (_) {}
+    }
+    return {for (final a in addresses) if (_now[key(a)] != null) a.toLowerCase(): (_now[key(a)]!.$1, _now[key(a)]!.$2)};
   }
 
   static Future<List<PricePoint>> chart(String coin, int days) async {

@@ -13,6 +13,8 @@ import '../core/screen_guard.dart';
 import '../state/auth_state.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../wallet/evm.dart';
+import '../wallet/portfolio.dart';
 import '../wallet/tron_api.dart';
 import '../wallet/tron_crypto.dart';
 import '../wallet/wallet_store.dart';
@@ -20,7 +22,6 @@ import '../wallet/wallet_store.dart';
 // Wallet palette: deep night card, mint for "in", warm for "out". Values in US dollars.
 const _mint = Color(0xFF12B89C);
 const _out = Color(0xFFE5484D);
-const _usdtColor = Color(0xFF26A17B);
 const _trxColor = Color(0xFFEB0029);
 
 final _usd = NumberFormat.currency(locale: 'en_US', symbol: r'$', decimalDigits: 2);
@@ -100,12 +101,12 @@ class _Welcome extends StatelessWidget {
           const SizedBox(height: 18),
           const Text('Your own crypto wallet', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
           const SizedBox(height: 6),
-          const Text('Hold, send and receive USDT and TRX — right inside Hushavia.',
+          const Text('Hold, send and receive USDT, ETH, BNB, TRX and more — right inside Hushavia.',
               textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 15)),
           const SizedBox(height: 18),
           point(Icons.key_rounded, 'Only you hold the keys', 'Your 12-word recovery phrase stays on this phone. Hushavia never sees it and can’t move your money.'),
           point(Icons.fingerprint_rounded, 'Locked with your fingerprint', 'Every transfer is confirmed with your fingerprint or screen lock.'),
-          point(Icons.bolt_rounded, 'USDT on TRON', 'Low fees, fast transfers, and the network most people use for USDT.'),
+          point(Icons.hub_rounded, 'Many networks, one phrase', 'TRON, Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche — plus any token you add.'),
           const SizedBox(height: 18),
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(54)),
@@ -496,9 +497,9 @@ class _WalletHome extends StatefulWidget {
 }
 
 class _WalletHomeState extends State<_WalletHome> {
-  WalletBalance? _bal;
+  List<WalletAsset> _assets = const [];
   List<WalletTx>? _txs;
-  Map<String, (double, double)> _px = const {};
+  bool _loading = true;
   String? _error;
   bool _hidden = false;
   Timer? _poll;
@@ -507,7 +508,7 @@ class _WalletHomeState extends State<_WalletHome> {
   void initState() {
     super.initState();
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 20), (_) => _load(quiet: true));
+    _poll = Timer.periodic(const Duration(seconds: 30), (_) => _load(quiet: true));
   }
 
   @override
@@ -518,100 +519,156 @@ class _WalletHomeState extends State<_WalletHome> {
 
   Future<void> _load({bool quiet = false}) async {
     final w = context.read<WalletStore>();
+    if (!quiet) setState(() => _loading = true);
+    final assets = Portfolio.build(tron: w.net, custom: w.customTokens);
+    // keep showing the last numbers while new ones load
+    for (final a in assets) {
+      final old = _assets.where((x) => x.key == a.key).firstOrNull;
+      if (old != null) {
+        a.balance = old.balance;
+        a.price = old.price;
+        a.change = old.change;
+      }
+    }
     try {
-      final api = w.api;
-      final results = await Future.wait([api.balance(w.address!), api.history(w.address!), Prices.current()]);
+      final tronTxs = w.api.history(w.address!).catchError((_) => <WalletTx>[]);
+      final sent = SentLog(w.userId).load();
+      await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net);
+      final txs = [...await tronTxs, ...await sent]..sort((a, b) => b.time.compareTo(a.time));
       if (!mounted) return;
       setState(() {
-        _bal = results[0] as WalletBalance;
-        _txs = results[1] as List<WalletTx>;
-        _px = results[2] as Map<String, (double, double)>;
-        _error = null;
+        _assets = assets;
+        _txs = txs;
+        _loading = false;
+        _error = assets.every((a) => a.balance == null) ? 'Can’t reach the networks. Pull down to try again.' : null;
       });
     } catch (e) {
-      if (mounted && !quiet) setState(() => _error = e is WalletException ? e.message : 'Can’t reach the network. Pull to try again.');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          if (!quiet) _error = 'Can’t reach the networks. Pull down to try again.';
+        });
+      }
     }
   }
 
-  double get _usdtPx => _px['tether']?.$1 ?? 1.0;
-  double get _trxPx => _px['tron']?.$1 ?? 0;
-  double get _total => _bal == null ? 0 : Units.toDouble(_bal!.usdt) * _usdtPx + Units.toDouble(_bal!.trx) * _trxPx;
+  double get _total => _assets.fold(0.0, (s, a) => s + a.value);
+
+  double? get _change {
+    final t = _total;
+    if (t <= 0) return null;
+    return _assets.fold<double>(0, (s, a) => s + a.value * (a.change ?? 0)) / t;
+  }
+
+  List<WalletAsset> get _shown {
+    final w = context.read<WalletStore>();
+    final list = _assets.where((a) => !w.hideZero || (a.balance ?? BigInt.zero) > BigInt.zero || a.key == 'tron:USDT' || a.custom).toList();
+    list.sort((a, b) {
+      final v = b.value.compareTo(a.value);
+      if (v != 0) return v;
+      return _assets.indexOf(a).compareTo(_assets.indexOf(b));
+    });
+    return list;
+  }
 
   void _menu() {
     final w = context.read<WalletStore>();
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            leading: const Icon(Icons.key_rounded),
-            title: const Text('Show recovery phrase'),
-            onTap: () async {
-              Navigator.pop(ctx);
-              final p = await w.readPhrase(context, 'Show your recovery phrase');
-              if (p == null || !mounted) return;
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _PhraseScreen(phrase: p, showOnly: true))));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.copy_rounded),
-            title: const Text('Copy my address'),
-            subtitle: Text(_short(w.address!)),
-            onTap: () {
-              Navigator.pop(ctx);
-              Clipboard.setData(ClipboardData(text: w.address!));
-              showInfo(context, 'Address copied');
-            },
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.science_rounded),
-            title: const Text('Test network (Nile)'),
-            subtitle: const Text('Free test coins, not real money'),
-            value: w.net.isTest,
-            onChanged: (v) async {
-              Navigator.pop(ctx);
-              await w.setNet(v ? TronNet.nile : TronNet.main);
-              setState(() {
-                _bal = null;
-                _txs = null;
-              });
-              _load();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_outline_rounded, color: _out),
-            title: const Text('Remove wallet from this phone', style: TextStyle(color: _out)),
-            onTap: () async {
-              Navigator.pop(ctx);
-              final ok = await confirm(context, 'Remove the wallet?',
-                  'Your money stays on the network, but without your 12 recovery words NOBODY can get it back — not even Hushavia. Make sure you have the words.',
-                  ok: 'Remove', danger: true);
-              if (!ok || !mounted) return;
-              if (!await WalletStore.confirmOwner(context, 'Remove your wallet')) return;
-              await w.remove();
-            },
-          ),
-          const SizedBox(height: 8),
-        ]),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline_rounded),
+              title: const Text('Add a token'),
+              subtitle: const Text('Any token on Ethereum, BNB Chain, Polygon …'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: const _AddTokenScreen()))).then((_) => _load());
+              },
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.visibility_off_outlined),
+              title: const Text('Hide empty coins'),
+              value: w.hideZero,
+              onChanged: (v) {
+                w.setHideZero(v);
+                Navigator.pop(ctx);
+                setState(() {});
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.key_rounded),
+              title: const Text('Show recovery phrase'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final p = await w.readPhrase(context, 'Show your recovery phrase');
+                if (p == null || !mounted) return;
+                Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _PhraseScreen(phrase: p, showOnly: true))));
+              },
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.science_rounded),
+              title: const Text('TRON test network (Nile)'),
+              subtitle: const Text('Free test coins for trying the wallet'),
+              value: w.net.isTest,
+              onChanged: (v) async {
+                Navigator.pop(ctx);
+                await w.setNet(v ? TronNet.nile : TronNet.main);
+                _load();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: _out),
+              title: const Text('Remove wallet from this phone', style: TextStyle(color: _out)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final ok = await confirm(context, 'Remove the wallet?',
+                    'Your money stays on the networks, but without your 12 recovery words NOBODY can get it back — not even Hushavia. Make sure you have the words.',
+                    ok: 'Remove', danger: true);
+                if (!ok || !mounted) return;
+                if (!await WalletStore.confirmOwner(context, 'Remove your wallet')) return;
+                await w.remove();
+              },
+            ),
+            const SizedBox(height: 8),
+          ]),
+        ),
       ),
     );
   }
 
-  void _openSend(String token) {
+  Future<void> _openSend({WalletAsset? asset, String? to}) async {
     final w = context.read<WalletStore>();
+    var a = asset;
+    if (a == null) {
+      final withMoney = _assets.where((x) => (x.balance ?? BigInt.zero) > BigInt.zero).toList()..sort((x, y) => y.value.compareTo(x.value));
+      a = await _pickAsset(context, withMoney.isEmpty ? _assets : withMoney, title: 'Send which coin?', toAddress: to);
+      if (a == null || !mounted) return;
+    }
+    final feeAsset = _assets.firstWhere((x) => x.network == a!.network && x.isNative);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _SendScreen(asset: a!, feeAsset: feeAsset, to: to))),
+    );
+    _load(quiet: true);
+  }
+
+  void _openAsset(WalletAsset a) {
+    final w = context.read<WalletStore>();
+    final txs = (_txs ?? const <WalletTx>[]).where((t) => t.network == a.network && t.token == a.symbol).toList();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _SendScreen(token: token, balance: _bal, prices: _px))),
+      MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _AssetScreen(asset: a, txs: txs, onSend: () => _openSend(asset: a)))),
     ).then((_) => _load(quiet: true));
   }
 
   @override
   Widget build(BuildContext context) {
     final w = context.watch<WalletStore>();
-    final b = _bal;
-    final change = _bal == null || _total == 0
-        ? null
-        : ((Units.toDouble(_bal!.trx) * _trxPx * (_px['tron']?.$2 ?? 0)) + (Units.toDouble(_bal!.usdt) * _usdtPx * (_px['tether']?.$2 ?? 0))) / _total;
+    final change = _change;
+    final shown = _shown;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wallet'),
@@ -642,14 +699,16 @@ class _WalletHomeState extends State<_WalletHome> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('TEST NETWORK', style: TextStyle(color: Colors.amber, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+                    child: const Text('TRON TEST', style: TextStyle(color: Colors.amber, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
                   ),
+                if (_loading && _assets.isNotEmpty)
+                  const Padding(padding: EdgeInsets.only(left: 8), child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))),
               ]),
               const SizedBox(height: 6),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
                 child: Text(
-                  b == null ? '—' : (_hidden ? r'$ ••••' : usd(_total)),
+                  _assets.isEmpty ? '—' : (_hidden ? r'$ ••••' : usd(_total)),
                   key: ValueKey('${_hidden}_${_total.toStringAsFixed(2)}'),
                   style: const TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w800, letterSpacing: -1),
                 ),
@@ -657,123 +716,94 @@ class _WalletHomeState extends State<_WalletHome> {
               if (change != null && !_hidden)
                 Text('${change >= 0 ? '+' : ''}${change.toStringAsFixed(2)}% today',
                     style: TextStyle(color: change >= 0 ? const Color(0xFF7DF3DB) : const Color(0xFFFF9AA2), fontWeight: FontWeight.w600)),
-              const SizedBox(height: 14),
-              InkWell(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: w.address!));
-                  showInfo(context, 'Address copied');
-                },
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_short(w.address!), style: const TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 13)),
-                    const SizedBox(width: 6),
-                    const Icon(Icons.copy_rounded, color: Colors.white54, size: 15),
-                  ]),
-                ),
-              ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               Row(children: [
-                _CardAction(icon: Icons.arrow_upward_rounded, label: 'Send', onTap: () => _openSend('USDT')),
+                _CardAction(icon: Icons.arrow_upward_rounded, label: 'Send', onTap: () => _openSend()),
                 const SizedBox(width: 10),
                 _CardAction(
                   icon: Icons.arrow_downward_rounded,
                   label: 'Receive',
-                  onTap: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (_) => _ReceiveSheet(address: w.address!, net: w.net)),
+                  onTap: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (_) => _ReceiveSheet(tron: w.address!, evm: w.evmAddress!)),
                 ),
                 const SizedBox(width: 10),
                 _CardAction(icon: Icons.qr_code_scanner_rounded, label: 'Scan', onTap: () async {
                   final v = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const _ScanScreen()));
-                  if (v != null && mounted) _openSendTo(v);
+                  if (v == null || !mounted) return;
+                  final addr = _addressFrom(v);
+                  if (addr == null) {
+                    showInfo(context, 'That QR code is not a wallet address');
+                    return;
+                  }
+                  _openSend(to: addr);
                 }),
               ]),
             ]),
           ),
           if (_error != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Text(_error!, style: const TextStyle(color: _out)),
-            ),
-          if (b != null && !b.activated)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: _Note(
-                icon: Icons.info_rounded,
-                text: 'New wallets wake up with their first deposit. To send USDT later you also need a little TRX (about 15–30 TRX) for the network fee.',
+            Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0), child: Text(_error!, style: const TextStyle(color: _out))),
+          _Section('Assets', trailing: TextButton.icon(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: const _AddTokenScreen()))).then((_) => _load()),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Token'),
+          )),
+          if (_assets.isEmpty && _loading)
+            const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+          else
+            for (final a in shown) _AssetTile(asset: a, hidden: _hidden, onTap: () => _openAsset(a)),
+          if (w.hideZero && _assets.isNotEmpty && shown.length < _assets.length)
+            Center(
+              child: TextButton(
+                onPressed: () => w.setHideZero(false).then((_) => setState(() {})),
+                child: Text('Show all ${_assets.length} coins'),
               ),
             ),
-          const _Section('Assets'),
-          _AssetTile(
-            name: 'Tether',
-            symbol: 'USDT',
-            color: _usdtColor,
-            glyph: '₮',
-            amount: b?.usdt,
-            price: _usdtPx,
-            change: _px['tether']?.$2,
-            hidden: _hidden,
-            onTap: () => _openAsset('USDT'),
-          ),
-          _AssetTile(
-            name: 'TRON',
-            symbol: 'TRX',
-            color: _trxColor,
-            glyph: 'T',
-            amount: b?.trx,
-            price: _trxPx,
-            change: _px['tron']?.$2,
-            hidden: _hidden,
-            onTap: () => _openAsset('TRX'),
-          ),
           const _Section('Activity'),
-          if (_txs == null && _error == null)
+          if (_txs == null)
             const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-          else if ((_txs ?? const []).isEmpty)
+          else if (_txs!.isEmpty)
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
-              child: Text('No transfers yet. Tap Receive to get your address.', style: TextStyle(color: Brand.muted)),
+              child: Text('No transfers yet. Tap Receive to get your addresses.', style: TextStyle(color: Brand.muted)),
             )
           else
-            for (final t in _txs!.take(30)) _TxTile(tx: t, me: w.address!, net: w.net, hidden: _hidden),
+            for (final t in _txs!.take(30)) _TxTile(tx: t, me: t.network == 'tron' ? w.address! : w.evmAddress!, hidden: _hidden, tronNet: w.net),
         ]),
-      ),
-    );
-  }
-
-  void _openSendTo(String scanned) {
-    final w = context.read<WalletStore>();
-    final addr = _addressFrom(scanned);
-    if (addr == null) {
-      showInfo(context, 'That QR code is not a TRON address');
-      return;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _SendScreen(token: 'USDT', balance: _bal, prices: _px, to: addr))),
-    ).then((_) => _load(quiet: true));
-  }
-
-  void _openAsset(String token) {
-    final w = context.read<WalletStore>();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider.value(
-          value: w,
-          child: _AssetScreen(token: token, balance: _bal, txs: _txs ?? const [], prices: _px, onSend: () => _openSend(token)),
-        ),
       ),
     );
   }
 }
 
+/// A TRON (T…) or EVM (0x…) address inside any text (QR codes often carry "ethereum:0x…?value=…").
 String? _addressFrom(String raw) {
-  var s = raw.trim();
-  final m = RegExp(r'T[1-9A-HJ-NP-Za-km-z]{33}').firstMatch(s);
-  if (m == null) return null;
-  s = m.group(0)!;
-  return TronCrypto.isValidAddress(s) ? s : null;
+  final t = RegExp(r'T[1-9A-HJ-NP-Za-km-z]{33}').firstMatch(raw)?.group(0);
+  if (t != null && TronCrypto.isValidAddress(t)) return t;
+  final e = RegExp(r'0x[0-9a-fA-F]{40}').firstMatch(raw)?.group(0);
+  if (e != null && EvmCrypto.isValidAddress(e)) return e;
+  return null;
+}
+
+Future<WalletAsset?> _pickAsset(BuildContext context, List<WalletAsset> assets, {required String title, String? toAddress}) {
+  // a scanned address decides the network family
+  final list = toAddress == null
+      ? assets
+      : assets.where((a) => toAddress.startsWith('T') ? a.isTron : !a.isTron).toList();
+  return showModalBottomSheet<WalletAsset>(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.92,
+      builder: (_, scroll) => Column(children: [
+        Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 8), child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+        Expanded(
+          child: ListView(controller: scroll, children: [
+            for (final a in list) _AssetTile(asset: a, hidden: false, onTap: () => Navigator.pop(ctx, a)),
+          ]),
+        ),
+      ]),
+    ),
+  );
 }
 
 class _CardAction extends StatelessWidget {
@@ -806,12 +836,16 @@ class _CardAction extends StatelessWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section(this.text);
+  const _Section(this.text, {this.trailing});
   final String text;
+  final Widget? trailing;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
-        child: Text(text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.2)),
+        padding: EdgeInsets.fromLTRB(20, 22, trailing == null ? 20 : 8, 6),
+        child: Row(children: [
+          Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.2))),
+          if (trailing != null) trailing!,
+        ]),
       );
 }
 
@@ -832,99 +866,125 @@ class _Note extends StatelessWidget {
       );
 }
 
+/// Coin badge; tokens get a small network dot so USDT on TRON and USDT on BNB never look the same.
 class _TokenIcon extends StatelessWidget {
-  const _TokenIcon({required this.color, required this.glyph, this.size = 44});
+  const _TokenIcon({required this.color, required this.glyph, this.size = 44, this.network});
   final Color color;
   final String glyph;
   final double size;
+  final Color? network;
+
+  static _TokenIcon of(WalletAsset a, {double size = 44}) => _TokenIcon(
+        color: a.color,
+        glyph: a.glyph,
+        size: size,
+        network: a.isNative ? null : (a.isTron ? const Color(0xFFEB0029) : Color(a.evm!.color)),
+      );
+
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
         width: size,
         height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(colors: [Color.lerp(color, Colors.white, 0.15)!, color], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        ),
-        child: Text(glyph, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: size * 0.46)),
+        child: Stack(clipBehavior: Clip.none, children: [
+          Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: [Color.lerp(color, Colors.white, 0.15)!, color], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            ),
+            child: Text(glyph, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: size * 0.44)),
+          ),
+          if (network != null)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: size * 0.38,
+                height: size * 0.38,
+                decoration: BoxDecoration(color: network, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).colorScheme.surface, width: 2)),
+              ),
+            ),
+        ]),
       );
 }
 
 class _AssetTile extends StatelessWidget {
-  const _AssetTile({
-    required this.name,
-    required this.symbol,
-    required this.color,
-    required this.glyph,
-    required this.amount,
-    required this.price,
-    required this.change,
-    required this.hidden,
-    required this.onTap,
-  });
-  final String name;
-  final String symbol;
-  final Color color;
-  final String glyph;
-  final BigInt? amount;
-  final double price;
-  final double? change;
+  const _AssetTile({required this.asset, required this.hidden, required this.onTap});
+  final WalletAsset asset;
   final bool hidden;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final value = amount == null ? null : Units.toDouble(amount!) * price;
-    final up = (change ?? 0) >= 0;
+    final a = asset;
+    final up = (a.change ?? 0) >= 0;
     return ListTile(
       onTap: onTap,
-      leading: _TokenIcon(color: color, glyph: glyph),
-      title: Text(name),
+      leading: _TokenIcon.of(a),
+      title: Row(children: [
+        Flexible(child: Text(a.symbol, overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6)),
+          child: Text(a.networkName, style: const TextStyle(fontSize: 10.5, color: Brand.muted, fontWeight: FontWeight.w600)),
+        ),
+      ]),
       subtitle: Row(children: [
-        Text(price > 0 ? usd(price) : '—'),
-        if (change != null) ...[
+        Text(a.price != null ? usd(a.price!) : '—'),
+        if (a.change != null) ...[
           const SizedBox(width: 6),
-          Text('${up ? '+' : ''}${change!.toStringAsFixed(2)}%', style: TextStyle(color: up ? _mint : _out, fontWeight: FontWeight.w600)),
+          Text('${up ? '+' : ''}${a.change!.toStringAsFixed(2)}%', style: TextStyle(color: up ? _mint : _out, fontWeight: FontWeight.w600)),
         ],
       ]),
       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text(amount == null ? '—' : (hidden ? '••••' : '${Units.format(amount!, maxFraction: 4)} $symbol'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-        if (value != null && !hidden) Text(usd(value), style: const TextStyle(color: Brand.muted, fontSize: 13)),
+        Text(a.balance == null ? '—' : (hidden ? '••••' : Units.format(a.balance!, decimals: a.decimals, maxFraction: 4)),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        if (a.balance != null && a.price != null && !hidden) Text(usd(a.value), style: const TextStyle(color: Brand.muted, fontSize: 13)),
       ]),
     );
   }
 }
 
+String _explorerTx(WalletTx t, TronNet tron) {
+  if (t.network == 'tron') return '${tron.explorer}${t.id}';
+  final c = EvmChain.byId(t.network);
+  return c == null ? '' : '${c.explorer}/tx/${t.id}';
+}
+
+String _netName(String network) => network == 'tron' ? 'TRON' : (EvmChain.byId(network)?.name ?? network);
+
 class _TxTile extends StatelessWidget {
-  const _TxTile({required this.tx, required this.me, required this.net, required this.hidden});
+  const _TxTile({required this.tx, required this.me, required this.hidden, required this.tronNet});
   final WalletTx tx;
   final String me;
-  final TronNet net;
   final bool hidden;
+  final TronNet tronNet;
 
   @override
   Widget build(BuildContext context) {
-    final incoming = tx.to == me;
+    final incoming = tx.to.toLowerCase() == me.toLowerCase() && tx.from.toLowerCase() != me.toLowerCase();
     final other = incoming ? tx.from : tx.to;
     final color = !tx.ok ? Brand.muted : (incoming ? _mint : Theme.of(context).colorScheme.onSurface);
     return ListTile(
-      onTap: () => _txSheet(context, tx, me, net),
+      onTap: () => _txSheet(context, tx, incoming, tronNet),
       leading: Container(
         width: 42,
         height: 42,
         decoration: BoxDecoration(color: (incoming ? _mint : Brand.primary).withValues(alpha: 0.12), shape: BoxShape.circle),
         child: Icon(!tx.ok ? Icons.error_outline_rounded : (incoming ? Icons.south_west_rounded : Icons.north_east_rounded), color: incoming ? _mint : Brand.primary, size: 20),
       ),
-      title: Text(!tx.ok ? 'Failed' : (incoming ? 'Received' : 'Sent')),
+      title: Text('${!tx.ok ? 'Failed' : (incoming ? 'Received' : 'Sent')} · ${_netName(tx.network)}'),
       subtitle: Text('${incoming ? 'From' : 'To'} ${_short(other)} · ${DateFormat('d MMM, HH:mm').format(tx.time)}', maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Text(hidden ? '••••' : '${incoming ? '+' : '−'}${Units.format(tx.amount, maxFraction: 4)} ${tx.token}',
+      trailing: Text(hidden ? '••••' : '${incoming ? '+' : '−'}${Units.format(tx.amount, decimals: tx.decimals, maxFraction: 4)} ${tx.token}',
           style: TextStyle(fontWeight: FontWeight.w700, color: color)),
     );
   }
 }
 
-void _txSheet(BuildContext context, WalletTx tx, String me, TronNet net) {
-  final incoming = tx.to == me;
+void _txSheet(BuildContext context, WalletTx tx, bool incoming, TronNet tron) {
   Widget row(String k, String v, {bool copy = false}) => ListTile(
         dense: true,
         title: Text(k, style: const TextStyle(color: Brand.muted, fontSize: 13)),
@@ -939,88 +999,115 @@ void _txSheet(BuildContext context, WalletTx tx, String me, TronNet net) {
               )
             : null,
       );
+  final url = _explorerTx(tx, tron);
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     builder: (ctx) => SafeArea(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('${incoming ? '+' : '−'}${Units.format(tx.amount)} ${tx.token}',
+        Text('${incoming ? '+' : '−'}${Units.format(tx.amount, decimals: tx.decimals)} ${tx.token}',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: incoming ? _mint : null)),
-        Text(tx.ok ? (incoming ? 'Received' : 'Sent') : 'Failed', style: const TextStyle(color: Brand.muted)),
+        Text('${tx.ok ? (incoming ? 'Received' : 'Sent') : 'Failed'} on ${_netName(tx.network)}', style: const TextStyle(color: Brand.muted)),
         const SizedBox(height: 8),
         row('Date', DateFormat('d MMMM y, HH:mm').format(tx.time)),
         row(incoming ? 'From' : 'To', incoming ? tx.from : tx.to, copy: true),
         row('Transaction', tx.id, copy: true),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
-            onPressed: () => launchUrl(Uri.parse('${net.explorer}${tx.id}'), mode: LaunchMode.externalApplication),
-            icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: const Text('View on Tronscan'),
+        if (url.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+              onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('View on the explorer'),
+            ),
           ),
-        ),
       ]),
     ),
   );
 }
 
 // ======================================================================== receive
-class _ReceiveSheet extends StatelessWidget {
-  const _ReceiveSheet({required this.address, required this.net});
-  final String address;
-  final TronNet net;
+class _ReceiveSheet extends StatefulWidget {
+  const _ReceiveSheet({required this.tron, required this.evm});
+  final String tron;
+  final String evm;
+  @override
+  State<_ReceiveSheet> createState() => _ReceiveSheetState();
+}
+
+class _ReceiveSheetState extends State<_ReceiveSheet> {
+  bool _evm = false;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Receive', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('USDT (TRC-20) and TRX on ${net.name}', style: const TextStyle(color: Brand.muted)),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 18)]),
-              child: Stack(alignment: Alignment.center, children: [
-                QrImageView(
-                  data: address,
-                  size: 220,
-                  backgroundColor: Colors.white,
-                  eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.circle, color: Brand.primary),
-                  dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Brand.ink),
-                  errorCorrectionLevel: QrErrorCorrectLevel.H,
-                ),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: const _TokenIcon(color: _usdtColor, glyph: '₮', size: 40),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            SelectableText(address, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'monospace', fontSize: 14.5, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(50)),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: address));
-                HapticFeedback.selectionClick();
-                showInfo(context, 'Address copied');
-              },
-              icon: const Icon(Icons.copy_rounded, size: 18),
-              label: const Text('Copy address'),
-            ),
-            const SizedBox(height: 12),
-            const _Note(
-              icon: Icons.warning_amber_rounded,
-              color: Color(0xFFE08A1E),
-              text: 'Send only USDT (TRC-20) or TRX on the TRON network here. Coins sent from another network (ERC-20, BEP-20 …) are lost.',
-            ),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final address = _evm ? widget.evm : widget.tron;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Receive', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('TRON')),
+              ButtonSegment(value: true, label: Text('Ethereum · BNB · more')),
+            ],
+            selected: {_evm},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => _evm = s.first),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _evm ? 'One address for Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche' : 'USDT (TRC-20) and TRX',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Brand.muted),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 18)]),
+            child: Stack(alignment: Alignment.center, children: [
+              QrImageView(
+                data: address,
+                size: 210,
+                backgroundColor: Colors.white,
+                eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.circle, color: Brand.primary),
+                dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.circle, color: Brand.ink),
+                errorCorrectionLevel: QrErrorCorrectLevel.H,
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: _evm ? const _TokenIcon(color: Color(0xFF627EEA), glyph: 'Ξ', size: 38) : const _TokenIcon(color: _trxColor, glyph: 'T', size: 38),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 14),
+          SelectableText(address, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(50)),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: address));
+              HapticFeedback.selectionClick();
+              showInfo(context, 'Address copied');
+            },
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            label: const Text('Copy address'),
+          ),
+          const SizedBox(height: 12),
+          _Note(
+            icon: Icons.warning_amber_rounded,
+            color: const Color(0xFFE08A1E),
+            text: _evm
+                ? 'Tell the sender which network they use (e.g. BNB Chain). The coins arrive on that same network in your wallet.'
+                : 'Only TRON coins here (USDT TRC-20, TRX). Coins sent from another network to this address are lost.',
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 class _ScanScreen extends StatefulWidget {
@@ -1064,12 +1151,130 @@ class _ScanScreenState extends State<_ScanScreen> {
       );
 }
 
+// ======================================================================== add a token
+class _AddTokenScreen extends StatefulWidget {
+  const _AddTokenScreen();
+  @override
+  State<_AddTokenScreen> createState() => _AddTokenScreenState();
+}
+
+class _AddTokenScreenState extends State<_AddTokenScreen> {
+  EvmChain _chain = EvmChain.bsc;
+  final _addr = TextEditingController();
+  EvmToken? _found;
+  bool _busy = false;
+  String? _err;
+
+  @override
+  void dispose() {
+    _addr.dispose();
+    super.dispose();
+  }
+
+  Future<void> _look() async {
+    final a = _addr.text.trim();
+    setState(() {
+      _found = null;
+      _err = null;
+    });
+    if (!EvmCrypto.isValidAddress(a)) {
+      if (a.isNotEmpty) setState(() => _err = 'A token address starts with 0x and has 42 characters');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final t = await EvmApi(_chain).tokenInfo(a);
+      if (mounted) setState(() => _found = t);
+    } catch (e) {
+      if (mounted) setState(() => _err = e is WalletException ? e.message : 'Not found on ${_chain.name}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = context.read<WalletStore>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Add a token')),
+      body: SafeArea(
+        child: ListView(padding: const EdgeInsets.fromLTRB(18, 4, 18, 24), children: [
+          const Text('Network', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final c in EvmChain.all)
+              ChoiceChip(
+                label: Text(c.name),
+                selected: _chain == c,
+                onSelected: (_) {
+                  setState(() => _chain = c);
+                  _look();
+                },
+              ),
+          ]),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _addr,
+            autocorrect: false,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+            onChanged: (_) => _look(),
+            decoration: InputDecoration(
+              labelText: 'Token contract address (0x…)',
+              errorText: _err,
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.content_paste_rounded),
+                onPressed: () async {
+                  final d = await Clipboard.getData('text/plain');
+                  final m = RegExp(r'0x[0-9a-fA-F]{40}').firstMatch(d?.text ?? '');
+                  if (m != null) {
+                    _addr.text = m.group(0)!;
+                    _look();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_busy) const Center(child: CircularProgressIndicator()),
+          if (_found != null) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: _TokenIcon(color: Color(_chain.color), glyph: _found!.symbol.substring(0, 1), network: Color(_chain.color)),
+              title: Text('${_found!.name} (${_found!.symbol})'),
+              subtitle: Text('${_chain.name} · ${_found!.decimals} decimals'),
+            ),
+            const _Note(
+              icon: Icons.warning_amber_rounded,
+              color: Color(0xFFE08A1E),
+              text: 'Anyone can make a token with any name — even a fake “USDT”. Only add tokens whose address you got from the official project.',
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(52)),
+              onPressed: () async {
+                try {
+                  await w.addToken(_found!);
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  showInfo(context, '${_found!.symbol} added');
+                } catch (e) {
+                  if (context.mounted) showError(context, e);
+                }
+              },
+              child: Text('Add ${_found!.symbol}'),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
 // ======================================================================== send
 class _SendScreen extends StatefulWidget {
-  const _SendScreen({required this.token, required this.balance, required this.prices, this.to});
-  final String token;
-  final WalletBalance? balance;
-  final Map<String, (double, double)> prices;
+  const _SendScreen({required this.asset, required this.feeAsset, this.to});
+  final WalletAsset asset;
+  final WalletAsset feeAsset; // the network's own coin (pays the fee)
   final String? to;
 
   @override
@@ -1077,10 +1282,11 @@ class _SendScreen extends StatefulWidget {
 }
 
 class _SendScreenState extends State<_SendScreen> {
-  late String _token = widget.token;
   late final _to = TextEditingController(text: widget.to ?? '');
   final _amount = TextEditingController();
   bool _busy = false;
+
+  WalletAsset get a => widget.asset;
 
   @override
   void initState() {
@@ -1096,18 +1302,24 @@ class _SendScreenState extends State<_SendScreen> {
     super.dispose();
   }
 
-  BigInt get _have => _token == 'USDT' ? (widget.balance?.usdt ?? BigInt.zero) : (widget.balance?.trx ?? BigInt.zero);
-  double get _price => _token == 'USDT' ? (widget.prices['tether']?.$1 ?? 1) : (widget.prices['tron']?.$1 ?? 0);
+  BigInt get _have => a.balance ?? BigInt.zero;
+
+  bool _validAddress(String t) => a.isTron ? TronCrypto.isValidAddress(t) : EvmCrypto.isValidAddress(t);
 
   String? get _toError {
     final t = _to.text.trim();
     if (t.isEmpty) return null;
-    if (!TronCrypto.isValidAddress(t)) return 'Not a TRON address (they start with T)';
-    if (t == context.read<WalletStore>().address) return 'This is your own address';
+    if (!_validAddress(t)) {
+      if (a.isTron && t.startsWith('0x')) return 'This is an Ethereum-style address. ${a.symbol} on TRON needs a T… address';
+      if (!a.isTron && t.startsWith('T')) return 'This is a TRON address. ${a.symbol} on ${a.networkName} needs a 0x… address';
+      return a.isTron ? 'Not a TRON address (they start with T)' : 'Not a valid address (0x… with 42 characters)';
+    }
+    final w = context.read<WalletStore>();
+    if (t.toLowerCase() == (a.isTron ? w.address! : w.evmAddress!).toLowerCase()) return 'This is your own address';
     return null;
   }
 
-  BigInt? get _units => Units.parse(_amount.text);
+  BigInt? get _units => Units.parse(_amount.text, decimals: a.decimals);
 
   String? get _amountError {
     if (_amount.text.trim().isEmpty) return null;
@@ -1121,19 +1333,30 @@ class _SendScreenState extends State<_SendScreen> {
 
   void _max() {
     var v = _have;
-    if (_token == 'TRX') v -= BigInt.from(1100000); // keep a little for the fee
+    if (a.isNative) {
+      // keep enough of the network's coin for the fee
+      final keep = a.isTron ? BigInt.from(1100000) : BigInt.from((a.evm!.maxFeeNative / 10 * 1e18).round());
+      v -= keep;
+    }
     if (v < BigInt.zero) v = BigInt.zero;
-    _amount.text = Units.format(v).replaceAll(',', '');
+    _amount.text = Units.format(v, decimals: a.decimals, maxFraction: a.decimals).replaceAll(',', '');
   }
 
   Future<void> _review() async {
     FocusScope.of(context).unfocus();
     final w = context.read<WalletStore>();
+    final to = _to.text.trim();
+    final amount = _units!;
     setState(() => _busy = true);
-    PreparedTx p;
+    _Quote q;
     try {
-      final to = _to.text.trim();
-      p = _token == 'USDT' ? await w.api.prepareUsdt(w.address!, to, _units!) : await w.api.prepareTrx(w.address!, to, _units!);
+      if (a.isTron) {
+        final p = a.symbol == 'TRX' ? await w.api.prepareTrx(w.address!, to, amount) : await w.api.prepareUsdt(w.address!, to, amount);
+        q = _Quote(fee: p.feeSun, feeDecimals: 6, tron: p);
+      } else {
+        final p = await EvmApi(a.evm!).prepare(from: w.evmAddress!, to: EvmCrypto.checksum(to.substring(2)), amount: amount, token: a.evmToken);
+        q = _Quote(fee: p.fee, feeDecimals: 18, evm: p);
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
@@ -1143,26 +1366,42 @@ class _SendScreenState extends State<_SendScreen> {
     }
     if (!mounted) return;
     setState(() => _busy = false);
-    final trxPx = widget.prices['tron']?.$1 ?? 0;
-    final trxHave = widget.balance?.trx ?? BigInt.zero;
-    final needTrx = p.feeSun + (_token == 'TRX' ? p.amount : BigInt.zero);
-    final short = needTrx > trxHave;
+    final feeHave = widget.feeAsset.balance ?? BigInt.zero;
+    final needNative = q.fee + (a.isNative ? amount : BigInt.zero);
+    final short = needNative > feeHave;
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _ConfirmSheet(p: p, price: _price, trxPrice: trxPx, shortOfTrx: short, trxHave: trxHave),
+      builder: (ctx) => _ConfirmSheet(asset: a, feeAsset: widget.feeAsset, to: to, amount: amount, fee: q.fee, short: short),
     );
     if (go != true || !mounted) return;
-    final phrase = await w.readPhrase(context, 'Confirm sending ${Units.format(p.amount)} ${p.token}');
+    final phrase = await w.readPhrase(context, 'Confirm sending ${Units.format(amount, decimals: a.decimals)} ${a.symbol}');
     if (phrase == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      final key = TronCrypto.privateKey(phrase);
-      final id = await w.api.broadcast(p, key);
-      key.fillRange(0, key.length, 0); // wipe the key from memory
+      String id;
+      if (q.tron != null) {
+        final key = TronCrypto.privateKey(phrase);
+        try {
+          id = await w.api.broadcast(q.tron!, key);
+        } finally {
+          key.fillRange(0, key.length, 0); // wipe the key from memory
+        }
+      } else {
+        final key = EvmCrypto.privateKey(phrase);
+        try {
+          id = await EvmApi(a.evm!).send(q.evm!, key);
+        } finally {
+          key.fillRange(0, key.length, 0);
+        }
+        await SentLog(w.userId).add(WalletTx(
+          id: id, token: a.symbol, from: w.evmAddress!, to: to, amount: amount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
+        ));
+      }
       if (!mounted) return;
       HapticFeedback.heavyImpact();
-      await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => _SentScreen(p: p, id: id, net: w.net)));
+      final url = a.isTron ? '${w.net.explorer}$id' : '${a.evm!.explorer}/tx/$id';
+      await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => _SentScreen(text: '${Units.format(amount, decimals: a.decimals)} ${a.symbol} to ${_short(to)}', url: url)));
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
@@ -1174,42 +1413,38 @@ class _SendScreenState extends State<_SendScreen> {
   @override
   Widget build(BuildContext context) {
     final u = _units;
+    final hint = a.isTron ? 'T…' : '0x…';
     return Scaffold(
-      appBar: AppBar(title: const Text('Send')),
+      appBar: AppBar(title: Text('Send ${a.symbol}')),
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.fromLTRB(18, 4, 18, 24), children: [
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'USDT', label: Text('USDT'), icon: _TokenIcon(color: _usdtColor, glyph: '₮', size: 20)),
-              ButtonSegment(value: 'TRX', label: Text('TRX'), icon: _TokenIcon(color: _trxColor, glyph: 'T', size: 20)),
-            ],
-            selected: {_token},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() {
-              _token = s.first;
-              _amount.clear();
-            }),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: _TokenIcon.of(a, size: 40),
+            title: Text('${a.name} · ${a.symbol}'),
+            subtitle: Text('on ${a.networkName}'),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 6),
           TextField(
             controller: _to,
             autocorrect: false,
             enableSuggestions: false,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 14.5),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
             decoration: InputDecoration(
-              labelText: 'To (TRON address)',
+              labelText: 'To (${a.networkName} address, $hint)',
               errorText: _toError,
+              errorMaxLines: 2,
               suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
                 IconButton(
                   tooltip: 'Paste',
                   icon: const Icon(Icons.content_paste_rounded),
                   onPressed: () async {
                     final d = await Clipboard.getData('text/plain');
-                    final a = _addressFrom(d?.text ?? '');
-                    if (a != null) {
-                      _to.text = a;
+                    final addr = _addressFrom(d?.text ?? '');
+                    if (addr != null) {
+                      _to.text = addr;
                     } else if (mounted) {
-                      showInfo(context, 'No TRON address in the clipboard');
+                      showInfo(context, 'No address in the clipboard');
                     }
                   },
                 ),
@@ -1218,9 +1453,9 @@ class _SendScreenState extends State<_SendScreen> {
                   icon: const Icon(Icons.qr_code_scanner_rounded),
                   onPressed: () async {
                     final v = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const _ScanScreen()));
-                    final a = v == null ? null : _addressFrom(v);
-                    if (a != null) _to.text = a;
-                    if (v != null && a == null && mounted) showInfo(context, 'That QR code is not a TRON address');
+                    final addr = v == null ? null : _addressFrom(v);
+                    if (addr != null) _to.text = addr;
+                    if (v != null && addr == null && mounted) showInfo(context, 'That QR code is not an address');
                   },
                 ),
               ]),
@@ -1234,20 +1469,23 @@ class _SendScreenState extends State<_SendScreen> {
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
             decoration: InputDecoration(
               labelText: 'Amount',
-              suffixText: _token,
+              suffixText: a.symbol,
               errorText: _amountError,
-              helperText: u != null && u > BigInt.zero && _price > 0 ? '≈ ${usd(Units.toDouble(u) * _price)}' : null,
+              helperText: u != null && u > BigInt.zero && a.price != null ? '≈ ${usd(Units.toDouble(u, decimals: a.decimals) * a.price!)}' : null,
             ),
           ),
           const SizedBox(height: 8),
           Row(children: [
-            Text('Available: ${Units.format(_have, maxFraction: 4)} $_token', style: const TextStyle(color: Brand.muted)),
-            const Spacer(),
+            Expanded(child: Text('Available: ${Units.format(_have, decimals: a.decimals, maxFraction: 6)} ${a.symbol}', style: const TextStyle(color: Brand.muted))),
             TextButton(onPressed: _max, child: const Text('Max')),
           ]),
           const SizedBox(height: 10),
-          if (_token == 'USDT')
-            const _Note(icon: Icons.local_gas_station_rounded, text: 'Sending USDT costs a network fee paid in TRX (usually 15–30 TRX). You’ll see the exact amount before you confirm.'),
+          if (!a.isNative)
+            _Note(
+              icon: Icons.local_gas_station_rounded,
+              text: 'The network fee is paid in ${a.feeSymbol}. You have ${Units.format(widget.feeAsset.balance ?? BigInt.zero, decimals: widget.feeAsset.decimals, maxFraction: 5)} ${a.feeSymbol}. '
+                  'You’ll see the exact fee before you confirm.',
+            ),
           const SizedBox(height: 18),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(54)),
@@ -1260,45 +1498,55 @@ class _SendScreenState extends State<_SendScreen> {
   }
 }
 
+class _Quote {
+  _Quote({required this.fee, required this.feeDecimals, this.tron, this.evm});
+  final BigInt fee;
+  final int feeDecimals;
+  final PreparedTx? tron;
+  final EvmPrepared? evm;
+}
+
 class _ConfirmSheet extends StatelessWidget {
-  const _ConfirmSheet({required this.p, required this.price, required this.trxPrice, required this.shortOfTrx, required this.trxHave});
-  final PreparedTx p;
-  final double price;
-  final double trxPrice;
-  final bool shortOfTrx;
-  final BigInt trxHave;
+  const _ConfirmSheet({required this.asset, required this.feeAsset, required this.to, required this.amount, required this.fee, required this.short});
+  final WalletAsset asset;
+  final WalletAsset feeAsset;
+  final String to;
+  final BigInt amount;
+  final BigInt fee;
+  final bool short;
 
   @override
   Widget build(BuildContext context) {
     Widget row(String k, Widget v) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: 90, child: Text(k, style: const TextStyle(color: Brand.muted))),
+            SizedBox(width: 96, child: Text(k, style: const TextStyle(color: Brand.muted))),
             Expanded(child: Align(alignment: Alignment.centerRight, child: v)),
           ]),
         );
-    final feeTrx = Units.format(p.feeSun, maxFraction: 3);
+    final feeText = Units.format(fee, decimals: feeAsset.decimals, maxFraction: 6);
+    final feeUsd = feeAsset.price == null ? null : Units.toDouble(fee, decimals: feeAsset.decimals) * feeAsset.price!;
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('Confirm transfer', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
           const SizedBox(height: 14),
-          Text('${Units.format(p.amount)} ${p.token}', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
-          if (price > 0) Text('≈ ${usd(Units.toDouble(p.amount) * price)}', style: const TextStyle(color: Brand.muted)),
+          Text('${Units.format(amount, decimals: asset.decimals)} ${asset.symbol}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
+          if (asset.price != null) Text('≈ ${usd(Units.toDouble(amount, decimals: asset.decimals) * asset.price!)}', style: const TextStyle(color: Brand.muted)),
           const SizedBox(height: 14),
-          row('To', SelectableText(p.to, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600))),
-          row('Network fee', Text('≈ $feeTrx TRX${trxPrice > 0 ? '  (${usd(Units.toDouble(p.feeSun) * trxPrice)})' : ''}', style: const TextStyle(fontWeight: FontWeight.w600))),
-          row('Network', const Text('TRON', style: TextStyle(fontWeight: FontWeight.w600))),
+          row('To', SelectableText(to, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600))),
+          row('Network', Text(asset.networkName, style: const TextStyle(fontWeight: FontWeight.w600))),
+          row('Network fee', Text('≈ $feeText ${feeAsset.symbol}${feeUsd != null ? '  (${usd(feeUsd)})' : ''}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600))),
           const SizedBox(height: 8),
-          if (shortOfTrx)
+          if (short)
             _Note(
               icon: Icons.error_outline_rounded,
               color: _out,
-              text: 'You have ${Units.format(trxHave, maxFraction: 2)} TRX, but this needs about $feeTrx TRX for the fee. Add TRX first.',
+              text: 'Not enough ${feeAsset.symbol} on ${asset.networkName} for this (you have ${Units.format(feeAsset.balance ?? BigInt.zero, decimals: feeAsset.decimals, maxFraction: 5)}). Add some ${feeAsset.symbol} first.',
             )
           else
-            const _Note(icon: Icons.verified_user_rounded, color: _mint, text: 'Check the address. Transfers can’t be undone.'),
+            const _Note(icon: Icons.verified_user_rounded, color: _mint, text: 'Check the address and the network. Transfers can’t be undone.'),
           const SizedBox(height: 14),
           Row(children: [
             Expanded(
@@ -1312,7 +1560,7 @@ class _ConfirmSheet extends StatelessWidget {
             Expanded(
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(52)),
-                onPressed: shortOfTrx ? null : () => Navigator.pop(context, true),
+                onPressed: short ? null : () => Navigator.pop(context, true),
                 icon: const Icon(Icons.fingerprint_rounded),
                 label: const Text('Send'),
               ),
@@ -1325,10 +1573,9 @@ class _ConfirmSheet extends StatelessWidget {
 }
 
 class _SentScreen extends StatelessWidget {
-  const _SentScreen({required this.p, required this.id, required this.net});
-  final PreparedTx p;
-  final String id;
-  final TronNet net;
+  const _SentScreen({required this.text, required this.url});
+  final String text;
+  final String url;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -1352,15 +1599,15 @@ class _SentScreen extends StatelessWidget {
               const SizedBox(height: 22),
               const Text('Sent', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
-              Text('${Units.format(p.amount)} ${p.token} to ${_short(p.to)}', style: const TextStyle(color: Brand.muted, fontSize: 15)),
+              Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted, fontSize: 15)),
               const SizedBox(height: 4),
               const Text('It usually arrives within a minute.', style: TextStyle(color: Brand.faint)),
               const Spacer(),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-                onPressed: () => launchUrl(Uri.parse('${net.explorer}$id'), mode: LaunchMode.externalApplication),
+                onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                label: const Text('View on Tronscan'),
+                label: const Text('View on the explorer'),
               ),
               const SizedBox(height: 10),
               FilledButton(
@@ -1376,11 +1623,9 @@ class _SentScreen extends StatelessWidget {
 
 // ======================================================================== asset + chart
 class _AssetScreen extends StatefulWidget {
-  const _AssetScreen({required this.token, required this.balance, required this.txs, required this.prices, required this.onSend});
-  final String token;
-  final WalletBalance? balance;
+  const _AssetScreen({required this.asset, required this.txs, required this.onSend});
+  final WalletAsset asset;
   final List<WalletTx> txs;
-  final Map<String, (double, double)> prices;
   final VoidCallback onSend;
 
   @override
@@ -1393,7 +1638,7 @@ class _AssetScreenState extends State<_AssetScreen> {
   String? _err;
   int? _touch;
 
-  String get _coin => widget.token == 'USDT' ? 'tether' : 'tron';
+  WalletAsset get a => widget.asset;
 
   @override
   void initState() {
@@ -1402,12 +1647,16 @@ class _AssetScreenState extends State<_AssetScreen> {
   }
 
   Future<void> _load() async {
+    if (a.gecko == null) {
+      setState(() => _err = 'No price chart for this token');
+      return;
+    }
     setState(() {
       _pts = null;
       _err = null;
     });
     try {
-      final p = await Prices.chart(_coin, _days);
+      final p = await Prices.chart(a.gecko!, _days);
       if (mounted) setState(() => _pts = p);
     } catch (e) {
       if (mounted) setState(() => _err = 'Price chart is not available right now');
@@ -1417,22 +1666,35 @@ class _AssetScreenState extends State<_AssetScreen> {
   @override
   Widget build(BuildContext context) {
     final w = context.read<WalletStore>();
-    final usdt = widget.token == 'USDT';
-    final amount = usdt ? widget.balance?.usdt : widget.balance?.trx;
     final pts = _pts;
     final shown = pts != null && pts.isNotEmpty ? pts[(_touch ?? pts.length - 1).clamp(0, pts.length - 1)] : null;
     final first = pts != null && pts.isNotEmpty ? pts.first.usd : null;
-    final now = shown?.usd ?? widget.prices[_coin]?.$1;
-    final ch = first != null && now != null && first > 0 ? (now - first) / first * 100 : null;
+    final now = shown?.usd ?? a.price;
+    final ch = first != null && now != null && first > 0 ? (now - first) / first * 100 : a.change;
     final up = (ch ?? 0) >= 0;
-    final txs = widget.txs.where((t) => t.token == widget.token).toList();
+    final myAddress = a.isTron ? w.address! : w.evmAddress!;
+    final explorerAddr = a.isTron
+        ? '${w.net.explorer.replaceFirst('/transaction/', '/address/')}$myAddress'
+        : '${a.evm!.explorer}/${a.isNative ? 'address' : 'token'}/${a.isNative ? myAddress : '${a.contract}?a=$myAddress'}';
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [
-          _TokenIcon(color: usdt ? _usdtColor : _trxColor, glyph: usdt ? '₮' : 'T', size: 30),
+          _TokenIcon.of(a, size: 30),
           const SizedBox(width: 10),
-          Text(usdt ? 'Tether' : 'TRON'),
+          Flexible(child: Text('${a.symbol} · ${a.networkName}', overflow: TextOverflow.ellipsis)),
         ]),
+        actions: [
+          if (a.custom)
+            IconButton(
+              tooltip: 'Remove token',
+              icon: const Icon(Icons.delete_outline_rounded),
+              onPressed: () async {
+                if (!await confirm(context, 'Remove ${a.symbol}?', 'It only disappears from this list — nothing happens to the coins.', ok: 'Remove')) return;
+                await w.removeToken(a.evmToken!);
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+        ],
       ),
       body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
         Padding(
@@ -1460,20 +1722,21 @@ class _AssetScreenState extends State<_AssetScreen> {
                   ),
                 ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            for (final d in const [1, 7, 30, 365])
-              ChoiceChip(
-                label: Text(_chip(d)),
-                selected: _days == d,
-                onSelected: (_) {
-                  setState(() => _days = d);
-                  _load();
-                },
-              ),
-          ]),
-        ),
+        if (a.gecko != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              for (final d in const [1, 7, 30, 365])
+                ChoiceChip(
+                  label: Text(_chip(d)),
+                  selected: _days == d,
+                  onSelected: (_) {
+                    setState(() => _days = d);
+                    _load();
+                  },
+                ),
+            ]),
+          ),
         const SizedBox(height: 16),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -1484,9 +1747,9 @@ class _AssetScreenState extends State<_AssetScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Your balance', style: TextStyle(color: Brand.muted)),
                 const SizedBox(height: 2),
-                Text(amount == null ? '—' : '${Units.format(amount, maxFraction: 4)} ${widget.token}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-                if (amount != null && (widget.prices[_coin]?.$1 ?? 0) > 0)
-                  Text(usd(Units.toDouble(amount) * widget.prices[_coin]!.$1), style: const TextStyle(color: Brand.muted)),
+                Text(a.balance == null ? '—' : '${Units.format(a.balance!, decimals: a.decimals, maxFraction: 6)} ${a.symbol}',
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                if (a.balance != null && a.price != null) Text(usd(a.value), style: const TextStyle(color: Brand.muted)),
               ]),
             ),
             FilledButton.icon(
@@ -1500,11 +1763,19 @@ class _AssetScreenState extends State<_AssetScreen> {
             ),
           ]),
         ),
-        const _Section('History'),
-        if (txs.isEmpty)
-          const Padding(padding: EdgeInsets.fromLTRB(20, 4, 20, 0), child: Text('No transfers yet.', style: TextStyle(color: Brand.muted)))
+        _Section('History', trailing: TextButton.icon(
+          onPressed: () => launchUrl(Uri.parse(explorerAddr), mode: LaunchMode.externalApplication),
+          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+          label: const Text('All on explorer'),
+        )),
+        if (widget.txs.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+            child: Text(a.isTron ? 'No transfers yet.' : 'Transfers you send from here show up below. For everything you received, tap “All on explorer”.',
+                style: const TextStyle(color: Brand.muted)),
+          )
         else
-          for (final t in txs.take(40)) _TxTile(tx: t, me: w.address!, net: w.net, hidden: false),
+          for (final t in widget.txs.take(40)) _TxTile(tx: t, me: myAddress, hidden: false, tronNet: w.net),
       ]),
     );
   }
