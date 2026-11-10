@@ -6,6 +6,7 @@ import 'package:chatapp/wallet/evm.dart';
 import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
 import 'package:chatapp/wallet/verify.dart';
+import 'package:chatapp/wallet/utxo.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -116,4 +117,26 @@ void main() {
     print('BSC faked receiver → $bad');
     expect(bad, CardCheck.mismatch);
   }, timeout: const Timeout(Duration(seconds: 90)));
+
+  for (final c in UtxoChain.all) {
+    test('${c.name}: balance, history, fee rate; our transaction id matches the network\'s', () async {
+      final api = UtxoApi(c);
+      final addr = {'btc': 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', 'ltc': 'ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh', 'doge': 'DBus3bamQjgJULBJtYXpEzDWQRwF5iwxgC'}[c.id]!;
+      final b = await api.balance(addr);
+      final h = await api.history(addr);
+      final rate = await api.feeRate();
+      // ignore: avoid_print
+      print('${c.name}: balance ${Units.format(b, decimals: 8)} ${c.symbol}, ${h.length} transfers, fee ${rate.toStringAsFixed(2)}/vB');
+      if (!c.blockcypher && h.isNotEmpty) {
+        // a real transaction from the network: our id function must give the same id
+        final r = await http.get(Uri.parse('${c.apis.first}/tx/${h.first.id}/hex'));
+        if (r.statusCode == 200) {
+          expect(UtxoTx.txid(TronCrypto.fromHex(r.body.trim()), c), h.first.id);
+          final paid = await api.checkPayment(h.first.id, h.first.to, h.first.amount);
+          // ignore: avoid_print
+          print('${c.name}: card check of a real transfer → $paid');
+        }
+      }
+    }, timeout: const Timeout(Duration(seconds: 90)));
+  }
 }

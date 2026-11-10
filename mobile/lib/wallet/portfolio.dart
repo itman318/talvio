@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'evm.dart';
 import 'tron_api.dart';
 import 'tron_crypto.dart';
+import 'utxo.dart';
 
 /// One coin or token the wallet shows, on one network.
 class WalletAsset {
@@ -22,6 +23,7 @@ class WalletAsset {
     this.gecko,
     this.evm,
     this.evmToken,
+    this.utxo,
     this.custom = false,
   });
 
@@ -37,6 +39,7 @@ class WalletAsset {
   final String? gecko;
   final EvmChain? evm;
   final EvmToken? evmToken;
+  final UtxoChain? utxo;
   final bool custom;
 
   BigInt? balance;
@@ -44,10 +47,12 @@ class WalletAsset {
   double? change;
 
   bool get isTron => network == 'tron';
+  bool get isUtxo => utxo != null;
+  bool get isEvm => evm != null;
   bool get isNative => contract == null;
   double get value => balance == null || price == null ? 0 : Units.toDouble(balance!, decimals: decimals) * price!;
   /// What pays the network fee for this asset.
-  String get feeSymbol => isTron ? 'TRX' : evm!.symbol;
+  String get feeSymbol => isTron ? 'TRX' : (isUtxo ? utxo!.symbol : evm!.symbol);
 }
 
 class Portfolio {
@@ -61,6 +66,12 @@ class Portfolio {
       WalletAsset(key: 'tron:USDT', network: 'tron', networkName: 'TRON', symbol: 'USDT', name: 'Tether', decimals: 6, color: _usdtColor, glyph: '₮', contract: tron.usdt, gecko: 'tether'),
       WalletAsset(key: 'tron:TRX', network: 'tron', networkName: 'TRON', symbol: 'TRX', name: 'TRON', decimals: 6, color: const Color(0xFFEB0029), glyph: 'T', gecko: 'tron'),
     ];
+    for (final c in UtxoChain.all) {
+      out.add(WalletAsset(
+        key: '${c.id}:native', network: c.id, networkName: c.name, symbol: c.symbol, name: c.name, decimals: 8,
+        color: Color(c.color), glyph: c.glyph, gecko: c.gecko, utxo: c,
+      ));
+    }
     for (final c in EvmChain.all) {
       out.add(WalletAsset(
         key: '${c.id}:native', network: c.id, networkName: c.name, symbol: c.symbol, name: c.coinName, decimals: 18,
@@ -79,7 +90,8 @@ class Portfolio {
   }
 
   /// Fills balances and prices. Each network loads on its own: one slow network never blocks the rest.
-  static Future<void> load(List<WalletAsset> assets, {required String tronAddress, required String evmAddress, required TronNet tron}) async {
+  static Future<void> load(List<WalletAsset> assets,
+      {required String tronAddress, required String evmAddress, required TronNet tron, Map<String, String> utxoAddr = const {}}) async {
     final jobs = <Future<void>>[];
     // TRON: one call for both
     jobs.add(() async {
@@ -90,6 +102,17 @@ class Portfolio {
         }
       } catch (_) {}
     }());
+    for (final c in UtxoChain.all) {
+      final addr = utxoAddr[c.id];
+      if (addr == null) continue;
+      for (final a in assets.where((a) => a.network == c.id)) {
+        jobs.add(() async {
+          try {
+            a.balance = await UtxoApi(c).balance(addr);
+          } catch (_) {}
+        }());
+      }
+    }
     for (final c in EvmChain.all) {
       final api = EvmApi(c);
       for (final a in assets.where((a) => a.network == c.id)) {

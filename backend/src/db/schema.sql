@@ -1250,3 +1250,6 @@ ALTER TABLE messages ADD CONSTRAINT messages_type_check
 -- public wallet addresses a person CHOSE to share with the people they chat with (never keys)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_tron VARCHAR(40);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_evm VARCHAR(42);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_btc VARCHAR(90);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_ltc VARCHAR(90);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_doge VARCHAR(40);

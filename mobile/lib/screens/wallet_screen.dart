@@ -20,6 +20,7 @@ import '../wallet/evm.dart';
 import '../wallet/portfolio.dart';
 import '../wallet/tron_api.dart';
 import '../wallet/tron_crypto.dart';
+import '../wallet/utxo.dart';
 import '../wallet/wallet_store.dart';
 
 // Wallet palette: deep night card, mint for "in", warm for "out". Values in US dollars.
@@ -116,12 +117,12 @@ class _Welcome extends StatelessWidget {
           const SizedBox(height: 18),
           const Text('Your own crypto wallet', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
           const SizedBox(height: 6),
-          const Text('Hold, send and receive USDT, ETH, BNB, TRX and more — right inside Hushavia.',
+          const Text('Hold, send and receive BTC, USDT, ETH, BNB and more — right inside Hushavia.',
               textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 15)),
           const SizedBox(height: 18),
           point(Icons.key_rounded, 'Only you hold the keys', 'Your 12-word recovery phrase stays on this phone. Hushavia never sees it and can’t move your money.'),
           point(Icons.fingerprint_rounded, 'Locked with your fingerprint', 'Every transfer is confirmed with your fingerprint or screen lock.'),
-          point(Icons.hub_rounded, 'Many networks, one phrase', 'TRON, Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche — plus any token you add.'),
+          point(Icons.hub_rounded, 'Many networks, one phrase', 'Bitcoin, Ethereum, BNB Chain, TRON, Litecoin, Dogecoin, Polygon and more — plus any token you add.'),
           const SizedBox(height: 18),
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(54)),
@@ -547,12 +548,18 @@ class _WalletHomeState extends State<_WalletHome> {
     }
     try {
       final tronTxs = w.api.history(w.address!).catchError((_) => <WalletTx>[]);
+      final utxoTxs = Future.wait([
+        for (final c in UtxoChain.all)
+          if (w.utxoAddr[c.id] != null) UtxoApi(c).history(w.utxoAddr[c.id]!).catchError((_) => <WalletTx>[]),
+      ]);
       final sent = SentLog(w.userId).load();
-      await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net);
+      await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net, utxoAddr: w.utxoAddr);
       // a TRON transfer sent from here is in both lists: keep the network's copy (it has the final status)
       final net = await tronTxs;
       final ids = net.map((t) => t.id.toLowerCase()).toSet();
-      final txs = [...net, ...(await sent).where((t) => !ids.contains(t.id.toLowerCase()))]..sort((a, b) => b.time.compareTo(a.time));
+      final utxoList = [for (final l in await utxoTxs) ...l];
+      ids.addAll(utxoList.map((t) => t.id.toLowerCase()));
+      final txs = [...net, ...utxoList, ...(await sent).where((t) => !ids.contains(t.id.toLowerCase()))]..sort((a, b) => b.time.compareTo(a.time));
       if (!mounted) return;
       setState(() {
         _assets = assets;
@@ -754,7 +761,7 @@ class _WalletHomeState extends State<_WalletHome> {
                 _CardAction(
                   icon: Icons.arrow_downward_rounded,
                   label: 'Receive',
-                  onTap: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (_) => _ReceiveSheet(tron: w.address!, evm: w.evmAddress!)),
+                  onTap: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (_) => _ReceiveSheet(tron: w.address!, evm: w.evmAddress!, utxo: w.utxoAddr)),
                 ),
                 const SizedBox(width: 10),
                 _CardAction(icon: Icons.qr_code_scanner_rounded, label: 'Scan', onTap: () async {
@@ -797,7 +804,7 @@ class _WalletHomeState extends State<_WalletHome> {
               child: Text('No transfers yet. Tap Receive to get your addresses.', style: TextStyle(color: Brand.muted)),
             )
           else
-            for (final t in _txs!.take(30)) _TxTile(tx: t, me: t.network == 'tron' ? w.address! : w.evmAddress!, hidden: _hidden, tronNet: w.net),
+            for (final t in _txs!.take(30)) _TxTile(tx: t, me: w.addressFor(t.network) ?? '', hidden: _hidden, tronNet: w.net),
         ]),
       ),
     );
@@ -839,7 +846,7 @@ class _AddressBookScreenState extends State<_AddressBookScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, set) {
           final a = addr.text.trim();
-          final valid = TronCrypto.isValidAddress(a) || EvmCrypto.isValidAddress(a);
+          final valid = _familyOf(a) != null;
           final dup = edit == null && (_list ?? const []).any((x) => x.address.toLowerCase() == a.toLowerCase());
           final look = edit == null && valid ? AddressBook.lookalike((_list ?? const []).map((x) => x.address), a) : null;
           return Padding(
@@ -863,9 +870,9 @@ class _AddressBookScreenState extends State<_AddressBookScreen> {
                 onChanged: (_) => set(() {}),
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: 'Address (T… or 0x…)',
-                  errorText: a.isEmpty ? null : (!valid ? 'Not a TRON or 0x address' : (dup ? 'Already saved' : null)),
-                  helperText: valid ? (a.startsWith('T') ? 'TRON' : 'Ethereum, BNB Chain, Polygon, Arbitrum, Base, Avalanche') : null,
+                  labelText: 'Address',
+                  errorText: a.isEmpty ? null : (!valid ? 'Not a wallet address we know' : (dup ? 'Already saved' : null)),
+                  helperText: valid ? (_familyOf(a) == 'evm' ? 'Ethereum, BNB Chain, Polygon, Arbitrum, Base, Avalanche' : _familyName(_familyOf(a)!)) : null,
                   suffixIcon: edit != null
                       ? null
                       : IconButton(
@@ -895,7 +902,7 @@ class _AddressBookScreenState extends State<_AddressBookScreen> {
     );
     if (saved != true) return;
     final a = addr.text.trim();
-    await _book.add(name.text, a.startsWith('0x') ? EvmCrypto.checksum(a.substring(2)) : a);
+    await _book.add(name.text, _familyOf(a) == 'evm' ? EvmCrypto.checksum(a.substring(2)) : a);
     await _load();
   }
 
@@ -985,12 +992,11 @@ class _AddressBookScreenState extends State<_AddressBookScreen> {
                     ListTile(
                       onTap: () => _actions(x),
                       leading: CircleAvatar(
-                        backgroundColor: (x.isTron ? _trxColor : const Color(0xFF627EEA)).withValues(alpha: 0.15),
-                        child: Text(x.name.isEmpty ? '?' : x.name.substring(0, 1).toUpperCase(),
-                            style: TextStyle(color: x.isTron ? _trxColor : const Color(0xFF627EEA), fontWeight: FontWeight.w800)),
+                        backgroundColor: Brand.primary.withValues(alpha: 0.13),
+                        child: Text(x.name.isEmpty ? '?' : x.name.substring(0, 1).toUpperCase(), style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w800)),
                       ),
                       title: Text(x.name),
-                      subtitle: Text('${x.isTron ? 'TRON' : 'EVM'} · ${_short(x.address)}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5)),
+                      subtitle: Text('${_familyName(_familyOf(x.address) ?? '?')} · ${_short(x.address)}', style: const TextStyle(fontSize: 12.5)),
                       trailing: const Icon(Icons.chevron_right_rounded),
                     ),
                 ]),
@@ -1019,7 +1025,7 @@ class _ShareSwitchState extends State<_ShareSwitch> {
   Future<void> _set(bool v) async {
     final w = widget.store;
     try {
-      await context.read<AppServices>().api.put('/me/wallet', {'share': v, 'tron': w.address, 'evm': w.evmAddress});
+      await context.read<AppServices>().api.put('/me/wallet', {'share': v, 'tron': w.address, 'evm': w.evmAddress, ...w.utxoAddr});
       (await SharedPreferences.getInstance()).setBool(_key, v);
       if (mounted) setState(() => _on = v);
     } catch (e) {
@@ -1037,12 +1043,31 @@ class _ShareSwitchState extends State<_ShareSwitch> {
       );
 }
 
-/// A TRON (T…) or EVM (0x…) address inside any text (QR codes often carry "ethereum:0x…?value=…").
+/// Which kind of address this is: 'tron', 'evm', 'btc', 'ltc', 'doge' — or null.
+String? _familyOf(String a) {
+  final s = a.trim();
+  if (TronCrypto.isValidAddress(s)) return 'tron';
+  if (EvmCrypto.isValidAddress(s)) return 'evm';
+  for (final c in UtxoChain.all) {
+    if (UtxoCrypto.isValidAddress(s, c)) return c.id;
+  }
+  return null;
+}
+
+/// The address family an asset uses.
+String _familyOfAsset(WalletAsset a) => a.isTron ? 'tron' : (a.isUtxo ? a.network : 'evm');
+
+String _familyName(String f) => switch (f) {
+      'tron' => 'TRON',
+      'evm' => 'Ethereum-style (0x…)',
+      _ => UtxoChain.byId(f)?.name ?? f,
+    };
+
+/// An address inside any text (QR codes often carry "bitcoin:bc1…?amount=…" or "ethereum:0x…").
 String? _addressFrom(String raw) {
-  final t = RegExp(r'T[1-9A-HJ-NP-Za-km-z]{33}').firstMatch(raw)?.group(0);
-  if (t != null && TronCrypto.isValidAddress(t)) return t;
-  final e = RegExp(r'0x[0-9a-fA-F]{40}').firstMatch(raw)?.group(0);
-  if (e != null && EvmCrypto.isValidAddress(e)) return e;
+  for (final w in raw.split(RegExp(r'[^A-Za-z0-9]+'))) {
+    if (w.length >= 25 && _familyOf(w) != null) return w;
+  }
   return null;
 }
 
@@ -1050,7 +1075,7 @@ Future<WalletAsset?> _pickAsset(BuildContext context, List<WalletAsset> assets, 
   // a scanned address decides the network family
   final list = toAddress == null
       ? assets
-      : assets.where((a) => toAddress.startsWith('T') ? a.isTron : !a.isTron).toList();
+      : assets.where((a) => _familyOfAsset(a) == _familyOf(toAddress)).toList();
   return showModalBottomSheet<WalletAsset>(
     context: context,
     isScrollControlled: true,
@@ -1142,7 +1167,7 @@ class _TokenIcon extends StatelessWidget {
         color: a.color,
         glyph: a.glyph,
         size: size,
-        network: a.isNative ? null : (a.isTron ? const Color(0xFFEB0029) : Color(a.evm!.color)),
+        network: a.isNative ? null : (a.isTron ? const Color(0xFFEB0029) : Color(a.evm?.color ?? 0xFF888888)),
       );
 
   @override
@@ -1214,11 +1239,13 @@ class _AssetTile extends StatelessWidget {
 
 String _explorerTx(WalletTx t, TronNet tron) {
   if (t.network == 'tron') return '${tron.explorer}${t.id}';
+  final u = UtxoChain.byId(t.network);
+  if (u != null) return u.txUrl(t.id);
   final c = EvmChain.byId(t.network);
   return c == null ? '' : '${c.explorer}/tx/${t.id}';
 }
 
-String _netName(String network) => network == 'tron' ? 'TRON' : (EvmChain.byId(network)?.name ?? network);
+String _netName(String network) => network == 'tron' ? 'TRON' : (UtxoChain.byId(network)?.name ?? EvmChain.byId(network)?.name ?? network);
 
 class _TxTile extends StatelessWidget {
   const _TxTile({required this.tx, required this.me, required this.hidden, required this.tronNet});
@@ -1293,9 +1320,10 @@ void _txSheet(BuildContext context, WalletTx tx, bool incoming, TronNet tron) {
 
 // ======================================================================== receive
 class _ReceiveSheet extends StatefulWidget {
-  const _ReceiveSheet({required this.tron, required this.evm, this.startEvm = false, this.asset});
+  const _ReceiveSheet({required this.tron, required this.evm, this.utxo = const {}, this.startEvm = false, this.asset});
   final String tron;
   final String evm;
+  final Map<String, String> utxo;
   final bool startEvm;
   final WalletAsset? asset; // opened from one coin: say exactly what to send here
   @override
@@ -1303,11 +1331,29 @@ class _ReceiveSheet extends StatefulWidget {
 }
 
 class _ReceiveSheetState extends State<_ReceiveSheet> {
-  late bool _evm = widget.startEvm;
+  late String _sel = widget.asset != null ? _familyOfAsset(widget.asset!) : (widget.startEvm ? 'evm' : 'tron');
+
+  String get _address => switch (_sel) { 'tron' => widget.tron, 'evm' => widget.evm, _ => widget.utxo[_sel] ?? '' };
+
+  static const _families = [('btc', 'Bitcoin'), ('evm', 'Ethereum · BNB · more'), ('tron', 'TRON'), ('ltc', 'Litecoin'), ('doge', 'Dogecoin')];
+
+  Widget _centerIcon() {
+    if (widget.asset != null) return _TokenIcon(color: widget.asset!.color, glyph: widget.asset!.glyph, size: 38);
+    final u = UtxoChain.byId(_sel);
+    if (u != null) return _TokenIcon(color: Color(u.color), glyph: u.glyph, size: 38);
+    return _sel == 'evm' ? const _TokenIcon(color: Color(0xFF627EEA), glyph: 'Ξ', size: 38) : const _TokenIcon(color: _trxColor, glyph: 'T', size: 38);
+  }
+
+  String get _what => switch (_sel) {
+        'tron' => 'USDT (TRC-20) and TRX',
+        'evm' => 'One address for Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche',
+        _ => 'Only ${UtxoChain.byId(_sel)?.name ?? ''} (${UtxoChain.byId(_sel)?.symbol ?? ''})',
+      };
 
   @override
   Widget build(BuildContext context) {
-    final address = _evm ? widget.evm : widget.tron;
+    final address = _address;
+    final isEvm = _sel == 'evm';
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
@@ -1326,20 +1372,15 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
               ]),
             )
           else
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: false, label: Text('TRON')),
-              ButtonSegment(value: true, label: Text('Ethereum · BNB · more')),
-            ],
-            selected: {_evm},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() => _evm = s.first),
-          ),
+          Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+            for (final (id, label) in _families)
+              ChoiceChip(label: Text(label), selected: _sel == id, onSelected: (_) => setState(() => _sel = id)),
+          ]),
           const SizedBox(height: 8),
           Text(
             widget.asset != null
                 ? 'Send only ${widget.asset!.symbol} on ${widget.asset!.networkName} to this address'
-                : _evm ? 'One address for Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche' : 'USDT (TRC-20) and TRX',
+                : _what,
             textAlign: TextAlign.center,
             style: const TextStyle(color: Brand.muted),
           ),
@@ -1359,11 +1400,7 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                child: widget.asset != null
-                    ? _TokenIcon(color: widget.asset!.color, glyph: widget.asset!.glyph, size: 38)
-                    : _evm
-                        ? const _TokenIcon(color: Color(0xFF627EEA), glyph: 'Ξ', size: 38)
-                        : const _TokenIcon(color: _trxColor, glyph: 'T', size: 38),
+                child: _centerIcon(),
               ),
             ]),
           ),
@@ -1386,9 +1423,11 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
             color: const Color(0xFFE08A1E),
             text: widget.asset != null
                 ? 'Only ${widget.asset!.symbol} on ${widget.asset!.networkName} here. The same coin sent from another network is lost.'
-                : _evm
+                : isEvm
                 ? 'Tell the sender which network they use (e.g. BNB Chain). The coins arrive on that same network in your wallet.'
-                : 'Only TRON coins here (USDT TRC-20, TRX). Coins sent from another network to this address are lost.',
+                : _sel == 'tron'
+                    ? 'Only TRON coins here (USDT TRC-20, TRX). Coins sent from another network to this address are lost.'
+                    : 'Only ${UtxoChain.byId(_sel)?.symbol} here. Other coins sent to this address are lost.',
           ),
         ]),
       ),
@@ -1600,18 +1639,26 @@ class _SendScreenState extends State<_SendScreen> {
 
   BigInt get _have => a.balance ?? BigInt.zero;
 
-  bool _validAddress(String t) => a.isTron ? TronCrypto.isValidAddress(t) : EvmCrypto.isValidAddress(t);
+  bool _validAddress(String t) => a.isTron
+      ? TronCrypto.isValidAddress(t)
+      : a.isUtxo
+          ? UtxoCrypto.isValidAddress(t, a.utxo!)
+          : EvmCrypto.isValidAddress(t);
 
   String? get _toError {
     final t = _to.text.trim();
     if (t.isEmpty) return null;
     if (!_validAddress(t)) {
-      if (a.isTron && t.startsWith('0x')) return 'This is an Ethereum-style address. ${a.symbol} on TRON needs a T… address';
-      if (!a.isTron && t.startsWith('T')) return 'This is a TRON address. ${a.symbol} on ${a.networkName} needs a 0x… address';
-      return a.isTron ? 'Not a TRON address (they start with T)' : 'Not a valid address (0x… with 42 characters)';
+      final other = _familyOf(t);
+      if (other != null) return 'This is a ${_familyName(other)} address. ${a.symbol} on ${a.networkName} can’t go there — the coins would be lost';
+      return a.isTron
+          ? 'Not a TRON address (they start with T)'
+          : a.isUtxo
+              ? 'Not a ${a.networkName} address'
+              : 'Not a valid address (0x… with 42 characters)';
     }
     final w = context.read<WalletStore>();
-    if (t.toLowerCase() == (a.isTron ? w.address! : w.evmAddress!).toLowerCase()) return 'This is your own address';
+    if (t.toLowerCase() == (w.addressFor(a.network) ?? '').toLowerCase()) return 'This is your own address';
     return null;
   }
 
@@ -1631,8 +1678,11 @@ class _SendScreenState extends State<_SendScreen> {
     var v = _have;
     if (a.isNative) {
       // keep enough of the network's coin for the fee
-      final keep = a.isTron ? BigInt.from(1100000) : BigInt.from((a.evm!.maxFeeNative / 10 * 1e18).round());
-      v -= keep;
+      // Bitcoin-family: "all of it" — the fee is taken from the amount when it's sent
+      if (!a.isUtxo) {
+        final keep = a.isTron ? BigInt.from(1100000) : BigInt.from((a.evm!.maxFeeNative / 10 * 1e18).round());
+        v -= keep;
+      }
     }
     if (v < BigInt.zero) v = BigInt.zero;
     _amount.text = Units.format(v, decimals: a.decimals, maxFraction: a.decimals).replaceAll(',', '');
@@ -1649,6 +1699,9 @@ class _SendScreenState extends State<_SendScreen> {
       if (a.isTron) {
         final p = a.symbol == 'TRX' ? await w.api.prepareTrx(w.address!, to, amount) : await w.api.prepareUsdt(w.address!, to, amount);
         q = _Quote(fee: p.feeSun, feeDecimals: 6, tron: p);
+      } else if (a.isUtxo) {
+        final p = await UtxoApi(a.utxo!).prepare(from: w.utxoAddr[a.network]!, to: to, amount: amount, sweep: amount >= _have);
+        q = _Quote(fee: p.fee, feeDecimals: 8, utxo: p, amount: p.amount);
       } else {
         final p = await EvmApi(a.evm!).prepare(from: w.evmAddress!, to: EvmCrypto.checksum(to.substring(2)), amount: amount, token: a.evmToken);
         q = _Quote(fee: p.fee, feeDecimals: 18, evm: p);
@@ -1663,20 +1716,21 @@ class _SendScreenState extends State<_SendScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     final feeHave = widget.feeAsset.balance ?? BigInt.zero;
-    final needNative = q.fee + (a.isNative ? amount : BigInt.zero);
+    final sendAmount = q.amount ?? amount; // Bitcoin "send all": what's left after the fee
+    final needNative = q.fee + (a.isNative ? sendAmount : BigInt.zero);
     final short = needNative > feeHave;
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _ConfirmSheet(
-        asset: a, feeAsset: widget.feeAsset, to: to, amount: amount, fee: q.fee, short: short,
+        asset: a, feeAsset: widget.feeAsset, to: to, amount: sendAmount, fee: q.fee, short: short,
         name: AddressBook.nameFor(_book, to) ?? widget.toName,
         firstTime: AddressBook.nameFor(_book, to) == null && !_known.any((k) => k.toLowerCase() == to.toLowerCase()) && widget.toName == null,
         lookalike: AddressBook.lookalike([..._book.map((b) => b.address), ..._known], to),
       ),
     );
     if (go != true || !mounted) return;
-    final phrase = await w.readPhrase(context, 'Confirm sending ${Units.format(amount, decimals: a.decimals)} ${a.symbol}');
+    final phrase = await w.readPhrase(context, 'Confirm sending ${Units.format(sendAmount, decimals: a.decimals)} ${a.symbol}');
     if (phrase == null || !mounted) return;
     setState(() => _busy = true);
     try {
@@ -1688,6 +1742,16 @@ class _SendScreenState extends State<_SendScreen> {
         } finally {
           key.fillRange(0, key.length, 0); // wipe the key from memory
         }
+      } else if (q.utxo != null) {
+        final key = UtxoCrypto.privateKey(phrase, a.utxo!);
+        try {
+          id = await UtxoApi(a.utxo!).send(q.utxo!, key);
+        } finally {
+          key.fillRange(0, key.length, 0);
+        }
+        await SentLog(w.userId).add(WalletTx(
+          id: id, token: a.symbol, from: w.utxoAddr[a.network]!, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
+        ));
       } else {
         final key = EvmCrypto.privateKey(phrase);
         try {
@@ -1701,13 +1765,13 @@ class _SendScreenState extends State<_SendScreen> {
       }
       if (!mounted) return;
       HapticFeedback.heavyImpact();
-      final url = a.isTron ? '${w.net.explorer}$id' : '${a.evm!.explorer}/tx/$id';
+      final url = a.isTron ? '${w.net.explorer}$id' : (a.isUtxo ? a.utxo!.txUrl(id) : '${a.evm!.explorer}/tx/$id');
       if (a.isTron) {
         await SentLog(w.userId).add(WalletTx(id: id, token: a.symbol, from: w.address!, to: to, amount: amount, time: DateTime.now(), ok: true, network: 'tron', decimals: a.decimals));
       }
       if (widget.forChat) {
         Navigator.pop(context, <String, dynamic>{
-          'kind': 'sent', 'network': a.network, 'symbol': a.symbol, 'amount': '$amount', 'decimals': a.decimals, 'to': to,
+          'kind': 'sent', 'network': a.network, 'symbol': a.symbol, 'amount': '$sendAmount', 'decimals': a.decimals, 'to': to,
           if (a.contract != null) 'contract': a.contract, 'tx': id,
         });
         return;
@@ -1716,7 +1780,7 @@ class _SendScreenState extends State<_SendScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => _SentScreen(
-            text: '${Units.format(amount, decimals: a.decimals)} ${a.symbol} to ${AddressBook.nameFor(_book, to) ?? _short(to)}',
+            text: '${Units.format(sendAmount, decimals: a.decimals)} ${a.symbol} to ${AddressBook.nameFor(_book, to) ?? _short(to)}',
             url: url,
             saveAddress: AddressBook.nameFor(_book, to) == null ? to : null,
             userId: w.userId,
@@ -1734,7 +1798,7 @@ class _SendScreenState extends State<_SendScreen> {
   @override
   Widget build(BuildContext context) {
     final u = _units;
-    final hint = a.isTron ? 'T…' : '0x…';
+    final hint = a.isTron ? 'T…' : (a.isUtxo ? (a.utxo!.segwit ? '${a.utxo!.hrp}1…' : 'D…') : '0x…');
     return Scaffold(
       appBar: AppBar(title: Text('Send ${a.symbol}')),
       body: SafeArea(
@@ -1761,9 +1825,9 @@ class _SendScreenState extends State<_SendScreen> {
                   tooltip: 'Address book',
                   icon: const Icon(Icons.contacts_rounded),
                   onPressed: () async {
-                    final mine = _book.where((b) => b.isTron == a.isTron).toList();
+                    final mine = _book.where((b) => _familyOf(b.address) == _familyOfAsset(a)).toList();
                     if (mine.isEmpty) {
-                      showInfo(context, 'No saved ${a.isTron ? 'TRON' : '0x'} addresses yet. They’re saved after you send.');
+                      showInfo(context, 'No saved ${a.networkName} addresses yet. They’re saved after you send.');
                       return;
                     }
                     final pick = await showModalBottomSheet<String>(
@@ -1838,6 +1902,8 @@ class _SendScreenState extends State<_SendScreen> {
             TextButton(onPressed: _max, child: const Text('Max')),
           ]),
           const SizedBox(height: 10),
+          if (a.isUtxo && (_units ?? BigInt.zero) >= _have && _have > BigInt.zero)
+            const _Note(icon: Icons.info_rounded, text: 'Sending everything: the network fee is taken from this amount.'),
           if (!a.isNative)
             _Note(
               icon: Icons.local_gas_station_rounded,
@@ -1857,11 +1923,13 @@ class _SendScreenState extends State<_SendScreen> {
 }
 
 class _Quote {
-  _Quote({required this.fee, required this.feeDecimals, this.tron, this.evm});
+  _Quote({required this.fee, required this.feeDecimals, this.tron, this.evm, this.utxo, this.amount});
   final BigInt fee;
   final int feeDecimals;
   final PreparedTx? tron;
   final EvmPrepared? evm;
+  final UtxoPrepared? utxo;
+  final BigInt? amount; // what really gets sent, when it differs from what was typed
 }
 
 class _ConfirmSheet extends StatelessWidget {
@@ -2078,9 +2146,11 @@ class _AssetScreenState extends State<_AssetScreen> {
     final now = shown?.usd ?? a.price;
     final ch = first != null && now != null && first > 0 ? (now - first) / first * 100 : a.change;
     final up = (ch ?? 0) >= 0;
-    final myAddress = a.isTron ? w.address! : w.evmAddress!;
+    final myAddress = w.addressFor(a.network) ?? '';
     final explorerAddr = a.isTron
         ? '${w.net.explorer.replaceFirst('/transaction/', '/address/')}$myAddress'
+        : a.isUtxo
+        ? a.utxo!.addressUrl(myAddress)
         : '${a.evm!.explorer}/${a.isNative ? 'address' : 'token'}/${a.isNative ? myAddress : '${a.contract}?a=$myAddress'}';
     return Scaffold(
       appBar: AppBar(
@@ -2182,7 +2252,7 @@ class _AssetScreenState extends State<_AssetScreen> {
                 onPressed: () => showModalBottomSheet<void>(
                   context: context,
                   isScrollControlled: true,
-                  builder: (_) => _ReceiveSheet(tron: w.address!, evm: w.evmAddress!, startEvm: !a.isTron, asset: a),
+                  builder: (_) => _ReceiveSheet(tron: w.address!, evm: w.evmAddress!, utxo: w.utxoAddr, startEvm: !a.isTron, asset: a),
                 ),
                 icon: const Icon(Icons.arrow_downward_rounded, size: 18),
                 label: const Text('Receive'),
@@ -2198,7 +2268,7 @@ class _AssetScreenState extends State<_AssetScreen> {
         if (widget.txs.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Text(a.isTron ? 'No transfers yet.' : 'Transfers you send from here show up below. For everything you received, tap “All on explorer”.',
+            child: Text(a.isTron || a.isUtxo ? 'No transfers yet.' : 'Transfers you send from here show up below. For everything you received, tap “All on explorer”.',
                 style: const TextStyle(color: Brand.muted)),
           )
         else
@@ -2289,7 +2359,7 @@ Future<(WalletStore, List<WalletAsset>)?> _walletForChat(BuildContext context) a
   final assets = Portfolio.build(tron: w.net, custom: w.customTokens);
   showDialog<void>(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
   try {
-    await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net);
+    await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net, utxoAddr: w.utxoAddr);
   } finally {
     if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
   }
@@ -2332,9 +2402,9 @@ Future<Map<String, dynamic>?> walletSendForChat(BuildContext context, {int? peer
     }
     asset = await _pickAsset(context, list, title: 'Send which coin?');
     if (asset == null || !context.mounted) return null;
-    to = asset.isTron ? shared['tron'] as String? : shared['evm'] as String?;
+    to = shared[_familyOfAsset(asset)] as String?;
     if (to == null && peerName != null) {
-      showInfo(context, '$peerName hasn’t shared a ${asset.isTron ? 'TRON' : asset.networkName} address. Paste the address they gave you — or ask them to send you a request.');
+      showInfo(context, '$peerName hasn’t shared a ${asset.networkName} address. Paste the address they gave you — or ask them to send you a request.');
     }
   }
   if (!context.mounted) return null;
@@ -2403,7 +2473,7 @@ Future<Map<String, dynamic>?> walletRequestForChat(BuildContext context) async {
   if (amount == null) return null;
   return {
     'kind': 'request', 'network': a.network, 'symbol': a.symbol, 'amount': '$amount', 'decimals': a.decimals,
-    'to': a.isTron ? w.address! : w.evmAddress!,
+    'to': w.addressFor(a.network)!,
     if (a.contract != null) 'contract': a.contract,
     if (note.text.trim().isNotEmpty) 'note': note.text.trim(),
   };

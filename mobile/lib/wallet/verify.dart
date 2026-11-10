@@ -1,6 +1,7 @@
 import 'evm.dart';
 import 'tron_api.dart';
 import 'tron_crypto.dart';
+import 'utxo.dart';
 
 enum CardCheck { checking, confirmed, pending, failed, mismatch }
 
@@ -21,7 +22,12 @@ class CryptoVerify {
     if (hit != null && (hit.$1 != CardCheck.pending || DateTime.now().difference(hit.$2) < const Duration(seconds: 20))) return hit.$1;
     CardCheck r;
     try {
-      r = '${c['network']}' == 'tron' ? await _tron(c, tx) : await _evm(c, tx);
+      final u = UtxoChain.byId('${c['network']}');
+      r = '${c['network']}' == 'tron'
+          ? await _tron(c, tx)
+          : u != null
+              ? await _utxo(u, c, tx)
+              : await _evm(c, tx);
     } catch (_) {
       r = CardCheck.pending; // network not reachable right now
     }
@@ -60,6 +66,14 @@ class CryptoVerify {
       return CardCheck.mismatch;
     }
     return CardCheck.pending;
+  }
+
+  static Future<CardCheck> _utxo(UtxoChain chain, Map<String, dynamic> c, String tx) async {
+    final r = await UtxoApi(chain).checkPayment(tx, '${c['to']}', _amount(c));
+    if (r == null) return CardCheck.pending;
+    final (paid, confirmed) = r;
+    if (!paid) return CardCheck.mismatch;
+    return confirmed ? CardCheck.confirmed : CardCheck.pending;
   }
 
   static const _transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';

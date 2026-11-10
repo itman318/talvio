@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chatapp/wallet/evm.dart';
 import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
+import 'package:chatapp/wallet/utxo.dart';
 
 // Expected values were computed with an independent implementation (Python: PBKDF2, BIP-32, secp256k1,
 // Keccak-256, Base58Check written from the specs) — not with this code.
@@ -124,6 +125,67 @@ void main() {
     expect(TronCrypto.hex(d), 'a9059cbb0000000000000000000000009858effd232b4033e47d90003d41ec34ecaeda94000000000000000000000000000000000000000000000000000000000016e360');
     expect(Units.format(BigInt.parse('1234500000000000000'), decimals: 18), '1.2345');
     expect(Units.parse('0.5', decimals: 18), BigInt.parse('500000000000000000'));
+  });
+
+  test('Bitcoin family: phrase → addresses (BIP-84 / BIP-44) — same as Trust Wallet', () {
+    expect(UtxoCrypto.addressOf(UtxoCrypto.privateKey(phrase, UtxoChain.btc), UtxoChain.btc), 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu');
+    expect(UtxoCrypto.addressOf(UtxoCrypto.privateKey(phrase, UtxoChain.btc, index: 1), UtxoChain.btc), 'bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g');
+    expect(UtxoCrypto.addressOf(UtxoCrypto.privateKey(phrase, UtxoChain.ltc), UtxoChain.ltc), 'ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh');
+    expect(UtxoCrypto.addressOf(UtxoCrypto.privateKey(phrase, UtxoChain.doge), UtxoChain.doge), 'DBus3bamQjgJULBJtYXpEzDWQRwF5iwxgC');
+  });
+
+  test('Bitcoin family: every kind of address someone may give you', () {
+    const btc = UtxoChain.btc;
+    expect(TronCrypto.hex(UtxoCrypto.scriptFor('bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu', btc)!), startsWith('0014'));
+    expect(TronCrypto.hex(UtxoCrypto.scriptFor('bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297', btc)!), startsWith('5120'), reason: 'Taproot');
+    expect(TronCrypto.hex(UtxoCrypto.scriptFor('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', btc)!), '76a914${'7680adec8eabcabac676be9e83854ade0bd22cdb'}88ac');
+    expect(TronCrypto.hex(UtxoCrypto.scriptFor('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', btc)!), startsWith('a914'));
+    expect(UtxoCrypto.isValidAddress('bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyv', btc), false, reason: 'checksum');
+    expect(UtxoCrypto.isValidAddress('ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh', btc), false, reason: 'Litecoin address on Bitcoin');
+    expect(UtxoCrypto.isValidAddress('DBus3bamQjgJULBJtYXpEzDWQRwF5iwxgC', btc), false);
+    expect(UtxoCrypto.isValidAddress('DBus3bamQjgJULBJtYXpEzDWQRwF5iwxgC', UtxoChain.doge), true);
+    expect(UtxoCrypto.isValidAddress('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH', UtxoChain.doge), false);
+  });
+
+  test('Bitcoin family: BIP-143 signature hash (the example from the BIP itself)', () {
+    final txin0 = [...TronCrypto.fromHex('fff7f7881a8099afa6940d42d1e7f6362bec38171ea3edf433541db4e4ad969f'), 0, 0, 0, 0];
+    final txin1 = [...TronCrypto.fromHex('ef51e1b804cc89d182d279655c3aa89e815b1b309fe287d9b2b55d57b90ec68a'), 1, 0, 0, 0];
+    final outs = TronCrypto.fromHex('202cb206000000001976a9148280b37df378db99f66f85c95a783a76ac7a6d5988ac9093510d000000001976a9143bde42dbee7e4dbe6a21b2d50ce2f0167faa815988ac');
+    final priv = TronCrypto.fromHex('619c335025c7f4012e556c2a58b2506e30b8511b53ade95ea316fd8c3286feb9');
+    final pkh = UtxoCrypto.hash160(UtxoCrypto.compressedPub(priv));
+    expect(TronCrypto.hex(pkh), '1d0f172a0ecb48aee1be1f2687d2963ae33f71a1');
+    final h = UtxoTx.bip143(
+      version: 1, hashPrevouts: UtxoCrypto.dsha([...txin0, ...txin1]), hashSequence: UtxoCrypto.dsha(TronCrypto.fromHex('eeffffffffffffff')),
+      outpoint: txin1, scriptCode: [0x76, 0xa9, 0x14, ...pkh, 0x88, 0xac], value: 600000000, sequence: const [0xff, 0xff, 0xff, 0xff],
+      hashOutputs: UtxoCrypto.dsha(outs), locktime: 0x11,
+    );
+    expect(TronCrypto.hex(h), 'c37af31116d1b27caf68aae9e3ac82f1477929014d5b917657d0eb49478cb670');
+  });
+
+  test('Bitcoin family: DER signatures verify; a built transaction has the right shape and id', () {
+    final priv = UtxoCrypto.privateKey(phrase, UtxoChain.btc);
+    final h = UtxoCrypto.dsha('hushavia'.codeUnits);
+    final sig = TronCrypto.sign(h, priv);
+    final der = UtxoCrypto.der(sig);
+    expect(der.first, 0x30);
+    expect(der.last, 0x01, reason: 'SIGHASH_ALL');
+    expect(der.length, der[1] + 3);
+    final me = UtxoCrypto.addressOf(priv, UtxoChain.btc);
+    final p = UtxoPrepared(
+      chain: UtxoChain.btc, from: me, to: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', amount: BigInt.from(50000), fee: BigInt.from(1000),
+      change: BigInt.from(49000), inputs: [Utxo('aa' * 32, 1, 100000)],
+    );
+    final raw = UtxoTx.sign(p, priv);
+    expect(TronCrypto.hex(raw.sublist(0, 6)), '020000000001', reason: 'version 2 + SegWit marker');
+    expect(UtxoTx.txid(raw, UtxoChain.btc).length, 64);
+    // Dogecoin (legacy): the id is simply the hash of the whole transaction
+    final dp = UtxoCrypto.privateKey(phrase, UtxoChain.doge);
+    final d = UtxoPrepared(
+      chain: UtxoChain.doge, from: UtxoCrypto.addressOf(dp, UtxoChain.doge), to: 'DBus3bamQjgJULBJtYXpEzDWQRwF5iwxgC', amount: BigInt.from(500000000),
+      fee: BigInt.from(1000000), change: BigInt.zero, inputs: [Utxo('bb' * 32, 0, 501000000)],
+    );
+    final draw = UtxoTx.sign(d, dp);
+    expect(UtxoTx.txid(draw, UtxoChain.doge), TronCrypto.hex(UtxoCrypto.dsha(draw).reversed.toList()));
   });
 }
 

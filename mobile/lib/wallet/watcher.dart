@@ -41,7 +41,7 @@ class WalletWatcher {
       await w.load();
       if (!w.exists || w.evmAddress == null) return;
       final assets = Portfolio.build(tron: w.net, custom: w.customTokens);
-      await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net);
+      await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net, utxoAddr: w.utxoAddr);
       final p = await SharedPreferences.getInstance();
       final key = 'wallet_seen_v1_${userId}_${w.net.id}';
       final seen = Map<String, dynamic>.from(jsonDecode(p.getString(key) ?? '{}') as Map);

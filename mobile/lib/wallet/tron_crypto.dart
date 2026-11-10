@@ -50,10 +50,10 @@ class TronCrypto {
   static Uint8List privateKey(String phrase, {int index = 0}) => privateKeyFor(phrase, coin: 195, index: index);
 
   /// BIP-44 m/44'/coin'/0'/0/index (195 = TRON, 60 = Ethereum and every EVM network).
-  static Uint8List privateKeyFor(String phrase, {required int coin, int index = 0}) {
-    final seed = bip39.mnemonicToSeed(normalize(phrase));
-    return derive(seed, [0x80000000 + 44, 0x80000000 + coin, 0x80000000, 0, index]);
-  }
+  static Uint8List privateKeyFor(String phrase, {required int coin, int index = 0}) =>
+      derive(seedOf(phrase), [0x80000000 + 44, 0x80000000 + coin, 0x80000000, 0, index]);
+
+  static Uint8List seedOf(String phrase) => bip39.mnemonicToSeed(normalize(phrase));
 
   /// BIP-32 private-key derivation.
   static Uint8List derive(Uint8List seed, List<int> path) {

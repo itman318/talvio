@@ -10,6 +10,7 @@ import '../theme/brand.dart';
 import '../theme/chat_theme.dart';
 import '../wallet/evm.dart';
 import '../wallet/tron_crypto.dart';
+import '../wallet/utxo.dart';
 import '../wallet/verify.dart';
 import '../wallet/wallet_store.dart';
 
@@ -28,6 +29,7 @@ class CryptoCard extends StatefulWidget {
 class _CryptoCardState extends State<CryptoCard> {
   CardCheck _check = CardCheck.checking;
   static final Map<int, (String?, String?)> _mine = {}; // my wallet addresses, per account
+  static final Map<int, Set<String>> _utxoMine = {};
 
   Map<String, dynamic> get c => Map<String, dynamic>.from((widget.message.meta?['crypto'] as Map?) ?? const {});
 
@@ -44,6 +46,7 @@ class _CryptoCardState extends State<CryptoCard> {
     final w = WalletStore(uid);
     await w.load();
     _mine[uid] = (w.address, w.evmAddress);
+    _utxoMine[uid] = w.utxoAddr.values.map((x) => x.toLowerCase()).toSet();
     if (mounted) setState(() {});
   }
 
@@ -61,10 +64,12 @@ class _CryptoCardState extends State<CryptoCard> {
   bool get _toMe {
     final m = _mine[context.read<AuthState>().me?.id ?? 0];
     final to = '${c['to']}'.toLowerCase();
-    return m != null && (m.$1?.toLowerCase() == to || m.$2?.toLowerCase() == to);
+    return m != null && (m.$1?.toLowerCase() == to || m.$2?.toLowerCase() == to || (_utxoMine[context.read<AuthState>().me?.id ?? 0]?.contains(to) ?? false));
   }
 
-  String get _network => '${c['network']}' == 'tron' ? 'TRON' : (EvmChain.byId('${c['network']}')?.name ?? '${c['network']}');
+  String get _network => '${c['network']}' == 'tron'
+      ? 'TRON'
+      : (UtxoChain.byId('${c['network']}')?.name ?? EvmChain.byId('${c['network']}')?.name ?? '${c['network']}');
 
   String get _amount {
     final u = BigInt.tryParse('${c['amount']}') ?? BigInt.zero;
@@ -75,6 +80,8 @@ class _CryptoCardState extends State<CryptoCard> {
     final tx = c['tx'];
     if (tx == null) return null;
     if ('${c['network']}' == 'tron') return 'https://tronscan.org/#/transaction/$tx';
+    final u = UtxoChain.byId('${c['network']}');
+    if (u != null) return u.txUrl('$tx');
     final ch = EvmChain.byId('${c['network']}');
     return ch == null ? null : '${ch.explorer}/tx/$tx';
   }
