@@ -29,6 +29,7 @@ import 'link_device_screen.dart';
 import 'business_screen.dart';
 import 'prayer_screen.dart';
 import 'backup_screen.dart';
+import 'wallet_screen.dart';
 import 'qr_screens.dart';
 import 'calls_screen.dart' show CallLinksScreen;
 import 'story_screens.dart' show MyHighlightsScreen;
@@ -92,6 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (context.mounted) showError(context, e);
           }
         }),
+      _Item(acc, Icons.account_balance_wallet_rounded, const Color(0xFF12B89C), 'Wallet', subtitle: 'USDT & TRX — your keys stay on this phone', keywords: 'crypto usdt trx tron money send receive', onTap: () => go(const WalletScreen())),
       _Item(notif, Icons.notifications_rounded, const Color(0xFFE5484D), 'Notifications', subtitle: 'Chats, groups, channels, sound, vibration', keywords: 'sound vibrate alert push preview', onTap: () => go(const NotificationsScreen())),
       _Item(priv, Icons.health_and_safety_rounded, const Color(0xFF12A150), 'Security checkup', subtitle: 'Your protection score and quick fixes', keywords: 'secure score', onTap: () => go(const SecurityCheckupScreen())),
       _Item(priv, Icons.visibility_rounded, Brand.green, 'Privacy', subtitle: 'Who can see, message, call and find you', keywords: 'last seen online phone', onTap: () => go(const PrivacyScreen())),

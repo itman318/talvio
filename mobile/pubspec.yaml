@@ -80,6 +80,10 @@ dependencies:
   archive: '>=3.6.1 <5.0.0'
   latlong2: ^0.9.1
 
+  # wallet (TRON, keys stay on the phone)
+  bip39: ^1.0.6
+  pointycastle: ^3.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

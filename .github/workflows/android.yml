@@ -123,6 +123,14 @@ jobs:
           set -o pipefail
           flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee ../ci-report/analyze.txt
 
+      # the wallet's keys, addresses and signatures must match the independent test vectors —
+      # if they don't, no APK is built
+      - name: Wallet crypto tests
+        run: |
+          mkdir -p ../ci-report
+          set -o pipefail
+          flutter test test/wallet_crypto_test.dart 2>&1 | tail -60 | tee ../ci-report/wallet-test.txt
+
       - name: Render mascot previews
         continue-on-error: true
         run: |
