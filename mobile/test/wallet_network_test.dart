@@ -132,9 +132,17 @@ void main() {
         final r = await http.get(Uri.parse('${c.apis.first}/tx/${h.first.id}/hex'));
         if (r.statusCode == 200) {
           expect(UtxoTx.txid(TronCrypto.fromHex(r.body.trim()), c), h.first.id);
-          final paid = await api.checkPayment(h.first.id, h.first.to, h.first.amount);
-          // ignore: avoid_print
-          print('${c.name}: card check of a real transfer → $paid');
+          // a card for a real incoming transfer must check out; the same card with 1 unit more must not
+          final incoming = h.where((t) => t.to == addr).toList();
+          if (incoming.isNotEmpty) {
+            final t = incoming.first;
+            final ok = await api.checkPayment(t.id, addr, t.amount);
+            final fake = await api.checkPayment(t.id, addr, t.amount + BigInt.one);
+            // ignore: avoid_print
+            print('${c.name}: card check real → $ok, faked → $fake');
+            if (ok != null) expect(ok.$1, true, reason: 'real payment');
+            if (fake != null) expect(fake.$1, false, reason: 'faked amount');
+          }
         }
       }
     }, timeout: const Timeout(Duration(seconds: 90)));
