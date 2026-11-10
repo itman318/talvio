@@ -1203,3 +1203,42 @@ CREATE TABLE IF NOT EXISTS chat_bans (
 -- admin panel: switch a sticker pack off, or decide Plus-only by hand (kept across restarts)
 ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS is_disabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS premium_by_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ------------------------------------------------------------------ support desk v2
+-- Public request numbers: start in the hundred-thousands and grow in uneven steps, so a number
+-- never tells how many requests (or users) there are. The internal id stays for links.
+CREATE SEQUENCE IF NOT EXISTS support_ticket_no_seq START WITH 482137;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS number BIGINT;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS first_reply_at TIMESTAMPTZ;
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS is_note BOOLEAN NOT NULL DEFAULT FALSE; -- team-only note
+CREATE OR REPLACE FUNCTION hushavia_next_ticket_no() RETURNS BIGINT AS $$
+DECLARE n BIGINT;
+BEGIN
+  n := nextval('support_ticket_no_seq') + floor(random() * 23)::bigint;
+  PERFORM setval('support_ticket_no_seq', n, true);
+  RETURN n;
+END $$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION hushavia_ticket_number() RETURNS trigger AS $$
+BEGIN
+  IF NEW.number IS NULL THEN NEW.number := hushavia_next_ticket_no(); END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS support_tickets_number ON support_tickets;
+CREATE TRIGGER support_tickets_number BEFORE INSERT ON support_tickets FOR EACH ROW EXECUTE FUNCTION hushavia_ticket_number();
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN SELECT id FROM support_tickets WHERE number IS NULL ORDER BY id LOOP
+    UPDATE support_tickets SET number = hushavia_next_ticket_no() WHERE id = r.id;
+  END LOOP;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS support_tickets_number_idx ON support_tickets (number);
+-- saved answers the team can drop into a reply
+CREATE TABLE IF NOT EXISTS support_canned (
+  id         BIGSERIAL PRIMARY KEY,
+  title      VARCHAR(80)   NOT NULL,
+  text       VARCHAR(4000) NOT NULL,
+  created_by BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT now()
+);

@@ -152,6 +152,10 @@ router.post('/announcements/:id/expire', requireAdmin('broadcast'), h(async (req
 router.get('/support', requireAdmin('support'), h(async (req, res) => {
   res.json(await support.adminList({ ...req.query, admin_id: req.query.mine === 'true' ? req.admin.id : undefined }));
 }));
+router.get('/support/stats', requireAdmin('support'), h(async (req, res) => res.json(await support.adminStats())));
+router.get('/support/canned', requireAdmin('support'), h(async (req, res) => res.json(await support.cannedList())));
+router.post('/support/canned', requireAdmin('support'), h(async (req, res) => res.json(await support.cannedSave(req.admin, req.body))));
+router.delete('/support/canned/:id', requireAdmin('support'), h(async (req, res) => res.json(await support.cannedDelete(req.params.id))));
 router.get('/support/:id', requireAdmin('support'), h(async (req, res) => res.json(await support.adminGet(req.params.id))));
 router.post('/support/:id/reply', requireAdmin('support'), h(async (req, res) => res.json(await support.adminReply(req.admin, req.params.id, req.body))));
 router.patch('/support/:id', requireAdmin('support'), h(async (req, res) => res.json(await support.adminUpdate(req.params.id, req.body))));

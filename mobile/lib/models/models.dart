@@ -950,6 +950,8 @@ class Announcement {
 
 class SupportTicket {
   final int id;
+  /// The public request number shown to people (big, not a count).
+  final int number;
   final String subject;
   final String category;
   final String status;
@@ -962,6 +964,7 @@ class SupportTicket {
 
   SupportTicket({
     required this.id,
+    required this.number,
     required this.subject,
     required this.category,
     required this.status,
@@ -975,6 +978,7 @@ class SupportTicket {
 
   factory SupportTicket.fromJson(Map<String, dynamic> j) => SupportTicket(
         id: _int(j['id']),
+        number: _int(j['number'] ?? j['id']),
         subject: j['subject'] as String,
         category: (j['category'] ?? 'other') as String,
         status: (j['status'] ?? 'open') as String,

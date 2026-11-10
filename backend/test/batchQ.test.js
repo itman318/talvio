@@ -390,6 +390,32 @@ test('support: screenshot, phone info, rating once after it is resolved', async 
   assert.equal(reply.code, 'ticket_not_found');
 });
 
+test('support desk: big uneven request numbers, team notes, saved answers, stats, auto-close', async () => {
+  const support = require('../src/services/support.service');
+  const a = await support.createTicket(A.id, { subject: 'Number one', message: 'hi' });
+  const b = await support.createTicket(A.id, { subject: 'Number two', message: 'hi' });
+  assert.ok(a.ticket.number >= 100000, 'starts big');
+  assert.ok(b.ticket.number > a.ticket.number, 'grows');
+  const [boss] = (await db.many('SELECT * FROM admins LIMIT 1'));
+  const admin = boss || (await db.one(`INSERT INTO admins (email, password_hash, name, role) VALUES ('desk@example.com', 'x', 'Desk', 'super_admin') RETURNING *`));
+  await support.adminReply(admin, a.ticket.id, { text: 'checking logs', note: true });
+  assert.equal((await support.getMine(A.id, a.ticket.id)).messages.length, 1, 'the note stays hidden from the user');
+  const g = await support.adminGet(a.ticket.id);
+  assert.ok(g.messages.some((m) => m.is_note));
+  assert.ok(g.other_tickets.some((t) => t.id === b.ticket.id));
+  await support.adminReply(admin, a.ticket.id, { text: 'Fixed!', status: 'resolved' });
+  const found = await support.adminList({ status: 'all', q: `#${a.ticket.number}` });
+  assert.equal(found.tickets[0].id, a.ticket.id);
+  const st = await support.adminStats();
+  assert.ok(st.first_reply_min !== null && st.resolved_week >= 1);
+  const c = await support.cannedSave(admin, { title: 'Greeting', text: 'Assalam o Alaikum!' });
+  assert.ok((await support.cannedList()).some((x) => x.id === c.id));
+  await support.cannedDelete(c.id);
+  await db.query(`UPDATE support_tickets SET resolved_at = now() - interval '4 days' WHERE id = $1`, [a.ticket.id]);
+  await support.sweep();
+  assert.equal((await support.getMine(A.id, a.ticket.id)).ticket.status, 'closed');
+});
+
 test('blocking: the blocked person sees they were blocked', async () => {
   const D = await signup('+923270000077', 'Dina', 'dina_blk');
   const chat = await chats.getOrCreatePrivate(A.id, D.id);

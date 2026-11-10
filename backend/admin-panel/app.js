@@ -1611,7 +1611,10 @@
   }
 
   // ------------------------------------------------------------------ support tickets
-  const supportState = { status: 'active', page: 1, mine: false, q: '' };
+  const supportState = { status: 'active', page: 1, mine: false, q: '', category: '' };
+  const CATS = ['account', 'bug', 'abuse', 'payment', 'feature', 'other'];
+  const supStat = (label, value) => el('div', { class: 'card stat' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+  const waitText = (min) => (min == null ? '—' : min < 60 ? `${min} min` : min < 1440 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} d`);
   const PRIORITY_CHIP = { urgent: 'bad', high: 'warn', normal: '', low: '' };
   async function pageSupport() {
     const tabs = el('div', { class: 'tabs' }, [['active', 'Open & waiting'], ['resolved', 'Resolved'], ['closed', 'Closed'], ['all', 'All']].map(([v, l]) => el('button', {
@@ -1621,20 +1624,35 @@
     const mine = el('input', { type: 'checkbox', checked: supportState.mine, id: 'sp-mine' });
     const search = el('input', { type: 'text', placeholder: 'Search subject, phone, @username', value: supportState.q, style: 'flex:1;min-width:220px' });
     const listBox = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
-    main.replaceChildren(head('Support'), tabs, el('div', { class: 'toolbar' }, search, el('label', { class: 'check', for: 'sp-mine', style: 'margin:0' }, mine, 'Assigned to me')), listBox);
+    const statsBox = el('div', { class: 'stats' });
+    const cat = el('select', {}, [el('option', { value: '' }, 'All topics'), ...CATS.map((c) => el('option', { value: c, selected: supportState.category === c ? true : null }, c))]);
+    cat.addEventListener('change', () => { supportState.category = cat.value; supportState.page = 1; load(); });
+    main.replaceChildren(head('Support', el('button', { class: 'btn small', onclick: manageCanned }, 'Saved answers')), statsBox, tabs,
+      el('div', { class: 'toolbar' }, search, cat, el('label', { class: 'check', for: 'sp-mine', style: 'margin:0' }, mine, 'Assigned to me')), listBox);
+    api('GET', '/support/stats').then((st) => statsBox.replaceChildren(
+      supStat('Open', fmtNum(st.active)),
+      supStat('Needs a reply', fmtNum(st.needs_reply)),
+      supStat('Unassigned', fmtNum(st.unassigned)),
+      supStat('High / urgent', fmtNum(st.urgent)),
+      supStat('New today', fmtNum(st.new_today)),
+      supStat('First reply (avg, 30d)', waitText(st.first_reply_min)),
+      supStat('Resolved this week', fmtNum(st.resolved_week)),
+      supStat('Rating (90d)', st.avg_rating ? `${st.avg_rating} ★ · ${st.ratings}` : '—'),
+    )).catch(() => statsBox.remove());
     mine.addEventListener('change', () => { supportState.mine = mine.checked; pageSupport(); });
     search.addEventListener('input', debounce(() => { supportState.q = search.value.trim(); supportState.page = 1; load(); }, 300));
 
     async function load() {
-      const q = new URLSearchParams({ status: supportState.status, page: supportState.page, mine: supportState.mine, q: supportState.q });
+      const q = new URLSearchParams({ status: supportState.status, page: supportState.page, mine: supportState.mine, q: supportState.q, category: supportState.category });
       const data = await action(() => api('GET', `/support?${q}`));
       if (!data) return;
       const rows = data.tickets.map((t) => el('tr', { class: 'clickable', onclick: () => openTicket(t.id) },
-        el('td', { class: 'num' }, t.id),
+        el('td', { class: 'num' }, `#${t.number || t.id}`),
         el('td', {}, el('strong', {}, t.subject), el('div', { class: 'muted' }, t.category)),
         el('td', {}, `${t.first_name || ''} ${t.last_name || ''}`.trim() || '—', el('div', { class: 'muted' }, t.username ? `@${t.username}` : (t.phone || t.email || ''))),
         el('td', {}, el('span', { class: `chip ${t.status === 'open' ? 'warn' : t.status === 'pending' ? 'info' : 'ok'}` }, t.status),
-          t.awaiting_admin && ['open', 'pending'].includes(t.status) ? el('span', { class: 'chip bad', style: 'margin-left:4px' }, 'Needs reply') : null),
+          t.awaiting_admin && ['open', 'pending'].includes(t.status) ? el('span', { class: 'chip bad', style: 'margin-left:4px' }, 'Needs reply') : null,
+          t.awaiting_admin && t.last_user_at && ['open', 'pending'].includes(t.status) ? el('div', { class: 'muted' }, `waiting ${ago(t.last_user_at)}`) : null),
         el('td', {}, el('span', { class: `chip ${PRIORITY_CHIP[t.priority]}` }, t.priority)),
         el('td', {}, t.assigned_name || el('span', { class: 'muted' }, 'Unassigned')),
         el('td', { class: 'muted' }, ago(t.updated_at))));
@@ -1649,6 +1667,27 @@
     if (!d) return;
     const t = d.ticket;
     const reply = el('textarea', { rows: 4, placeholder: 'Write a reply to the user…' });
+    const asNote = el('input', { type: 'checkbox', id: 'sp-note' });
+    asNote.addEventListener('change', () => {
+      reply.placeholder = asNote.checked ? 'A note for the team (the user won’t see it)…' : 'Write a reply to the user…';
+      statusSel.disabled = asNote.checked;
+      send.textContent = asNote.checked ? 'Save note' : 'Send reply';
+    });
+    const canned = el('select', {}, el('option', { value: '' }, 'Insert saved answer…'));
+    api('GET', '/support/canned').then((list) => {
+      list.forEach((c) => canned.append(el('option', { value: c.id }, c.title)));
+      canned.addEventListener('change', () => {
+        const c = list.find((x) => String(x.id) === canned.value);
+        if (c) {
+          const name = (t.first_name || '').trim();
+          reply.value = (reply.value ? `${reply.value}\n` : '') + c.text.replaceAll('{name}', name || 'there').replaceAll('{number}', `#${t.number || t.id}`);
+          reply.focus();
+        }
+        canned.value = '';
+      });
+    }).catch(() => {});
+    const catSel = el('select', {}, CATS.map((c) => el('option', { value: c, selected: c === t.category ? true : null }, c)));
+    catSel.addEventListener('change', async () => { await action(() => api('PATCH', `/support/${id}`, { category: catSel.value }), 'Topic updated'); });
     const statusSel = el('select', {}, [['pending', 'Send & wait for user'], ['resolved', 'Send & mark resolved'], ['open', 'Send & keep open']]
       .map(([v, l]) => el('option', { value: v }, l)));
     const priority = el('select', {}, ['low', 'normal', 'high', 'urgent'].map((p) => el('option', { value: p, selected: p === t.priority ? true : null }, p)));
@@ -1657,17 +1696,17 @@
     send.addEventListener('click', async () => {
       if (!reply.value.trim()) return undefined;
       send.disabled = true;
-      const r = await action(() => api('POST', `/support/${id}/reply`, { text: reply.value.trim(), status: statusSel.value }), 'Reply sent');
+      const r = await action(() => api('POST', `/support/${id}/reply`, asNote.checked ? { text: reply.value.trim(), note: true } : { text: reply.value.trim(), status: statusSel.value }), asNote.checked ? 'Note saved' : 'Reply sent');
       send.disabled = false;
       if (r) { openTicket(id); if (state.page === 'support') pageSupport(); }
       return undefined;
     });
     const setStatus = (s) => el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { status: s }), `Marked ${s}`)) { openTicket(id); pageSupport(); } } }, s[0].toUpperCase() + s.slice(1));
     openDrawer([
-      el('h3', {}, `#${t.id} — ${t.subject}`),
+      el('h3', {}, `#${t.number || t.id} — ${t.subject}`),
       el('div', { class: 'muted' }, `${t.category} · opened ${fmtDate(t.created_at)} by ${`${t.first_name || ''} ${t.last_name || ''}`.trim()} (${t.phone || t.email || ''}${t.username ? `, @${t.username}` : ''})`),
       el('section', {}, el('div', { class: 'btn-row', style: 'align-items:center' },
-        el('span', { class: 'chip' }, t.status), 'Priority', priority,
+        el('span', { class: 'chip' }, t.status), 'Priority', priority, 'Topic', catSel,
         t.assigned_to === state.admin.id ? null : el('button', { class: 'btn small', onclick: async () => { if (await action(() => api('PATCH', `/support/${id}`, { assigned_to: state.admin.id }), 'Assigned to you')) openTicket(id); } }, 'Assign to me'),
         setStatus('resolved'), setStatus('closed'))),
       t.device || t.rating ? el('div', { class: 'muted', style: 'margin-top:6px' },
@@ -1676,11 +1715,39 @@
       el('section', {}, el('h4', {}, 'Conversation'), d.messages.map((m) => {
         const pic = el('div', {});
         if (m.media_id) mediaPreview({ admin_url: `/api/admin/media/${m.media_id}`, mime: 'image/png', name: 'screenshot' }).then((n) => pic.replaceWith(n));
-        return el('div', { class: m.from_user ? 'bubble' : 'bubble hl' },
-          el('small', {}, `${m.from_user ? 'User' : (m.admin_name || 'Admin')} · ${fmtDate(m.created_at)}`), m.text, m.media_id ? pic : null);
+        return el('div', { class: m.from_user ? 'bubble' : 'bubble hl', style: m.is_note ? 'background:#fff6dc;border-left:3px solid #e0a020;color:#5a4410' : null },
+          el('small', {}, `${m.is_note ? '📝 Team note · ' : ''}${m.from_user ? 'User' : (m.admin_name || 'Admin')} · ${fmtDate(m.created_at)}`), m.text, m.media_id ? pic : null);
       })),
+      d.other_tickets && d.other_tickets.length ? el('section', {}, el('h4', {}, `Other requests from this person (${d.other_tickets.length})`),
+        d.other_tickets.map((o) => el('div', { class: 'clickable', style: 'padding:4px 0', onclick: () => openTicket(o.id) },
+          el('span', { class: 'num' }, `#${o.number || o.id} `), o.subject, el('span', { class: 'chip', style: 'margin-left:6px' }, o.status), el('span', { class: 'muted' }, ` · ${ago(o.created_at)}`)))) : null,
       t.status === 'closed' ? el('section', {}, el('div', { class: 'muted' }, 'This ticket is closed.'))
-        : el('section', {}, el('h4', {}, 'Reply'), el('div', { class: 'field' }, reply), el('div', { class: 'btn-row' }, statusSel, send)),
+        : el('section', {}, el('h4', {}, 'Reply'), el('div', { class: 'btn-row' }, canned), el('div', { class: 'field' }, reply),
+          el('div', { class: 'btn-row', style: 'align-items:center' }, el('label', { class: 'check', for: 'sp-note', style: 'margin:0' }, asNote, 'Team note only'), statusSel, send)),
+    ]);
+  }
+
+  async function manageCanned() {
+    const list = await action(() => api('GET', '/support/canned'));
+    if (!list) return;
+    const title = el('input', { type: 'text', placeholder: 'Name, e.g. "Login problem"', maxlength: 80 });
+    const text = el('textarea', { rows: 5, placeholder: 'The answer. {name} = the person’s name, {number} = the request number.' });
+    let editing = null;
+    const save = el('button', { class: 'btn primary' }, 'Save answer');
+    save.addEventListener('click', async () => {
+      if (!title.value.trim() || !text.value.trim()) return;
+      if (await action(() => api('POST', '/support/canned', { id: editing || undefined, title: title.value.trim(), text: text.value.trim() }), 'Saved')) manageCanned();
+    });
+    openDrawer([
+      el('h3', {}, 'Saved answers'),
+      el('div', { class: 'muted' }, 'Ready-made replies the team can insert into any request.'),
+      el('section', {}, list.length ? list.map((c) => el('div', { class: 'bubble' },
+        el('strong', {}, c.title), el('div', { style: 'white-space:pre-wrap;margin:4px 0' }, c.text),
+        el('div', { class: 'btn-row' },
+          el('button', { class: 'btn small', onclick: () => { editing = c.id; title.value = c.title; text.value = c.text; save.textContent = 'Update answer'; title.focus(); } }, 'Edit'),
+          el('button', { class: 'btn small danger', onclick: async () => { if (await action(() => api('DELETE', `/support/canned/${c.id}`), 'Deleted')) manageCanned(); } }, 'Delete'))))
+        : el('div', { class: 'muted' }, 'No saved answers yet.')),
+      el('section', {}, el('h4', {}, 'Add an answer'), el('div', { class: 'field' }, title), el('div', { class: 'field' }, text), el('div', { class: 'btn-row' }, save)),
     ]);
   }
 

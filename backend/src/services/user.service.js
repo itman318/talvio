@@ -738,7 +738,7 @@ async function exportData(userId) {
     uploads: await q('SELECT id, kind, mime, size_bytes, original_name, created_at FROM media WHERE uploader_id = $1 ORDER BY id DESC LIMIT 5000'),
     stories: await q('SELECT id, caption, privacy, created_at, expires_at, deleted_at FROM stories WHERE user_id = $1 ORDER BY id DESC'),
     reports_sent: await q('SELECT target_type, target_id, reason, details, status, created_at FROM reports WHERE reporter_id = $1'),
-    support_tickets: await q('SELECT id, subject, category, status, created_at FROM support_tickets WHERE user_id = $1'),
+    support_tickets: await q('SELECT number, subject, category, status, created_at FROM support_tickets WHERE user_id = $1'),
   };
 }
 

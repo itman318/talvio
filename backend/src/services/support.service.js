@@ -18,6 +18,7 @@ function iso(d) {
 function serializeTicket(t) {
   return {
     id: t.id,
+    number: t.number ? Number(t.number) : t.id,
     subject: t.subject,
     category: t.category,
     status: t.status,
@@ -47,7 +48,7 @@ function serializeMessage(m, { forAdmin = false } = {}) {
     media_url: m.media_id ? `/api/media/${m.media_id}` : null,
     media_id: m.media_id || null,
     created_at: iso(m.created_at),
-    ...(forAdmin ? { admin_id: m.admin_id, admin_name: m.admin_name || null } : {}),
+    ...(forAdmin ? { admin_id: m.admin_id, admin_name: m.admin_name || null, is_note: !!m.is_note } : {}),
   };
 }
 
@@ -73,7 +74,7 @@ async function createTicket(userId, body = {}) {
 
 async function listMine(userId) {
   const rows = await db.many(
-    `SELECT t.*, (SELECT left(text, 120) FROM support_messages WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS last_text
+    `SELECT t.*, (SELECT left(text, 120) FROM support_messages WHERE ticket_id = t.id AND NOT is_note ORDER BY id DESC LIMIT 1) AS last_text
      FROM support_tickets t WHERE t.user_id = $1 ORDER BY t.updated_at DESC LIMIT 100`,
     [userId],
   );
@@ -84,7 +85,8 @@ async function getMine(userId, ticketIdRaw) {
   const t = await db.one('SELECT * FROM support_tickets WHERE id = $1 AND user_id = $2', [v.id(ticketIdRaw, 'ticket_id'), userId]);
   if (!t) throw notFound('ticket_not_found', 'Ticket not found');
   if (t.user_unread) await db.query('UPDATE support_tickets SET user_unread = FALSE WHERE id = $1', [t.id]);
-  const msgs = await db.many('SELECT * FROM support_messages WHERE ticket_id = $1 ORDER BY id', [t.id]);
+  // team notes never reach the user
+  const msgs = await db.many('SELECT * FROM support_messages WHERE ticket_id = $1 AND NOT is_note ORDER BY id', [t.id]);
   return { ticket: serializeTicket({ ...t, user_unread: false }), messages: msgs.map((m) => serializeMessage(m)) };
 }
 
@@ -143,13 +145,24 @@ async function adminList(query = {}) {
   const q = String(query.q || '').trim();
   if (q) {
     params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
-    where.push(`(t.subject ILIKE $${params.length} OR u.phone ILIKE $${params.length} OR u.username ILIKE $${params.length})`);
+    const n = q.replace(/^#/, '');
+    if (/^\d{3,12}$/.test(n)) {
+      params.push(n);
+      where.push(`(t.subject ILIKE $${params.length - 1} OR t.number::text = $${params.length} OR u.phone ILIKE $${params.length - 1})`);
+    } else {
+      where.push(`(t.subject ILIKE $${params.length} OR u.phone ILIKE $${params.length} OR u.username ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+    }
+  }
+  if (query.category && CATEGORIES.includes(query.category)) {
+    params.push(query.category);
+    where.push(`t.category = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = await db.one(`SELECT count(*) AS n FROM support_tickets t JOIN users u ON u.id = t.user_id ${whereSql}`, params);
   const rows = await db.many(
     `SELECT t.*, u.first_name, u.last_name, u.username, u.phone, u.email, a.name AS assigned_name,
-            (SELECT from_user FROM support_messages WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS awaiting_admin
+            (SELECT from_user FROM support_messages WHERE ticket_id = t.id AND NOT is_note ORDER BY id DESC LIMIT 1) AS awaiting_admin,
+            (SELECT max(created_at) FROM support_messages WHERE ticket_id = t.id AND from_user) AS last_user_at
      FROM support_tickets t JOIN users u ON u.id = t.user_id LEFT JOIN admins a ON a.id = t.assigned_to
      ${whereSql}
      ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, t.updated_at DESC
@@ -172,22 +185,84 @@ async function adminGet(ticketIdRaw) {
      WHERE m.ticket_id = $1 ORDER BY m.id`,
     [id],
   );
-  return { ticket: t, messages: msgs.map((m) => serializeMessage(m, { forAdmin: true })) };
+  // the person's other requests (to spot repeats)
+  const others = await db.many(
+    `SELECT id, number, subject, status, created_at FROM support_tickets WHERE user_id = $1 AND id <> $2 ORDER BY id DESC LIMIT 10`,
+    [t.user_id, id],
+  );
+  return { ticket: t, messages: msgs.map((m) => serializeMessage(m, { forAdmin: true })), other_tickets: others };
 }
 
 async function adminReply(admin, ticketIdRaw, body = {}) {
   const id = v.id(ticketIdRaw, 'ticket_id');
   const text = v.str(body.text, { field: 'text', min: 1, max: 4000, required: true });
+  if (body.note === true) {
+    // a note for the team only: the user doesn't see it and nothing changes for them
+    const t = await db.one('SELECT id FROM support_tickets WHERE id = $1', [id]);
+    if (!t) throw notFound('ticket_not_found', 'Ticket not found');
+    await db.query('INSERT INTO support_messages (ticket_id, admin_id, from_user, text, is_note) VALUES ($1, $2, FALSE, $3, TRUE)', [id, admin.id, text]);
+    return adminGet(id);
+  }
   const status = body.status ? v.oneOf(body.status, STATUSES, 'status') : 'pending';
   const t = await db.one(
     `UPDATE support_tickets SET status = $2, user_unread = TRUE, updated_at = now(),
+       first_reply_at = COALESCE(first_reply_at, now()),
+       resolved_at = CASE WHEN $2 IN ('resolved', 'closed') THEN now() ELSE NULL END,
        assigned_to = COALESCE(assigned_to, $3) WHERE id = $1 RETURNING *`,
     [id, status, admin.id],
   );
   if (!t) throw notFound('ticket_not_found', 'Ticket not found');
   await db.query('INSERT INTO support_messages (ticket_id, admin_id, from_user, text) VALUES ($1, $2, FALSE, $3)', [id, admin.id, text]);
-  bus.emit('support:reply', { userId: t.user_id, ticketId: t.id, subject: t.subject, text });
+  bus.emit('support:reply', { userId: t.user_id, ticketId: t.id, number: Number(t.number), subject: t.subject, text });
   return adminGet(id);
+}
+
+/** Numbers for the support page: what's waiting and how fast the team answers. */
+async function adminStats() {
+  return db.one(
+    `SELECT
+       (SELECT count(*) FROM support_tickets WHERE status IN ('open', 'pending'))::int AS active,
+       (SELECT count(*) FROM support_tickets t WHERE status IN ('open', 'pending')
+          AND (SELECT from_user FROM support_messages WHERE ticket_id = t.id AND NOT is_note ORDER BY id DESC LIMIT 1))::int AS needs_reply,
+       (SELECT count(*) FROM support_tickets WHERE status IN ('open', 'pending') AND assigned_to IS NULL)::int AS unassigned,
+       (SELECT count(*) FROM support_tickets WHERE status IN ('open', 'pending') AND priority IN ('high', 'urgent'))::int AS urgent,
+       (SELECT count(*) FROM support_tickets WHERE created_at > now() - interval '1 day')::int AS new_today,
+       (SELECT count(*) FROM support_tickets WHERE resolved_at > now() - interval '7 days')::int AS resolved_week,
+       (SELECT round(avg(extract(epoch FROM first_reply_at - created_at)) / 60)::int FROM support_tickets
+          WHERE first_reply_at IS NOT NULL AND created_at > now() - interval '30 days') AS first_reply_min,
+       (SELECT round(avg(rating)::numeric, 1)::float FROM support_tickets WHERE rating IS NOT NULL AND created_at > now() - interval '90 days') AS avg_rating,
+       (SELECT count(*) FROM support_tickets WHERE rating IS NOT NULL AND created_at > now() - interval '90 days')::int AS ratings`,
+  );
+}
+
+// ------------------------------------------------------------------ saved answers
+async function cannedList() {
+  return db.many('SELECT id, title, text FROM support_canned ORDER BY title LIMIT 200');
+}
+
+async function cannedSave(admin, body = {}) {
+  const title = v.str(body.title, { field: 'title', min: 1, max: 80, required: true });
+  const text = v.str(body.text, { field: 'text', min: 1, max: 4000, required: true });
+  if (body.id) {
+    const r = await db.one('UPDATE support_canned SET title = $2, text = $3 WHERE id = $1 RETURNING id, title, text', [v.id(body.id, 'id'), title, text]);
+    if (!r) throw notFound('not_found', 'Saved answer not found');
+    return r;
+  }
+  return db.one('INSERT INTO support_canned (title, text, created_by) VALUES ($1, $2, $3) RETURNING id, title, text', [title, text, admin.id]);
+}
+
+async function cannedDelete(idRaw) {
+  await db.query('DELETE FROM support_canned WHERE id = $1', [v.id(idRaw, 'id')]);
+  return { ok: true };
+}
+
+/** Resolved requests the user didn't answer for 3 days close by themselves. */
+async function sweep() {
+  const r = await db.query(
+    `UPDATE support_tickets SET status = 'closed', updated_at = now()
+     WHERE status = 'resolved' AND COALESCE(resolved_at, updated_at) < now() - interval '3 days'`,
+  );
+  return r.rowCount || 0;
 }
 
 async function adminUpdate(ticketIdRaw, body = {}) {
@@ -197,6 +272,11 @@ async function adminUpdate(ticketIdRaw, body = {}) {
   if (body.status !== undefined) {
     params.push(v.oneOf(body.status, STATUSES, 'status'));
     sets.push(`status = $${params.length}`);
+    sets.push(`resolved_at = CASE WHEN $${params.length} IN ('resolved', 'closed') THEN COALESCE(resolved_at, now()) ELSE NULL END`);
+  }
+  if (body.category !== undefined) {
+    params.push(v.oneOf(body.category, CATEGORIES, 'category'));
+    sets.push(`category = $${params.length}`);
   }
   if (body.priority !== undefined) {
     params.push(v.oneOf(body.priority, PRIORITIES, 'priority'));
@@ -227,4 +307,9 @@ module.exports = {
   adminGet,
   adminReply,
   adminUpdate,
+  adminStats,
+  cannedList,
+  cannedSave,
+  cannedDelete,
+  sweep,
 };

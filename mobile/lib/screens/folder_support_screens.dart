@@ -291,7 +291,9 @@ class _SupportListScreenState extends State<SupportListScreen> {
           padding: const EdgeInsets.only(top: 4),
           child: Row(children: [
             _statusChip(x.status),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
+            Text('#${x.number}', style: const TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 6),
             Expanded(child: Text(x.lastMessage ?? label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5))),
           ]),
         ),
@@ -617,7 +619,7 @@ class _TicketScreenState extends State<TicketScreen> {
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(t?.subject ?? 'Support', maxLines: 1, overflow: TextOverflow.ellipsis),
-          if (t != null) Text('Request #${t.id}', style: const TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w500)),
+          if (t != null) Text('Request #${t.number}', style: const TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w500)),
         ]),
         actions: [if (t != null && !closed) TextButton(onPressed: _close, child: const Text('Close'))],
       ),

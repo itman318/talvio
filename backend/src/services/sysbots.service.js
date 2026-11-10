@@ -165,7 +165,7 @@ const SUPPORT_HELP = [
 async function supportStatus(userId, chatId) {
   const rows = await db.many('SELECT * FROM support_tickets WHERE user_id = $1 ORDER BY id DESC LIMIT 5', [userId]);
   if (!rows.length) return say('support', chatId, 'You have no requests yet. Write your question here to start one.');
-  const lines = rows.map((t) => `#${t.id} · ${t.subject}\n${STATUS[t.status] || t.status} · ${when(t.updated_at)}`);
+  const lines = rows.map((t) => `#${t.number || t.id} · ${t.subject}\n${STATUS[t.status] || t.status} · ${when(t.updated_at)}`);
   return say('support', chatId, `📋 Your requests\n\n${lines.join('\n\n')}`);
 }
 
@@ -183,7 +183,7 @@ async function supportMessage(userId, chatId, row) {
     const t = await openTicket(userId);
     if (!t) return say('support', chatId, 'You have no open request.');
     await lazy.support().userClose(userId, t.id);
-    return say('support', chatId, `⚪ Request #${t.id} is closed. Write anytime to start a new one.`);
+    return say('support', chatId, `⚪ Request #${t.number || t.id} is closed. Write anytime to start a new one.`);
   }
   if (c) return say('support', chatId, 'I don’t know that command. Just write your question, or send /start.');
 
@@ -200,7 +200,7 @@ async function supportMessage(userId, chatId, row) {
   try {
     if (current) {
       await lazy.support().userReply(userId, current.id, { text, media_id: mediaId || undefined });
-      return say('support', chatId, `✉️ Added to request #${current.id}. The team will reply here.`);
+      return say('support', chatId, `✉️ Added to request #${current.number || current.id}. The team will reply here.`);
     }
     const subject = require('../utils/text').cut((text || 'Photo').replace(/\s+/g, ' '), 80).padEnd(3, '.'); // eslint-disable-line global-require
     const r = await lazy.support().createTicket(userId, {
@@ -210,7 +210,7 @@ async function supportMessage(userId, chatId, row) {
       media_id: mediaId || undefined,
       device: TAG,
     });
-    return say('support', chatId, `✅ Request #${r.ticket.id} received.\n\nOur team will reply in this chat — usually within a day. Write more here to add details.`);
+    return say('support', chatId, `✅ Request #${r.ticket.number} received.\n\nOur team will reply in this chat — usually within a day. Write more here to add details.`);
   } catch (err) {
     return say('support', chatId, `⚠️ ${err.message || 'Something went wrong. Please try again.'}`);
   }
@@ -218,7 +218,7 @@ async function supportMessage(userId, chatId, row) {
 
 /** The team answered in the admin panel → deliver it in the bot chat (for requests opened from the bot). */
 async function deliverReply({ userId, ticketId, text }) {
-  const t = await db.one('SELECT id, device, status FROM support_tickets WHERE id = $1', [ticketId]);
+  const t = await db.one('SELECT id, number, device, status FROM support_tickets WHERE id = $1', [ticketId]);
   if (!t || t.device !== TAG) return;
   const me = await ensureOne('support');
   const chat = await db.one(
@@ -230,7 +230,7 @@ async function deliverReply({ userId, ticketId, text }) {
   );
   if (!chat) return;
   const tail = t.status === 'resolved' ? '\n\n✅ The team marked this as solved. Write here if you still need help.' : '';
-  await say('support', chat.id, `💬 Hushavia team · request #${t.id}\n\n${text}${tail}`);
+  await say('support', chat.id, `💬 Hushavia team · request #${t.number || t.id}\n\n${text}${tail}`);
 }
 
 bus.on('support:reply', (e) => {
@@ -294,7 +294,7 @@ async function spamAppeal(user, chatId, why) {
       message: `Limit until ${new Date(user.restricted_until).toISOString()} (${user.restrict_reason || 'no reason given'}).\n\n${why}`,
       device: TAG, // the answer comes back through @HushaviaSupportBot
     });
-    return say('spam', chatId, `✅ Sent to the team (request #${r.ticket.id}). They’ll answer in @${BOTS.support.username}.`);
+    return say('spam', chatId, `✅ Sent to the team (request #${r.ticket.number}). They’ll answer in @${BOTS.support.username}.`);
   } catch (err) {
     return say('spam', chatId, `⚠️ ${err.message || 'Something went wrong. Please try again.'}`);
   }
