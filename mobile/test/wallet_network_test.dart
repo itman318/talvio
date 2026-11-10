@@ -14,12 +14,16 @@ void main() {
     test('${net.name}: balance, history, prepared USDT + TRX transfers pass the checks', () async {
       final api = TronApi(net);
       final b = await api.balance(me);
-      expect(b.trx >= BigInt.zero, true);
+      expect(b.trx >= BigInt.zero, true, reason: 'balance');
+      // ignore: avoid_print
+      print('${net.name} balance: ${b.trx} sun, ${b.usdt} usdt, active ${b.activated}');
       await api.history(me);
       try {
         final p = await api.prepareUsdt(me, to, BigInt.from(1000000));
         expect(p.id.length, 32);
-        expect(p.feeSun > BigInt.zero, true);
+        // ignore: avoid_print
+        print('${net.name} fee raw: ${p.feeSun}');
+        expect(p.feeSun > BigInt.zero, true, reason: 'fee');
         // ignore: avoid_print
         print('${net.name} USDT fee estimate: ${Units.format(p.feeSun)} TRX');
       } on WalletException catch (e) {
