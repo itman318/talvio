@@ -71,8 +71,8 @@ void main() {
     final me = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH';
     final to = 'TSeJkUh4Qv67VNFwY8LaAxERygNdy6NQZK';
     const usdt = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-    List<int> ld(int field, List<int> b) => [field << 3 | 2, ..._v(b.length), ...b];
-    List<int> vi(int field, int v) => [field << 3, ..._v(v)];
+    List<int> ld(int field, List<int> b) => [..._v(field << 3 | 2), ..._v(b.length), ...b];
+    List<int> vi(int field, int v) => [..._v(field << 3), ..._v(v)];
     List<int> transferData(String dest, BigInt amt) => [
           0xa9, 0x05, 0x9c, 0xbb, ...List.filled(12, 0), ...TronCrypto.decodeAddress(dest)!.sublist(1),
           ...TronCrypto.fromHex(amt.toRadixString(16).padLeft(64, '0')),
