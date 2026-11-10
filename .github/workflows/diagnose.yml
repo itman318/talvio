@@ -47,6 +47,16 @@ jobs:
           echo "app update: $(curl -s 'http://127.0.0.1:4000/api/app/update?build=1&abi=arm64-v8a' | head -c 300)"
           echo "--- recent upload / sticker requests (status, size)"
           grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
+          echo "--- security"
+          echo "fail2ban: $(systemctl is-active fail2ban) · $(fail2ban-client status sshd 2>/dev/null | grep -E 'Currently banned|Total banned' | tr -s ' \t' ' ' | tr '\n' ' ')"
+          echo "sandbox: $(systemctl show hushavia -p NoNewPrivileges -p ProtectSystem -p PrivateTmp | tr '\n' ' ')"
+          echo "auto security updates: $(cat /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null | tr '\n' ' ')"
+          echo "turn blocks localhost: $(grep -c 'denied-peer-ip=127' /etc/turnserver.conf)"
+          echo "hidden file: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/.env) (expect 404)"
+          echo "faked address: $(for i in $(seq 1 14); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H 'Content-Type: application/json' -H "X-Forwarded-For: 9.9.9.$i" -d '{"email":"nobody@example.com","password":"x"}' http://127.0.0.1/api/admin/login; done) (expect 401 ×10 then 429)"
+          echo "open ports: $(ss -tlnH | awk '{print $4}' | sort -u | tr '\n' ' ')"
+          echo "firewall: $(ufw status | grep -c ALLOW) rules · $(ufw status | head -1)"
+          echo "ssh root/password: $(sshd -T 2>/dev/null | grep -E '^(permitrootlogin|passwordauthentication|maxauthtries)' | tr '\n' ' ')"
           echo "--- recent server errors"
           journalctl -u hushavia --since "-3d" --no-pager | grep -iE "error|warn|timeout|ECONN|ETIMEDOUT|unhandled|TypeError" | grep -v OTP_DEV_MODE | tail -40 | sed -E 's/(postgres:\/\/)[^ ]*/\1***/g'
           echo "--- classic bot api (fake token → expect 401 JSON)"
