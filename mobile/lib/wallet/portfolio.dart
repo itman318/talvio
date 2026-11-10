@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'evm.dart';
 import 'tron_api.dart';
 import 'tron_crypto.dart';
+import 'solana.dart';
 import 'utxo.dart';
 
 /// One coin or token the wallet shows, on one network.
@@ -48,11 +49,12 @@ class WalletAsset {
 
   bool get isTron => network == 'tron';
   bool get isUtxo => utxo != null;
+  bool get isSol => network == 'sol';
   bool get isEvm => evm != null;
   bool get isNative => contract == null;
   double get value => balance == null || price == null ? 0 : Units.toDouble(balance!, decimals: decimals) * price!;
   /// What pays the network fee for this asset.
-  String get feeSymbol => isTron ? 'TRX' : (isUtxo ? utxo!.symbol : evm!.symbol);
+  String get feeSymbol => isTron ? 'TRX' : (isSol ? 'SOL' : (isUtxo ? utxo!.symbol : evm!.symbol));
 }
 
 class Portfolio {
@@ -66,6 +68,10 @@ class Portfolio {
       WalletAsset(key: 'tron:USDT', network: 'tron', networkName: 'TRON', symbol: 'USDT', name: 'Tether', decimals: 6, color: _usdtColor, glyph: '₮', contract: tron.usdt, gecko: 'tether'),
       WalletAsset(key: 'tron:TRX', network: 'tron', networkName: 'TRON', symbol: 'TRX', name: 'TRON', decimals: 6, color: const Color(0xFFEB0029), glyph: 'T', gecko: 'tron'),
     ];
+    out.add(WalletAsset(
+      key: 'sol:native', network: 'sol', networkName: 'Solana', symbol: 'SOL', name: 'Solana', decimals: Sol.decimals,
+      color: const Color(0xFF9945FF), glyph: '◎', gecko: 'solana',
+    ));
     for (final c in UtxoChain.all) {
       out.add(WalletAsset(
         key: '${c.id}:native', network: c.id, networkName: c.name, symbol: c.symbol, name: c.name, decimals: 8,
@@ -91,7 +97,7 @@ class Portfolio {
 
   /// Fills balances and prices. Each network loads on its own: one slow network never blocks the rest.
   static Future<void> load(List<WalletAsset> assets,
-      {required String tronAddress, required String evmAddress, required TronNet tron, Map<String, String> utxoAddr = const {}}) async {
+      {required String tronAddress, required String evmAddress, required TronNet tron, Map<String, String> utxoAddr = const {}, String? solAddress}) async {
     final jobs = <Future<void>>[];
     // TRON: one call for both
     jobs.add(() async {
@@ -102,6 +108,15 @@ class Portfolio {
         }
       } catch (_) {}
     }());
+    if (solAddress != null) {
+      for (final a in assets.where((a) => a.isSol)) {
+        jobs.add(() async {
+          try {
+            a.balance = await SolApi().balance(solAddress);
+          } catch (_) {}
+        }());
+      }
+    }
     for (final c in UtxoChain.all) {
       final addr = utxoAddr[c.id];
       if (addr == null) continue;

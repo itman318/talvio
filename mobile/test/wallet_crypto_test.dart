@@ -5,6 +5,7 @@ import 'package:chatapp/wallet/evm.dart';
 import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
 import 'package:chatapp/wallet/utxo.dart';
+import 'package:chatapp/wallet/solana.dart';
 
 // Expected values were computed with an independent implementation (Python: PBKDF2, BIP-32, secp256k1,
 // Keccak-256, Base58Check written from the specs) — not with this code.
@@ -186,6 +187,21 @@ void main() {
     );
     final draw = UtxoTx.sign(d, dp);
     expect(UtxoTx.txid(draw, UtxoChain.doge), TronCrypto.hex(UtxoCrypto.dsha(draw).reversed.toList()));
+  });
+
+  test('Solana: phrase → address (SLIP-0010 m/44\'/501\'/0\', like Trust Wallet), signatures verify', () async {
+    final k = Sol.privateKey(phrase);
+    final addr = await Sol.addressOf(k);
+    expect(addr, 'GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL');
+    expect(Sol.isValidAddress(addr), true);
+    expect(Sol.isValidAddress('GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27Ah'), false);
+    expect(Sol.isValidAddress('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'), false, reason: 'TRON address is 25 bytes');
+    final msg = Sol.transferMessage(addr, 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk', 1500000, '11111111111111111111111111111111');
+    expect(msg.sublist(0, 4), [1, 0, 1, 3]);
+    final tx = await Sol.signTransaction(msg, k);
+    expect(tx.length, 1 + 64 + msg.length);
+    expect(await Sol.verify(msg, tx.sublist(1, 65), addr), true);
+    expect(await Sol.verify(msg, tx.sublist(1, 65), 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk'), false);
   });
 }
 

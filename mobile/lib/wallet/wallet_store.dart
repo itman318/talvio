@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import 'evm.dart';
+import 'solana.dart';
 import 'utxo.dart';
 import 'tron_api.dart';
 import 'tron_crypto.dart';
@@ -25,10 +26,18 @@ class WalletStore extends ChangeNotifier {
   String get _tokensKey => 'wallet_tokens_v1_$userId';
   String get _hideKey => 'wallet_hide0_v1_$userId';
   String get _utxoKey => 'wallet_utxo_v1_$userId';
+  String get _solKey => 'wallet_sol_v1_$userId';
+  String get _shownKey => 'wallet_shown_v1_$userId';
 
   String? address; // TRON
   String? evmAddress; // the same 0x address on every EVM network
   Map<String, String> utxoAddr = {}; // 'btc' | 'ltc' | 'doge' → address
+  String? solAddress;
+  /// Coins on the main list, in this order (the rest: Manage coins). Coins with a balance always show.
+  List<String> shown = defaultShown;
+  static const defaultShown = [
+    'btc:native', 'eth:native', 'ltc:native', 'bsc:native', 'tron:TRX', 'sol:native', 'tron:USDT', 'eth:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  ];
   List<EvmToken> customTokens = [];
   bool hideZero = true;
   TronNet net = TronNet.main;
@@ -42,6 +51,8 @@ class WalletStore extends ChangeNotifier {
     address = p.getString(_addrKey);
     evmAddress = p.getString(_evmKey);
     hideZero = p.getBool(_hideKey) ?? true;
+    solAddress = p.getString(_solKey);
+    shown = p.getStringList(_shownKey) ?? defaultShown;
     try {
       utxoAddr = Map<String, String>.from(jsonDecode(p.getString(_utxoKey) ?? '{}') as Map);
     } catch (_) {
@@ -64,7 +75,7 @@ class WalletStore extends ChangeNotifier {
       address = null;
       evmAddress = null;
     }
-    if ((address == null || evmAddress == null || UtxoChain.all.any((c) => utxoAddr[c.id] == null)) && hasPhrase) {
+    if ((address == null || evmAddress == null || solAddress == null || UtxoChain.all.any((c) => utxoAddr[c.id] == null)) && hasPhrase) {
       // address cache missing (or a wallet made before EVM support): rebuild it — addresses are public,
       // the phrase stays locked in secure storage
       final phrase = await _secure.read(key: _phraseKey);
@@ -72,6 +83,8 @@ class WalletStore extends ChangeNotifier {
         address = TronCrypto.addressOf(TronCrypto.privateKey(phrase));
         evmAddress = EvmCrypto.addressOf(EvmCrypto.privateKey(phrase));
         utxoAddr = _utxoOf(phrase);
+        solAddress = await Sol.addressOf(Sol.privateKey(phrase));
+        await p.setString(_solKey, solAddress!);
         await p.setString(_addrKey, address!);
         await p.setString(_evmKey, evmAddress!);
         await p.setString(_utxoKey, jsonEncode(utxoAddr));
@@ -96,12 +109,15 @@ class WalletStore extends ChangeNotifier {
     final addr = TronCrypto.addressOf(TronCrypto.privateKey(p));
     final evm = EvmCrypto.addressOf(EvmCrypto.privateKey(p));
     final utxo = _utxoOf(p);
+    final sol = await Sol.addressOf(Sol.privateKey(p));
     await _secure.write(key: _phraseKey, value: p);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_addrKey, addr);
     await prefs.setString(_evmKey, evm);
     await prefs.setString(_utxoKey, jsonEncode(utxo));
+    await prefs.setString(_solKey, sol);
     utxoAddr = utxo;
+    solAddress = sol;
     address = addr;
     evmAddress = evm;
     notifyListeners();
@@ -114,6 +130,8 @@ class WalletStore extends ChangeNotifier {
     await prefs.remove(_addrKey);
     await prefs.remove(_evmKey);
     await prefs.remove(_utxoKey);
+    await prefs.remove(_solKey);
+    solAddress = null;
     address = null;
     evmAddress = null;
     utxoAddr = {};
@@ -125,6 +143,7 @@ class WalletStore extends ChangeNotifier {
   /// My address on a network ('tron', 'btc', … or any EVM chain id).
   String? addressFor(String network) {
     if (network == 'tron') return address;
+    if (network == 'sol') return solAddress;
     if (UtxoChain.byId(network) != null) return utxoAddr[network];
     return evmAddress;
   }
@@ -142,6 +161,12 @@ class WalletStore extends ChangeNotifier {
   Future<void> removeToken(EvmToken t) async {
     customTokens = customTokens.where((x) => !(x.chain == t.chain && x.address == t.address)).toList();
     (await SharedPreferences.getInstance()).setString(_tokensKey, jsonEncode([for (final x in customTokens) x.toJson()]));
+    notifyListeners();
+  }
+
+  Future<void> setShown(List<String> keys) async {
+    shown = keys;
+    (await SharedPreferences.getInstance()).setStringList(_shownKey, keys);
     notifyListeners();
   }
 

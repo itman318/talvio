@@ -173,8 +173,10 @@ class TronCrypto {
 
   static const _alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-  static String base58check(Uint8List body) {
-    final full = Uint8List.fromList([...body, ..._sha256(_sha256(body)).sublist(0, 4)]);
+  static String base58check(Uint8List body) => base58encode(Uint8List.fromList([...body, ..._sha256(_sha256(body)).sublist(0, 4)]));
+
+  /// Plain Base58 (no checksum) — Solana addresses.
+  static String base58encode(Uint8List full) {
     var n = _toBig(full);
     final sb = StringBuffer();
     final b58 = BigInt.from(58);

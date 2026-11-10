@@ -46,7 +46,7 @@ class _CryptoCardState extends State<CryptoCard> {
     final w = WalletStore(uid);
     await w.load();
     _mine[uid] = (w.address, w.evmAddress);
-    _utxoMine[uid] = w.utxoAddr.values.map((x) => x.toLowerCase()).toSet();
+    _utxoMine[uid] = {...w.utxoAddr.values.map((x) => x.toLowerCase()), if (w.solAddress != null) w.solAddress!.toLowerCase()};
     if (mounted) setState(() {});
   }
 
@@ -69,6 +69,8 @@ class _CryptoCardState extends State<CryptoCard> {
 
   String get _network => '${c['network']}' == 'tron'
       ? 'TRON'
+      : '${c['network']}' == 'sol'
+      ? 'Solana'
       : (UtxoChain.byId('${c['network']}')?.name ?? EvmChain.byId('${c['network']}')?.name ?? '${c['network']}');
 
   String get _amount {
@@ -82,6 +84,7 @@ class _CryptoCardState extends State<CryptoCard> {
     if ('${c['network']}' == 'tron') return 'https://tronscan.org/#/transaction/$tx';
     final u = UtxoChain.byId('${c['network']}');
     if (u != null) return u.txUrl('$tx');
+    if ('${c['network']}' == 'sol') return 'https://solscan.io/tx/$tx';
     final ch = EvmChain.byId('${c['network']}');
     return ch == null ? null : '${ch.explorer}/tx/$tx';
   }

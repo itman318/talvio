@@ -1,6 +1,7 @@
 import 'evm.dart';
 import 'tron_api.dart';
 import 'tron_crypto.dart';
+import 'solana.dart';
 import 'utxo.dart';
 
 enum CardCheck { checking, confirmed, pending, failed, mismatch }
@@ -25,6 +26,8 @@ class CryptoVerify {
       final u = UtxoChain.byId('${c['network']}');
       r = '${c['network']}' == 'tron'
           ? await _tron(c, tx)
+          : '${c['network']}' == 'sol'
+          ? await _sol(c, tx)
           : u != null
               ? await _utxo(u, c, tx)
               : await _evm(c, tx);
@@ -66,6 +69,12 @@ class CryptoVerify {
       return CardCheck.mismatch;
     }
     return CardCheck.pending;
+  }
+
+  static Future<CardCheck> _sol(Map<String, dynamic> c, String tx) async {
+    final r = await SolApi().checkPayment(tx, '${c['to']}', _amount(c));
+    if (r == null) return CardCheck.pending;
+    return r.$1 ? CardCheck.confirmed : CardCheck.mismatch;
   }
 
   static Future<CardCheck> _utxo(UtxoChain chain, Map<String, dynamic> c, String tx) async {

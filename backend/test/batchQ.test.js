@@ -531,7 +531,7 @@ test('wallet in chats: shared addresses, sent / request cards, bad cards refused
   assert.equal(wallet.isTron(tron), true);
   assert.equal(wallet.isTron('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdJ'), false, 'checksum');
   // nothing shared until the person chooses to
-  const none = { tron: null, evm: null, btc: null, ltc: null, doge: null };
+  const none = { tron: null, evm: null, btc: null, ltc: null, doge: null, sol: null };
   assert.deepEqual(await wallet.getFor(B.id, A.id), none);
   const btc = 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu';
   const ltc = 'ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh';
@@ -545,8 +545,12 @@ test('wallet in chats: shared addresses, sent / request cards, bad cards refused
   assert.equal(wallet.isUtxoAddress('btc', '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2'), true, 'legacy P2PKH');
   assert.equal(wallet.isUtxoAddress('btc', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'), true, 'P2SH');
   assert.equal(wallet.isUtxoAddress('btc', 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297'), true, 'Taproot (bech32m)');
-  await wallet.setMine(A.id, { share: true, tron, evm, btc, ltc, doge });
-  assert.deepEqual(await wallet.getFor(B.id, A.id), { tron, evm, btc, ltc, doge });
+  const sol = 'GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL';
+  assert.equal(wallet.isSol(sol), true);
+  assert.equal(wallet.isSol('GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27Ah'), false, 'too short');
+  await wallet.setMine(A.id, { share: true, tron, evm, btc, ltc, doge, sol });
+  assert.deepEqual(await wallet.getFor(B.id, A.id), { tron, evm, btc, ltc, doge, sol });
+  await rejects(messages.sendMessage(A.id, (await chats.getOrCreatePrivate(A.id, B.id)).id, { type: 'crypto', crypto: { kind: 'sent', network: 'sol', symbol: 'SOL', amount: '1000', decimals: 9, to: sol, tx: 'abc' } }), 'invalid_tx');
   const bm = await messages.sendMessage(A.id, (await chats.getOrCreatePrivate(A.id, B.id)).id, { type: 'crypto', crypto: { kind: 'sent', network: 'btc', symbol: 'BTC', amount: '150000', decimals: 8, to: btc, tx: 'cd'.repeat(32) } });
   assert.equal(wallet.previewText(bm.meta), '💸 Sent 0.0015 BTC');
   await rejects(messages.sendMessage(A.id, (await chats.getOrCreatePrivate(A.id, B.id)).id, { type: 'crypto', crypto: { kind: 'request', network: 'btc', symbol: 'BTC', amount: '1', decimals: 8, to: ltc } }), 'invalid_address');

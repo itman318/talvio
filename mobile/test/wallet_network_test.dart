@@ -7,6 +7,7 @@ import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
 import 'package:chatapp/wallet/verify.dart';
 import 'package:chatapp/wallet/utxo.dart';
+import 'package:chatapp/wallet/solana.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -147,4 +148,33 @@ void main() {
       }
     }, timeout: const Timeout(Duration(seconds: 90)));
   }
+
+  test('Solana: balance, history, and the network accepts our transfer message format', () async {
+    final api = SolApi();
+    const addr = 'GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL';
+    final b = await api.balance(addr);
+    final h = await api.history(addr);
+    // ignore: avoid_print
+    print('Solana: balance ${Units.format(b, decimals: 9)} SOL, ${h.length} transfers');
+    final r = await http.post(Uri.parse(Sol.rpcs.first), headers: {'content-type': 'application/json'},
+        body: jsonEncode({'jsonrpc': '2.0', 'id': 1, 'method': 'getLatestBlockhash', 'params': []}));
+    final bh = '${((jsonDecode(r.body) as Map)['result'] as Map)['value']['blockhash']}';
+    final msg = Sol.transferMessage(addr, 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk', 1000000, bh);
+    final f = await http.post(Uri.parse(Sol.rpcs.first), headers: {'content-type': 'application/json'},
+        body: jsonEncode({'jsonrpc': '2.0', 'id': 2, 'method': 'getFeeForMessage', 'params': [base64Encode(msg), {'commitment': 'processed'}]}));
+    final j = jsonDecode(f.body) as Map;
+    // ignore: avoid_print
+    print('Solana fee for our message: ${j['result'] ?? j['error']}');
+    expect(j['error'], null, reason: 'the network must be able to read our message');
+    expect(((j['result'] as Map)['value'] as num?) ?? 0, greaterThan(0));
+    if (h.isNotEmpty) {
+      final t = h.firstWhere((x) => x.to == addr, orElse: () => h.first);
+      final ok = await api.checkPayment(t.id, t.to, t.amount);
+      final fake = await api.checkPayment(t.id, t.to, t.amount + BigInt.one);
+      // ignore: avoid_print
+      print('Solana card check real → $ok, faked → $fake');
+      if (ok != null && t.ok) expect(ok.$1, true);
+      if (fake != null) expect(fake.$1, false);
+    }
+  }, timeout: const Timeout(Duration(seconds: 120)));
 }

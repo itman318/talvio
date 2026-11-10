@@ -10,7 +10,7 @@ const settings = require('./settings.service');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const NETWORKS = ['tron', 'eth', 'bsc', 'polygon', 'arbitrum', 'base', 'avalanche', 'btc', 'ltc', 'doge'];
+const NETWORKS = ['tron', 'eth', 'bsc', 'polygon', 'arbitrum', 'base', 'avalanche', 'btc', 'ltc', 'doge', 'sol'];
 const UTXO = {
   btc: { hrp: 'bc', p2pkh: [0x00], p2sh: [0x05] },
   ltc: { hrp: 'ltc', p2pkh: [0x30], p2sh: [0x32, 0x05] },
@@ -76,8 +76,20 @@ function isUtxoAddress(network, a) {
   return ver !== null && (c.p2pkh.includes(ver) || c.p2sh.includes(ver));
 }
 
+/** Plain Base58 of exactly [len] bytes (Solana: 32 = address, 64 = transaction signature). */
+function base58Len(a, len) {
+  if (typeof a !== 'string' || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(a)) return false;
+  let n = 0n;
+  for (const ch of a) n = n * 58n + BigInt(B58.indexOf(ch));
+  let hex = n === 0n ? '' : n.toString(16);
+  if (hex.length % 2) hex = `0${hex}`;
+  return a.match(/^1*/)[0].length + hex.length / 2 === len;
+}
+const isSol = (a) => base58Len(a, 32);
+
 function validFor(network, a) {
   if (network === 'tron') return isTron(a);
+  if (network === 'sol') return isSol(a);
   if (UTXO[network]) return isUtxoAddress(network, a);
   return isEvm(a);
 }
@@ -94,19 +106,21 @@ async function setMine(userId, body = {}) {
     utxo[n] = share && body[n] ? String(body[n]) : null;
     if (utxo[n] && !isUtxoAddress(n, utxo[n])) throw badRequest('invalid_address', `Not a valid ${n.toUpperCase()} address`);
   }
-  await db.query('UPDATE users SET wallet_tron = $2, wallet_evm = $3, wallet_btc = $4, wallet_ltc = $5, wallet_doge = $6, updated_at = now() WHERE id = $1',
-    [userId, tron, evm, utxo.btc, utxo.ltc, utxo.doge]);
-  return { share: !!(tron || evm), tron, evm, ...utxo };
+  const sol = share && body.sol ? String(body.sol) : null;
+  if (sol && !isSol(sol)) throw badRequest('invalid_address', 'Not a Solana address');
+  await db.query('UPDATE users SET wallet_tron = $2, wallet_evm = $3, wallet_btc = $4, wallet_ltc = $5, wallet_doge = $6, wallet_sol = $7, updated_at = now() WHERE id = $1',
+    [userId, tron, evm, utxo.btc, utxo.ltc, utxo.doge, sol]);
+  return { share: !!(tron || evm), tron, evm, ...utxo, sol };
 }
 
 /** Someone's shared addresses — only for people they can chat with (never if either blocked the other). */
 async function getFor(userId, otherIdRaw) {
   await settings.requireFeature('feature_wallet', 'Wallet');
   const otherId = v.id(otherIdRaw, 'user_id');
-  const u = await db.one(`SELECT id, wallet_tron, wallet_evm, wallet_btc, wallet_ltc, wallet_doge FROM users WHERE id = $1 AND status = 'active'`, [otherId]);
+  const u = await db.one(`SELECT id, wallet_tron, wallet_evm, wallet_btc, wallet_ltc, wallet_doge, wallet_sol FROM users WHERE id = $1 AND status = 'active'`, [otherId]);
   if (!u) throw notFound('user_not_found', 'User not found');
   if (await require('./user.service').isBlockedEither(userId, otherId)) throw forbidden('blocked', 'Not available'); // eslint-disable-line global-require
-  return { tron: u.wallet_tron || null, evm: u.wallet_evm || null, btc: u.wallet_btc || null, ltc: u.wallet_ltc || null, doge: u.wallet_doge || null };
+  return { tron: u.wallet_tron || null, evm: u.wallet_evm || null, btc: u.wallet_btc || null, ltc: u.wallet_ltc || null, doge: u.wallet_doge || null, sol: u.wallet_sol || null };
 }
 
 /** Checks a crypto card before it is stored. Amounts are whole units as a decimal string. */
@@ -123,12 +137,13 @@ async function cardMeta(body = {}) {
   const okAddr = (a) => validFor(network, a);
   const to = String(c.to || '');
   if (!okAddr(to)) throw badRequest('invalid_address', 'Invalid address');
-  const contract = c.contract && !UTXO[network] ? String(c.contract) : null;
+  const contract = c.contract && !UTXO[network] && network !== 'sol' ? String(c.contract) : null;
   if (contract && !okAddr(contract)) throw badRequest('invalid_address', 'Invalid token address');
   let tx = null;
   if (kind === 'sent') {
     tx = String(c.tx || '');
-    if (!(network === 'tron' || UTXO[network] ? /^[0-9a-f]{64}$/i.test(tx) : /^0x[0-9a-f]{64}$/i.test(tx))) throw badRequest('invalid_tx', 'Invalid transaction id');
+    const ok = network === 'sol' ? base58Len(tx, 64) : network === 'tron' || UTXO[network] ? /^[0-9a-f]{64}$/i.test(tx) : /^0x[0-9a-f]{64}$/i.test(tx);
+    if (!ok) throw badRequest('invalid_tx', 'Invalid transaction id');
   }
   const note = c.note ? v.str(String(c.note), { field: 'note', max: 140 }) : null;
   return { crypto: { kind, network, symbol, amount, decimals, to, contract, tx, note } };
@@ -144,4 +159,4 @@ function previewText(meta) {
   return c.kind === 'request' ? `💸 Request: ${amt} ${c.symbol}` : `💸 Sent ${amt} ${c.symbol}`;
 }
 
-module.exports = { setMine, getFor, cardMeta, previewText, isTron, isEvm, isUtxoAddress, NETWORKS };
+module.exports = { setMine, getFor, cardMeta, previewText, isTron, isEvm, isUtxoAddress, isSol, NETWORKS };
