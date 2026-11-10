@@ -126,13 +126,7 @@ async function updateShape(u) {
 // ------------------------------------------------------------------ files: upload, by id, by URL
 const MAX_URL_BYTES = 20 * 1024 * 1024;
 
-function isPrivateHost(host) {
-  const h = host.toLowerCase();
-  return h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')
-    || /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || h === '[::1]' || h.startsWith('[fc') || h.startsWith('[fd');
-}
-
-/** A file the bot downloads from a public https URL, saved like a normal upload. */
+/** A file the bot downloads from a public http(s) URL, saved like a normal upload. */
 async function download(url) {
   let u;
   try {
@@ -140,21 +134,26 @@ async function download(url) {
   } catch (_) {
     throw badRequest('invalid_file', 'wrong file identifier/HTTP URL specified');
   }
-  if (!['http:', 'https:'].includes(u.protocol) || isPrivateHost(u.hostname)) throw badRequest('invalid_file', 'wrong HTTP URL specified');
-  const res = await fetch(u, { signal: AbortSignal.timeout(20000), redirect: 'follow' });
-  if (!res.ok) throw badRequest('invalid_file', `failed to get HTTP URL content (${res.status})`);
-  const len = Number(res.headers.get('content-length') || 0);
-  if (len > MAX_URL_BYTES) throw badRequest('file_too_large', 'file is too big');
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > MAX_URL_BYTES) throw badRequest('file_too_large', 'file is too big');
+  if (!['http:', 'https:'].includes(u.protocol)) throw badRequest('invalid_file', 'wrong HTTP URL specified');
+  let res;
+  try {
+    // never the server itself or its private network; read at most 20 MB
+    res = await require('../utils/safeFetch').safeFetch(u.toString(), { timeoutMs: 20000, maxBytes: MAX_URL_BYTES, redirects: 3 }); // eslint-disable-line global-require
+  } catch (err) {
+    if (err && err.code === 'too_big') throw badRequest('file_too_large', 'file is too big');
+    throw badRequest('invalid_file', 'wrong HTTP URL specified');
+  }
+  if (res.status < 200 || res.status >= 300) throw badRequest('invalid_file', `failed to get HTTP URL content (${res.status})`);
+  const buf = res.body;
   const config = require('../config'); // eslint-disable-line global-require
   const d = new Date();
   const dir = path.join(config.uploadDir, String(d.getUTCFullYear()), String(d.getUTCMonth() + 1).padStart(2, '0'));
   fs.mkdirSync(dir, { recursive: true });
   const name = path.basename(u.pathname) || 'file';
-  const file = path.join(dir, `${crypto.randomBytes(16).toString('hex')}${path.extname(name).slice(0, 10)}`);
+  const ext = path.extname(name).toLowerCase();
+  const file = path.join(dir, `${crypto.randomBytes(16).toString('hex')}${/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ''}`);
   fs.writeFileSync(file, buf);
-  return { path: file, size: buf.length, mimetype: (res.headers.get('content-type') || 'application/octet-stream').split(';')[0], originalname: name };
+  return { path: file, size: buf.length, mimetype: String(res.headers['content-type'] || 'application/octet-stream').split(';')[0].trim().toLowerCase(), originalname: name };
 }
 
 /**

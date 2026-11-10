@@ -365,7 +365,9 @@ function init(httpServer) {
     try {
       const header = socket.handshake.headers.authorization || '';
       const token = (socket.handshake.auth && socket.handshake.auth.token) || (header.startsWith('Bearer ') ? header.slice(7) : null);
-      if (await require('../http/middleware').isIpBlocked(socket.handshake.address)) throw new AppError(403, 'ip_blocked', 'Blocked');
+      // behind nginx the socket's own address is 127.0.0.1: the real one is the LAST entry nginx added
+      const fwd = config.trustProxy ? String(socket.handshake.headers['x-forwarded-for'] || '').split(',').pop().trim() : '';
+      if (await require('../http/middleware').isIpBlocked(fwd || socket.handshake.address)) throw new AppError(403, 'ip_blocked', 'Blocked');
       const { user, sessionId } = await authService.authenticate(token);
       socket.data.userId = user.id;
       socket.data.sessionId = sessionId;

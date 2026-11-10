@@ -23,7 +23,7 @@ if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split("."
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
   apt-get install -y -qq nodejs >/dev/null
 fi
-for pkg in postgresql nginx coturn ufw ffmpeg; do # ffmpeg: video posters
+for pkg in postgresql nginx coturn ufw ffmpeg fail2ban unattended-upgrades; do # ffmpeg: video posters · fail2ban: blocks password guessing · unattended-upgrades: security patches
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
     log "Installing $pkg"
     apt-get update -qq
@@ -150,6 +150,14 @@ ExecStart=/usr/bin/node src/server.js
 Restart=always
 RestartSec=3
 LimitNOFILE=65536
+# the app can't gain new rights, sees its own /tmp, and can't write to the system or to home folders
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target
@@ -159,6 +167,12 @@ systemctl enable hushavia >/dev/null 2>&1
 systemctl restart hushavia
 
 # ------------------------------------------------------------------ nginx (port 80 → app, websockets, big uploads)
+cat > /etc/nginx/conf.d/hushavia-limits.conf <<'EOF'
+# login / code requests: a burst is fine, a flood from one address is not (many people can share one mobile IP)
+limit_req_zone $binary_remote_addr zone=hv_auth:10m rate=5r/s;
+limit_req_status 429;
+server_tokens off;
+EOF
 cat > /etc/nginx/sites-available/hushavia <<'EOF'
 server {
     listen 80 default_server;
@@ -166,6 +180,20 @@ server {
     server_name _;
     client_max_body_size 2100m;
     keepalive_timeout 30s;
+
+    # hidden files (.env, .git ...) are never served, whatever the app does
+    location ~ /\.(?!well-known) { return 404; }
+
+    location ~ ^/api/(auth/(otp|email|password|passkey|refresh)|admin/login) {
+        limit_req zone=hv_auth burst=40 nodelay;
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
 
     # smaller responses = faster on mobile data
     gzip on;
@@ -191,7 +219,26 @@ server {
 EOF
 ln -sf /etc/nginx/sites-available/hushavia /etc/nginx/sites-enabled/hushavia
 rm -f /etc/nginx/sites-enabled/default
-nginx -t >/dev/null 2>&1 && systemctl reload nginx
+if nginx -t >/dev/null 2>&1; then
+  systemctl reload nginx
+else
+  echo "nginx: the new config has a problem — keeping the running one"; nginx -t 2>&1 | tail -3
+fi
+
+# ------------------------------------------------------------------ password guessing & security patches
+cat > /etc/fail2ban/jail.d/hushavia.conf <<'EOF'
+[sshd]
+enabled = true
+maxretry = 6
+findtime = 10m
+bantime = 1h
+EOF
+systemctl enable fail2ban >/dev/null 2>&1 || true
+systemctl restart fail2ban >/dev/null 2>&1 || echo "fail2ban: could not start"
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
 
 # ------------------------------------------------------------------ coturn (voice / video calls through firewalls)
 cat > /etc/turnserver.conf <<EOF
@@ -207,9 +254,16 @@ no-cli
 no-tlsv1
 no-tlsv1_1
 no-multicast-peers
+denied-peer-ip=0.0.0.0-0.255.255.255
 denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
 denied-peer-ip=172.16.0.0-172.31.255.255
 denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 EOF
 chmod 640 /etc/turnserver.conf
 chgrp turnserver /etc/turnserver.conf 2>/dev/null || true

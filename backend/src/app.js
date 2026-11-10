@@ -13,7 +13,10 @@ const adminRoutes = require('./http/routes.admin');
 
 function createApp() {
   const app = express();
-  app.set('trust proxy', config.trustProxy);
+  // Exactly ONE proxy (nginx) is trusted. With `true` the address would be taken from the left end of
+  // X-Forwarded-For — which the client writes itself — so anyone could fake their IP and walk around
+  // every per-IP limit (login codes, admin login, blocked networks).
+  app.set('trust proxy', config.trustProxy ? 1 : false);
   app.disable('x-powered-by');
   app.use(securityHeaders);
   app.use(cors);

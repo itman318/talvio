@@ -258,16 +258,19 @@ async function deliverWebhook(botId) {
         const secretHeaders = b.webhook_secret
           ? { 'X-Hushavia-Webhook-Secret': b.webhook_secret, ...(cls ? { 'X-Telegram-Bot-Api-Secret-Token': b.webhook_secret } : {}) }
           : {};
-        const res = await fetch(b.webhook_url, {
+        // the hook address is chosen by the bot's owner: never the server itself or its private network
+        const res = await require('../utils/safeFetch').safeFetch(b.webhook_url, { // eslint-disable-line global-require
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(v2 ? v2.headers : secretHeaders),
           },
           body: v2 ? v2.body : JSON.stringify(cls || update),
-          signal: AbortSignal.timeout(10000),
+          timeoutMs: 10000,
+          maxBytes: 256 * 1024,
+          httpsOnly: true,
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
         await db.query('DELETE FROM bot_updates WHERE id = $1', [u.id]);
         await db.query('UPDATE bots SET webhook_error = NULL WHERE user_id = $1 AND webhook_error IS NOT NULL', [botId]);
       } catch (err) {

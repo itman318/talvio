@@ -44,6 +44,13 @@ jobs:
       - name: Syntax check
         run: for f in $(git ls-files 'src/*.js' 'src/**/*.js' 'scripts/*.js' 'web-client/*.js' 'admin-panel/*.js'); do node --check "$f" || exit 1; done
 
+      - name: Known holes in the packages we use
+        continue-on-error: true
+        run: |
+          mkdir -p ../ci-backend
+          npm audit --omit=dev > ../ci-backend/audit.txt 2>&1 || true
+          tail -30 ../ci-backend/audit.txt
+
       - name: Unit tests
         id: unit
         continue-on-error: true
