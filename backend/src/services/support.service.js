@@ -205,9 +205,9 @@ async function adminReply(admin, ticketIdRaw, body = {}) {
   }
   const status = body.status ? v.oneOf(body.status, STATUSES, 'status') : 'pending';
   const t = await db.one(
-    `UPDATE support_tickets SET status = $2, user_unread = TRUE, updated_at = now(),
+    `UPDATE support_tickets SET status = $2::varchar, user_unread = TRUE, updated_at = now(),
        first_reply_at = COALESCE(first_reply_at, now()),
-       resolved_at = CASE WHEN $2 IN ('resolved', 'closed') THEN now() ELSE NULL END,
+       resolved_at = CASE WHEN $2::varchar IN ('resolved', 'closed') THEN now() ELSE NULL END,
        assigned_to = COALESCE(assigned_to, $3) WHERE id = $1 RETURNING *`,
     [id, status, admin.id],
   );
@@ -271,8 +271,8 @@ async function adminUpdate(ticketIdRaw, body = {}) {
   const params = [id];
   if (body.status !== undefined) {
     params.push(v.oneOf(body.status, STATUSES, 'status'));
-    sets.push(`status = $${params.length}`);
-    sets.push(`resolved_at = CASE WHEN $${params.length} IN ('resolved', 'closed') THEN COALESCE(resolved_at, now()) ELSE NULL END`);
+    sets.push(`status = $${params.length}::varchar`);
+    sets.push(`resolved_at = CASE WHEN $${params.length}::varchar IN ('resolved', 'closed') THEN COALESCE(resolved_at, now()) ELSE NULL END`);
   }
   if (body.category !== undefined) {
     params.push(v.oneOf(body.category, CATEGORIES, 'category'));
