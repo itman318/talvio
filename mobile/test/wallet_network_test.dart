@@ -23,7 +23,7 @@ void main() {
         expect(p.id.length, 32);
         // ignore: avoid_print
         print('${net.name} fee raw: ${p.feeSun}');
-        expect(p.feeSun > BigInt.zero, true, reason: 'fee');
+        expect(p.feeSun >= BigInt.zero, true, reason: 'fee'); // 0 is real for accounts with staked energy
         // ignore: avoid_print
         print('${net.name} USDT fee estimate: ${Units.format(p.feeSun)} TRX');
       } on WalletException catch (e) {
