@@ -27,7 +27,9 @@ push.init();
 
 require('./services/sticker.service').ensureOfficialPacks().catch((err) => console.error('sticker packs:', err.message)); // eslint-disable-line no-console
 
-server.listen(config.port, () => {
+// behind nginx (TRUST_PROXY) only nginx may reach the app: listen on this machine alone, so nobody can
+// talk to it directly and pretend to be the proxy — even if the firewall is ever opened by mistake
+server.listen(config.port, process.env.HOST || (config.isProd && config.trustProxy ? '127.0.0.1' : undefined), () => {
   require('./services/botforge.service').ensure()
     .then(() => require('./services/idbot.service').ensure())
     .then(() => require('./services/sysbots.service').ensure())
