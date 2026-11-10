@@ -65,17 +65,25 @@ class TronApi {
 
   static const feeLimitSun = 50000000; // never burn more than 50 TRX on one USDT transfer
 
-  Future<dynamic> _get(String path) async {
+  Future<dynamic> _get(String path, {int tries = 3}) async {
     final r = await _http.get(Uri.parse('${net.api}$path'), headers: {'accept': 'application/json'}).timeout(const Duration(seconds: 15));
+    if (r.statusCode == 429 && tries > 1) {
+      await Future<void>.delayed(Duration(milliseconds: 700 * (4 - tries)));
+      return _get(path, tries: tries - 1);
+    }
     if (r.statusCode == 429) throw WalletException('The network is busy. Try again in a moment.');
     if (r.statusCode != 200) throw WalletException('Network error (${r.statusCode})');
     return jsonDecode(r.body);
   }
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body, {int tries = 3}) async {
     final r = await _http
         .post(Uri.parse('${net.api}$path'), headers: {'content-type': 'application/json', 'accept': 'application/json'}, body: jsonEncode(body))
         .timeout(const Duration(seconds: 20));
+    if (r.statusCode == 429 && tries > 1) {
+      await Future<void>.delayed(Duration(milliseconds: 700 * (4 - tries)));
+      return _post(path, body, tries: tries - 1);
+    }
     if (r.statusCode == 429) throw WalletException('The network is busy. Try again in a moment.');
     if (r.statusCode != 200) throw WalletException('Network error (${r.statusCode})');
     return Map<String, dynamic>.from(jsonDecode(r.body) as Map);
@@ -170,7 +178,10 @@ class TronApi {
   Future<BigInt> _usdtFee(String from, Map<String, dynamic> body) async {
     try {
       final est = await _post('/wallet/triggerconstantcontract', body);
-      final energy = (est['energy_used'] as num?)?.toInt() ?? 65000;
+      // an account without USDT can't simulate its own transfer (the estimate then says 0):
+      // fall back to what a USDT transfer normally needs, more when the receiver never held USDT
+      var energy = (est['energy_used'] as num?)?.toInt() ?? 0;
+      if (energy <= 0) energy = 65000;
       final res = await _post('/wallet/getaccountresource', {'address': from, 'visible': true});
       final freeEnergy = (((res['EnergyLimit'] as num?) ?? 0) - ((res['EnergyUsed'] as num?) ?? 0)).toInt();
       final price = await _energyPrice();
