@@ -549,7 +549,10 @@ class _WalletHomeState extends State<_WalletHome> {
       final tronTxs = w.api.history(w.address!).catchError((_) => <WalletTx>[]);
       final sent = SentLog(w.userId).load();
       await Portfolio.load(assets, tronAddress: w.address!, evmAddress: w.evmAddress!, tron: w.net);
-      final txs = [...await tronTxs, ...await sent]..sort((a, b) => b.time.compareTo(a.time));
+      // a TRON transfer sent from here is in both lists: keep the network's copy (it has the final status)
+      final net = await tronTxs;
+      final ids = net.map((t) => t.id.toLowerCase()).toSet();
+      final txs = [...net, ...(await sent).where((t) => !ids.contains(t.id.toLowerCase()))]..sort((a, b) => b.time.compareTo(a.time));
       if (!mounted) return;
       setState(() {
         _assets = assets;

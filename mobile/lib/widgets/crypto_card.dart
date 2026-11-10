@@ -7,6 +7,7 @@ import '../screens/wallet_screen.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
+import '../theme/chat_theme.dart';
 import '../wallet/evm.dart';
 import '../wallet/tron_crypto.dart';
 import '../wallet/verify.dart';
@@ -88,7 +89,7 @@ class _CryptoCardState extends State<CryptoCard> {
   @override
   Widget build(BuildContext context) {
     final sent = c['kind'] == 'sent';
-    final onDark = widget.isMine; // my bubbles are dark
+    final onDark = widget.isMine && !softMineOf(context); // my bubbles are dark, unless a light chat theme is on
     final fg = onDark ? Colors.white : Theme.of(context).colorScheme.onSurface;
     final sub = onDark ? Colors.white70 : Brand.muted;
     final (icon, label, color) = switch (_check) {
