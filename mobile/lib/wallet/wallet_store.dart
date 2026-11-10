@@ -44,7 +44,19 @@ class WalletStore extends ChangeNotifier {
     } catch (_) {
       customTokens = [];
     }
-    if ((address == null || evmAddress == null) && await _secure.containsKey(key: _phraseKey)) {
+    var hasPhrase = false;
+    try {
+      hasPhrase = await _secure.containsKey(key: _phraseKey);
+    } catch (_) {
+      // secure storage can't be read (e.g. restored from a backup on a new phone): the 12 words bring it back
+      hasPhrase = false;
+    }
+    if (address != null && !hasPhrase) {
+      // the address is remembered but its key is gone: don't show a wallet that can't send
+      address = null;
+      evmAddress = null;
+    }
+    if ((address == null || evmAddress == null) && hasPhrase) {
       // address cache missing (or a wallet made before EVM support): rebuild it — addresses are public,
       // the phrase stays locked in secure storage
       final phrase = await _secure.read(key: _phraseKey);

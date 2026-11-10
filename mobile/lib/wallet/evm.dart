@@ -219,8 +219,14 @@ class EvmApi {
       final url = chain.rpcs[i];
       try {
         if (!_verified.contains(url)) {
-          final id = await _call(url, 'eth_chainId', const []);
-          if (BigInt.parse((id as String).substring(2), radix: 16).toInt() != chain.chainId) throw WalletException('wrong network');
+          // any problem with this check means: don't use this endpoint (never: blame the request)
+          try {
+            final id = await _call(url, 'eth_chainId', const []);
+            if (BigInt.parse((id as String).substring(2), radix: 16).toInt() != chain.chainId) throw Exception('wrong network');
+          } catch (e) {
+            last = e is _RpcError ? Exception(e.message) : e;
+            continue;
+          }
           _verified.add(url);
         }
         final r = await _call(url, method, params);

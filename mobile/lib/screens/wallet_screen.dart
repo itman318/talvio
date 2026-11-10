@@ -59,6 +59,18 @@ class _WalletScreenState extends State<WalletScreen> {
       value: _store!,
       child: Consumer<WalletStore>(
         builder: (_, w, __) {
+          if (!context.watch<AuthState>().feature('wallet')) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Wallet')),
+              body: const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text('The wallet is switched off for now. Your coins are safe on the networks — your 12 words still open them in any wallet.',
+                      textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 15)),
+                ),
+              ),
+            );
+          }
           if (!w.loaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
           return w.exists ? const _WalletHome() : const _Welcome();
         },

@@ -1415,6 +1415,7 @@
     call_ring_timeout_sec: ['Ring for (seconds)', 'After this the call counts as missed.'],
     call_max_minutes: ['Longest call (minutes)', 'Calls are cut off after this.'],
     stun_urls: ['STUN servers', 'One per line, e.g. stun:stun.l.google.com:19302'],
+    feature_wallet: ['Crypto wallet', 'Show the wallet (USDT, ETH, BNB, TRX …) in the app. Turning it off hides it; people’s coins stay safe on the networks and come back when it’s on again.'],
     feature_web_login: ['Web & desktop app', 'Users can log in at /web by scanning a QR code with their phone.'],
     max_accounts_per_device: ['Accounts per phone', 'How many accounts one phone can switch between.'],
     feature_bots: ['Bots & mini apps', 'Users can create bots with the Bot API.'],
@@ -1435,7 +1436,7 @@
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['App updates', ['app_update_notes']],
-    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'max_accounts_per_device']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
