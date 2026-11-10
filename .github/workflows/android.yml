@@ -131,6 +131,10 @@ jobs:
           set -o pipefail
           flutter test test/wallet_crypto_test.dart 2>&1 | tail -60 | tee ../ci-report/wallet-test.txt
 
+      - name: Wallet against the live TRON network (read only)
+        continue-on-error: true
+        run: flutter test test/wallet_network_test.dart 2>&1 | tail -40
+
       - name: Render mascot previews
         continue-on-error: true
         run: |
