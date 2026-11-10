@@ -547,7 +547,7 @@ test('wallet in chats: shared addresses, sent / request cards, bad cards refused
   assert.equal(wallet.isUtxoAddress('btc', 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297'), true, 'Taproot (bech32m)');
   const sol = 'GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL';
   assert.equal(wallet.isSol(sol), true);
-  assert.equal(wallet.isSol('GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27Ah'), false, 'too short');
+  assert.equal(wallet.isSol('GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkL'), false, 'too short');
   await wallet.setMine(A.id, { share: true, tron, evm, btc, ltc, doge, sol });
   assert.deepEqual(await wallet.getFor(B.id, A.id), { tron, evm, btc, ltc, doge, sol });
   await rejects(messages.sendMessage(A.id, (await chats.getOrCreatePrivate(A.id, B.id)).id, { type: 'crypto', crypto: { kind: 'sent', network: 'sol', symbol: 'SOL', amount: '1000', decimals: 9, to: sol, tx: 'abc' } }), 'invalid_tx');

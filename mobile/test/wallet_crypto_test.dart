@@ -194,7 +194,7 @@ void main() {
     final addr = await Sol.addressOf(k);
     expect(addr, 'GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL');
     expect(Sol.isValidAddress(addr), true);
-    expect(Sol.isValidAddress('GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27Ah'), false);
+    expect(Sol.isValidAddress('GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkL'), false, reason: '29 bytes');
     expect(Sol.isValidAddress('TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'), false, reason: 'TRON address is 25 bytes');
     final msg = Sol.transferMessage(addr, 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk', 1500000, '11111111111111111111111111111111');
     expect(msg.sublist(0, 4), [1, 0, 1, 3]);
