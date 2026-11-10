@@ -144,10 +144,15 @@ test('BotForge creates and manages bots from a chat', async () => {
   assert.equal(await botfather.ensure(), bfId);
   const chat = await chats.getOrCreatePrivate(B.id, bfId);
   const last = async () => db.one('SELECT * FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [chat.id, bfId]);
+  // wait for the bot's answer to THIS message (an answer to the previous one can arrive late)
   const send = async (text) => {
     rateLimit.reset();
-    await messages.sendMessage(B.id, chat.id, { text });
-    await flush();
+    const mine = await messages.sendMessage(B.id, chat.id, { text });
+    for (let i = 0; i < 40; i += 1) {
+      await flush(100);
+      const m = await last();
+      if (m && Number(m.id) > Number(mine.id)) return m;
+    }
     return last();
   };
   assert.match((await send('/start')).text, /build and manage/);
