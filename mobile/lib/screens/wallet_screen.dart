@@ -1041,15 +1041,17 @@ void _txSheet(BuildContext context, WalletTx tx, bool incoming, TronNet tron) {
 
 // ======================================================================== receive
 class _ReceiveSheet extends StatefulWidget {
-  const _ReceiveSheet({required this.tron, required this.evm});
+  const _ReceiveSheet({required this.tron, required this.evm, this.startEvm = false, this.asset});
   final String tron;
   final String evm;
+  final bool startEvm;
+  final WalletAsset? asset; // opened from one coin: say exactly what to send here
   @override
   State<_ReceiveSheet> createState() => _ReceiveSheetState();
 }
 
 class _ReceiveSheetState extends State<_ReceiveSheet> {
-  bool _evm = false;
+  late bool _evm = widget.startEvm;
 
   @override
   Widget build(BuildContext context) {
@@ -1071,7 +1073,9 @@ class _ReceiveSheetState extends State<_ReceiveSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            _evm ? 'One address for Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche' : 'USDT (TRC-20) and TRX',
+            widget.asset != null && widget.asset!.isTron != _evm
+                ? 'Send only ${widget.asset!.symbol} on ${widget.asset!.networkName} to this address'
+                : _evm ? 'One address for Ethereum, BNB Chain, Polygon, Arbitrum, Base and Avalanche' : 'USDT (TRC-20) and TRX',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Brand.muted),
           ),
@@ -1764,14 +1768,35 @@ class _AssetScreenState extends State<_AssetScreen> {
                 if (a.balance != null && a.price != null) Text(usd(a.value), style: const TextStyle(color: Brand.muted)),
               ]),
             ),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: Brand.primary),
-              onPressed: () {
-                Navigator.pop(context);
-                widget.onSend();
-              },
-              icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-              label: const Text('Send'),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(children: [
+            Expanded(
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(50)),
+                onPressed: () {
+                  Navigator.pop(context);
+                  widget.onSend();
+                },
+                icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                label: const Text('Send'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: _mint, minimumSize: const Size.fromHeight(50)),
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => _ReceiveSheet(tron: w.address!, evm: w.evmAddress!, startEvm: !a.isTron, asset: a),
+                ),
+                icon: const Icon(Icons.arrow_downward_rounded, size: 18),
+                label: const Text('Receive'),
+              ),
             ),
           ]),
         ),
