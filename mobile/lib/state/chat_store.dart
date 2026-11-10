@@ -498,6 +498,7 @@ class ChatStore extends ChangeNotifier {
   Future<void> loadMessages(int chatId) async {
     final gen = _session;
     final fresh = api.get('/chats/$chatId/messages', query: {'limit': '50'});
+    fresh.ignore(); // offline: the error is handled at the await below, not reported as "unhandled"
     await _showCachedMessages(chatId); // while the server answers
     final data = Map<String, dynamic>.from(await fresh as Map);
     if (gen != _session) return;
@@ -513,7 +514,9 @@ class ChatStore extends ChangeNotifier {
     }
     final list = (data['messages'] as List).map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
     _cacheSenders(list);
-    final locals = (_messages[chatId] ?? []).where((m) => m.isLocal).toList();
+    // still-sending messages stay on top — unless the server already has them (no doubles)
+    final arrived = {for (final m in list) if (m.clientId != null) m.clientId};
+    final locals = (_messages[chatId] ?? []).where((m) => m.isLocal && !arrived.contains(m.clientId)).toList();
     _messages[chatId] = [...locals, ...list];
     _hasMore[chatId] = data['has_more'] == true;
     notifyListeners();
@@ -549,7 +552,12 @@ class ChatStore extends ChangeNotifier {
       await loadChats();
     } catch (_) {}
     final active = activeChatId;
-    _messages.removeWhere((k, _) => k != active);
+    // chats with a message still sending (or failed) keep it: they are refreshed, not dropped
+    final unsent = [for (final e in _messages.entries) if (e.key != active && e.value.any((m) => m.isLocal)) e.key];
+    _messages.removeWhere((k, _) => k != active && !unsent.contains(k));
+    for (final k in unsent) {
+      unawaited(loadMessages(k).catchError((_) {}));
+    }
     if (active == null || !_messages.containsKey(active)) return;
     final list = _messages[active]!;
     final newest = list.firstWhere((m) => !m.isLocal, orElse: () => Message(id: 0, chatId: active, type: 'text', createdAt: DateTime.now()));
@@ -597,11 +605,33 @@ class ChatStore extends ChangeNotifier {
   }
 
   // ------------------------------------------------------------------ sending
-  String _newClientId() => '${DateTime.now().microsecondsSinceEpoch}-${_rand.nextInt(1 << 30)}';
+  String _newClientId() {
+    final id = '${DateTime.now().microsecondsSinceEpoch}-${_rand.nextInt(1 << 30)}';
+    _sentHere.add(id);
+    return id;
+  }
+
+  // Messages sent from this phone keep ONE identity on screen from "sending" to "sent": the bubble
+  // (and its photo) is not rebuilt when the server gives the message its real number.
+  final Set<String> _sentHere = {};
+  Object keyOf(Message m) => m.clientId != null && _sentHere.contains(m.clientId) ? 'c${m.clientId}' : m.id;
+
+  // Messages that just arrived / were just sent slide in instead of popping.
+  final Map<Object, int> _arrivedAt = {};
+  void _markFresh(Message m) {
+    if (_arrivedAt.length > 60) _arrivedAt.clear();
+    _arrivedAt.putIfAbsent(keyOf(m), () => DateTime.now().millisecondsSinceEpoch);
+  }
+
+  bool isFresh(Message m) {
+    final t = _arrivedAt[keyOf(m)];
+    return t != null && DateTime.now().millisecondsSinceEpoch - t < 500;
+  }
 
   void _insertLocal(Message m) {
     final list = _messages.putIfAbsent(m.chatId, () => []);
     list.insert(0, m);
+    _markFresh(m);
     final chat = chatById(m.chatId);
     if (chat != null) {
       chat.lastMessage = m;
@@ -1816,7 +1846,7 @@ class ChatStore extends ChangeNotifier {
     _cacheSenders([m]);
     // Channel posts carry no sender id, so a matching optimistic copy is how we know it's ours.
     final hadLocal = m.clientId != null && (_messages[m.chatId]?.any((x) => x.isLocal && x.clientId == m.clientId) ?? false);
-    _insertIncoming(m);
+    if (_insertIncoming(m) && !hadLocal) _markFresh(m);
     final mine = (m.senderId == myId && !m.isSystem) || hadLocal;
     final chat = chatById(m.chatId);
     if (chat == null) {

@@ -96,7 +96,13 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = EmojiTextController();
   final _focus = FocusNode();
   bool _emojiOpen = false;
-  final _msgKeys = <int, GlobalKey>{};
+  final _msgKeys = <Object, GlobalKey>{}; // by ChatStore.keyOf: stays the same from "sending" to "sent"
+  GlobalKey? _keyForId(int id) {
+    for (final m in _store.messagesOf(chatId)) {
+      if (m.id == id) return _msgKeys[_store.keyOf(m)];
+    }
+    return null;
+  }
   int? _flashId; // briefly highlighted after jumping to it
   bool _slashShown = false; // quick replies panel was showing
 
@@ -116,7 +122,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     // the list is built lazily: move towards it until it is on screen, then centre it
-    for (var step = 0; step < 60 && _msgKeys[id]?.currentContext == null; step++) {
+    for (var step = 0; step < 60 && _keyForId(id)?.currentContext == null; step++) {
       if (!_scroll.hasClients) break;
       final pos = _scroll.position;
       final target = (pos.pixels + pos.viewportDimension * 0.9).clamp(0.0, pos.maxScrollExtent);
@@ -124,7 +130,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _scroll.jumpTo(target);
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
-    final ctx = _msgKeys[id]?.currentContext;
+    final ctx = _keyForId(id)?.currentContext;
     if (ctx == null || !ctx.mounted) return;
     await Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
     if (!mounted) return;
@@ -211,6 +217,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _showDown = false;
   int _newBelow = 0;
   int? _newestSeen;
+  String? _lastSent;
 
   int? _online; // groups: members online now
   bool _formatOpen = false; // the B / I / S / code / spoiler bar above the message box
@@ -2109,6 +2116,16 @@ class _ChatScreenState extends State<ChatScreen> {
       _newBelow += messages.takeWhile((x) => x.id > _newestSeen!).length;
     }
     _newestSeen = newest;
+    // I just sent something while reading older messages: go back down to it
+    final sentNow = messages.isNotEmpty && messages.first.isLocal ? messages.first.clientId : null;
+    if (sentNow != null && sentNow != _lastSent) {
+      _lastSent = sentNow;
+      if (_showDown) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scroll.hasClients) _scroll.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+        });
+      }
+    }
     final dark = Theme.of(context).brightness == Brightness.dark;
     return AnimatedScale(
       scale: _showDown ? 1 : 0,
@@ -2170,6 +2187,13 @@ class _ChatScreenState extends State<ChatScreen> {
       final fwd = messages.take(40).where((m) => m.forwardedFromName != null).toList();
       if (fwd.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, fwd));
     }
+    final rowIndex = <Object, int>{};
+    for (var i = 0; i < messages.length; i++) {
+      final m = messages[i];
+      // an album is one row, drawn at its newest photo
+      if (m.albumId != null && i > 0 && messages[i - 1].albumId == m.albumId) continue;
+      rowIndex[m.albumId != null && i + 1 < messages.length && messages[i + 1].albumId == m.albumId ? 'album-${m.albumId}' : store.keyOf(m)] = i;
+    }
     return ListView.builder(
       controller: _scroll,
       reverse: true,
@@ -2177,6 +2201,13 @@ class _ChatScreenState extends State<ChatScreen> {
       cacheExtent: 900,
       padding: EdgeInsets.only(top: top, bottom: bottom),
       itemCount: messages.length + (hasMore ? 1 : 0) + (_ad != null ? 1 : 0),
+      // every row has its own identity: when a message arrives the rows above simply move up,
+      // nothing is rebuilt or reloaded
+      findChildIndexCallback: (key) {
+        if (key is! ValueKey<Object>) return null;
+        final i = rowIndex[key.value];
+        return i == null ? null : i + (_ad != null ? 1 : 0);
+      },
       itemBuilder: (ctx, idx) {
         if (_ad != null && idx == 0) return _adCard();
         final i = _ad != null ? idx - 1 : idx;
@@ -2196,9 +2227,10 @@ class _ChatScreenState extends State<ChatScreen> {
           final items = messages.sublist(i, j + 1).reversed.toList();
           final mineA = chat.isChannel ? m.isLocal : m.senderId == store.myId;
           return _Vanish(
+            key: ValueKey<Object>('album-${m.albumId}'),
             on: items.any((x) => _vanishing.contains(x.id)),
+            fresh: store.isFresh(m),
             child: AlbumBubble(
-            key: ValueKey('album-${m.albumId}'),
             items: items,
             isMine: mineA,
             senderName: chat.isGroup && !mineA ? m.sender?.name : null,
@@ -2228,8 +2260,11 @@ class _ChatScreenState extends State<ChatScreen> {
         final showSender = chat.isGroup && !mine && (older == null || older.senderId != m.senderId || older.isSystem || newDay);
         final selecting = _selected.isNotEmpty;
         final picked = _selected.contains(m.id);
+        final rowKey = store.keyOf(m);
         return _Vanish(
+          key: ValueKey<Object>(rowKey),
           on: _vanishing.contains(m.id),
+          fresh: store.isFresh(m),
           child: Column(
           children: [
             if (newDay) DateChip(date: m.createdAt),
@@ -2245,11 +2280,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 onReply: selecting || m.isLocal || !chat.canPost ? null : () => _startReply(m),
                 onDoubleTap: null, // one tap opens the menu right away (❤️ is the first reaction there)
                 child: Builder(builder: (bctx) => AnimatedContainer(
-                key: _msgKeys.putIfAbsent(m.id, () => GlobalKey()),
+                key: _msgKeys.putIfAbsent(rowKey, () => GlobalKey()),
                 duration: const Duration(milliseconds: 400),
                 color: _flashId == m.id ? Brand.primary.withValues(alpha: 0.16) : Colors.transparent,
                 child: MessageBubble(
-                key: ValueKey(m.isLocal ? m.clientId : m.id),
                 onReplyTap: m.replyTo == null ? null : () => _jumpToMessage(m.replyTo!.id),
                         onCommand: (chat.isBot || chat.isGroup) && chat.canPost ? (c) { HapticFeedback.selectionClick(); _store.sendText(chatId, c); } : null,
                 message: m,
@@ -3245,26 +3279,60 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 
-/// A deleted message folds away (height and opacity) before it leaves the list.
-class _Vanish extends StatelessWidget {
-  const _Vanish({required this.on, required this.child});
+/// One row of the chat. A message that just arrived (or was just sent) slides in — the rows above
+/// glide up instead of jumping — and a deleted one folds away before it leaves the list.
+class _Vanish extends StatefulWidget {
+  const _Vanish({super.key, required this.on, required this.child, this.fresh = false});
   final bool on;
+  final bool fresh;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-        tween: Tween(begin: 1, end: on ? 0 : 1),
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeInCubic,
-        child: child,
-        builder: (_, v, c) => v >= 1
-            ? c!
-            : ClipRect(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  heightFactor: v,
-                  child: Opacity(opacity: v, child: Transform.scale(scale: 0.92 + 0.08 * v, child: c)),
-                ),
-              ),
+  State<_Vanish> createState() => _VanishState();
+}
+
+class _VanishState extends State<_Vanish> with SingleTickerProviderStateMixin {
+  final _childKey = GlobalKey(); // the row keeps its state when the animation wrapper comes and goes
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 190),
+    reverseDuration: const Duration(milliseconds: 220),
+    value: widget.fresh && !widget.on ? 0 : (widget.on ? 0 : 1),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.on) _c.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Vanish old) {
+    super.didUpdateWidget(old);
+    if (widget.on != old.on) widget.on ? _c.reverse() : _c.forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _c,
+        child: KeyedSubtree(key: _childKey, child: widget.child),
+        builder: (_, c) {
+          final leaving = _c.status == AnimationStatus.reverse || widget.on;
+          final v = (leaving ? Curves.easeInCubic : Curves.easeOutCubic).transform(_c.value);
+          if (v >= 1) return c!;
+          return ClipRect(
+            child: Align(
+              alignment: leaving ? Alignment.topCenter : Alignment.bottomCenter,
+              heightFactor: v,
+              child: Opacity(opacity: v, child: leaving ? Transform.scale(scale: 0.92 + 0.08 * v, child: c) : c),
+            ),
+          );
+        },
       );
 }

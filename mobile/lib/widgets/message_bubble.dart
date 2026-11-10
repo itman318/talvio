@@ -73,7 +73,19 @@ class MessageBubble extends StatelessWidget {
 
   bool get _asChannel => chat.isChannel && !commentMode;
 
+  /// Clock → one tick → two ticks → read: each step fades and pops in instead of switching abruptly.
   Widget _ticks(BuildContext context) {
+    final w = _tickIcon(context);
+    if (w is! Icon) return w;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      transitionBuilder: (c, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(a), child: c)),
+      child: KeyedSubtree(key: ValueKey('${w.icon?.codePoint}-${w.color?.toARGB32()}'), child: w),
+    );
+  }
+
+  Widget _tickIcon(BuildContext context) {
     final m = message;
     final soft = isMine && softMineOf(context);
     final meta = soft ? const Color(0xFF8A85AD) : isMine ? Colors.white.withAlpha(150) : ChatColors.of(context).meta;
