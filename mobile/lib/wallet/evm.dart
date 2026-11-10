@@ -132,11 +132,13 @@ class EvmCrypto {
 
   // ---- RLP
   static List<int> rlp(Object x) {
+    // bytes first: a List<int> (address, data) is a byte string, not a list of items
+    if (x is List<int>) return x.length == 1 && x[0] < 0x80 ? x : [..._len(x.length, 0x80), ...x];
     if (x is List<Object>) {
       final body = [for (final i in x) ...rlp(i)];
       return [..._len(body.length, 0xc0), ...body];
     }
-    final b = x is BigInt ? _big(x) : x is int ? _big(BigInt.from(x)) : (x as List<int>);
+    final b = x is BigInt ? _big(x) : _big(BigInt.from(x as int));
     if (b.length == 1 && b[0] < 0x80) return b;
     return [..._len(b.length, 0x80), ...b];
   }
