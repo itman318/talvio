@@ -47,6 +47,16 @@ jobs:
           echo "app update: $(curl -s 'http://127.0.0.1:4000/api/app/update?build=1&abi=arm64-v8a' | head -c 300)"
           echo "--- recent upload / sticker requests (status, size)"
           grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
+          echo "--- logout check"
+          echo "auth answers today (path status → count):"
+          grep -hE "/api/auth/" /var/log/nginx/access.log 2>/dev/null | awk '{print $7, $9}' | sed -E 's/\?.*//; s/[0-9]{5,}/N/g' | sort | uniq -c | sort -rn | head -15
+          echo "401/429 anywhere today:"
+          awk '$9==401 || $9==429 {print $7, $9}' /var/log/nginx/access.log 2>/dev/null | sed -E 's/\?.*//; s/[0-9]{3,}/N/g' | sort | uniq -c | sort -rn | head -12
+          echo "nginx limit hits: $(grep -c 'limiting requests' /var/log/nginx/error.log 2>/dev/null)"
+          sudo -u postgres psql -d hushavia -tAc "SELECT 'sessions revoked 2d: '||count(*) FROM sessions WHERE revoked_at > now() - interval '2 days'" 2>&1
+          sudo -u postgres psql -d hushavia -tAc "SELECT 'new sessions 2d: '||count(*) FROM sessions WHERE created_at > now() - interval '2 days'" 2>&1
+          sudo -u postgres psql -d hushavia -tAc "SELECT user_id||' '||to_char(created_at,'MM-DD HH24:MI')||' revoked '||coalesce(to_char(revoked_at,'MM-DD HH24:MI'),'-')||' last '||to_char(last_active_at,'MM-DD HH24:MI') FROM sessions ORDER BY id DESC LIMIT 12" 2>&1
+          journalctl -u hushavia --since "-1d" --no-pager | grep -iE "session|refresh|revok|logout" | tail -10 | cut -c1-200
           echo "--- push log"
           journalctl -u hushavia --since "-1d" --no-pager | grep -iE "push|firebase|fcm|messaging" | tail -15 | cut -c1-300
           echo "firebase pkg: $(cd /opt/hushavia/app && node -p "require('./node_modules/firebase-admin/package.json').version" 2>&1 | tail -1)"
