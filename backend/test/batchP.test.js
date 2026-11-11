@@ -199,6 +199,7 @@ test('BotForge creates and manages bots from a chat', async () => {
 
 test('Plus: prices in the buyer currency, perks enforced', async () => {
   const pay = require('../src/services/payment.service');
+  await settings.update({ plus_usd_only: false });
   const pk = await pay.premiumInfo(B.id); // +92 phone → PKR
   assert.equal(pk.currency, 'PKR');
   assert.match(pk.plans[0].price_text, /^Rs /);

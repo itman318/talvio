@@ -65,6 +65,7 @@ const DEFINITIONS = {
   // ---- Batch D2
   feature_premium: { type: 'boolean', default: true },
   plus_sales_open: { type: 'boolean', default: false },
+  plus_usd_only: { type: 'boolean', default: true },
   premium_upload_mb: { type: 'integer', default: 500, min: 1, max: 2048 },
   payment_manual_enabled: { type: 'boolean', default: true },
   payment_manual_instructions: {

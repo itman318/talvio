@@ -65,6 +65,7 @@ test.before(async () => {
   await db.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await db.query(fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'schema.sql'), 'utf8'));
   settings.clearCache();
+  await settings.update({ plus_usd_only: false }); // the rest of this file tests the local (PKR) gateways
   A = await signup('+923260000001', 'Asad');
   B = await signup('+923260000002', 'Bilal');
   C = await signup('+923260000003', 'Chand');
@@ -368,6 +369,16 @@ test('Plus with USDT from the wallet: unique amount, checked on the network, one
     await db.query('UPDATE payment_orders SET crypto_checked_at = NULL WHERE id = $1', [b6.order.id]);
     await payments.sweep();
     assert.equal((await payments.getOrder(B.id, b6.order.id)).status, 'paid');
+
+    // USD only (the default): one price for everyone, no local gateways
+    await settings.update({ plus_usd_only: true });
+    const world = await payments.premiumInfo(C.id);
+    assert.equal(world.currency, 'USD');
+    assert.deepEqual(world.plans.map((p) => p.price_text), ['$3.99', '$10.49', '$19.99', '$35.99']);
+    assert.deepEqual(world.plans.map((p) => p.save_percent), [0, 12, 16, 25]);
+    assert.deepEqual(world.methods.map((m) => m.id), ['crypto']);
+    await rejects(payments.checkout(C.id, { plan_id: plan3.id, provider: 'manual' }), 'provider_unavailable');
+    await settings.update({ plus_usd_only: false });
 
     // the wallet switched off → no crypto payments
     await settings.update({ feature_wallet: false });

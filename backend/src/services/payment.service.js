@@ -129,6 +129,8 @@ function usdOf(plan) {
 
 /** The buyer's country: phone number first, then what the app sends (X-Country / Accept-Language). */
 async function buyerCurrency(userId, hint = {}) {
+  // one price list for the whole world (Settings → "Prices in USD only")
+  if (await settings.get('plus_usd_only')) return { country: null, currency: 'USD' };
   const u = await db.one('SELECT phone FROM users WHERE id = $1', [userId]);
   const country = money.countryFromPhone(u && u.phone)
     || (/^[A-Za-z]{2}$/.test(String(hint.country || '')) ? String(hint.country).toUpperCase() : null)
