@@ -18,7 +18,9 @@ class WalletStore extends ChangeNotifier {
   WalletStore(this.userId);
   final int userId;
 
-  static const _secure = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
+  // the SAME storage options as the rest of the app (other options make Android move the app's
+  // whole secure storage — that logged people out; see core/secure_repair.dart)
+  static const _secure = FlutterSecureStorage();
   String get _phraseKey => 'wallet_phrase_v1_$userId';
   String get _addrKey => 'wallet_addr_v1_$userId';
   String get _netKey => 'wallet_net_v1_$userId';

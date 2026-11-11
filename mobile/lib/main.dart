@@ -4,6 +4,7 @@ import 'screens/login_activity_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'wallet/watcher.dart';
+import 'core/secure_repair.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -46,6 +47,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   CrashReporter.install();
   try {
+    await SecureRepair.run(); // before anything reads the login token
     await _start();
   } catch (e, st) {
     CrashReporter.report(e, st, context: 'startup');
