@@ -72,6 +72,9 @@ const DEFINITIONS = {
     default: 'Send the amount to our JazzCash / Easypaisa account 03XX-XXXXXXX (Account title: Your Company), then upload the screenshot and transaction ID.',
     max: 1000,
   },
+  // OUR receiving addresses for USDT (public addresses only — never a key or recovery phrase)
+  crypto_pay_bsc_address: { type: 'string', default: '', max: 42, check: (a) => /^0x[0-9a-fA-F]{40}$/.test(a), hint: 'a BNB Smart Chain address (0x… 42 characters)' },
+  crypto_pay_tron_address: { type: 'string', default: '', max: 34, check: (a) => require('./payments/cryptopay').tronHex(a) !== null, hint: 'a TRON address (T… 34 characters)' },
   feature_ads: { type: 'boolean', default: false },
   ads_min_subscribers: { type: 'integer', default: 1000, min: 0, max: 100000000 },
 
@@ -143,6 +146,7 @@ function validateValue(key, value) {
     if (typeof value !== 'string' || value.length > d.max) {
       throw badRequest('invalid_setting', `${key} must be text (max ${d.max} characters)`);
     }
+    if (d.check && value !== '' && !d.check(value)) throw badRequest('invalid_setting', `${key} must be ${d.hint}`);
   }
   if (d.type === 'enum' && !d.values.includes(value)) {
     throw badRequest('invalid_setting', `${key} must be one of: ${d.values.join(', ')}`);

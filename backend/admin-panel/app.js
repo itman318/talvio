@@ -1427,6 +1427,8 @@
     premium_upload_mb: ['Hushavia Plus upload limit (MB)', 'Free users get “Max upload size”.'],
     payment_manual_enabled: ['Accept manual payments', 'User sends money to your account and uploads a screenshot; you approve it under Payments.'],
     payment_manual_instructions: ['Manual payment instructions', 'Shown to the user: account number, title, what to write in the note.'],
+    crypto_pay_bsc_address: ['USDT receiving address — BNB Smart Chain', 'YOUR wallet address (0x…). Members pay Hushavia Plus to it from their in-app wallet; payments are confirmed automatically. Public address only — never type a recovery phrase or key anywhere. Empty = off.'],
+    crypto_pay_tron_address: ['USDT receiving address — TRON', 'YOUR TRON address (T…). Empty = off. Check every character: money sent to a wrong address cannot be returned.'],
     payment_intl_instructions: ['International payment instructions', 'For people outside Pakistan (Wise, Payoneer, PayPal, card link…). Empty = “coming soon”.'],
     feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Hushavia Plus users).'],
     ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
@@ -1438,7 +1440,7 @@
     ['App updates', ['app_update_notes']],
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
-    ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions']],
+    ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions', 'crypto_pay_bsc_address', 'crypto_pay_tron_address']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
@@ -2012,8 +2014,10 @@
       const info = el('div', {},
         el('p', {}, `${o.user.name} · ${rs(o.amount_pkr)} · ${o.months} month(s) · ${o.provider}`),
         o.proof_txn_id ? el('p', {}, `Transaction ID: ${o.proof_txn_id}${o.proof_sender ? ` · from ${o.proof_sender}` : ''}`) : null,
+        o.crypto ? el('p', {}, `${o.crypto.amount_text} on ${o.crypto.network_name} → ${o.crypto.to}`) : null,
+        o.crypto && o.crypto.tx_url ? el('p', {}, el('a', { href: o.crypto.tx_url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the transaction on the explorer'), ' — approve only if it shows the right amount arriving at your address.') : null,
         o.provider_message ? el('p', { class: 'muted' }, o.provider_message) : null,
-        proof, el('div', { class: 'field', style: 'margin-top:10px' }, note));
+        o.crypto ? null : proof, el('div', { class: 'field', style: 'margin-top:10px' }, note));
       openDrawer(el('div', {}, el('h3', {}, `Payment #${o.id}`), info,
         el('div', { class: 'btn-row', style: 'margin-top:12px' },
           el('button', { class: 'btn primary', onclick: async () => { if (await action(() => api('POST', `/payments/${o.id}/approve`, { note: note.value.trim() }), 'Approved — Hushavia Plus is active')) { closeDrawer(); pagePayments(); } } }, 'Approve'),
@@ -2045,20 +2049,22 @@
       const months = el('input', { type: 'number', min: 1, max: 60, value: p ? p.months : 1 });
       const price = el('input', { type: 'number', min: 0, value: p ? p.price_pkr : 299 });
       const active = el('input', { type: 'checkbox', checked: p ? p.is_active : true, id: 'plan-active' });
+      const badge = el('input', { type: 'text', maxlength: 20, value: p && p.badge ? p.badge : '', placeholder: 'e.g. Popular, Best value (optional)' });
       const CURS = ['USD', 'EUR', 'GBP', 'AED', 'SAR', 'INR', 'BDT', 'CAD', 'AUD', 'TRY', 'MYR'];
       const cur = Object.fromEntries(CURS.map((c) => [c, el('input', { type: 'number', min: 0, step: '0.01', value: p && p.prices && p.prices[c] !== undefined ? p.prices[c] : '', placeholder: '—' })]));
       modal(p ? 'Edit plan' : 'New plan', [
         el('div', { class: 'field' }, el('label', {}, 'Name'), name),
         el('div', { class: 'field' }, el('label', {}, 'Months'), months),
         el('div', { class: 'field' }, el('label', {}, 'Price (Rs)'), price),
+        el('div', { class: 'field' }, el('label', {}, 'Badge'), badge),
         el('div', { class: 'field' }, el('label', {}, 'Prices in other countries'),
           el('div', { class: 'cur-grid' }, CURS.map((c) => el('label', { class: 'cur' }, el('span', {}, c), cur[c])))),
-        el('p', { class: 'muted' }, 'People see the price in their own currency (from their phone number or phone settings). Empty = shown in USD.'),
+        el('p', { class: 'muted' }, 'People see the price in their own currency (from their phone number or phone settings). Empty = shown in USD. Paying with USDT from the wallet always uses the USD price.'),
         el('label', { class: 'check', for: 'plan-active' }, active, 'Available to buy'),
       ], 'Save', async () => {
         const prices = {};
         for (const c of CURS) if (cur[c].value !== '') prices[c] = Number(cur[c].value);
-        const body = { name: name.value.trim(), months: Number(months.value), price_pkr: Number(price.value), is_active: active.checked, sort: Number(months.value), prices };
+        const body = { name: name.value.trim(), months: Number(months.value), price_pkr: Number(price.value), is_active: active.checked, sort: Number(months.value), prices, badge: badge.value.trim() };
         const r = await action(() => api(p ? 'PUT' : 'POST', p ? `/plans/${p.id}` : '/plans', body), 'Plan saved');
         if (r) pagePlans();
         return !!r;

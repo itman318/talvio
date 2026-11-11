@@ -1,18 +1,22 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
+import '../core/api_client.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
 import '../theme/brand.dart';
 import '../widgets/mascot.dart';
+import 'wallet_screen.dart' show walletSendForChat;
 
 const premiumColor = Brand.premium;
 
@@ -52,11 +56,128 @@ class _PremiumScreenState extends State<PremiumScreen> {
     } catch (e) {
       if (mounted) showError(context, e);
     }
+    _resumeCrypto();
+  }
+
+  // ---- paying with USDT from the wallet
+  // The transaction id is written to the phone the moment the network accepts it, so a payment
+  // is never lost if the app closes before the server hears about it.
+  String get _pendingKey => 'plus_crypto_pending_${context.read<AuthState>().me?.id ?? 0}';
+
+  Future<void> _savePending(int orderId, String tx) async {
+    final key = _pendingKey;
+    await (await SharedPreferences.getInstance()).setString(key, jsonEncode({'order': orderId, 'tx': tx}));
+  }
+
+  /// Tells the server which transaction paid the order. True when it no longer needs to be retried.
+  Future<bool> _submitTx(int orderId, String tx) async {
+    final api = context.read<AppServices>().api;
+    final key = _pendingKey;
+    try {
+      await api.post('/payments/orders/$orderId/crypto', {'tx': tx});
+    } on ApiException catch (e) {
+      if (e.isNetwork || e.status >= 500 || e.status == 429) return false; // try again later
+    } catch (_) {
+      return false;
+    }
+    (await SharedPreferences.getInstance()).remove(key);
+    return true;
+  }
+
+  Future<void> _resumeCrypto() async {
+    try {
+      final key = _pendingKey;
+      final raw = (await SharedPreferences.getInstance()).getString(key);
+      if (raw == null || !mounted) return;
+      final j = jsonDecode(raw) as Map;
+      final orderId = (j['order'] as num).toInt();
+      if (!await _submitTx(orderId, '${j['tx']}') || !mounted) return;
+      await _waitFor(orderId, crypto: true);
+    } catch (_) {}
+  }
+
+  Future<void> _waitFor(int orderId, {bool crypto = false}) async {
+    final paid = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => _WaitForPayment(orderId: orderId, crypto: crypto));
+    if (paid == true && mounted) {
+      await context.read<AuthState>().refreshMe();
+      if (mounted) showInfo(context, 'Hushavia Plus is active ⭐');
+      _load();
+    }
+  }
+
+  Future<void> _payCrypto(int planId) async {
+    final nets = [for (final n in (_info?['crypto_networks'] as List? ?? const [])) Map<String, dynamic>.from(n as Map)];
+    if (nets.isEmpty) return;
+    final net = nets.length == 1
+        ? nets.first
+        : await showModalBottomSheet<Map<String, dynamic>>(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 4, 20, 2),
+                  child: Align(alignment: Alignment.centerLeft, child: Text('Pay with USDT on…', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Align(alignment: Alignment.centerLeft, child: Text('Choose the network where your USDT is.', style: TextStyle(color: Brand.muted))),
+                ),
+                for (final n in nets)
+                  ListTile(
+                    leading: const CircleAvatar(backgroundColor: Color(0xFF26A17B), child: Text('₮', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900))),
+                    title: Text('${n['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('${n['fee_hint'] ?? ''}'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.pop(ctx, n),
+                  ),
+                const SizedBox(height: 8),
+              ]),
+            ),
+          );
+    if (net == null || !mounted) return;
+    setState(() => _busy = true);
+    final api = context.read<AppServices>().api;
+    try {
+      final r = Map<String, dynamic>.from(await api.post('/payments/checkout', {'plan_id': planId, 'provider': 'crypto', 'network': net['id']}) as Map);
+      final orderId = ((r['order'] as Map)['id'] as num).toInt();
+      final c = Map<String, dynamic>.from(r['crypto'] as Map);
+      if (!mounted) return;
+      String? sent;
+      final card = await walletSendForChat(
+        context,
+        peerName: '${AppConfig.appName} Plus',
+        locked: true,
+        request: {'network': c['network'], 'symbol': c['symbol'], 'amount': c['amount'], 'decimals': c['decimals'], 'to': c['to'], 'contract': c['contract']},
+        onSent: (tx) async {
+          sent = tx;
+          await _savePending(orderId, tx);
+        },
+      );
+      final tx = sent ?? (card == null ? null : '${card['tx']}');
+      if (tx == null) {
+        // nothing was sent: drop the order
+        try {
+          await api.post('/payments/orders/$orderId/cancel', {});
+        } catch (_) {}
+        return;
+      }
+      if (!mounted) return;
+      if (!await _submitTx(orderId, tx)) {
+        if (mounted) showInfo(context, 'Your payment was sent. We’ll confirm it as soon as you’re back online — open this page again.');
+        return;
+      }
+      if (mounted) await _waitFor(orderId, crypto: true);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _pay(String provider) async {
     final planId = _planId;
     if (planId == null) return;
+    if (provider == 'crypto') return _payCrypto(planId);
     setState(() => _busy = true);
     final services = context.read<AppServices>();
     try {
@@ -110,6 +231,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
   /// "Save 25%" on longer plans, compared with the 1-month price.
   int? _saving(List plans, Map<String, dynamic> plan) {
+    if (plan['save_percent'] is num) return (plan['save_percent'] as num) >= 5 ? (plan['save_percent'] as num).toInt() : null;
     Map? monthly;
     for (final p in plans) {
       if ((p as Map)['months'] == 1) monthly = p;
@@ -214,6 +336,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 final id = (plan['id'] as num).toInt();
                 final selected = id == _planId;
                 final save = _saving(info['plans'] as List, plan);
+                final badge = plan['badge'] == null || '${plan['badge']}'.isEmpty ? null : '${plan['badge']}';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: InkWell(
@@ -223,7 +346,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
                       decoration: BoxDecoration(
-                        color: dark ? const Color(0xFF1A1E33) : Colors.white,
+                        color: selected ? premiumColor.withValues(alpha: dark ? 0.16 : 0.07) : (dark ? const Color(0xFF1A1E33) : Colors.white),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: selected ? premiumColor : (dark ? Colors.white12 : const Color(0xFFE3E6EF)), width: selected ? 2 : 1),
                       ),
@@ -232,6 +355,16 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            if (badge != null)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 5),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [Color(0xFFFFB347), Color(0xFF8F72FF)]),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(badge.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.6)),
+                              ),
                             Row(children: [
                               Text('${plan['name']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                               if (save != null) ...[
@@ -269,13 +402,19 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 const Padding(padding: EdgeInsets.only(bottom: 10), child: Text('Payments are not available right now.', textAlign: TextAlign.center)),
               ...(info['methods'] as List).map((m) {
                 final method = Map<String, dynamic>.from(m as Map);
+                final isCrypto = method['id'] == 'crypto';
+                Map? chosen;
+                for (final p in info['plans'] as List) {
+                  if ((p as Map)['id'] == _planId) chosen = p;
+                }
+                if (isCrypto && chosen?['usdt'] == null) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(backgroundColor: premiumColor, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     onPressed: _busy || _planId == null ? null : () => _pay('${method['id']}'),
-                    icon: const Icon(Icons.lock_rounded, size: 18),
-                    label: Text('Pay with ${method['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    icon: Icon(isCrypto ? Icons.account_balance_wallet_rounded : Icons.lock_rounded, size: 18),
+                    label: Text(isCrypto ? 'Pay ${chosen!['usdt']} USDT from your wallet' : 'Pay with ${method['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                   ),
                 );
               }),
@@ -306,8 +445,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
 /// Waits for the gateway result (socket event, or polling as a fallback).
 class _WaitForPayment extends StatefulWidget {
-  const _WaitForPayment({required this.orderId});
+  const _WaitForPayment({required this.orderId, this.crypto = false});
   final int orderId;
+  final bool crypto; // paid from the wallet: waiting for the network, not for a browser page
 
   @override
   State<_WaitForPayment> createState() => _WaitForPaymentState();
@@ -348,7 +488,7 @@ class _WaitForPaymentState extends State<_WaitForPayment> {
   Widget build(BuildContext context) {
     final failed = ['failed', 'cancelled', 'rejected'].contains(_status);
     return AlertDialog(
-      title: Text(failed ? 'Payment not completed' : _status == 'review' ? 'Confirming…' : 'Waiting for payment'),
+      title: Text(failed ? 'Payment not completed' : _status == 'review' || widget.crypto ? 'Confirming…' : 'Waiting for payment'),
       content: Row(children: [
         if (!failed) const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
         if (!failed) const SizedBox(width: 16),
@@ -357,7 +497,9 @@ class _WaitForPaymentState extends State<_WaitForPayment> {
               ? 'The payment did not go through. You can try again.'
               : _status == 'review'
                   ? 'We received your payment details and are confirming them. Hushavia Plus will start shortly.'
-                  : 'Finish the payment in your browser, then come back here.'),
+                  : widget.crypto
+                      ? 'Your payment was sent. The network is confirming it — usually about a minute. You can close this: Hushavia Plus starts by itself.'
+                      : 'Finish the payment in your browser, then come back here.'),
         ),
       ]),
       actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(failed || _status == 'review' ? 'OK' : 'Close'))],

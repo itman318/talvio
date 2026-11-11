@@ -82,7 +82,9 @@ test.after(async () => {
 test('premium info, manual payment with screenshot → admin approves → perks unlocked', async () => {
   const info = await payments.premiumInfo(A.id);
   assert.equal(info.is_premium, false);
-  assert.deepEqual(info.plans.map((p) => p.price_pkr), [299, 2999]);
+  assert.deepEqual(info.plans.map((p) => [p.months, p.price_pkr]), [[1, 299], [3, 799], [6, 1499], [12, 2699]]);
+  assert.deepEqual(info.plans.map((p) => p.save_percent), [0, 11, 16, 25]);
+  assert.deepEqual(info.plans.map((p) => p.badge), [null, 'Popular', null, 'Best value']);
   assert.deepEqual(info.methods.map((m) => m.id), ['manual'], 'gateways hidden until configured');
   plan1 = info.plans[0];
 
@@ -251,4 +253,128 @@ test('sponsored messages: big public channels only, never for Premium, unique da
   assert.ok(rev.by_provider.some((p) => p.provider === 'jazzcash' && p.amount_pkr === 299));
   assert.ok(rev.premium_users >= 2);
   await settings.update({ feature_ads: false });
+});
+
+test('Plus with USDT from the wallet: unique amount, checked on the network, one transaction pays one order', async () => {
+  const cryptopay = require('../src/services/payments/cryptopay');
+  const BSC = `0x${'1a'.repeat(20)}`;
+  const TRON = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH';
+  assert.equal(cryptopay.tronHex(cryptopay.NETWORKS.tron.contract), 'a614f803b6fd780986a42c78ec9c7f77e6ded13c', 'the real USDT contract');
+  assert.ok(!(await payments.premiumInfo(C.id)).methods.some((m) => m.id === 'crypto'), 'hidden until our address is set');
+  await rejects(settings.update({ crypto_pay_bsc_address: '0x123' }), 'invalid_setting');
+  await rejects(settings.update({ crypto_pay_tron_address: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdJ' }), 'invalid_setting');
+  await settings.update({ crypto_pay_bsc_address: BSC, crypto_pay_tron_address: TRON });
+  const info = await payments.premiumInfo(C.id);
+  assert.equal(info.methods[0].id, 'crypto');
+  assert.deepEqual(info.crypto_networks.map((n) => n.id), ['bsc', 'tron']);
+  assert.ok(!JSON.stringify(info.crypto_networks).includes(BSC.slice(4)), 'the address is given only with an order');
+  const plan3 = info.plans.find((p) => p.months === 3);
+  assert.equal(plan3.usdt, 10.49);
+
+  // a pretend network
+  const pad = (h) => String(h).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+  const chain = {};
+  const tron = {};
+  let head = 1000;
+  let blockTime = Date.now();
+  cryptopay.setTransport(async (url, body) => {
+    if (url.includes('walletsolidity')) return tron[body.value] || {};
+    if (body.method === 'eth_blockNumber') return { result: `0x${head.toString(16)}` };
+    if (body.method === 'eth_getTransactionReceipt') return { result: chain[body.params[0]] || null };
+    if (body.method === 'eth_getBlockByNumber') return { result: { timestamp: `0x${Math.floor(blockTime / 1000).toString(16)}` } };
+    throw new Error(`unexpected call ${url}`);
+  });
+  const usdt = cryptopay.NETWORKS.bsc.contract;
+  const receipt = (tx, { contract = usdt, to = BSC, amount, status = '0x1', block = 900 }) => ({
+    transactionHash: tx, blockNumber: `0x${block.toString(16)}`, status,
+    logs: [{ address: contract, topics: [`0x${cryptopay.TRANSFER}`, `0x${pad('22'.repeat(20))}`, `0x${pad(to)}`], data: `0x${pad(BigInt(amount).toString(16))}` }],
+  });
+  const txid = (n) => `0x${String(n).repeat(64).slice(0, 64)}`;
+
+  try {
+    await rejects(payments.checkout(C.id, { plan_id: plan3.id, provider: 'crypto', network: 'eth' }), 'provider_unavailable');
+    const co = await payments.checkout(C.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    assert.equal(co.crypto.to, BSC);
+    assert.equal(co.crypto.contract, usdt);
+    const amount = BigInt(co.crypto.amount);
+    assert.ok(amount > 10490000n * 10n ** 12n && amount < 10500000n * 10n ** 12n, 'price plus a fraction of a cent');
+    assert.match(co.crypto.amount_text, /^10\.49\d{4} USDT$/);
+
+    await rejects(payments.submitCryptoTx(C.id, co.order.id, { tx: 'hello' }), 'invalid_input');
+    await rejects(payments.submitCryptoTx(B.id, co.order.id, { tx: txid(1) }), 'order_not_found');
+    // not on the network yet
+    assert.equal((await payments.submitCryptoTx(C.id, co.order.id, { tx: txid(1).toUpperCase().replace('0X', '0x') })).status, 'pending');
+    // there, but not final yet
+    chain[txid(1)] = receipt(txid(1), { amount, block: 995 });
+    assert.equal(await payments.verifyCrypto(co.order.id), 'pending');
+    assert.equal((await users.getMe(C.id)).is_premium, false);
+    head = 1100;
+    assert.equal(await payments.verifyCrypto(co.order.id), 'paid');
+    assert.ok(new Date((await users.getMe(C.id)).premium_until) > new Date(Date.now() + 85 * 86400e3), '3 months added');
+    const paid = await payments.getOrder(C.id, co.order.id);
+    assert.equal(paid.status, 'paid');
+    assert.match(paid.crypto.tx_url, /bscscan\.com\/tx\/0x1111/);
+    assert.equal(await payments.verifyCrypto(co.order.id), null, 'never paid twice');
+
+    // somebody else can't use the same transaction
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+    const b1 = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    assert.notEqual(b1.crypto.amount, co.crypto.amount);
+    await rejects(payments.submitCryptoTx(B.id, b1.order.id, { tx: txid(1) }), 'tx_used');
+    // a look-alike token is not USDT
+    chain[txid(2)] = receipt(txid(2), { amount: b1.crypto.amount, contract: `0x${'99'.repeat(20)}` });
+    assert.equal((await payments.submitCryptoTx(B.id, b1.order.id, { tx: txid(2) })).status, 'review');
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+    // a different amount
+    const b2 = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    chain[txid(3)] = receipt(txid(3), { amount: 10490000n * 10n ** 12n });
+    const r2 = await payments.submitCryptoTx(B.id, b2.order.id, { tx: txid(3) });
+    assert.equal(r2.status, 'review');
+    assert.match(r2.provider_message, /different amount/);
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+    // sent to somebody else
+    const b3 = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    chain[txid(4)] = receipt(txid(4), { amount: b3.crypto.amount, to: `0x${'77'.repeat(20)}` });
+    assert.equal((await payments.submitCryptoTx(B.id, b3.order.id, { tx: txid(4) })).status, 'review');
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+    // a failed transaction
+    const b4 = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    chain[txid(5)] = receipt(txid(5), { amount: b4.crypto.amount, status: '0x0' });
+    assert.equal((await payments.submitCryptoTx(B.id, b4.order.id, { tx: txid(5) })).status, 'failed');
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+
+    // an old payment can't pay a new order
+    const b5 = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    blockTime = Date.now() - 3600e3;
+    chain[txid(6)] = receipt(txid(6), { amount: b5.crypto.amount });
+    assert.equal((await payments.submitCryptoTx(B.id, b5.order.id, { tx: txid(6) })).status, 'review');
+    blockTime = Date.now();
+
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+    // a new order replaces an unpaid one; an expired order that WAS paid still counts
+    const b6 = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'tron' });
+    assert.equal(b6.crypto.decimals, 6);
+    assert.ok(BigInt(b6.crypto.amount) > 10490000n && BigInt(b6.crypto.amount) < 10500000n);
+    await db.query(`UPDATE payment_orders SET created_at = now() - interval '3 hours' WHERE id = $1`, [b6.order.id]);
+    await payments.sweep();
+    assert.equal((await payments.getOrder(B.id, b6.order.id)).status, 'cancelled');
+    await db.query(`UPDATE payment_orders SET created_at = now() WHERE id = $1`, [b6.order.id]);
+    const t = 'ab'.repeat(32);
+    assert.equal((await payments.submitCryptoTx(B.id, b6.order.id, { tx: t })).status, 'pending');
+    tron[t] = {
+      id: t, blockNumber: 5, blockTimeStamp: Date.now(), receipt: { result: 'SUCCESS' },
+      log: [{ address: 'a614f803b6fd780986a42c78ec9c7f77e6ded13c', topics: [cryptopay.TRANSFER, pad('33'.repeat(20)), pad(cryptopay.tronHex(TRON))], data: pad(BigInt(b6.crypto.amount).toString(16)) }],
+    };
+    await db.query('UPDATE payment_orders SET crypto_checked_at = NULL WHERE id = $1', [b6.order.id]);
+    await payments.sweep();
+    assert.equal((await payments.getOrder(B.id, b6.order.id)).status, 'paid');
+
+    // the wallet switched off → no crypto payments
+    await settings.update({ feature_wallet: false });
+    assert.ok(!(await payments.premiumInfo(C.id)).methods.some((m) => m.id === 'crypto'));
+    await rejects(payments.checkout(C.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' }), 'provider_unavailable');
+  } finally {
+    cryptopay.setTransport(null);
+    await settings.update({ feature_wallet: true, crypto_pay_bsc_address: '', crypto_pay_tron_address: '' });
+  }
 });

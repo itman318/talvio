@@ -256,6 +256,7 @@ router.post('/payments/checkout', h(async (req, res) => res.json(await paymentSe
 router.get('/payments/orders', h(async (req, res) => res.json(await paymentService.listMyOrders(req.userId))));
 router.get('/payments/orders/:id', h(async (req, res) => res.json(await paymentService.getOrder(req.userId, req.params.id))));
 router.post('/payments/orders/:id/cancel', h(async (req, res) => res.json(await paymentService.cancelOrder(req.userId, req.params.id))));
+router.post('/payments/orders/:id/crypto', h(async (req, res) => res.json(await paymentService.submitCryptoTx(req.userId, req.params.id, req.body))));
 router.post('/payments/orders/:id/proof', h(async (req, res) => res.json(await paymentService.submitProof(req.userId, req.params.id, req.body))));
 
 // ---- sponsored messages

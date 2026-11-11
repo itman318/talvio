@@ -1780,7 +1780,11 @@ class _AddTokenScreenState extends State<_AddTokenScreen> {
 
 // ======================================================================== send
 class _SendScreen extends StatefulWidget {
-  const _SendScreen({required this.asset, required this.feeAsset, this.to, this.amount, this.forChat = false, this.toName});
+  const _SendScreen({required this.asset, required this.feeAsset, this.to, this.amount, this.forChat = false, this.toName, this.locked = false, this.onSent});
+  /// A bill (e.g. Hushavia Plus): the address and the amount are fixed.
+  final bool locked;
+  /// Called with the transaction id the moment the network accepts it (before any screen changes).
+  final Future<void> Function(String tx)? onSent;
   final WalletAsset asset;
   final WalletAsset feeAsset; // the network's own coin (pays the fee)
   final String? to;
@@ -1972,6 +1976,9 @@ class _SendScreenState extends State<_SendScreen> {
           id: id, token: a.symbol, from: w.evmAddress!, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
         ));
       }
+      try {
+        await widget.onSent?.call(id);
+      } catch (_) {}
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       final url = a.isTron ? '${w.net.explorer}$id' : a.isSol ? '${Sol.explorer}/tx/$id' : (a.isUtxo ? a.utxo!.txUrl(id) : '${a.evm!.explorer}/tx/$id');
@@ -2019,8 +2026,12 @@ class _SendScreenState extends State<_SendScreen> {
             subtitle: Text('on ${a.networkName}'),
           ),
           const SizedBox(height: 6),
+          if (widget.locked)
+            _Note(icon: Icons.lock_rounded, text: 'Payment to ${widget.toName ?? 'Hushavia'}. The address and the amount are set for this order — you only confirm.'),
+          if (widget.locked) const SizedBox(height: 10),
           TextField(
             controller: _to,
+            readOnly: widget.locked,
             autocorrect: false,
             enableSuggestions: false,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
@@ -2029,7 +2040,7 @@ class _SendScreenState extends State<_SendScreen> {
               errorText: _toError,
               errorMaxLines: 2,
               helperText: AddressBook.nameFor(_book, _to.text.trim()),
-              suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+              suffixIcon: widget.locked ? null : Row(mainAxisSize: MainAxisSize.min, children: [
                 IconButton(
                   tooltip: 'Address book',
                   icon: const Icon(Icons.contacts_rounded),
@@ -2092,7 +2103,7 @@ class _SendScreenState extends State<_SendScreen> {
               ]),
             ),
           ),
-          if (_to.text.trim().isEmpty && _recent.isNotEmpty) ...[
+          if (!widget.locked && _to.text.trim().isEmpty && _recent.isNotEmpty) ...[
             const SizedBox(height: 8),
             SizedBox(
               height: 36,
@@ -2112,6 +2123,7 @@ class _SendScreenState extends State<_SendScreen> {
           const SizedBox(height: 14),
           TextField(
             controller: _amount,
+            readOnly: widget.locked,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
@@ -2127,6 +2139,7 @@ class _SendScreenState extends State<_SendScreen> {
             Expanded(child: Text('Available: ${Units.format(_have, decimals: a.decimals, maxFraction: 6)} ${a.symbol}', style: const TextStyle(color: Brand.muted))),
           ]),
           const SizedBox(height: 6),
+          if (!widget.locked)
           Row(children: [
             for (final pc in const [25, 50, 75, 100]) ...[
               Expanded(
@@ -2610,10 +2623,18 @@ Future<(WalletStore, List<WalletAsset>)?> _walletForChat(BuildContext context) a
 /// "Send crypto" from a chat. Returns the card to post (kind: sent) or null.
 /// [peerUserId]: the other person in a private chat (their shared address is filled in);
 /// [request]: a payment request card being paid.
-Future<Map<String, dynamic>?> walletSendForChat(BuildContext context, {int? peerUserId, String? peerName, Map<String, dynamic>? request}) async {
+///
+/// Also used to pay a bill ([locked]: the address and amount can't be changed; [onSent] gets the
+/// transaction id as soon as the network accepts it).
+Future<Map<String, dynamic>?> walletSendForChat(BuildContext context,
+    {int? peerUserId, String? peerName, Map<String, dynamic>? request, bool locked = false, Future<void> Function(String tx)? onSent}) async {
   final got = await _walletForChat(context);
   if (got == null || !context.mounted) return null;
   final (w, assets) = got;
+  if (locked && request?['network'] == 'tron' && w.net.isTest) {
+    showInfo(context, 'Your wallet is on the TRON test network. Switch it off in the wallet menu first.');
+    return null;
+  }
   WalletAsset? asset;
   String? to;
   BigInt? amount;
@@ -2628,6 +2649,10 @@ Future<Map<String, dynamic>?> walletSendForChat(BuildContext context, {int? peer
     }
     to = '${request['to']}';
     amount = BigInt.tryParse('${request['amount']}');
+    if (locked && (amount == null || (asset.balance ?? BigInt.zero) < amount)) {
+      showInfo(context, 'Not enough ${asset.symbol} on ${asset.networkName} in your wallet. Add some (Wallet → Receive) and try again.');
+      return null;
+    }
   } else {
     Map<String, dynamic> shared = const {};
     if (peerUserId != null) {
@@ -2655,7 +2680,7 @@ Future<Map<String, dynamic>?> walletSendForChat(BuildContext context, {int? peer
     MaterialPageRoute(
       builder: (_) => ChangeNotifierProvider.value(
         value: w,
-        child: _SendScreen(asset: asset!, feeAsset: feeAsset, to: to, amount: amount, forChat: true, toName: peerName),
+        child: _SendScreen(asset: asset!, feeAsset: feeAsset, to: to, amount: amount, forChat: true, toName: peerName, locked: locked, onSent: onSent),
       ),
     ),
   );

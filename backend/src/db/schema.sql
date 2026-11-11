@@ -1254,3 +1254,34 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_btc VARCHAR(90);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_ltc VARCHAR(90);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_doge VARCHAR(40);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_sol VARCHAR(48);
+
+-- ------------------------------------------------------------------ Plus packages (1 / 3 / 6 / 12 months) + paying from the in-app wallet
+ALTER TABLE premium_plans ADD COLUMN IF NOT EXISTS badge VARCHAR(20);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM hushavia_migrations WHERE name = 'plus_packages_v1') THEN RETURN; END IF;
+  INSERT INTO premium_plans (name, months, price_pkr, sort, badge, prices)
+    SELECT '3 months', 3, 799, 3, 'Popular',
+      '{"USD": 10.49, "EUR": 9.99, "GBP": 8.69, "AED": 38.99, "SAR": 39.99, "INR": 659, "BDT": 1049, "CAD": 14.49, "AUD": 15.79, "TRY": 339, "MYR": 46.9}'::jsonb
+    WHERE NOT EXISTS (SELECT 1 FROM premium_plans WHERE months = 3);
+  INSERT INTO premium_plans (name, months, price_pkr, sort, prices)
+    SELECT '6 months', 6, 1499, 6,
+      '{"USD": 19.99, "EUR": 18.99, "GBP": 16.49, "AED": 74.99, "SAR": 74.99, "INR": 1249, "BDT": 1999, "CAD": 27.49, "AUD": 29.99, "TRY": 645, "MYR": 89.9}'::jsonb
+    WHERE NOT EXISTS (SELECT 1 FROM premium_plans WHERE months = 6);
+  -- the yearly plan must be the best deal: Rs 2,999 was the same per month as 6 months
+  UPDATE premium_plans SET price_pkr = 2699 WHERE months = 12 AND price_pkr = 2999;
+  UPDATE premium_plans SET badge = 'Best value' WHERE months = 12 AND badge IS NULL;
+  UPDATE premium_plans SET sort = months WHERE sort IN (1, 2) AND months IN (1, 12);
+  INSERT INTO hushavia_migrations (name) VALUES ('plus_packages_v1');
+END $$;
+
+-- paying with USDT straight from the person's own wallet; the server only ever sees public data
+ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_check;
+ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto'));
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_network VARCHAR(12);
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_to VARCHAR(64);
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_amount NUMERIC(40, 0);
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_tx VARCHAR(80);
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_checked_at TIMESTAMPTZ;
+-- one network transaction can pay for one order only
+CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_crypto_tx_idx ON payment_orders (crypto_network, crypto_tx) WHERE crypto_tx IS NOT NULL;

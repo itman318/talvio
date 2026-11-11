@@ -8,6 +8,7 @@
  *   easypaisa — hosted page (needs EASYPAISA_* env)       → activation after the Inquire API says PAID
  *   manual    — user sends money to your account and uploads a screenshot + transaction ID → admin approves
  *   admin     — premium given by an admin (no money)
+ *   crypto    — USDT sent from the person's own in-app wallet → checked on the public network, then instant
  */
 const crypto = require('crypto');
 const config = require('../config');
@@ -16,6 +17,7 @@ const bus = require('../bus');
 const settings = require('./settings.service');
 const jazzcash = require('./payments/jazzcash');
 const easypaisa = require('./payments/easypaisa');
+const cryptopay = require('./payments/cryptopay');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
@@ -96,7 +98,33 @@ function serializePlan(p, currency = 'PKR') {
     out.per_month_text = money.format(Math.round((local / p.months) * 100) / 100, cur);
   }
   out.prices = p.prices || {};
+  out.badge = p.badge || null;
   return out;
+}
+
+/** "Save 25%": how much cheaper per month each plan is than the shortest one. */
+function withSavings(plans) {
+  const priced = plans.filter((p) => Number.isFinite(p.price) && p.price > 0);
+  const base = priced.slice().sort((a, b) => a.months - b.months)[0];
+  for (const p of plans) {
+    const save = base && Number.isFinite(p.price) && p.months > base.months ? Math.round((1 - p.price / p.months / (base.price / base.months)) * 100) : 0;
+    p.save_percent = save > 0 ? save : 0;
+  }
+  return plans;
+}
+
+/** Networks on which we can be paid in USDT right now (our receiving address is set and valid). */
+function cryptoNetworks(s) {
+  if (!s.feature_wallet) return [];
+  return Object.values(cryptopay.NETWORKS)
+    .map((n) => ({ n, to: String(s[n.setting] || '').trim() }))
+    .filter((x) => x.n.valid(x.to))
+    .map((x) => ({ id: x.n.id, name: x.n.name, symbol: x.n.symbol, fee_hint: x.n.fee_hint, to: x.to }));
+}
+
+function usdOf(plan) {
+  const n = Number((plan.prices || {}).USD);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** The buyer's country: phone number first, then what the app sends (X-Country / Accept-Language). */
@@ -127,16 +155,21 @@ async function premiumInfo(userId, hint = {}) {
   if (local && s.payment_manual_enabled) methods.push({ id: 'manual', name: 'Bank / wallet transfer (manual)' });
   const intl = String(s.payment_intl_instructions || '').trim();
   if (!local && intl) methods.push({ id: 'manual', name: 'International transfer (Wise, card, PayPal…)' });
+  // USDT from the in-app wallet works in every country
+  const nets = cryptoNetworks(s).map(({ to, ...n }) => n); // eslint-disable-line no-unused-vars
+  const cryptoOk = nets.length > 0 && plans.some((p) => usdOf(p));
+  if (cryptoOk) methods.unshift({ id: 'crypto', name: 'your wallet (USDT)' });
   return {
     is_premium: isPremiumRow(u),
     premium_until: iso(u && u.premium_until),
     country,
     currency,
-    plans: plans.map((p) => serializePlan(p, currency)),
+    plans: withSavings(plans.map((p) => ({ ...serializePlan(p, currency), usdt: cryptoOk ? usdOf(p) : null }))),
     perks: await perks(),
     methods,
+    crypto_networks: cryptoOk ? nets : [],
     manual_instructions: local ? (s.payment_manual_enabled ? s.payment_manual_instructions : null) : intl || null,
-    payments_note: !local && !intl ? 'Payments from your country are coming soon. Prices are shown in your currency.' : null,
+    payments_note: !local && !intl && !cryptoOk ? 'Payments from your country are coming soon. Prices are shown in your currency.' : null,
   };
 }
 
@@ -156,8 +189,29 @@ function serializeOrder(o) {
     provider_message: o.provider_message,
     review_note: o.review_note,
     has_proof: !!o.proof_media_id,
+    crypto: o.provider === 'crypto' ? cryptoOf(o) : undefined,
     created_at: iso(o.created_at),
     paid_at: iso(o.paid_at),
+  };
+}
+
+function cryptoOf(o) {
+  const n = cryptopay.NETWORKS[o.crypto_network];
+  if (!n) return null;
+  const units = BigInt(String(o.crypto_amount || 0).split('.')[0]);
+  const whole = units / 10n ** BigInt(n.decimals);
+  const frac = (units % 10n ** BigInt(n.decimals)).toString().padStart(n.decimals, '0').slice(0, 6);
+  return {
+    network: n.id,
+    network_name: n.name,
+    symbol: n.symbol,
+    decimals: n.decimals,
+    contract: n.contract,
+    to: o.crypto_to,
+    amount: units.toString(), // in the token's smallest unit
+    amount_text: `${whole}.${frac} ${n.symbol}`,
+    tx: o.crypto_tx || null,
+    tx_url: o.crypto_tx ? `${n.explorer}${o.crypto_tx}` : null,
   };
 }
 
@@ -180,7 +234,8 @@ async function checkout(userId, body = {}) {
   if (!(await settings.get('plus_sales_open'))) throw forbidden('coming_soon', 'Hushavia Plus is coming soon');
   const plan = await db.one('SELECT * FROM premium_plans WHERE id = $1 AND is_active', [v.id(body.plan_id, 'plan_id')]);
   if (!plan) throw notFound('plan_not_found', 'This plan is not available');
-  const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual'], 'provider');
+  const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual', 'crypto'], 'provider');
+  if (provider === 'crypto') return checkoutCrypto(userId, plan, body);
   const { currency } = await buyerCurrency(userId, { country: body.country, locale: body.locale });
   const local = currency === 'PKR';
   const intl = String((await settings.get('payment_intl_instructions')) || '').trim();
@@ -199,6 +254,85 @@ async function checkout(userId, body = {}) {
   if (provider === 'manual') out.instructions = local ? await settings.get('payment_manual_instructions') : intl;
   else out.pay_url = `${config.publicUrl}/pay/${o.id}?t=${payToken(o.id)}`;
   return out;
+}
+
+/**
+ * USDT from the in-app wallet. Every order asks for a slightly different amount (a fraction of a
+ * cent on top), so a payment on the network can belong to exactly one order.
+ */
+async function checkoutCrypto(userId, plan, body) {
+  const s = await settings.getAll();
+  const net = cryptoNetworks(s).find((n) => n.id === String(body.network || ''));
+  const usd = usdOf(plan);
+  if (!net || !usd) throw forbidden('provider_unavailable', 'Paying with USDT is not available for this plan right now');
+  const n = cryptopay.NETWORKS[net.id];
+  rateLimit.enforce(`checkout:${userId}`, 10, 60 * 60 * 1000, 'Too many payment attempts. Try again later.');
+  // an unpaid earlier attempt is simply replaced
+  await db.query(`UPDATE payment_orders SET status = 'cancelled', provider_message = 'Replaced by a new order' WHERE user_id = $1 AND provider = 'crypto' AND status = 'pending' AND crypto_tx IS NULL`, [userId]);
+  const open = await db.one(`SELECT count(*)::int AS n FROM payment_orders WHERE user_id = $1 AND status IN ('pending', 'review')`, [userId]);
+  if (open.n >= 5) throw forbidden('too_many_orders', 'You have several unfinished payments. Finish or cancel them first.');
+  const cents = BigInt(Math.round(usd * 100));
+  for (let i = 0; i < 20; i += 1) {
+    // price + 0.000001 … 0.009999 USDT
+    const micro = cents * 10000n + BigInt(crypto.randomInt(1, 10000)); // 6 decimals
+    const units = micro * 10n ** BigInt(n.decimals - 6);
+    const o = await db.one(
+      `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, txn_ref, currency, amount, crypto_network, crypto_to, crypto_amount)
+       SELECT $1::bigint, $2::bigint, $3::int, $4::int, 'crypto', $5::varchar, 'USD', $6::numeric, $7::varchar, $8::varchar, $9::numeric
+       WHERE NOT EXISTS (SELECT 1 FROM payment_orders WHERE provider = 'crypto' AND crypto_network = $7::varchar AND crypto_amount = $9::numeric
+                           AND (status IN ('pending', 'review') OR created_at > now() - interval '1 day'))
+       RETURNING *`,
+      [userId, plan.id, plan.months, plan.price_pkr, newTxnRef(), usd, n.id, net.to, units.toString()],
+    );
+    if (o) return { order: serializeOrder(o), crypto: cryptoOf(o) };
+  }
+  throw conflict('busy', 'Many people are paying right now. Try again in a minute.');
+}
+
+/** The app tells us which network transaction paid the order; we check it ourselves. */
+async function submitCryptoTx(userId, idRaw, body = {}) {
+  const o = await myOrder(userId, idRaw);
+  if (o.provider !== 'crypto') throw badRequest('invalid_input', 'This order is not paid with crypto');
+  if (o.status === 'paid') return serializeOrder(o);
+  // a payment must never be lost because the app was closed at the wrong moment
+  // (cancelled / expired orders are accepted too — the network check decides, not the order's state)
+  if (!['pending', 'review', 'cancelled'].includes(o.status)) throw conflict('order_closed', 'This payment is already finished');
+  const tx = cryptopay.normalizeTx(o.crypto_network, body.tx);
+  if (!tx) throw badRequest('invalid_input', 'This is not a transaction ID');
+  if (o.crypto_tx && o.crypto_tx !== tx && o.status === 'review') throw conflict('order_closed', 'This payment is already being checked');
+  rateLimit.enforce(`cryptotx:${userId}`, 20, 60 * 60 * 1000, 'Too many attempts. Try again later.');
+  try {
+    await db.query(`UPDATE payment_orders SET crypto_tx = $2, status = 'pending', provider_message = 'Confirming on the network', crypto_checked_at = NULL WHERE id = $1`, [o.id, tx]);
+  } catch (e) {
+    if (e && e.code === '23505') throw conflict('tx_used', 'This transaction was already used for another order');
+    throw e;
+  }
+  await verifyCrypto(o.id).catch(() => {});
+  return serializeOrder(await myOrder(userId, o.id));
+}
+
+/** One look at the network for an order with a submitted transaction. */
+async function verifyCrypto(orderId) {
+  const o = await db.one(`SELECT * FROM payment_orders WHERE id = $1 AND provider = 'crypto' AND status = 'pending' AND crypto_tx IS NOT NULL`, [orderId]);
+  if (!o) return null;
+  await db.query('UPDATE payment_orders SET crypto_checked_at = now() WHERE id = $1', [o.id]);
+  const r = await cryptopay.check({
+    network: o.crypto_network,
+    tx: o.crypto_tx,
+    to: o.crypto_to,
+    amount: BigInt(String(o.crypto_amount).split('.')[0]),
+    after: new Date(o.created_at).getTime(),
+  });
+  if (r.state === 'paid') {
+    await markPaid(o.id, { providerRef: o.crypto_tx, message: 'Confirmed on the network', raw: { from: r.from } });
+  } else if (r.state === 'failed') {
+    await markFailed(o.id, { message: r.reason });
+  } else if (r.state === 'mismatch') {
+    // real money may have moved: a person decides (Payments → To review)
+    await db.query(`UPDATE payment_orders SET status = 'review', provider_message = $2 WHERE id = $1 AND status = 'pending'`, [o.id, String(r.reason).slice(0, 300)]);
+    bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: o.id, status: 'review' }, userIds: [o.user_id] });
+  }
+  return r.state;
 }
 
 async function myOrder(userId, idRaw) {
@@ -345,7 +479,30 @@ async function sweep() {
     `UPDATE payment_orders SET status = 'cancelled', provider_message = 'Expired'
      WHERE status = 'pending' AND provider IN ('jazzcash', 'easypaisa') AND created_at < now() - interval '2 hours'`,
   );
+  // crypto orders nobody paid
+  await db.query(
+    `UPDATE payment_orders SET status = 'cancelled', provider_message = 'Expired'
+     WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NULL AND created_at < now() - interval '2 hours'`,
+  );
+  // a transaction that is still not final after 2 hours: a person looks at it
+  await db.query(
+    `UPDATE payment_orders SET status = 'review', provider_message = 'Not confirmed on the network after 2 hours'
+     WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NOT NULL AND created_at < now() - interval '2 hours'`,
+  );
+  if (sweeping) return;
+  sweeping = true;
+  try {
+    const due = await db.many(
+      `SELECT id FROM payment_orders WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NOT NULL
+         AND (crypto_checked_at IS NULL OR crypto_checked_at < now() - interval '20 seconds')
+       ORDER BY crypto_checked_at NULLS FIRST LIMIT 5`,
+    );
+    for (const d of due) await verifyCrypto(d.id).catch(() => {}); // network trouble: the next round tries again
+  } finally {
+    sweeping = false;
+  }
 }
+let sweeping = false;
 
 // ------------------------------------------------------------------ admin
 async function adminListOrders(query = {}) {
@@ -358,7 +515,7 @@ async function adminListOrders(query = {}) {
     where.push(`o.status = $${params.length}`);
   }
   if (query.provider) {
-    params.push(v.oneOf(query.provider, ['jazzcash', 'easypaisa', 'manual', 'admin'], 'provider'));
+    params.push(v.oneOf(query.provider, ['jazzcash', 'easypaisa', 'manual', 'admin', 'crypto'], 'provider'));
     where.push(`o.provider = $${params.length}`);
   }
   if (query.user_id) {
@@ -442,6 +599,7 @@ async function adminSavePlan(idRaw, body = {}) {
   if (!Number.isInteger(price) || price < 0 || price > 10000000) throw badRequest('invalid_input', 'Invalid price');
   const active = body.is_active === undefined ? true : v.bool(body.is_active, 'is_active');
   const sort = parseInt(body.sort, 10) || 0;
+  const badge = body.badge === undefined ? undefined : v.str(body.badge, { field: 'badge', max: 20 }) || null;
   // other currencies: { "USD": 3.99, "EUR": 3.79, … }
   let prices = null;
   if (body.prices !== undefined) {
@@ -455,11 +613,11 @@ async function adminSavePlan(idRaw, body = {}) {
     }
   }
   const r = idRaw
-    ? await db.one('UPDATE premium_plans SET name = $2, months = $3, price_pkr = $4, is_active = $5, sort = $6, prices = COALESCE($7::jsonb, prices) WHERE id = $1 RETURNING *', [
-      v.id(idRaw, 'plan_id'), name, months, price, active, sort, prices ? JSON.stringify(prices) : null,
+    ? await db.one('UPDATE premium_plans SET name = $2, months = $3, price_pkr = $4, is_active = $5, sort = $6, prices = COALESCE($7::jsonb, prices), badge = CASE WHEN $8 THEN $9 ELSE badge END WHERE id = $1 RETURNING *', [
+      v.id(idRaw, 'plan_id'), name, months, price, active, sort, prices ? JSON.stringify(prices) : null, badge !== undefined, badge || null,
     ])
-    : await db.one('INSERT INTO premium_plans (name, months, price_pkr, is_active, sort, prices) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [
-      name, months, price, active, sort, JSON.stringify(prices || {}),
+    : await db.one('INSERT INTO premium_plans (name, months, price_pkr, is_active, sort, prices, badge) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *', [
+      name, months, price, active, sort, JSON.stringify(prices || {}), badge || null,
     ]);
   if (!r) throw notFound('plan_not_found', 'Plan not found');
   return serializePlan(r);
@@ -478,6 +636,8 @@ module.exports = {
   listMyOrders,
   cancelOrder,
   submitProof,
+  submitCryptoTx,
+  verifyCrypto,
   markPaid,
   markFailed,
   gatewayForm,
