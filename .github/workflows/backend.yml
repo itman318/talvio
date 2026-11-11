@@ -38,8 +38,13 @@ jobs:
 
       - name: Install
         run: |
-          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null)
-          npm install --no-audit --no-fund 2>&1 | tail -5
+          # a download that hangs is stopped and tried again (it used to block the whole run)
+          command -v ffmpeg >/dev/null || timeout 240 sudo sh -c 'apt-get update -qq && apt-get install -y -qq ffmpeg >/dev/null' || echo "ffmpeg not installed"
+          for i in 1 2 3; do
+            timeout 200 npm install --no-audit --no-fund 2>&1 | tail -5
+            [ "${PIPESTATUS[0]}" = "0" ] && break
+            echo "npm install: try $i did not finish"; [ "$i" = "3" ] && exit 1
+          done
 
       - name: Syntax check
         run: for f in $(git ls-files 'src/*.js' 'src/**/*.js' 'scripts/*.js' 'web-client/*.js' 'admin-panel/*.js'); do node --check "$f" || exit 1; done
