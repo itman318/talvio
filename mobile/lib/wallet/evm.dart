@@ -305,12 +305,16 @@ class EvmApi {
     }
   }
 
-  Future<EvmPrepared> prepare({required String from, required String to, required BigInt amount, EvmToken? token}) async {
+  /// [have]: the coin balance. Sending all of the network's own coin ("Max") leaves exactly nothing:
+  /// the real fee is worked out first and taken from the amount.
+  Future<EvmPrepared> prepare({required String from, required String to, required BigInt amount, EvmToken? token, BigInt? have}) async {
     if (!EvmCrypto.isValidAddress(to)) throw WalletException('This is not a valid ${chain.name} address');
     final toAddr = TronCrypto.fromHex(to.substring(2));
     final txTo = token == null ? to : token.address;
     final data = token == null ? <int>[] : EvmCrypto.transferData(to, amount);
-    final value = token == null ? amount : BigInt.zero;
+    final sweep = token == null && have != null && amount >= have;
+    // (while sweeping, the size of the transfer is estimated with a small amount: the gas is the same)
+    var value = token == null ? (sweep ? BigInt.one : amount) : BigInt.zero;
     final results = await Future.wait([
       _rpc('eth_getTransactionCount', [from, 'pending']),
       _rpc('eth_gasPrice', const []),
@@ -323,8 +327,16 @@ class EvmApi {
     final gasPrice = _q(results[1]) * BigInt.from(115) ~/ BigInt.from(100);
     var gas = _q(results[2]) * BigInt.from(120) ~/ BigInt.from(100);
     if (token == null && toAddr.length == 20 && gas < BigInt.from(21000)) gas = BigInt.from(21000);
+    var sendAmount = amount;
+    if (sweep) {
+      // Base-style networks charge a small extra "data" fee on top of gas: leave room for it
+      final extra = chain.id == 'base' ? BigInt.from(30000000000000) : BigInt.zero;
+      sendAmount = have - gasPrice * gas - extra;
+      if (sendAmount <= BigInt.zero) throw WalletException('Not enough ${chain.symbol} to pay the network fee');
+      value = sendAmount;
+    }
     final p = EvmPrepared(
-      chain: chain, to: to, amount: amount, symbol: token?.symbol ?? chain.symbol, decimals: token?.decimals ?? 18, token: token,
+      chain: chain, to: to, amount: sendAmount, symbol: token?.symbol ?? chain.symbol, decimals: token?.decimals ?? 18, token: token,
       nonce: nonce, gasPrice: gasPrice, gas: gas, txTo: txTo, value: value, data: data,
     );
     final feeNative = p.fee.toDouble() / 1e18;

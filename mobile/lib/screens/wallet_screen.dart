@@ -49,7 +49,17 @@ class _WalletScreenState extends State<WalletScreen> {
   void initState() {
     super.initState();
     final uid = context.read<AuthState>().me?.id ?? 0;
-    _store = WalletStore(uid)..load();
+    _store = WalletStore(uid);
+    _store!.load().then((_) {
+      if (mounted && _store!.exists && _store!.lockOnOpen) _unlock();
+    });
+  }
+
+  bool _unlocked = false;
+
+  Future<void> _unlock() async {
+    final ok = await WalletStore.confirmOwner(context, 'Open your wallet');
+    if (ok && mounted) setState(() => _unlocked = true);
   }
 
   @override
@@ -77,6 +87,30 @@ class _WalletScreenState extends State<WalletScreen> {
             );
           }
           if (!w.loaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          if (w.exists && w.lockOnOpen && !_unlocked) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Wallet')),
+              body: Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 92,
+                    height: 92,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: Brand.primary.withValues(alpha: 0.12)),
+                    child: const Icon(Icons.lock_rounded, color: Brand.primary, size: 42),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Wallet is locked', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: Brand.primary),
+                    onPressed: _unlock,
+                    icon: const Icon(Icons.fingerprint_rounded),
+                    label: const Text('Unlock'),
+                  ),
+                ]),
+              ),
+            );
+          }
           return w.exists ? const _WalletHome() : const _Welcome();
         },
       ),
@@ -525,7 +559,7 @@ class _WalletHomeState extends State<_WalletHome> {
   void initState() {
     super.initState();
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 30), (_) => _load(quiet: true));
+    _poll = Timer.periodic(const Duration(seconds: 45), (_) => _load(quiet: true));
   }
 
   @override
@@ -640,6 +674,19 @@ class _WalletHomeState extends State<_WalletHome> {
               },
             ),
             _ShareSwitch(store: w),
+            StatefulBuilder(
+              builder: (c2, set2) => SwitchListTile(
+                secondary: const Icon(Icons.lock_rounded),
+                title: const Text('Lock wallet with fingerprint'),
+                subtitle: const Text('Ask every time the wallet is opened'),
+                value: w.lockOnOpen,
+                onChanged: (v) async {
+                  if (!await WalletStore.confirmOwner(context, v ? 'Turn on the wallet lock' : 'Turn off the wallet lock')) return;
+                  await w.setLockOnOpen(v);
+                  set2(() {});
+                },
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.key_rounded),
               title: const Text('Show recovery phrase'),
@@ -783,6 +830,32 @@ class _WalletHomeState extends State<_WalletHome> {
           ),
           if (_error != null)
             Padding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 0), child: Text(_error!, style: const TextStyle(color: _out))),
+          if (_error == null && !_loading && _assets.any((a) => a.balance == null))
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _Note(icon: Icons.cloud_off_rounded, color: Color(0xFFE08A1E), text: 'Some networks didn’t answer just now — their balances show “—”. Pull down to try again; your coins are safe.'),
+            ),
+          if (w.recoveredPhrase != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Material(
+                color: const Color(0xFFE08A1E).withValues(alpha: 0.13),
+                borderRadius: BorderRadius.circular(14),
+                child: ListTile(
+                  leading: const Icon(Icons.history_edu_rounded, color: Color(0xFFE08A1E)),
+                  title: const Text('An earlier wallet was found on this phone', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                  subtitle: const Text('Tap to see its 12 words and write them down — its coins are still there.'),
+                  onTap: () async {
+                    if (!await WalletStore.confirmOwner(context, 'Show the earlier wallet’s recovery phrase') || !mounted) return;
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _PhraseScreen(phrase: w.recoveredPhrase!, showOnly: true))));
+                    if (!mounted) return;
+                    final done = await confirm(context, 'Did you write the words down?',
+                        'If yes, this reminder goes away. The words themselves are then removed from this phone — make sure they are on paper.', ok: 'Yes, remove the reminder');
+                    if (done) await w.forgetRecovered();
+                  },
+                ),
+              ),
+            ),
           _Section('Assets', trailing: TextButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: const _AddTokenScreen()))).then((_) => _load()),
             icon: const Icon(Icons.add_rounded, size: 18),
@@ -1728,6 +1801,16 @@ class _SendScreenState extends State<_SendScreen> {
   List<SavedAddress> _book = const [];
   List<String> _known = const []; // addresses sent to before (from this phone's history)
 
+  /// Saved and recently used addresses of this coin's kind, for one-tap filling.
+  List<String> get _recent {
+    final fam = _familyOfAsset(a);
+    final out = <String>[];
+    for (final x in [..._book.map((b) => b.address), ..._known]) {
+      if (_familyOf(x) == fam && !out.any((o) => o.toLowerCase() == x.toLowerCase())) out.add(x);
+    }
+    return out.take(8).toList();
+  }
+
   WalletAsset get a => widget.asset;
 
   @override
@@ -1787,17 +1870,17 @@ class _SendScreenState extends State<_SendScreen> {
   bool get _ready => _toError == null && _amountError == null && _to.text.trim().isNotEmpty && (_units ?? BigInt.zero) > BigInt.zero;
 
   void _max() {
-    var v = _have;
-    if (a.isNative) {
-      // keep enough of the network's coin for the fee
-      // Bitcoin-family: "all of it" — the fee is taken from the amount when it's sent
-      if (!a.isUtxo && !a.isSol) {
-        final keep = a.isTron ? BigInt.from(1100000) : BigInt.from((a.evm!.maxFeeNative / 10 * 1e18).round());
-        v -= keep;
-      }
-    }
+    _part(100);
+  }
+
+  /// 25 / 50 / 75 / 100 % of what's there. "All of it" of a network's own coin: the real fee is
+  /// worked out on Review and taken from the amount (TRX keeps a little, its fee isn't known before).
+  void _part(int percent) {
+    var v = _have * BigInt.from(percent) ~/ BigInt.from(100);
+    if (percent == 100 && a.isTron && a.isNative) v -= BigInt.from(1100000);
     if (v < BigInt.zero) v = BigInt.zero;
     _amount.text = Units.format(v, decimals: a.decimals, maxFraction: a.decimals).replaceAll(',', '');
+    _amount.selection = TextSelection.collapsed(offset: _amount.text.length);
   }
 
   Future<void> _review() async {
@@ -1818,8 +1901,9 @@ class _SendScreenState extends State<_SendScreen> {
         final p = await UtxoApi(a.utxo!).prepare(from: w.utxoAddr[a.network]!, to: to, amount: amount, sweep: amount >= _have);
         q = _Quote(fee: p.fee, feeDecimals: 8, utxo: p, amount: p.amount);
       } else {
-        final p = await EvmApi(a.evm!).prepare(from: w.evmAddress!, to: EvmCrypto.checksum(to.substring(2)), amount: amount, token: a.evmToken);
-        q = _Quote(fee: p.fee, feeDecimals: 18, evm: p);
+        final p = await EvmApi(a.evm!)
+            .prepare(from: w.evmAddress!, to: EvmCrypto.checksum(to.substring(2)), amount: amount, token: a.evmToken, have: a.isNative ? _have : null);
+        q = _Quote(fee: p.fee, feeDecimals: 18, evm: p, amount: p.amount);
       }
     } catch (e) {
       if (mounted) {
@@ -1885,7 +1969,7 @@ class _SendScreenState extends State<_SendScreen> {
           key.fillRange(0, key.length, 0);
         }
         await SentLog(w.userId).add(WalletTx(
-          id: id, token: a.symbol, from: w.evmAddress!, to: to, amount: amount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
+          id: id, token: a.symbol, from: w.evmAddress!, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
         ));
       }
       if (!mounted) return;
@@ -2008,6 +2092,23 @@ class _SendScreenState extends State<_SendScreen> {
               ]),
             ),
           ),
+          if (_to.text.trim().isEmpty && _recent.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView(scrollDirection: Axis.horizontal, children: [
+                for (final r in _recent)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ActionChip(
+                      avatar: Icon(AddressBook.nameFor(_book, r) != null ? Icons.person_rounded : Icons.history_rounded, size: 16),
+                      label: Text(AddressBook.nameFor(_book, r) ?? _short(r)),
+                      onPressed: () => _to.text = r,
+                    ),
+                  ),
+              ]),
+            ),
+          ],
           const SizedBox(height: 14),
           TextField(
             controller: _amount,
@@ -2024,10 +2125,22 @@ class _SendScreenState extends State<_SendScreen> {
           const SizedBox(height: 8),
           Row(children: [
             Expanded(child: Text('Available: ${Units.format(_have, decimals: a.decimals, maxFraction: 6)} ${a.symbol}', style: const TextStyle(color: Brand.muted))),
-            TextButton(onPressed: _max, child: const Text('Max')),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            for (final pc in const [25, 50, 75, 100]) ...[
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size.fromHeight(36), visualDensity: VisualDensity.compact),
+                  onPressed: _have > BigInt.zero ? () => pc == 100 ? _max() : _part(pc) : null,
+                  child: Text(pc == 100 ? 'Max' : '$pc%'),
+                ),
+              ),
+              if (pc != 100) const SizedBox(width: 8),
+            ],
           ]),
           const SizedBox(height: 10),
-          if ((a.isUtxo || a.isSol) && (_units ?? BigInt.zero) >= _have && _have > BigInt.zero)
+          if (a.isNative && !a.isTron && (_units ?? BigInt.zero) >= _have && _have > BigInt.zero)
             const _Note(icon: Icons.info_rounded, text: 'Sending everything: the network fee is taken from this amount.'),
           if (!a.isNative)
             _Note(

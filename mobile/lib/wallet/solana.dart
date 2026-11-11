@@ -19,8 +19,9 @@ class Sol {
   static const rentMin = 890880; // lamports an empty account must hold
 
   /// 32-byte ed25519 seed (the private key).
-  static Uint8List privateKey(String phrase) {
-    final seed = TronCrypto.seedOf(phrase);
+  static Uint8List privateKey(String phrase) => privateKeyFromSeed(TronCrypto.seedOf(phrase));
+
+  static Uint8List privateKeyFromSeed(Uint8List seed) {
     var i = Uint8List.fromList(c.Hmac(c.sha512, utf8.encode('ed25519 seed')).convert(seed).bytes);
     var k = i.sublist(0, 32), chain = i.sublist(32);
     for (final idx in const [44, 501, 0]) {
@@ -174,11 +175,19 @@ class SolApi {
     return '$sig';
   }
 
+  static final Map<String, List<WalletTx>> _txCache = {}; // a finished transaction never changes: ask once
+
   Future<List<WalletTx>> history(String address) async {
     final sigs = (await _rpc('getSignaturesForAddress', [address, {'limit': 10}]) as List?) ?? const [];
-    final out = <WalletTx>[];
+    final all = <WalletTx>[];
     for (final s in sigs) {
       final m = s as Map;
+      final known = _txCache['$address:${m['signature']}'];
+      if (known != null) {
+        all.addAll(known);
+        continue;
+      }
+      final out = <WalletTx>[];
       try {
         final t = await _rpc('getTransaction', ['${m['signature']}', {'encoding': 'jsonParsed', 'maxSupportedTransactionVersion': 0}]) as Map?;
         if (t == null) continue;
@@ -194,9 +203,12 @@ class SolApi {
             ok: (t['meta'] as Map?)?['err'] == null,
           ));
         }
+        if (_txCache.length > 300) _txCache.clear();
+        _txCache['$address:${m['signature']}'] = out;
       } catch (_) {}
+      all.addAll(out);
     }
-    return out;
+    return all;
   }
 
   /// For chat cards: (paid exactly, confirmed) or null while unknown.

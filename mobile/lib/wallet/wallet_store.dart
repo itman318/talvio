@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
@@ -53,6 +54,7 @@ class WalletStore extends ChangeNotifier {
     address = p.getString(_addrKey);
     evmAddress = p.getString(_evmKey);
     hideZero = p.getBool(_hideKey) ?? true;
+    lockOnOpen = p.getBool(_lockKey) ?? false;
     solAddress = p.getString(_solKey);
     shown = p.getStringList(_shownKey) ?? defaultShown;
     try {
@@ -66,14 +68,18 @@ class WalletStore extends ChangeNotifier {
       customTokens = [];
     }
     var hasPhrase = false;
+    var storageBroken = false;
     try {
       hasPhrase = await _secure.containsKey(key: _phraseKey);
+      recoveredPhrase = await _secure.read(key: _recoveredKey);
     } catch (_) {
-      // secure storage can't be read (e.g. restored from a backup on a new phone): the 12 words bring it back
-      hasPhrase = false;
+      // secure storage can't be read right now. That is NOT the same as "no wallet": keep showing
+      // the wallet (sending will ask again) instead of inviting the person to make a new one.
+      storageBroken = true;
     }
-    if (address != null && !hasPhrase) {
-      // the address is remembered but its key is gone: don't show a wallet that can't send
+    if (address != null && !hasPhrase && !storageBroken) {
+      // the address is remembered but its key is really gone (e.g. a phone restored from a backup):
+      // the 12 words bring it back
       address = null;
       evmAddress = null;
     }
@@ -82,10 +88,11 @@ class WalletStore extends ChangeNotifier {
       // the phrase stays locked in secure storage
       final phrase = await _secure.read(key: _phraseKey);
       if (phrase != null) {
-        address = TronCrypto.addressOf(TronCrypto.privateKey(phrase));
-        evmAddress = EvmCrypto.addressOf(EvmCrypto.privateKey(phrase));
-        utxoAddr = _utxoOf(phrase);
-        solAddress = await Sol.addressOf(Sol.privateKey(phrase));
+        final a = await compute(addressesOf, phrase);
+        address = a['tron'];
+        evmAddress = a['evm'];
+        utxoAddr = {for (final c in UtxoChain.all) c.id: a[c.id]!};
+        solAddress = a['sol'];
         await p.setString(_solKey, solAddress!);
         await p.setString(_addrKey, address!);
         await p.setString(_evmKey, evmAddress!);
@@ -108,11 +115,22 @@ class WalletStore extends ChangeNotifier {
   Future<void> save(String phrase) async {
     final p = TronCrypto.normalize(phrase);
     if (!TronCrypto.isValidPhrase(p)) throw WalletException('These words are not a valid recovery phrase');
-    final addr = TronCrypto.addressOf(TronCrypto.privateKey(p));
-    final evm = EvmCrypto.addressOf(EvmCrypto.privateKey(p));
-    final utxo = _utxoOf(p);
-    final sol = await Sol.addressOf(Sol.privateKey(p));
+    final a = await compute(addressesOf, p);
+    final addr = a['tron']!;
+    final evm = a['evm']!;
+    final utxo = {for (final c in UtxoChain.all) c.id: a[c.id]!};
+    final sol = a['sol']!;
+    // NEVER silently replace a phrase that is already on this phone: keep the old one readable
+    // (Wallet → "Earlier wallet found"), whatever led here
+    try {
+      final old = await _secure.read(key: _phraseKey);
+      if (old != null && old != p) {
+        await _secure.write(key: _recoveredKey, value: old);
+        recoveredPhrase = old;
+      }
+    } catch (_) {}
     await _secure.write(key: _phraseKey, value: p);
+    if (await _secure.read(key: _phraseKey) != p) throw WalletException('This phone could not save the wallet safely. Nothing was changed.');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_addrKey, addr);
     await prefs.setString(_evmKey, evm);
@@ -140,7 +158,28 @@ class WalletStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  static Map<String, String> _utxoOf(String phrase) => {for (final c in UtxoChain.all) c.id: UtxoCrypto.addressOf(UtxoCrypto.privateKey(phrase, c), c)};
+  /// Every public address of a phrase. The slow part (turning words into the seed) runs ONCE,
+  /// and off the screen's thread, so nothing freezes.
+  static Future<Map<String, String>> addressesOf(String phrase) async {
+    final seed = TronCrypto.seedOf(phrase);
+    Uint8List key(int purpose, int coin) => TronCrypto.derive(seed, [0x80000000 + purpose, 0x80000000 + coin, 0x80000000, 0, 0]);
+    return {
+      'tron': TronCrypto.addressOf(key(44, 195)),
+      'evm': EvmCrypto.addressOf(key(44, 60)),
+      for (final c in UtxoChain.all) c.id: UtxoCrypto.addressOf(key(c.purpose, c.coin), c),
+      'sol': await Sol.addressOf(Sol.privateKeyFromSeed(seed)),
+    };
+  }
+
+  /// A phrase that was on this phone before the current one (kept so it can never be lost by accident).
+  String? recoveredPhrase;
+  String get _recoveredKey => 'wallet_phrase_v1_${userId}_recovered';
+
+  Future<void> forgetRecovered() async {
+    await _secure.delete(key: _recoveredKey);
+    recoveredPhrase = null;
+    notifyListeners();
+  }
 
   /// My address on a network ('tron', 'btc', … or any EVM chain id).
   String? addressFor(String network) {
@@ -169,6 +208,16 @@ class WalletStore extends ChangeNotifier {
   Future<void> setShown(List<String> keys) async {
     shown = keys;
     (await SharedPreferences.getInstance()).setStringList(_shownKey, keys);
+    notifyListeners();
+  }
+
+  /// Ask for the fingerprint every time the wallet is opened (sending always asks anyway).
+  bool lockOnOpen = false;
+  String get _lockKey => 'wallet_lock_v1_$userId';
+
+  Future<void> setLockOnOpen(bool v) async {
+    lockOnOpen = v;
+    (await SharedPreferences.getInstance()).setBool(_lockKey, v);
     notifyListeners();
   }
 

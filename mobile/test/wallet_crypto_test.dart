@@ -6,6 +6,7 @@ import 'package:chatapp/wallet/tron_api.dart';
 import 'package:chatapp/wallet/tron_crypto.dart';
 import 'package:chatapp/wallet/utxo.dart';
 import 'package:chatapp/wallet/solana.dart';
+import 'package:chatapp/wallet/wallet_store.dart';
 
 // Expected values were computed with an independent implementation (Python: PBKDF2, BIP-32, secp256k1,
 // Keccak-256, Base58Check written from the specs) — not with this code.
@@ -202,6 +203,18 @@ void main() {
     expect(tx.length, 1 + 64 + msg.length);
     expect(await Sol.verify(msg, tx.sublist(1, 65), addr), true);
     expect(await Sol.verify(msg, tx.sublist(1, 65), 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk'), false);
+  });
+
+  test('one phrase → every address the wallet shows (the path the app really uses)', () async {
+    final a = await WalletStore.addressesOf(phrase);
+    expect(a, {
+      'tron': 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+      'evm': '0x9858EfFD232B4033E47d90003D41EC34EcaEda94',
+      'btc': 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu',
+      'ltc': 'ltc1qjmxnz78nmc8nq77wuxh25n2es7rzm5c2rkk4wh',
+      'doge': 'DBus3bamQjgJULBJtYXpEzDWQRwF5iwxgC',
+      'sol': 'GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL',
+    });
   });
 }
 

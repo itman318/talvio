@@ -29,6 +29,13 @@ class SecureRepair {
       final current = await _plain.readAll(); // read FIRST: opening the other store may move these too
       final moved = await _encrypted.readAll();
       final merged = {...moved, ...current}; // the normal store's values are the newer ones
+      // …except a wallet phrase: if a new wallet was made while the first one was "missing",
+      // BOTH phrases are kept (the earlier one under …_recovered) — a phrase is never dropped
+      for (final e in moved.entries) {
+        if (e.key.startsWith('wallet_phrase_') && !e.key.endsWith('_recovered') && current[e.key] != null && current[e.key] != e.value) {
+          merged['${e.key}_recovered'] = e.value;
+        }
+      }
       final now = await _plain.readAll();
       var ok = true;
       for (final e in merged.entries) {

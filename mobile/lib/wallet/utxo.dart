@@ -363,12 +363,27 @@ class UtxoApi {
   UtxoApi(this.chain);
   final UtxoChain chain;
 
-  Future<http.Response> _get(String path) async {
+  // Free servers allow only so many questions an hour (Dogecoin's very few): the same answer is
+  // reused for a short while instead of asking again on every refresh.
+  static final Map<String, (http.Response, DateTime)> _cache = {};
+
+  Future<http.Response> _get(String path, {int cacheSec = 0}) async {
     Object? last;
     for (final base in chain.apis) {
+      final key = '$base$path';
+      final hit = _cache[key];
+      if (cacheSec > 0 && hit != null && DateTime.now().difference(hit.$2).inSeconds < cacheSec) return hit.$1;
       try {
-        final r = await http.get(Uri.parse('$base$path')).timeout(const Duration(seconds: 15));
-        if (r.statusCode == 200) return r;
+        final r = await http.get(Uri.parse(key)).timeout(const Duration(seconds: 15));
+        if (r.statusCode == 200) {
+          if (cacheSec > 0) {
+            if (_cache.length > 60) _cache.clear();
+            _cache[key] = (r, DateTime.now());
+          }
+          return r;
+        }
+        // busy: an older answer is better than none
+        if (r.statusCode == 429 && hit != null && cacheSec > 0) return hit.$1;
         last = WalletException(r.statusCode == 429 ? '${chain.name} is busy. Try again in a moment.' : 'Network error (${r.statusCode})');
       } catch (e) {
         last = e;
@@ -381,10 +396,10 @@ class UtxoApi {
 
   Future<BigInt> balance(String address) async {
     if (chain.blockcypher) {
-      final j = _json(await _get('/addrs/$address/balance')) as Map;
+      final j = _json(await _get('/addrs/$address/balance', cacheSec: 90)) as Map;
       return BigInt.from((j['final_balance'] as num?) ?? 0);
     }
-    final j = _json(await _get('/address/$address')) as Map;
+    final j = _json(await _get('/address/$address', cacheSec: 20)) as Map;
     int n(Map? m, String k) => ((m?[k] as num?) ?? 0).toInt();
     final c = j['chain_stats'] as Map?;
     final m = j['mempool_stats'] as Map?;
@@ -406,12 +421,12 @@ class UtxoApi {
   /// Smallest units per virtual byte, for confirmation in ~30 minutes.
   Future<double> feeRate() async {
     if (chain.blockcypher) {
-      final j = _json(await _get('')) as Map;
+      final j = _json(await _get('', cacheSec: 300)) as Map;
       final perKb = ((j['medium_fee_per_kb'] as num?) ?? chain.minFeePerKb).toDouble();
       return (perKb < chain.minFeePerKb ? chain.minFeePerKb : perKb) / 1000;
     }
     try {
-      final j = _json(await _get('/v1/fees/recommended')) as Map;
+      final j = _json(await _get('/v1/fees/recommended', cacheSec: 30)) as Map;
       final r = ((j['halfHourFee'] as num?) ?? 2).toDouble();
       return r < 1 ? 1 : r;
     } catch (_) {
@@ -500,7 +515,7 @@ class UtxoApi {
   Future<List<WalletTx>> history(String address) async {
     final out = <WalletTx>[];
     if (chain.blockcypher) {
-      final j = _json(await _get('/addrs/$address/full?limit=20')) as Map;
+      final j = _json(await _get('/addrs/$address/full?limit=20', cacheSec: 180)) as Map;
       for (final t in (j['txs'] as List? ?? const [])) {
         final m = t as Map;
         var inSum = 0, outSum = 0;
@@ -528,7 +543,7 @@ class UtxoApi {
       }
       return out;
     }
-    final l = _json(await _get('/address/$address/txs')) as List;
+    final l = _json(await _get('/address/$address/txs', cacheSec: 40)) as List;
     for (final t in l.take(25)) {
       final m = t as Map;
       var inSum = 0, outSum = 0;
