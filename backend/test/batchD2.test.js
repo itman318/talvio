@@ -389,3 +389,93 @@ test('Plus with USDT from the wallet: unique amount, checked on the network, one
     await settings.update({ feature_wallet: true, crypto_pay_bsc_address: '', crypto_pay_tron_address: '' });
   }
 });
+
+test('Hushavia Coins: bought with USDT, spent on Plus, sent to a friend, never below zero', async () => {
+  const coins = require('../src/services/coin.service');
+  const cryptopay = require('../src/services/payments/cryptopay');
+  const BSC = `0x${'2b'.repeat(20)}`;
+  const first = await coins.info(A.id);
+  assert.equal(first.balance, 0);
+  assert.deepEqual(first.packs, [], 'nothing to buy until our address is set');
+  assert.ok(first.buy_note);
+  await settings.update({ crypto_pay_bsc_address: BSC });
+  const info = await coins.info(A.id);
+  assert.deepEqual(info.packs.map((p) => p.total), [100, 525, 1100, 2900, 6000]);
+  assert.deepEqual(info.plus.map((p) => p.coins), [399, 1049, 1999, 3599]);
+  assert.ok(!JSON.stringify(info).includes(BSC.slice(4)));
+
+  const pad = (h) => String(h).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+  const chain = {};
+  cryptopay.setTransport(async (url, body) => {
+    if (body.method === 'eth_blockNumber') return { result: '0x3e8' };
+    if (body.method === 'eth_getTransactionReceipt') return { result: chain[body.params[0]] || null };
+    if (body.method === 'eth_getBlockByNumber') return { result: { timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}` } };
+    throw new Error('unexpected call');
+  });
+  try {
+    const before = (await users.getMe(A.id)).premium_until;
+    const pack = info.packs[2];
+    await rejects(payments.checkout(A.id, { coin_pack_id: pack.id, provider: 'manual' }), 'invalid_input');
+    const co = await payments.checkout(A.id, { coin_pack_id: pack.id, provider: 'crypto', network: 'bsc' });
+    assert.equal(co.order.coins, 1100);
+    assert.match(co.crypto.amount_text, /^9\.99\d{4} USDT$/);
+    const tx = `0x${'c0'.repeat(32)}`;
+    chain[tx] = {
+      transactionHash: tx, blockNumber: '0x64', status: '0x1',
+      logs: [{ address: cryptopay.NETWORKS.bsc.contract, topics: [`0x${cryptopay.TRANSFER}`, `0x${pad('44'.repeat(20))}`, `0x${pad(BSC)}`], data: `0x${pad(BigInt(co.crypto.amount).toString(16))}` }],
+    };
+    assert.equal((await payments.submitCryptoTx(A.id, co.order.id, { tx })).status, 'paid');
+    assert.equal((await payments.submitCryptoTx(A.id, co.order.id, { tx })).status, 'paid', 'asking twice changes nothing');
+    let me = await users.getMe(A.id);
+    assert.equal(me.coins, 1100);
+    assert.equal(me.premium_until, before, 'a pack of coins is not Plus');
+
+    // Plus paid with coins
+    const plans = (await payments.premiumInfo(A.id)).plans;
+    assert.equal((await payments.premiumInfo(A.id)).coins.balance, 1100);
+    await rejects(coins.buyPlus(A.id, { plan_id: plans[3].id }), 'not_enough_coins');
+    assert.equal((await db.one(`SELECT count(*)::int AS n FROM payment_orders WHERE user_id = $1 AND provider = 'coins'`, [A.id])).n, 0, 'nothing is left behind when it fails');
+    const got = await coins.buyPlus(A.id, { plan_id: plans[0].id });
+    assert.deepEqual([got.spent, got.balance], [399, 701]);
+    assert.ok(new Date(got.premium_until) > new Date(new Date(before || Date.now()).getTime() + 27 * 86400e3));
+
+    // a gift
+    await rejects(coins.send(A.id, { user_id: A.id, amount: 5 }), 'invalid_input');
+    await rejects(coins.send(A.id, { user_id: B.id, amount: 0 }), 'invalid_input');
+    await rejects(coins.send(A.id, { user_id: B.id, amount: 1.5 }), 'invalid_input');
+    await rejects(coins.send(A.id, { user_id: B.id, amount: -50 }), 'invalid_input');
+    await rejects(coins.send(A.id, { user_id: B.id, amount: 702 }), 'not_enough_coins');
+    const sent = await coins.send(A.id, { user_id: B.id, amount: 200, note: 'Eid Mubarak' });
+    assert.equal(sent.balance, 501);
+    assert.equal((await users.getMe(B.id)).coins, 200);
+    const hb = await coins.history(B.id);
+    assert.deepEqual([hb[0].kind, hb[0].delta, hb[0].peer.id, hb[0].note], ['gift_received', 200, A.id, 'Eid Mubarak']);
+    assert.deepEqual((await coins.history(A.id)).map((h) => [h.kind, h.delta]), [['gift_sent', -200], ['plus', -399], ['purchase', 1100]]);
+    // two gifts at the same moment can't spend the same coins
+    const both = await Promise.allSettled([coins.send(A.id, { user_id: B.id, amount: 400 }), coins.send(A.id, { user_id: C.id, amount: 400 })]);
+    assert.equal(both.filter((r) => r.status === 'fulfilled').length, 1);
+    assert.equal((await users.getMe(A.id)).coins, 101);
+
+    // admin
+    await rejects(coins.adminAdjust(boss.id, A.id, { amount: -5000 }), 'not_enough_coins');
+    assert.equal((await coins.adminAdjust(boss.id, A.id, { amount: 49, note: 'Sorry for the trouble' })).balance, 150);
+    const packs = await coins.adminPacks();
+    assert.equal(packs.stats.bought, 1100);
+    assert.equal(packs.stats.in_wallets, 750);
+    const np = await coins.adminSavePack(null, { coins: 50, bonus: 0, price_usd: 0.5 });
+    await coins.adminSavePack(np.id, { coins: 50, bonus: 0, price_usd: 0.5, is_active: false });
+    assert.equal((await coins.info(A.id)).packs.length, 5);
+
+    // the books always add up
+    const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
+    assert.equal(bad.length, 0);
+
+    await settings.update({ feature_coins: false });
+    await assert.rejects(coins.info(A.id));
+    await assert.rejects(coins.send(A.id, { user_id: B.id, amount: 1 }));
+    assert.equal((await payments.premiumInfo(A.id)).coins, null);
+  } finally {
+    cryptopay.setTransport(null);
+    await settings.update({ feature_coins: true, crypto_pay_bsc_address: '' });
+  }
+});

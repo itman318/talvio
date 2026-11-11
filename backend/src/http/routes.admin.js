@@ -44,6 +44,14 @@ router.post('/users/:id/premium', requireAdmin('payments'), h(async (req, res) =
   await admin.log(req.admin.id, req.body.months === 0 ? 'premium.revoke' : 'premium.grant', 'user', parseInt(req.params.id, 10), { months: req.body.months }, req.ip);
   res.json(r);
 }));
+router.post('/users/:id/coins', requireAdmin('payments'), h(async (req, res) => {
+  const r = await require('../services/coin.service').adminAdjust(req.admin.id, req.params.id, req.body);
+  await admin.log(req.admin.id, 'coins.adjust', 'user', parseInt(req.params.id, 10), { amount: req.body.amount, note: req.body.note }, req.ip);
+  res.json(r);
+}));
+router.get('/coin-packs', requireAdmin('payments'), h(async (req, res) => res.json(await require('../services/coin.service').adminPacks())));
+router.post('/coin-packs', requireAdmin('payments'), h(async (req, res) => res.json(await require('../services/coin.service').adminSavePack(null, req.body))));
+router.put('/coin-packs/:id', requireAdmin('payments'), h(async (req, res) => res.json(await require('../services/coin.service').adminSavePack(req.params.id, req.body))));
 router.get('/plans', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminPlans())));
 router.post('/plans', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminSavePlan(null, req.body))));
 router.put('/plans/:id', requireAdmin('payments'), h(async (req, res) => res.json(await payments.adminSavePlan(req.params.id, req.body))));

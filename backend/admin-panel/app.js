@@ -20,6 +20,7 @@
     { id: 'revenue', label: 'Revenue', perm: 'payments', icon: 'trend', section: 'Business' },
     { id: 'payments', label: 'Payments', perm: 'payments', icon: 'card', section: 'Business' },
     { id: 'plans', label: 'Hushavia Plus plans', perm: 'payments', icon: 'star', section: 'Business' },
+    { id: 'coins', label: 'Coins', perm: 'payments', icon: 'star', section: 'Business' },
     { id: 'ads', label: 'Sponsored messages', perm: 'payments', icon: 'megaphone', section: 'Business' },
     { id: 'support', label: 'Support', perm: 'support', icon: 'buoy', section: 'Communication' },
     { id: 'broadcast', label: 'Broadcast', perm: 'broadcast', icon: 'send', section: 'Communication' },
@@ -612,6 +613,18 @@
             onclick: async () => { if (await action(() => api('POST', `/users/${id}/premium`, { months: 0 }), 'Hushavia Plus removed')) reload(); },
           }, 'Remove Hushavia Plus'));
         }
+        actions.push(el('button', {
+          class: 'btn',
+          onclick: () => {
+            const amount = el('input', { type: 'number', step: 1, placeholder: 'e.g. 500, or -200 to take away' });
+            const note = el('input', { type: 'text', maxlength: 120, placeholder: 'Shown to the member (optional)' });
+            modal(`Coins · balance ${Number(u.coins || 0).toLocaleString()}`, [el('div', { class: 'field' }, el('label', {}, 'Coins to add'), amount), el('div', { class: 'field' }, el('label', {}, 'Note'), note)], 'Apply', async () => {
+              const r = await action(() => api('POST', `/users/${id}/coins`, { amount: Number(amount.value), note: note.value.trim() }), 'Coins updated');
+              if (r) reload();
+              return !!r;
+            });
+          },
+        }, `Coins (${Number(u.coins || 0).toLocaleString()})`));
       }
       if (can('users.ban')) {
         actions.push(el('button', {
@@ -1415,6 +1428,7 @@
     call_ring_timeout_sec: ['Ring for (seconds)', 'After this the call counts as missed.'],
     call_max_minutes: ['Longest call (minutes)', 'Calls are cut off after this.'],
     stun_urls: ['STUN servers', 'One per line, e.g. stun:stun.l.google.com:19302'],
+    feature_coins: ['Hushavia Coins', 'The in-app balance: members buy coins with USDT, spend them on Hushavia Plus and send them to each other. Off hides it; balances are kept.'],
     feature_wallet: ['Crypto wallet', 'Show the wallet (USDT, ETH, BNB, TRX …) in the app. Turning it off hides it; people’s coins stay safe on the networks and come back when it’s on again.'],
     feature_web_login: ['Web & desktop app', 'Users can log in at /web by scanning a QR code with their phone.'],
     max_accounts_per_device: ['Accounts per phone', 'How many accounts one phone can switch between.'],
@@ -1439,7 +1453,7 @@
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['App updates', ['app_update_notes']],
-    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'max_accounts_per_device']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'feature_coins', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'plus_usd_only', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions', 'crypto_pay_bsc_address', 'crypto_pay_tron_address']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
@@ -2013,7 +2027,7 @@
       if (o.proof_media_id) mediaPreview({ admin_url: `/api/admin/media/${o.proof_media_id}`, mime: 'image/png', name: 'proof' }).then((n) => proof.replaceWith(n));
       const note = el('input', { type: 'text', placeholder: 'Note (reason if rejecting)' });
       const info = el('div', {},
-        el('p', {}, `${o.user.name} · ${rs(o.amount_pkr)} · ${o.months} month(s) · ${o.provider}`),
+        el('p', {}, `${o.user.name} · ${o.currency && o.currency !== 'PKR' ? o.amount_text : rs(o.amount_pkr)} · ${o.coins ? `${Number(o.coins).toLocaleString()} coins` : `${o.months} month(s)`} · ${o.provider}`),
         o.proof_txn_id ? el('p', {}, `Transaction ID: ${o.proof_txn_id}${o.proof_sender ? ` · from ${o.proof_sender}` : ''}`) : null,
         o.crypto ? el('p', {}, `${o.crypto.amount_text} on ${o.crypto.network_name} → ${o.crypto.to}`) : null,
         o.crypto && o.crypto.tx_url ? el('p', {}, el('a', { href: o.crypto.tx_url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the transaction on the explorer'), ' — approve only if it shows the right amount arriving at your address.') : null,
@@ -2029,8 +2043,8 @@
       return el('tr', {},
         el('td', { class: 'num' }, o.id),
         el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(o.user.id); } }, o.user.name || `#${o.user.id}`), el('div', { class: 'muted' }, o.user.phone || '')),
-        el('td', { class: 'num' }, rs(o.amount_pkr)),
-        el('td', {}, `${o.months} mo`),
+        el('td', { class: 'num' }, o.currency && o.currency !== 'PKR' ? o.amount_text : rs(o.amount_pkr)),
+        el('td', {}, o.coins ? `${Number(o.coins).toLocaleString()} coins` : `${o.months} mo`),
         el('td', {}, o.provider, el('div', { class: 'muted' }, o.txn_ref)),
         el('td', {}, el('span', { class: `chip ${cls}` }, label), o.provider_message ? el('div', { class: 'muted' }, o.provider_message) : null),
         el('td', { class: 'muted' }, ago(o.created_at)),
@@ -2038,6 +2052,41 @@
     });
     box.replaceChildren(table(['#', 'User', 'Amount', 'Plan', 'Method', 'Status', 'When', ''], rows, 'Nothing here'),
       pager(data, (p) => { payState.page = p; pagePayments(); }));
+  }
+
+  // ------------------------------------------------------------------ coins
+  async function pageCoins() {
+    main.replaceChildren(head('Coins'), el('div', { class: 'muted' }, 'Loading…'));
+    const d = await action(() => api('GET', '/coin-packs'));
+    if (!d) return;
+    const edit = (p) => {
+      const coins = el('input', { type: 'number', min: 1, value: p ? p.coins : 1000 });
+      const bonus = el('input', { type: 'number', min: 0, value: p ? p.bonus : 0 });
+      const price = el('input', { type: 'number', min: 0.5, step: '0.01', value: p ? p.price_usd : 9.99 });
+      const badge = el('input', { type: 'text', maxlength: 20, value: p && p.badge ? p.badge : '', placeholder: 'e.g. Popular (optional)' });
+      const active = el('input', { type: 'checkbox', checked: p ? p.is_active : true, id: 'pack-active' });
+      modal(p ? 'Edit pack' : 'New pack', [
+        el('div', { class: 'field' }, el('label', {}, 'Coins'), coins),
+        el('div', { class: 'field' }, el('label', {}, 'Bonus coins (free on top)'), bonus),
+        el('div', { class: 'field' }, el('label', {}, 'Price (USD, paid in USDT)'), price),
+        el('div', { class: 'field' }, el('label', {}, 'Badge'), badge),
+        el('label', { class: 'check', for: 'pack-active' }, active, 'Available to buy'),
+      ], 'Save', async () => {
+        const body = { coins: Number(coins.value), bonus: Number(bonus.value), price_usd: Number(price.value), badge: badge.value.trim(), is_active: active.checked };
+        const r = await action(() => api(p ? 'PUT' : 'POST', p ? `/coin-packs/${p.id}` : '/coin-packs', body), 'Pack saved');
+        if (r) pageCoins();
+        return !!r;
+      });
+    };
+    const n = (x) => Number(x).toLocaleString();
+    const rows = d.packs.map((p) => el('tr', {},
+      el('td', { class: 'num' }, n(p.coins)), el('td', { class: 'num' }, p.bonus ? `+${n(p.bonus)}` : '—'), el('td', { class: 'num' }, p.price_text), el('td', {}, p.badge || '—'),
+      el('td', {}, el('span', { class: `chip ${p.is_active ? 'ok' : ''}` }, p.is_active ? 'On sale' : 'Hidden')),
+      el('td', {}, el('button', { class: 'btn small', onclick: () => edit(p) }, 'Edit'))));
+    main.replaceChildren(head('Coins', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New pack')),
+      el('p', { class: 'muted' }, `In members’ balances: ${n(d.stats.in_wallets)} · bought: ${n(d.stats.bought)} · spent on Hushavia Plus: ${n(d.stats.spent_on_plus)} · given by admins: ${n(d.stats.given_by_admins)}`),
+      el('p', { class: 'muted' }, '1 coin = 1 US cent of Hushavia Plus. Members buy packs with USDT from the in-app wallet (to the receiving addresses in Settings). To give or take coins, open a user and press “Coins”.'),
+      table(['Coins', 'Bonus', 'Price', 'Badge', 'Status', ''], rows, 'No packs'));
   }
 
   // ------------------------------------------------------------------ premium plans
@@ -2146,6 +2195,7 @@
     revenue: pageRevenue,
     payments: pagePayments,
     plans: pagePlans,
+    coins: pageCoins,
     ads: pageAds,
     settings: pageSettings,
     broadcast: pageBroadcast,

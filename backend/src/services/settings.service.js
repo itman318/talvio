@@ -82,11 +82,13 @@ const DEFINITIONS = {
   // ---- Batch E
   feature_web_login: { type: 'boolean', default: true },
   feature_wallet: { type: 'boolean', default: true },
+  feature_coins: { type: 'boolean', default: true },
   max_accounts_per_device: { type: 'integer', default: 3, min: 1, max: 10 },
 };
 
 const FEATURE_KEYS = [
   'feature_wallet',
+  'feature_coins',
   'feature_channels',
   'feature_stories',
   'feature_polls',
@@ -221,6 +223,7 @@ async function publicConfig() {
       premium: s.feature_premium,
       web_login: s.feature_web_login,
       wallet: s.feature_wallet,
+      coins: s.feature_coins,
     },
     plus_available: !!(s.feature_premium && s.plus_sales_open),
     max_accounts: s.max_accounts_per_device,

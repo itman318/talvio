@@ -24,6 +24,7 @@ import 'folder_support_screens.dart';
 import 'home_screen.dart';
 import 'more_screens.dart';
 import 'premium_screens.dart';
+import 'coins_screen.dart';
 import 'bot_screens.dart';
 import 'link_device_screen.dart';
 import 'business_screen.dart';
@@ -93,6 +94,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (context.mounted) showError(context, e);
           }
         }),
+      if (auth.feature('coins'))
+      _Item(acc, Icons.monetization_on_rounded, const Color(0xFFF5A623), 'Coins', subtitle: 'Your Hushavia Coins: buy, send to friends, pay for Plus', keywords: 'coin coins gift balance stars money', onTap: () => go(const CoinsScreen())),
       if (auth.feature('wallet'))
       _Item(acc, Icons.account_balance_wallet_rounded, const Color(0xFF12B89C), 'Wallet', subtitle: 'USDT, ETH, BNB, TRX … — your keys stay on this phone', keywords: 'crypto usdt trx tron money send receive', onTap: () => go(const WalletScreen())),
       _Item(notif, Icons.notifications_rounded, const Color(0xFFE5484D), 'Notifications', subtitle: 'Chats, groups, channels, sound, vibration', keywords: 'sound vibrate alert push preview', onTap: () => go(const NotificationsScreen())),

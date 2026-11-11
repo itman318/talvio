@@ -122,6 +122,11 @@ function cryptoNetworks(s) {
     .map((x) => ({ id: x.n.id, name: x.n.name, symbol: x.n.symbol, fee_hint: x.n.fee_hint, to: x.to }));
 }
 
+/** The same list without our addresses (an address is given only with an order). */
+function cryptoNetworksPublic(s) {
+  return cryptoNetworks(s).map(({ to, ...n }) => n); // eslint-disable-line no-unused-vars
+}
+
 function usdOf(plan) {
   const n = Number((plan.prices || {}).USD);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -147,7 +152,7 @@ function providers() {
 
 async function premiumInfo(userId, hint = {}) {
   await settings.requireFeature('feature_premium', 'Hushavia Plus');
-  const u = await db.one('SELECT premium_until FROM users WHERE id = $1', [userId]);
+  const u = await db.one('SELECT premium_until, coins FROM users WHERE id = $1', [userId]);
   const plans = await db.many('SELECT * FROM premium_plans WHERE is_active ORDER BY sort, months');
   const s = await settings.getAll();
   const { country, currency } = await buyerCurrency(userId, hint);
@@ -158,7 +163,7 @@ async function premiumInfo(userId, hint = {}) {
   const intl = String(s.payment_intl_instructions || '').trim();
   if (!local && intl) methods.push({ id: 'manual', name: 'International transfer (Wise, card, PayPal…)' });
   // USDT from the in-app wallet works in every country
-  const nets = cryptoNetworks(s).map(({ to, ...n }) => n); // eslint-disable-line no-unused-vars
+  const nets = cryptoNetworksPublic(s);
   const cryptoOk = nets.length > 0 && plans.some((p) => usdOf(p));
   if (cryptoOk) methods.unshift({ id: 'crypto', name: 'your wallet (USDT)' });
   return {
@@ -171,6 +176,7 @@ async function premiumInfo(userId, hint = {}) {
     perks: await perks(),
     methods,
     crypto_networks: cryptoOk ? nets : [],
+    coins: s.feature_coins ? { balance: Number(u && u.coins) || 0, prices: Object.fromEntries(plans.map((p) => [p.id, usdOf(p) ? Math.round(usdOf(p) * 100) : null]).filter((x) => x[1])) } : null,
     manual_instructions: local ? (s.payment_manual_enabled ? s.payment_manual_instructions : null) : intl || null,
     payments_note: !local && !intl && !cryptoOk ? 'Payments from your country are coming soon. Prices are shown in your currency.' : null,
   };
@@ -182,6 +188,7 @@ function serializeOrder(o) {
     id: o.id,
     plan_id: o.plan_id,
     months: o.months,
+    coins: o.coins || 0,
     amount_pkr: o.amount_pkr,
     currency: o.currency || 'PKR',
     amount: o.amount === null || o.amount === undefined ? o.amount_pkr : Number(o.amount),
@@ -233,12 +240,13 @@ function checkPayToken(orderId, token) {
 }
 
 async function checkout(userId, body = {}) {
+  if (body.coin_pack_id !== undefined && body.coin_pack_id !== null) return checkoutCoins(userId, body);
   await settings.requireFeature('feature_premium', 'Hushavia Plus');
   if (!(await settings.get('plus_sales_open'))) throw forbidden('coming_soon', 'Hushavia Plus is coming soon');
   const plan = await db.one('SELECT * FROM premium_plans WHERE id = $1 AND is_active', [v.id(body.plan_id, 'plan_id')]);
   if (!plan) throw notFound('plan_not_found', 'This plan is not available');
   const provider = v.oneOf(body.provider, ['jazzcash', 'easypaisa', 'manual', 'crypto'], 'provider');
-  if (provider === 'crypto') return checkoutCrypto(userId, plan, body);
+  if (provider === 'crypto') return checkoutCrypto(userId, { planId: plan.id, months: plan.months, pkr: plan.price_pkr, usd: usdOf(plan) }, body);
   const { currency } = await buyerCurrency(userId, { country: body.country, locale: body.locale });
   const local = currency === 'PKR';
   const intl = String((await settings.get('payment_intl_instructions')) || '').trim();
@@ -263,11 +271,20 @@ async function checkout(userId, body = {}) {
  * USDT from the in-app wallet. Every order asks for a slightly different amount (a fraction of a
  * cent on top), so a payment on the network can belong to exactly one order.
  */
-async function checkoutCrypto(userId, plan, body) {
+async function checkoutCoins(userId, body) {
+  await settings.requireFeature('feature_coins', 'Coins');
+  v.oneOf(body.provider, ['crypto'], 'provider');
+  const pack = await db.one('SELECT * FROM coin_packs WHERE id = $1 AND is_active', [v.id(body.coin_pack_id, 'coin_pack_id')]);
+  if (!pack) throw notFound('pack_not_found', 'This pack is not available');
+  return checkoutCrypto(userId, { planId: null, months: 0, pkr: 0, usd: Number(pack.price_usd), coins: pack.coins + pack.bonus, packId: pack.id }, body);
+}
+
+/** item: { planId, months, pkr, usd, coins?, packId? } — a Plus plan or a pack of coins. */
+async function checkoutCrypto(userId, item, body) {
   const s = await settings.getAll();
   const net = cryptoNetworks(s).find((n) => n.id === String(body.network || ''));
-  const usd = usdOf(plan);
-  if (!net || !usd) throw forbidden('provider_unavailable', 'Paying with USDT is not available for this plan right now');
+  const usd = item.usd;
+  if (!net || !usd) throw forbidden('provider_unavailable', 'Paying with USDT is not available for this right now');
   const n = cryptopay.NETWORKS[net.id];
   rateLimit.enforce(`checkout:${userId}`, 10, 60 * 60 * 1000, 'Too many payment attempts. Try again later.');
   // an unpaid earlier attempt is simply replaced
@@ -280,12 +297,12 @@ async function checkoutCrypto(userId, plan, body) {
     const micro = cents * 10000n + BigInt(crypto.randomInt(1, 10000)); // 6 decimals
     const units = micro * 10n ** BigInt(n.decimals - 6);
     const o = await db.one(
-      `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, txn_ref, currency, amount, crypto_network, crypto_to, crypto_amount)
-       SELECT $1::bigint, $2::bigint, $3::int, $4::int, 'crypto', $5::varchar, 'USD', $6::numeric, $7::varchar, $8::varchar, $9::numeric
+      `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, txn_ref, currency, amount, crypto_network, crypto_to, crypto_amount, coins, coin_pack_id)
+       SELECT $1::bigint, $2::bigint, $3::int, $4::int, 'crypto', $5::varchar, 'USD', $6::numeric, $7::varchar, $8::varchar, $9::numeric, $10::int, $11::bigint
        WHERE NOT EXISTS (SELECT 1 FROM payment_orders WHERE provider = 'crypto' AND crypto_network = $7::varchar AND crypto_amount = $9::numeric
                            AND (status IN ('pending', 'review') OR created_at > now() - interval '1 day'))
        RETURNING *`,
-      [userId, plan.id, plan.months, plan.price_pkr, newTxnRef(), usd, n.id, net.to, units.toString()],
+      [userId, item.planId, item.months, item.pkr, newTxnRef(), usd, n.id, net.to, units.toString(), item.coins || null, item.packId || null],
     );
     if (o) return { order: serializeOrder(o), crypto: cryptoOf(o) };
   }
@@ -385,13 +402,22 @@ async function markPaid(orderId, { providerRef = null, raw = null, message = nul
       [orderId, providerRef, raw ? JSON.stringify(raw) : null, message, adminId],
     )).rows[0];
     if (!o) return null;
+    if (o.coins > 0) {
+      // a pack of coins
+      o.coin_balance = await require('./coin.service').change(c, o.user_id, o.coins, 'purchase', { orderId: o.id }); // eslint-disable-line global-require
+      return o;
+    }
     await c.query(
       `UPDATE users SET premium_until = GREATEST(COALESCE(premium_until, now()), now()) + make_interval(months => $2), updated_at = now() WHERE id = $1`,
       [o.user_id, o.months],
     );
     return o;
   });
-  if (r) {
+  if (r && r.coins > 0) {
+    bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: r.id, status: 'paid' }, userIds: [r.user_id] });
+    require('./coin.service').announce(r.user_id, r.coin_balance); // eslint-disable-line global-require
+    await require('./notice.service').notify(r.user_id, 'payment', `${Number(r.coins).toLocaleString('en-US')} coins added 🪙`, `Order #${r.id}: payment received. Thank you!`, { order_id: r.id });
+  } else if (r) {
     bus.emit('user:updated', { userId: r.user_id });
     bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: r.id, status: 'paid' }, userIds: [r.user_id] });
     await require('./notice.service').notify(r.user_id, 'payment', 'Payment received — Hushavia Plus is active ⭐', `Order #${r.id}: ${r.months} month${r.months === 1 ? '' : 's'} added. Thank you!`, { order_id: r.id });
@@ -518,7 +544,7 @@ async function adminListOrders(query = {}) {
     where.push(`o.status = $${params.length}`);
   }
   if (query.provider) {
-    params.push(v.oneOf(query.provider, ['jazzcash', 'easypaisa', 'manual', 'admin', 'crypto'], 'provider'));
+    params.push(v.oneOf(query.provider, ['jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins'], 'provider'));
     where.push(`o.provider = $${params.length}`);
   }
   if (query.user_id) {
@@ -633,6 +659,7 @@ module.exports = {
   isPremiumRow,
   limitsFor,
   providers,
+  cryptoNetworksPublic,
   premiumInfo,
   checkout,
   getOrder,

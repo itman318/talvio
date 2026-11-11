@@ -250,6 +250,11 @@ router.post('/calls/:id/accept', h(async (req, res) => res.json(await callServic
 router.post('/calls/:id/decline', h(async (req, res) => res.json(await callService.declineCall(req.userId, req.params.id))));
 router.post('/calls/:id/hangup', h(async (req, res) => res.json(await callService.hangup(req.userId, req.params.id, req.body.reason))));
 router.post('/calls/:id/rate', h(async (req, res) => res.json(await callService.rateCall(req.userId, req.params.id, req.body))));
+// ---- coins (the in-app balance)
+router.get('/coins', h(async (req, res) => res.json(await require('../services/coin.service').info(req.userId))));
+router.get('/coins/history', h(async (req, res) => res.json(await require('../services/coin.service').history(req.userId, req.query))));
+router.post('/coins/send', h(async (req, res) => res.json(await require('../services/coin.service').send(req.userId, req.body))));
+router.post('/coins/plus', h(async (req, res) => res.json(await require('../services/coin.service').buyPlus(req.userId, req.body))));
 // ---- premium & payments
 router.get('/premium', h(async (req, res) => res.json(await paymentService.premiumInfo(req.userId, { country: req.get('x-country') || req.query.country, locale: req.get('accept-language') }))));
 router.post('/payments/checkout', h(async (req, res) => res.json(await paymentService.checkout(req.userId, { ...req.body, country: req.body.country || req.get('x-country'), locale: req.get('accept-language') }))));

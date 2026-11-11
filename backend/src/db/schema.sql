@@ -1285,3 +1285,37 @@ ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_tx VARCHAR(80);
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_checked_at TIMESTAMPTZ;
 -- one network transaction can pay for one order only
 CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_crypto_tx_idx ON payment_orders (crypto_network, crypto_tx) WHERE crypto_tx IS NOT NULL;
+
+-- ------------------------------------------------------------------ Hushavia Coins (in-app balance, not a crypto token)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS coins BIGINT NOT NULL DEFAULT 0 CHECK (coins >= 0);
+CREATE TABLE IF NOT EXISTS coin_packs (
+  id         BIGSERIAL     PRIMARY KEY,
+  coins      INTEGER       NOT NULL CHECK (coins > 0),
+  bonus      INTEGER       NOT NULL DEFAULT 0 CHECK (bonus >= 0),
+  price_usd  NUMERIC(10,2) NOT NULL CHECK (price_usd > 0),
+  badge      VARCHAR(20),
+  is_active  BOOLEAN       NOT NULL DEFAULT TRUE,
+  sort       INTEGER       NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+INSERT INTO coin_packs (coins, bonus, price_usd, badge, sort)
+SELECT * FROM (VALUES (100, 0, 0.99, NULL, 100), (500, 25, 4.99, NULL, 500), (1000, 100, 9.99, 'Popular', 1000), (2500, 400, 24.99, NULL, 2500), (5000, 1000, 49.99, 'Best value', 5000))
+  AS p(coins, bonus, price_usd, badge, sort)
+WHERE NOT EXISTS (SELECT 1 FROM coin_packs);
+-- every change of a balance (the balance itself lives in users.coins)
+CREATE TABLE IF NOT EXISTS coin_tx (
+  id         BIGSERIAL    PRIMARY KEY,
+  user_id    BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  delta      BIGINT       NOT NULL,
+  balance    BIGINT       NOT NULL,
+  kind       VARCHAR(16)  NOT NULL CHECK (kind IN ('purchase', 'gift_sent', 'gift_received', 'plus', 'admin')),
+  peer_id    BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  order_id   BIGINT       REFERENCES payment_orders(id) ON DELETE SET NULL,
+  note       VARCHAR(120),
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS coin_tx_user_idx ON coin_tx (user_id, id DESC);
+ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_check;
+ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins'));
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coins INTEGER;
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coin_pack_id BIGINT REFERENCES coin_packs(id) ON DELETE SET NULL;

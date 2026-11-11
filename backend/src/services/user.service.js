@@ -192,6 +192,7 @@ async function getMe(userId) {
   if (!u) throw notFound('user_not_found', 'User not found');
   const me = serialize(u, userId);
   me.limits = await require('./payment.service').limitsFor(userId); // lazy: avoids circular import
+  me.coins = Number(u.coins) || 0;
   return me;
 }
 

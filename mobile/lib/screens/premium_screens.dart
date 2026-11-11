@@ -1,22 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
-import '../core/api_client.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
 import '../state/auth_state.dart';
 import '../utils/format.dart';
 import '../theme/brand.dart';
 import '../widgets/mascot.dart';
-import 'wallet_screen.dart' show walletSendForChat;
+import 'coins_screen.dart';
+import 'crypto_checkout.dart';
 
 const premiumColor = Brand.premium;
 
@@ -44,7 +42,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool resume = true}) async {
     try {
       final r = Map<String, dynamic>.from(await context.read<AppServices>().api.get('/premium') as Map);
       if (!mounted) return;
@@ -56,117 +54,45 @@ class _PremiumScreenState extends State<PremiumScreen> {
     } catch (e) {
       if (mounted) showError(context, e);
     }
-    _resumeCrypto();
+    if (resume && mounted) _resumeCrypto();
   }
 
-  // ---- paying with USDT from the wallet
-  // The transaction id is written to the phone the moment the network accepts it, so a payment
-  // is never lost if the app closes before the server hears about it.
-  String get _pendingKey => 'plus_crypto_pending_${context.read<AuthState>().me?.id ?? 0}';
-
-  Future<void> _savePending(int orderId, String tx) async {
-    final key = _pendingKey;
-    await (await SharedPreferences.getInstance()).setString(key, jsonEncode({'order': orderId, 'tx': tx}));
-  }
-
-  /// Tells the server which transaction paid the order. True when it no longer needs to be retried.
-  Future<bool> _submitTx(int orderId, String tx) async {
-    final api = context.read<AppServices>().api;
-    final key = _pendingKey;
-    try {
-      await api.post('/payments/orders/$orderId/crypto', {'tx': tx});
-    } on ApiException catch (e) {
-      if (e.isNetwork || e.status >= 500 || e.status == 429) return false; // try again later
-    } catch (_) {
-      return false;
-    }
-    (await SharedPreferences.getInstance()).remove(key);
-    return true;
-  }
-
+  /// A wallet payment that was sent while the app closed: report it now.
   Future<void> _resumeCrypto() async {
-    try {
-      final key = _pendingKey;
-      final raw = (await SharedPreferences.getInstance()).getString(key);
-      if (raw == null || !mounted) return;
-      final j = jsonDecode(raw) as Map;
-      final orderId = (j['order'] as num).toInt();
-      if (!await _submitTx(orderId, '${j['tx']}') || !mounted) return;
-      await _waitFor(orderId, crypto: true);
-    } catch (_) {}
+    if (await resumeWalletPayment(context) && mounted) _paid();
   }
 
-  Future<void> _waitFor(int orderId, {bool crypto = false}) async {
-    final paid = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => _WaitForPayment(orderId: orderId, crypto: crypto));
-    if (paid == true && mounted) {
-      await context.read<AuthState>().refreshMe();
-      if (mounted) showInfo(context, 'Hushavia Plus is active ⭐');
-      _load();
-    }
+  Future<void> _paid() async {
+    await context.read<AuthState>().refreshMe();
+    if (mounted) showInfo(context, 'Hushavia Plus is active ⭐');
+    _load(resume: false);
   }
 
   Future<void> _payCrypto(int planId) async {
-    final nets = [for (final n in (_info?['crypto_networks'] as List? ?? const [])) Map<String, dynamic>.from(n as Map)];
-    if (nets.isEmpty) return;
-    final net = nets.length == 1
-        ? nets.first
-        : await showModalBottomSheet<Map<String, dynamic>>(
-            context: context,
-            builder: (ctx) => SafeArea(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 4, 20, 2),
-                  child: Align(alignment: Alignment.centerLeft, child: Text('Pay with USDT on…', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
-                ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Align(alignment: Alignment.centerLeft, child: Text('Choose the network where your USDT is.', style: TextStyle(color: Brand.muted))),
-                ),
-                for (final n in nets)
-                  ListTile(
-                    leading: const CircleAvatar(backgroundColor: Color(0xFF26A17B), child: Text('₮', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900))),
-                    title: Text('${n['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text('${n['fee_hint'] ?? ''}'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.pop(ctx, n),
-                  ),
-                const SizedBox(height: 8),
-              ]),
-            ),
-          );
-    if (net == null || !mounted) return;
     setState(() => _busy = true);
-    final api = context.read<AppServices>().api;
     try {
-      final r = Map<String, dynamic>.from(await api.post('/payments/checkout', {'plan_id': planId, 'provider': 'crypto', 'network': net['id']}) as Map);
-      final orderId = ((r['order'] as Map)['id'] as num).toInt();
-      final c = Map<String, dynamic>.from(r['crypto'] as Map);
-      if (!mounted) return;
-      String? sent;
-      final card = await walletSendForChat(
-        context,
-        peerName: '${AppConfig.appName} Plus',
-        locked: true,
-        request: {'network': c['network'], 'symbol': c['symbol'], 'amount': c['amount'], 'decimals': c['decimals'], 'to': c['to'], 'contract': c['contract']},
-        onSent: (tx) async {
-          sent = tx;
-          await _savePending(orderId, tx);
-        },
-      );
-      final tx = sent ?? (card == null ? null : '${card['tx']}');
-      if (tx == null) {
-        // nothing was sent: drop the order
-        try {
-          await api.post('/payments/orders/$orderId/cancel', {});
-        } catch (_) {}
-        return;
+      final ok = await payWithWallet(context, body: {'plan_id': planId}, networks: _info?['crypto_networks'] as List? ?? const [], what: 'Plus');
+      if (ok && mounted) await _paid();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _payCoins(int planId, int price) async {
+    final balance = ((_info?['coins'] as Map?)?['balance'] as num?)?.toInt() ?? 0;
+    if (balance < price) {
+      final go = await confirm(context, 'Not enough coins', 'This plan costs ${fmtCoins(price)} coins and you have ${fmtCoins(balance)}. Get more coins?', ok: 'Get coins');
+      if (go && mounted) {
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => const CoinsScreen()));
+        _load(resume: false);
       }
-      if (!mounted) return;
-      if (!await _submitTx(orderId, tx)) {
-        if (mounted) showInfo(context, 'Your payment was sent. We’ll confirm it as soon as you’re back online — open this page again.');
-        return;
-      }
-      if (mounted) await _waitFor(orderId, crypto: true);
+      return;
+    }
+    if (!await confirm(context, 'Pay with coins?', '${fmtCoins(price)} coins will be taken from your balance (${fmtCoins(balance)}).', ok: 'Pay') || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await context.read<AppServices>().api.post('/coins/plus', {'plan_id': planId});
+      if (mounted) await _paid();
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -420,6 +346,14 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   ),
                 );
               }),
+              if (info['coins'] is Map && _planId != null && ((info['coins'] as Map)['prices'] as Map?)?['$_planId'] != null)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), side: const BorderSide(color: premiumColor)),
+                  onPressed: _busy ? null : () => _payCoins(_planId!, (((info['coins'] as Map)['prices'] as Map)['$_planId'] as num).toInt()),
+                  icon: const CoinIcon(size: 20),
+                  label: Text('Pay ${fmtCoins((((info['coins'] as Map)['prices'] as Map)['$_planId'] as num).toInt())} coins · you have ${fmtCoins(((info['coins'] as Map)['balance'] as num).toInt())}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ),
               ],
               const SizedBox(height: 14),
               Text(comingSoon ? 'What is coming' : 'What you get', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),

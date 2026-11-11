@@ -16,6 +16,7 @@ import 'secret_screens.dart';
 import 'chat_screen.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
+import 'coins_screen.dart';
 import 'shared_media_screen.dart';
 import 'story_screens.dart' show HighlightsRow;
 import '../widgets/emoji_status.dart';
@@ -280,6 +281,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       title: u.isContact ? 'Remove from contacts' : 'Add to contacts',
                       onTap: () => _toggle('/contacts/${u.id}', !u.isContact),
                     ),
+                    if (!u.isBot && !u.blocked && !u.blockedMe && auth.feature('coins'))
+                      SettingsTile(
+                        icon: Icons.card_giftcard_rounded,
+                        color: const Color(0xFFF5A623),
+                        title: 'Send coins',
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CoinsScreen(sendTo: u))),
+                      ),
                     SettingsTile(
                       icon: Icons.flag_rounded,
                       color: Brand.amber,
