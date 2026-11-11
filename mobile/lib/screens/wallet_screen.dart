@@ -2649,7 +2649,11 @@ Future<Map<String, dynamic>?> walletSendForChat(BuildContext context,
     }
     to = '${request['to']}';
     amount = BigInt.tryParse('${request['amount']}');
-    if (locked && (amount == null || (asset.balance ?? BigInt.zero) < amount)) {
+    if (locked && asset.balance == null) {
+      showInfo(context, 'Can’t reach the ${asset.networkName} network right now. Check your internet and try again.');
+      return null;
+    }
+    if (locked && (amount == null || asset.balance! < amount)) {
       showInfo(context, 'Not enough ${asset.symbol} on ${asset.networkName} in your wallet. Add some (Wallet → Receive) and try again.');
       return null;
     }

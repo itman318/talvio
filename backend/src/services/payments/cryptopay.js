@@ -106,7 +106,15 @@ function judge(logs, { contractHex, toHex, amount }) {
   return { state: 'mismatch', reason: 'This transaction did not send USDT to our address' };
 }
 
-async function checkTron(n, { tx, to, amount, after }) {
+const EARLY = 2 * 60 * 1000; // clocks differ a little
+/** A payment counts for an order only when it was made inside the order's own day (see payment.service: amounts are not reused within a day). */
+function timeProblem(ms, after, until) {
+  if (after && ms < after - EARLY) return 'This transaction is older than the order';
+  if (until && ms > until) return 'This transaction was made long after the order';
+  return null;
+}
+
+async function checkTron(n, { tx, to, amount, after, until }) {
   const headers = process.env.TRONGRID_API_KEY ? { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY } : {};
   // "walletsolidity" answers only for transactions that are final (can no longer be undone)
   const info = await transport(`${n.api}/walletsolidity/gettransactioninfobyid`, { value: tx }, headers);
@@ -116,7 +124,8 @@ async function checkTron(n, { tx, to, amount, after }) {
     return { state: 'failed', reason: 'The transaction failed on the network — nothing was paid' };
   }
   if (!info.receipt || info.receipt.result !== 'SUCCESS') return { state: 'mismatch', reason: 'Not a token transfer' };
-  if (after && Number(info.blockTimeStamp || 0) < after - 120000) return { state: 'mismatch', reason: 'This transaction is older than the order' };
+  const late = timeProblem(Number(info.blockTimeStamp || 0), after, until);
+  if (late) return { state: 'mismatch', reason: late };
   return judge(info.log || [], { contractHex: tronHex(n.contract), toHex: tronHex(to), amount });
 }
 
@@ -134,7 +143,7 @@ async function rpc(n, method, params) {
   throw last || new Error('network unreachable');
 }
 
-async function checkEvm(n, { tx, to, amount, after }) {
+async function checkEvm(n, { tx, to, amount, after, until }) {
   const rc = await rpc(n, 'eth_getTransactionReceipt', [tx]);
   if (!rc || !rc.blockNumber) return { state: 'pending' };
   if (String(rc.transactionHash || '').toLowerCase() !== tx) return { state: 'pending' };
@@ -145,13 +154,14 @@ async function checkEvm(n, { tx, to, amount, after }) {
     const block = await rpc(n, 'eth_getBlockByNumber', [rc.blockNumber, false]);
     // a block that vanished (re-organised away) is simply not final yet
     if (!block || !block.timestamp) return { state: 'pending' };
-    if (Number(BigInt(block.timestamp)) * 1000 < after - 120000) return { state: 'mismatch', reason: 'This transaction is older than the order' };
+    const late = timeProblem(Number(BigInt(block.timestamp)) * 1000, after, until);
+    if (late) return { state: 'mismatch', reason: late };
   }
   return judge(rc.logs || [], { contractHex: n.contract.slice(2).toLowerCase(), toHex: to.slice(2).toLowerCase(), amount });
 }
 
 /**
- * @param {{network:string, tx:string, to:string, amount:bigint, after?:number}} p  after = order creation time (ms)
+ * @param {{network:string, tx:string, to:string, amount:bigint, after?:number, until?:number}} p  after = order creation time (ms), until = the latest time a payment for it may carry
  * @returns {Promise<{state:'paid'|'pending'|'failed'|'mismatch', reason?:string, from?:string}>}
  *   pending  — not on the network yet / not final yet: ask again later
  *   failed   — reverted: certainly nothing was paid

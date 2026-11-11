@@ -326,7 +326,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     Expanded(child: Text('${info['payments_note']}', style: const TextStyle(fontSize: 13.5))),
                   ]),
                 )
-              else if ((info['methods'] as List).isEmpty)
+              else if ((info['methods'] as List).isEmpty && info['coins'] == null)
                 const Padding(padding: EdgeInsets.only(bottom: 10), child: Text('Payments are not available right now.', textAlign: TextAlign.center)),
               ...(info['methods'] as List).map((m) {
                 final method = Map<String, dynamic>.from(m as Map);
@@ -569,7 +569,11 @@ class PaymentHistoryScreen extends StatelessWidget {
                   st == 'paid' ? Icons.check_circle : (['failed', 'rejected', 'cancelled'].contains(st) ? Icons.cancel : Icons.schedule),
                   color: st == 'paid' ? Brand.accent : (['failed', 'rejected'].contains(st) ? Colors.red : null),
                 ),
-                title: Text('${o['amount_text'] ?? 'Rs ${o['amount_pkr']}'} · ${o['months']} month${o['months'] == 1 ? '' : 's'}'),
+                title: Text(o['provider'] == 'coins'
+                    ? '${o['provider_message'] ?? 'Paid with coins'} · ${o['months']} month${o['months'] == 1 ? '' : 's'}'
+                    : ((o['coins'] as num?) ?? 0) > 0
+                        ? '${o['amount_text']} · ${fmtCoins((o['coins'] as num).toInt())} coins'
+                        : '${o['amount_text'] ?? 'Rs ${o['amount_pkr']}'} · ${o['months']} month${o['months'] == 1 ? '' : 's'}'),
                 subtitle: Text([_labels[st] ?? st, '${o['provider']}', _date(o['created_at'] as String?), if (o['review_note'] != null) '${o['review_note']}'].join(' · ')),
               );
             }).toList(),

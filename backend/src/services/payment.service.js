@@ -300,7 +300,7 @@ async function checkoutCrypto(userId, item, body) {
       `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, txn_ref, currency, amount, crypto_network, crypto_to, crypto_amount, coins, coin_pack_id)
        SELECT $1::bigint, $2::bigint, $3::int, $4::int, 'crypto', $5::varchar, 'USD', $6::numeric, $7::varchar, $8::varchar, $9::numeric, $10::int, $11::bigint
        WHERE NOT EXISTS (SELECT 1 FROM payment_orders WHERE provider = 'crypto' AND crypto_network = $7::varchar AND crypto_amount = $9::numeric
-                           AND (status IN ('pending', 'review') OR created_at > now() - interval '1 day'))
+                           AND (status IN ('pending', 'review') OR created_at > now() - interval '1 day' OR crypto_submitted_at > now() - interval '1 day'))
        RETURNING *`,
       [userId, item.planId, item.months, item.pkr, newTxnRef(), usd, n.id, net.to, units.toString(), item.coins || null, item.packId || null],
     );
@@ -308,6 +308,8 @@ async function checkoutCrypto(userId, item, body) {
   }
   throw conflict('busy', 'Many people are paying right now. Try again in a minute.');
 }
+
+const ORDER_WINDOW_HOURS = 23;
 
 /** The app tells us which network transaction paid the order; we check it ourselves. */
 async function submitCryptoTx(userId, idRaw, body = {}) {
@@ -322,7 +324,7 @@ async function submitCryptoTx(userId, idRaw, body = {}) {
   if (o.crypto_tx && o.crypto_tx !== tx && o.status === 'review') throw conflict('order_closed', 'This payment is already being checked');
   rateLimit.enforce(`cryptotx:${userId}`, 20, 60 * 60 * 1000, 'Too many attempts. Try again later.');
   try {
-    await db.query(`UPDATE payment_orders SET crypto_tx = $2, status = 'pending', provider_message = 'Confirming on the network', crypto_checked_at = NULL WHERE id = $1`, [o.id, tx]);
+    await db.query(`UPDATE payment_orders SET crypto_tx = $2, status = 'pending', provider_message = 'Confirming on the network', crypto_checked_at = NULL, crypto_submitted_at = now() WHERE id = $1`, [o.id, tx]);
   } catch (e) {
     if (e && e.code === '23505') throw conflict('tx_used', 'This transaction was already used for another order');
     throw e;
@@ -342,6 +344,8 @@ async function verifyCrypto(orderId) {
     to: o.crypto_to,
     amount: BigInt(String(o.crypto_amount).split('.')[0]),
     after: new Date(o.created_at).getTime(),
+    // the same amount may be given to a new order a day later: an old order must not be able to claim that payment
+    until: new Date(o.created_at).getTime() + ORDER_WINDOW_HOURS * 3600 * 1000,
   });
   if (r.state === 'paid') {
     await markPaid(o.id, { providerRef: o.crypto_tx, message: 'Confirmed on the network', raw: { from: r.from } });
@@ -516,7 +520,7 @@ async function sweep() {
   // a transaction that is still not final after 2 hours: a person looks at it
   await db.query(
     `UPDATE payment_orders SET status = 'review', provider_message = 'Not confirmed on the network after 2 hours'
-     WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NOT NULL AND created_at < now() - interval '2 hours'`,
+     WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NOT NULL AND COALESCE(crypto_submitted_at, created_at) < now() - interval '2 hours'`,
   );
   if (sweeping) return;
   sweeping = true;

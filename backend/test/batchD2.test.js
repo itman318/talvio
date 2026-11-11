@@ -350,6 +350,15 @@ test('Plus with USDT from the wallet: unique amount, checked on the network, one
     chain[txid(6)] = receipt(txid(6), { amount: b5.crypto.amount });
     assert.equal((await payments.submitCryptoTx(B.id, b5.order.id, { tx: txid(6) })).status, 'review');
     blockTime = Date.now();
+    // …and a payment made days later can't either (the amount may belong to someone else's order by then)
+    await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
+    const b5b = await payments.checkout(B.id, { plan_id: plan3.id, provider: 'crypto', network: 'bsc' });
+    blockTime = Date.now() + 2 * 86400e3;
+    chain[txid(7)] = receipt(txid(7), { amount: b5b.crypto.amount });
+    const late = await payments.submitCryptoTx(B.id, b5b.order.id, { tx: txid(7) });
+    assert.equal(late.status, 'review');
+    assert.match(late.provider_message, /long after/);
+    blockTime = Date.now();
 
     await db.query(`UPDATE payment_orders SET status = 'rejected' WHERE user_id = $1 AND status IN ('review', 'pending')`, [B.id]);
     // a new order replaces an unpaid one; an expired order that WAS paid still counts

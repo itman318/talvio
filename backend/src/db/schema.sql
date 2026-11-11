@@ -1319,3 +1319,4 @@ ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_che
 ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins'));
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coins INTEGER;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coin_pack_id BIGINT REFERENCES coin_packs(id) ON DELETE SET NULL;
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_submitted_at TIMESTAMPTZ;
