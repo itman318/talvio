@@ -250,7 +250,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final info = _info;
     final dark = Theme.of(context).brightness == Brightness.dark;
     // Plus sales are switched on from the admin panel (app config "plus_available"); until then: coming soon.
-    final comingSoon = context.watch<AuthState>().appConfig['plus_available'] != true && info?['is_premium'] != true;
+    // (the page's own answer is fresher than the app config, which is read when the app starts)
+    final open = info?['sales_open'] is bool ? info!['sales_open'] == true : context.watch<AuthState>().appConfig['plus_available'] == true;
+    final comingSoon = !open && info?['is_premium'] != true;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hushavia Plus'),

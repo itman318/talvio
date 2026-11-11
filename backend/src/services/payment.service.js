@@ -164,6 +164,7 @@ async function premiumInfo(userId, hint = {}) {
   return {
     is_premium: isPremiumRow(u),
     premium_until: iso(u && u.premium_until),
+    sales_open: !!s.plus_sales_open,
     country,
     currency,
     plans: withSavings(plans.map((p) => ({ ...serializePlan(p, currency), usdt: cryptoOk ? usdOf(p) : null }))),
