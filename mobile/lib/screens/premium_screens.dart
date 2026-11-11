@@ -381,9 +381,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
 /// Waits for the gateway result (socket event, or polling as a fallback).
 class _WaitForPayment extends StatefulWidget {
-  const _WaitForPayment({required this.orderId, this.crypto = false});
+  const _WaitForPayment({required this.orderId});
   final int orderId;
-  final bool crypto; // paid from the wallet: waiting for the network, not for a browser page
 
   @override
   State<_WaitForPayment> createState() => _WaitForPaymentState();
@@ -424,7 +423,7 @@ class _WaitForPaymentState extends State<_WaitForPayment> {
   Widget build(BuildContext context) {
     final failed = ['failed', 'cancelled', 'rejected'].contains(_status);
     return AlertDialog(
-      title: Text(failed ? 'Payment not completed' : _status == 'review' || widget.crypto ? 'Confirming…' : 'Waiting for payment'),
+      title: Text(failed ? 'Payment not completed' : _status == 'review' ? 'Confirming…' : 'Waiting for payment'),
       content: Row(children: [
         if (!failed) const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
         if (!failed) const SizedBox(width: 16),
@@ -433,9 +432,7 @@ class _WaitForPaymentState extends State<_WaitForPayment> {
               ? 'The payment did not go through. You can try again.'
               : _status == 'review'
                   ? 'We received your payment details and are confirming them. Hushavia Plus will start shortly.'
-                  : widget.crypto
-                      ? 'Your payment was sent. The network is confirming it — usually about a minute. You can close this: Hushavia Plus starts by itself.'
-                      : 'Finish the payment in your browser, then come back here.'),
+                  : 'Finish the payment in your browser, then come back here.'),
         ),
       ]),
       actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(failed || _status == 'review' ? 'OK' : 'Close'))],

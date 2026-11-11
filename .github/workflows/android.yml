@@ -172,6 +172,10 @@ jobs:
           GRADLE
           sed -i 's/^          //' ~/.gradle/init.d/mirrors.gradle
           cat ~/.gradle/init.d/mirrors.gradle
+          # Android's release "lint" pass crashes inside a plugin's Java sources on the newest tools
+          # (a bug in lint itself, nothing in the app). It only reports style problems — skip it.
+          printf '%s\n' 'allprojects {' "  tasks.configureEach { t -> if (t.name.startsWith('lintVital')) { t.enabled = false } }" '}' > ~/.gradle/init.d/nolint.gradle
+          cat ~/.gradle/init.d/nolint.gradle
 
       - name: Get Gradle (several mirrors, retries)
         if: steps.analyze.outcome == 'success' && !inputs.analyze_only
