@@ -1,0 +1,328 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:PJS;src:url('../../assets/fonts/PlusJakartaSans-ExtraBold.ttf')}
+html,body{margin:0;background:transparent}
+svg{display:block}
+</style></head><body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+  <radialGradient id="gHead" cx="0.36" cy="0.30" r="0.85">
+    <stop offset="0" stop-color="#FFF3A6"/><stop offset="0.42" stop-color="#FFD83D"/><stop offset="0.85" stop-color="#FFB61A"/><stop offset="1" stop-color="#F59A0C"/>
+  </radialGradient>
+  <radialGradient id="gBody" cx="0.40" cy="0.22" r="0.95">
+    <stop offset="0" stop-color="#FFE56B"/><stop offset="0.55" stop-color="#FFC62A"/><stop offset="1" stop-color="#F0900A"/>
+  </radialGradient>
+  <radialGradient id="gBelly" cx="0.5" cy="0.4" r="0.6">
+    <stop offset="0" stop-color="#FFFBE0" stop-opacity=".95"/><stop offset="1" stop-color="#FFF1A8" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gArm" gradientUnits="userSpaceOnUse" x1="-18" y1="0" x2="18" y2="0"><stop offset="0" stop-color="#FFDC4E"/><stop offset="1" stop-color="#F9AE18"/></linearGradient>
+  <linearGradient id="gWing" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FFDF55"/><stop offset="1" stop-color="#F7A313"/>
+  </linearGradient>
+  <linearGradient id="gCap" x1="0.15" y1="0" x2="0.8" y2="1">
+    <stop offset="0" stop-color="#9A8BFF"/><stop offset="0.45" stop-color="#6A55F5"/><stop offset="1" stop-color="#3F2BC9"/>
+  </linearGradient>
+  <linearGradient id="gBrim" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#5B45EC"/><stop offset="1" stop-color="#2E1FA6"/>
+  </linearGradient>
+  <linearGradient id="gBeak" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFB03A"/><stop offset="1" stop-color="#F26A12"/>
+  </linearGradient>
+  <linearGradient id="gFoot" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FF9D2E"/><stop offset="1" stop-color="#E8640C"/>
+  </linearGradient>
+  <radialGradient id="gEye" cx="0.4" cy="0.3" r="0.8">
+    <stop offset="0" stop-color="#4A3A86"/><stop offset="0.6" stop-color="#231650"/><stop offset="1" stop-color="#140B33"/>
+  </radialGradient>
+  <radialGradient id="gCheek" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#FF7FA3" stop-opacity=".85"/><stop offset="1" stop-color="#FF7FA3" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gStar" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF2B0"/><stop offset="1" stop-color="#FFC233"/></linearGradient>
+  <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter>
+  <filter id="soft2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter>
+  <clipPath id="cHead"><circle cx="256" cy="246" r="112"/></clipPath>
+  <clipPath id="cBody"><ellipse cx="256" cy="390" rx="92" ry="68"/></clipPath>
+  <clipPath id="cDome"><path d="M148 204 C132 76 380 76 364 204 C306 184 206 184 148 204 Z"/></clipPath>
+  <path id="capArc" d="M168 176 Q256 138 344 176"/>
+</defs>
+
+<g id="stage" transform="translate(240 478) scale(.9) translate(-256 -470)">
+<g id="back"></g>
+<ellipse id="shadow" cx="256" cy="462" rx="112" ry="15" fill="#1A1240" opacity=".2" filter="url(#soft2)"/>
+
+<g id="root">
+  <!-- feet -->
+  <g id="footL"><path d="M178 452 C178 436 198 430 214 432 C232 434 246 442 244 454 C242 464 180 466 178 452 Z" fill="url(#gFoot)" stroke="#C4520A" stroke-width="3"/><path d="M196 440 L196 452 M214 437 L214 453" stroke="#C4520A" stroke-width="2.5" stroke-linecap="round" opacity=".55"/></g>
+  <g id="footR"><path d="M334 452 C334 436 314 430 298 432 C280 434 266 442 268 454 C270 464 332 466 334 452 Z" fill="url(#gFoot)" stroke="#C4520A" stroke-width="3"/><path d="M316 440 L316 452 M298 437 L298 453" stroke="#C4520A" stroke-width="2.5" stroke-linecap="round" opacity=".55"/></g>
+
+  <!-- body -->
+  <g id="body">
+    <ellipse cx="256" cy="390" rx="92" ry="68" fill="url(#gBody)" stroke="#D98708" stroke-width="3"/>
+    <g clip-path="url(#cBody)">
+      <ellipse cx="256" cy="404" rx="62" ry="50" fill="url(#gBelly)"/>
+      <path d="M238 352 q8 9 16 0 M258 352 q8 9 16 0 M248 364 q8 9 16 0" fill="none" stroke="#E0920A" stroke-width="2.6" stroke-linecap="round" opacity=".55"/>
+      <ellipse cx="256" cy="330" rx="100" ry="26" fill="#C96F00" opacity=".28" filter="url(#soft)"/>
+      <ellipse cx="256" cy="468" rx="96" ry="22" fill="#B85C00" opacity=".35" filter="url(#soft)"/>
+    </g>
+  </g>
+
+  <!-- head -->
+  <g id="head">
+    <g id="tuft"><path d="M350 206 C372 196 384 210 378 224 C372 216 364 216 360 222 Z" fill="#FFD23A" stroke="#D98708" stroke-width="2.5" stroke-linejoin="round"/></g>
+    <circle cx="256" cy="246" r="112" fill="url(#gHead)" stroke="#D98708" stroke-width="3"/>
+    <g clip-path="url(#cHead)">
+      <ellipse cx="256" cy="372" rx="120" ry="34" fill="#C96F00" opacity=".32" filter="url(#soft)"/>
+      <ellipse cx="200" cy="228" rx="46" ry="30" fill="#fff" opacity=".28" filter="url(#soft)"/>
+      <!-- shade under the cap -->
+      <ellipse cx="256" cy="206" rx="128" ry="26" fill="#B86200" opacity=".38" filter="url(#soft)"/>
+    </g>
+    <ellipse cx="178" cy="296" rx="27" ry="18" fill="url(#gCheek)"/>
+    <ellipse cx="334" cy="296" rx="27" ry="18" fill="url(#gCheek)"/>
+
+    <!-- eyes -->
+    <g id="eyeL"><ellipse cx="208" cy="262" rx="19" ry="25" fill="url(#gEye)"/><circle cx="201" cy="251" r="7.5" fill="#fff"/><circle cx="215" cy="272" r="3.4" fill="#fff" opacity=".75"/></g>
+    <g id="eyeR"><ellipse cx="304" cy="262" rx="19" ry="25" fill="url(#gEye)"/><circle cx="297" cy="251" r="7.5" fill="#fff"/><circle cx="311" cy="272" r="3.4" fill="#fff" opacity=".75"/></g>
+    <g id="lids" opacity="0">
+      <path d="M187 264 Q208 246 229 264" fill="none" stroke="#231650" stroke-width="6.5" stroke-linecap="round"/>
+      <path d="M283 264 Q304 246 325 264" fill="none" stroke="#231650" stroke-width="6.5" stroke-linecap="round"/>
+    </g>
+
+    <g id="lidsSleep" opacity="0">
+      <path d="M188 262 Q208 278 228 262" fill="none" stroke="#231650" stroke-width="6.5" stroke-linecap="round"/>
+      <path d="M284 262 Q304 278 324 262" fill="none" stroke="#231650" stroke-width="6.5" stroke-linecap="round"/>
+    </g>
+    <!-- beak -->
+    <g id="beak">
+      <g id="jaw"><path d="M232 300 C236 326 276 326 280 300 C268 306 244 306 232 300 Z" fill="#7A1F2B" stroke="#C4520A" stroke-width="3" stroke-linejoin="round"/><ellipse cx="256" cy="313" rx="12" ry="6" fill="#FF7B8E"/></g>
+      <path d="M226 298 C230 276 282 276 286 298 C274 310 238 310 226 298 Z" fill="url(#gBeak)" stroke="#C4520A" stroke-width="3" stroke-linejoin="round"/>
+      <ellipse cx="248" cy="289" rx="12" ry="4.5" fill="#fff" opacity=".45"/>
+    </g>
+
+    <g id="glasses"></g>
+    <!-- cap -->
+    <g id="cap">
+      <path d="M148 204 C132 76 380 76 364 204 C306 184 206 184 148 204 Z" fill="url(#gCap)" stroke="#2A1B8F" stroke-width="3" stroke-linejoin="round"/>
+      <g clip-path="url(#cDome)">
+        <ellipse cx="206" cy="124" rx="56" ry="30" fill="#fff" opacity=".30" filter="url(#soft)"/>
+        <ellipse cx="330" cy="196" rx="70" ry="30" fill="#1D1273" opacity=".35" filter="url(#soft)"/>
+        <path d="M256 92 C250 130 250 160 256 196" fill="none" stroke="#2A1B8F" stroke-width="2" opacity=".35"/>
+      </g>
+      <ellipse cx="256" cy="98" rx="14" ry="7.5" fill="#8B7BFF" stroke="#2A1B8F" stroke-width="2.5"/>
+      <text font-family="PJS" font-size="31" fill="#fff" text-anchor="middle" letter-spacing=".5"><textPath href="#capArc" startOffset="50%">Hushavia</textPath></text>
+      <path d="M126 206 C170 176 342 176 386 206 C392 214 386 222 376 226 C320 244 192 244 136 226 C126 222 120 214 126 206 Z" fill="url(#gBrim)" stroke="#231680" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M150 204 C196 188 316 188 362 204" fill="none" stroke="#A99CFF" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    </g>
+  </g>
+
+  <g id="propBody"></g>
+  <!-- arms: shoulder → hand with feather fingers (the joint hides behind the body) -->
+  <g id="armL" transform="translate(174 372) scale(1.32)"><g class="flip" transform="scale(-1 1)"><g class="rot">
+    <g class="upper"><path d="M-16 6 C-19 -16 -16 -38 -13 -48 L13 -48 C16 -38 19 -16 16 6 C9 13 -9 13 -16 6Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+    <g class="hand" transform="translate(0 -46)"><g class="prop"></g>
+      <g class="f f0"><path d="M-7.5 0 C-10 -16 -6 -30 0 -34 C6 -30 10 -16 7.5 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <g class="f f1"><path d="M-8 0 C-10.5 -18 -6 -34 0 -38 C6 -34 10.5 -18 8 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <g class="f f2"><path d="M-7.5 0 C-10 -16 -6 -30 0 -34 C6 -30 10 -16 7.5 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <g class="f f3"><path d="M-6.5 0 C-9 -12 -5 -22 0 -25 C5 -22 9 -12 6.5 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <ellipse cx="0" cy="-8" rx="18.5" ry="17" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3"/>
+      <ellipse cx="0" cy="-13" rx="13.5" ry="11" fill="#FFCE34"/>
+      <ellipse cx="0" cy="5" rx="11.5" ry="9" fill="#FFC62C"/>
+      <ellipse cx="-5" cy="-12" rx="6" ry="8" fill="#fff" opacity=".28"/>
+    </g>
+  </g></g></g>
+  <g id="armR" transform="translate(338 372) scale(1.32)"><g class="rot">
+    <g class="upper"><path d="M-16 6 C-19 -16 -16 -38 -13 -48 L13 -48 C16 -38 19 -16 16 6 C9 13 -9 13 -16 6Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+    <g class="hand" transform="translate(0 -46)"><g class="prop"></g>
+      <g class="f f0"><path d="M-7.5 0 C-10 -16 -6 -30 0 -34 C6 -30 10 -16 7.5 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <g class="f f1"><path d="M-8 0 C-10.5 -18 -6 -34 0 -38 C6 -34 10.5 -18 8 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <g class="f f2"><path d="M-7.5 0 C-10 -16 -6 -30 0 -34 C6 -30 10 -16 7.5 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <g class="f f3"><path d="M-6.5 0 C-9 -12 -5 -22 0 -25 C5 -22 9 -12 6.5 0Z" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3" stroke-linejoin="round"/></g>
+      <ellipse cx="0" cy="-8" rx="18.5" ry="17" fill="url(#gArm)" stroke="#D98708" stroke-width="2.3"/>
+      <ellipse cx="0" cy="-13" rx="13.5" ry="11" fill="#FFCE34"/>
+      <ellipse cx="0" cy="5" rx="11.5" ry="9" fill="#FFC62C"/>
+      <ellipse cx="-5" cy="-12" rx="6" ry="8" fill="#fff" opacity=".28"/>
+    </g>
+  </g></g>
+</g>
+
+<g id="fx"></g>
+</g>
+</svg>
+<script>
+const $=id=>document.getElementById(id);
+let DUR=3.0;
+const ease={ lin:x=>x, io:x=>x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2, out:x=>1-Math.pow(1-x,3), in:x=>x*x*x,
+  back:x=>{const c=1.70158,c3=c+1;return 1+c3*Math.pow(x-1,3)+c*Math.pow(x-1,2)} };
+function kf(t,k){ if(t<=k[0][0])return k[0][1]; for(let i=1;i<k.length;i++){ if(t<=k[i][0]){const a=k[i-1],b=k[i];const u=(t-a[0])/(b[0]-a[0]);return a[1]+(b[1]-a[1])*(ease[b[2]||'io'])(u);} } return k[k.length-1][1]; }
+const T=(el,s)=>el.setAttribute('transform',s);
+const O=(el,o)=>el.setAttribute('opacity',o);
+const sin=(t,hz,ph=0)=>Math.sin(t*Math.PI*2*hz+ph);
+const pulse=(t,t0,d)=>{const u=(t-t0)/d;return u>0&&u<1?Math.sin(u*Math.PI):0;};
+const blinkAt=(t,...ts)=>Math.max(0,...ts.map(b=>pulse(t,b,.16)));
+const STAR='M0 -18 C2 -5 5 -2 18 0 C5 2 2 5 0 18 C-2 5 -5 2 -18 0 C-5 -2 -2 -5 0 -18Z';
+const starEl=(id,gold)=>`<path id="${id}" d="${STAR}" fill="${gold?'url(#gStar)':'#B9AEFF'}" stroke="${gold?'#E79A00':'#6A55F5'}" stroke-width="1.5" opacity="0"/>`;
+function star(id,x,y,t,t0,s0,rot){const el=$(id);const u=(t-t0)/.7;const on=u>0&&u<1;T(el,`translate(${x} ${y-(on?u*26:0)}) rotate(${u*rot}) scale(${on?Math.sin(u*Math.PI)*s0:0})`);O(el,on?1:0);}
+
+// ---- the puppet: one set of numbers per frame
+function pose(p){
+  p=Object.assign({x:0,y:0,sy:1,hy:0,tilt:0,capY:0,capR:0,aR:[150,36,.35],aL:[150,36,.35],shrug:0,blink:0,lookX:0,lookY:0,open:0,eyes:'open',wl:0,eyeS:1,feet:0},p);
+  const sx=1/Math.sqrt(p.sy);
+  T($('stage'),`translate(${240+p.x} 478) scale(.9) translate(-256 -470)`);
+  T($('root'),`translate(0 ${p.y}) translate(256 456) scale(${sx} ${p.sy}) translate(-256 -456)`);
+  const h=Math.min(1,-p.y/44);
+  T($('shadow'),`translate(256 462) scale(${(1-h*.32)*(.96+(sx-1)*1.2)} ${1-h*.3}) translate(-256 -462)`); O($('shadow'),.2-h*.08);
+  const tuck=h*10+p.feet; T($('footL'),`translate(${tuck*.4} ${-tuck}) rotate(${h*14} 212 446)`); T($('footR'),`translate(${-tuck*.4} ${-tuck}) rotate(${-h*14} 300 446)`);
+  const arm=(id,[A,B,S])=>{const g=$(id);T(g.querySelector('.rot'),`rotate(${A})`);T(g.querySelector('.hand'),`translate(0 -46) rotate(${B})`);
+    const an=[-34,-2,30,-78];g.querySelectorAll('.f').forEach((el,i)=>T(el,`translate(${i==3?-12:0} ${i==3?-4:-14}) rotate(${an[i]*S})`));};
+  arm('armR',p.aR); arm('armL',p.aL);
+  T($('armR'),`translate(338 ${372-p.shrug}) scale(1.2)`); T($('armL'),`translate(174 ${372-p.shrug}) scale(1.2)`);
+  T($('head'),`translate(0 ${p.hy}) rotate(${p.tilt} 256 340)`);
+  T($('cap'),`translate(0 ${p.capY}) rotate(${p.capR} 256 200)`);
+  T($('tuft'),`rotate(${p.wl} 352 212)`);
+  const closed=p.eyes!=='open'||p.blink>.85; const es=(1-p.blink*.92)*p.eyeS;
+  for(const [id,cx] of [['eyeL',208],['eyeR',304]]){T($(id),`translate(${p.lookX} ${p.lookY}) translate(${cx} 264) scale(1 ${es}) translate(${-cx} -264)`);O($(id),closed?0:1);}
+  O($('lids'),(p.eyes==='happy'||(p.eyes==='open'&&p.blink>.85))?1:0); O($('lidsSleep'),p.eyes==='sleep'?1:0);
+  T($('lids'),`translate(${p.lookX} ${p.lookY})`);
+  T($('jaw'),`translate(0 ${-10+p.open*13}) translate(256 300) scale(1 ${.2+p.open*.9}) translate(-256 -300)`); O($('jaw'),p.open<.03?0:1);
+}
+const breath=t=>sin(t,2/3)*.012;
+const hop=(t,t0,amp=44)=>{ // squash → jump → land → settle, starting at t0
+  const u=t-t0;
+  return {y:kf(u,[[0,0],[.34,0],[.56,-amp,'out'],[.80,0,'in'],[9,0]]),
+    sy:kf(u,[[0,1],[.20,.90],[.34,.86],[.46,1.13,'out'],[.62,1.04],[.80,1.06,'in'],[.90,.84,'out'],[1.04,1.07],[1.18,.97],[1.32,1],[9,1]]),
+    hy:kf(u,[[0,0],[.20,5],[.34,8],[.50,-8,'out'],[.86,-2],[.96,9,'out'],[1.16,-3],[1.34,0],[9,0]]),
+    capY:kf(u,[[0,0],[.34,2],[.52,5,'out'],[.70,-9,'out'],[.92,-12],[1.04,6,'out'],[1.22,-2],[1.4,0],[9,0]]),
+    capR:kf(u,[[0,0],[.5,-2],[.96,3,'out'],[1.2,-1.5],[1.4,0],[9,0]]), land:pulse(u,.84,.2)};
+};
+
+const SCENES={};
+
+// ---------------------------------------------------------------- hello
+SCENES.wave={init(){ $('fx').innerHTML=`<g fill="none" stroke="#7C6BFF" stroke-width="7" stroke-linecap="round" transform="translate(-2 40)"><path id="a1" d="M438 250 Q456 272 446 298"/><path id="a2" d="M462 232 Q490 272 470 314"/></g>`+starEl('s1',1)+starEl('s2',0)+starEl('s3',1); },
+ draw(t){ const j=hop(t,0);
+  const up=kf(t,[[0,0],[.30,0],[.62,1,'back'],[2.30,1],[2.72,0],[3,0]]);
+  const env=kf(t,[[.6,0],[.78,1,'out'],[2.1,1],[2.36,0]]); const on=t>.6&&t<2.36;
+  const wv=on?sin(t-.6,2.6)*env:0, lag=on?sin(t-.6,2.6,-.9)*env:0;
+  const la=kf(t,[[0,152],[.34,158],[.52,100,'out'],[.86,160],[1.1,148],[1.4,152],[3,152]]);
+  pose({y:j.y,sy:j.sy+breath(t),hy:j.hy,capY:j.capY,capR:j.capR-wv*1.2,wl:-wv*9,
+    tilt:kf(t,[[0,0],[.34,-3],[.70,7,'out'],[2.3,7],[2.75,0],[3,0]])+wv*2.2,
+    aR:[(1-up)*152+up*60+wv*8,(1-up)*30+up*-22+lag*26,.4+up*.7+Math.abs(lag)*.12],
+    aL:[la,kf(t,[[0,30],[.52,-14,'out'],[.9,36],[1.3,30],[3,30]]),.4+(152-la)/150*.7],
+    blink:Math.max(j.land,blinkAt(t,1.5,2.62)),lookX:up*3,
+    open:kf(t,[[0,0],[.44,0],[.60,1,'back'],[1.0,.75],[1.3,1],[1.7,.7],[2.0,.95],[2.3,.2],[2.5,0],[3,0]])});
+  const arc=(el,d)=>{const p=((t-.7-d)%0.52)/0.52;const o=t>.7+d&&t<2.3;O(el,o?Math.sin(Math.max(0,p)*Math.PI)*.85:0);T(el,`translate(${o?p*10:0} ${o?-p*6:0})`);};
+  arc($('a1'),0);arc($('a2'),.12); star('s1',104,150,t,.52,1.15,90);star('s2',86,300,t,.66,.8,-70);star('s3',418,150,t,.60,.7,60); }};
+
+// ---------------------------------------------------------------- search: looks around through a magnifier
+const MAG=`<g transform="translate(0 -6) scale(1.45)"><rect x="-5.5" y="-34" width="11" height="40" rx="5.5" fill="#3F2BC9" stroke="#231680" stroke-width="2.2"/>
+ <circle cx="0" cy="-58" r="27" fill="#BFE9FF" fill-opacity=".55" stroke="#2A1B8F" stroke-width="2.2"/><circle cx="0" cy="-58" r="24" fill="none" stroke="#7C6BFF" stroke-width="6"/>
+ <circle cx="0" cy="-58" r="20.5" fill="none" stroke="#fff" stroke-width="1.6" opacity=".6"/><path d="M-13 -66 Q-8 -76 3 -77" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" opacity=".9"/></g>`;
+SCENES.search={init(){ $('armR').querySelector('.prop').innerHTML=MAG; $('fx').innerHTML=starEl('s1',1)+starEl('s2',0); },
+ draw(t){ const sw=kf(t,[[0,0],[.5,-1,'io'],[1.3,-1],[1.9,1,'io'],[2.6,1],[3,0,'io']]); // -1 = looking left, 1 = right
+  const bob=sin(t,2)*.5;
+  pose({sy:1+breath(t)+Math.abs(sw)*-.02,x:sw*5,hy:2+bob,tilt:sw*6,capR:-sw*2+sin(t,2,-.8)*.8,capY:bob*-1.2,wl:sw*6,
+    aR:[74+sw*14+sin(t,2)*2,-52+sw*8+sin(t,2,-.7)*5,.7], aL:[150-Math.abs(sw)*8,30,.4],
+    lookX:sw*6,lookY:-1,eyeS:1+pulse(t,.95,.5)*.12+pulse(t,2.25,.5)*.12,blink:blinkAt(t,.42,1.72,2.82),open:pulse(t,.9,.6)*.5+pulse(t,2.2,.6)*.5});
+  star('s1',400,170,t,.9,.8,80);star('s2',96,210,t,2.2,.75,-80); }};
+
+// ---------------------------------------------------------------- hide: covers the eyes (passwords)
+SCENES.hide={init(){},
+ draw(t){ const c=kf(t,[[0,0],[.25,0],[.6,1,'back'],[3,1]]); const peek=kf(t,[[0,0],[1.5,0],[1.75,1,'out'],[2.2,1],[2.45,0],[3,0]]);
+  const sh=sin(t,5)*pulse(t,.7,.7)*1.6;
+  const A=k=>(1-k)*152+k*-24, B=k=>(1-k)*30+k*2;
+  pose({sy:1+breath(t)-c*.03,hy:c*14,shrug:c*40,tilt:sh,capR:-sh*.6,
+    aR:[A(c)+peek*22,B(c)+peek*-10,.4+c*.6+peek*.3], aL:[A(c),B(c),.4+c*.6],
+    eyes:c>.5&&peek<.3?'happy':'open',lookX:peek*5,lookY:peek*-2,blink:0,open:peek*.35}); }};
+
+// ---------------------------------------------------------------- no contacts: shrug
+SCENES.nocontacts={init(){ $('fx').innerHTML=`<g id="q" opacity="0"><text x="0" y="0" font-family="PJS" font-size="74" fill="#7C6BFF" stroke="#2A1B8F" stroke-width="3" paint-order="stroke" text-anchor="middle">?</text></g><g id="q2" opacity="0"><text x="0" y="0" font-family="PJS" font-size="46" fill="#FFC233" stroke="#C98200" stroke-width="2.5" paint-order="stroke" text-anchor="middle">?</text></g>`; },
+ draw(t){ const s=kf(t,[[0,0],[.3,0],[.62,1,'back'],[1.9,1],[2.4,0],[3,0]]); const look=kf(t,[[0,0],[.9,0],[1.15,-1],[1.5,-1],[1.75,1],[2.1,1],[2.4,0],[3,0]]);
+  pose({sy:1+breath(t)+s*.03,hy:-s*5,tilt:s*-7+look*2,capY:-s*3,capR:s*3,wl:s*-8,
+    aR:[152-s*66,30-s*68,.4+s*.8], aL:[152-s*66,30-s*68,.4+s*.8],
+    lookX:look*6,lookY:s*-2,blink:blinkAt(t,.2,2.5),open:0,eyeS:1-s*.08});
+  const q=(el,x,y,t0,r)=>{const u=kf(t,[[0,0],[t0,0],[t0+.3,1,'back'],[2.0,1],[2.35,0],[3,0]]);O(el,Math.min(1,u*1.4));T(el,`translate(${x} ${y-u*10+sin(t,1.2)*3}) rotate(${r+sin(t,1,1)*4}) scale(${u})`);};
+  q($('q'),414,150,.5,12);q($('q2'),96,176,.68,-14); }};
+
+// ---------------------------------------------------------------- contacts: friends pop up, cheers
+const BUB=(id,c1,c2,face)=>`<g id="${id}" opacity="0"><path d="M-34 -30 h68 a14 14 0 0 1 14 14 v32 a14 14 0 0 1 -14 14 h-40 l-18 16 l4 -16 h-14 a14 14 0 0 1 -14 -14 v-32 a14 14 0 0 1 14 -14z" fill="${c1}" stroke="${c2}" stroke-width="3" stroke-linejoin="round"/>
+ <circle cx="-14" cy="-6" r="5" fill="#fff"/><circle cx="14" cy="-6" r="5" fill="#fff"/><path d="${face}" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/></g>`;
+SCENES.contacts={init(){ $('fx').innerHTML=BUB('b1','#7C6BFF','#2A1B8F','M-13 8 Q0 20 13 8')+BUB('b2','#FFB52E','#C98200','M-11 10 Q0 18 11 10')+BUB('b3','#FF6FA0','#C2386B','M-12 8 Q0 21 12 8')+starEl('s1',1); },
+ draw(t){ const j=hop(t,.2,38); const up=kf(t,[[0,0],[.5,0],[.8,1,'back'],[2.3,1],[2.7,0],[3,0]]); const w=sin(t,2.4)*up;
+  pose({y:j.y,sy:j.sy+breath(t),hy:j.hy,capY:j.capY,capR:j.capR,tilt:w*2.5,wl:w*-6,
+    aR:[152-up*102+w*7,30-up*46+sin(t,2.4,-.9)*up*16,.4+up*.75], aL:[152-up*102-w*7,30-up*46-sin(t,2.4,-.9)*up*16,.4+up*.75],
+    eyes:(t>1.05&&t<2.2)?'happy':'open',blink:blinkAt(t,2.6),open:up*.9});
+  const b=(el,x,y,t0,sc,r)=>{const u=kf(t,[[0,0],[t0,0],[t0+.32,1,'back'],[2.25,1],[2.6,0],[3,0]]);O(el,Math.min(1,u*1.5));T(el,`translate(${x} ${y+sin(t,1,t0*6)*5-u*8}) rotate(${r+sin(t,1,t0*3)*3}) scale(${u*sc})`);};
+  b($('b1'),84,214,.7,.95,-8);b($('b2'),424,170,.86,.85,8);b($('b3'),436,330,1.0,.62,4); star('s1',120,100,t,.95,.8,90); }};
+
+// ---------------------------------------------------------------- cool: sunglasses drop on
+SCENES.cool={init(){ $('glasses').innerHTML=`<g id="gl"><path d="M176 244 h62 q6 0 6 8 q-2 34 -34 34 q-34 0 -40 -32 q-1 -10 6 -10z M274 244 h62 q7 0 6 10 q-6 32 -40 32 q-32 0 -34 -34 q0 -8 6 -8z" fill="#1A1438" stroke="#0E0A22" stroke-width="3" stroke-linejoin="round"/><path d="M242 250 q14 -8 28 0" fill="none" stroke="#0E0A22" stroke-width="6" stroke-linecap="round"/>
+  <clipPath id="cGl"><path d="M176 244 h62 q6 0 6 8 q-2 34 -34 34 q-34 0 -40 -32 q-1 -10 6 -10z M274 244 h62 q7 0 6 10 q-6 32 -40 32 q-32 0 -34 -34 q0 -8 6 -8z"/></clipPath>
+  <g clip-path="url(#cGl)"><path d="M150 300 L200 232 L330 232 L280 300Z" fill="#7C6BFF" opacity=".35"/><rect id="glint" x="-18" y="220" width="22" height="90" fill="#fff" opacity=".75" transform="skewX(-24)"/></g></g>`; $('fx').innerHTML=starEl('s1',1)+starEl('s2',0); },
+ draw(t){ const d=kf(t,[[0,0],[.25,0],[.62,1,'back'],[3,1]]); const nod=pulse(t,.62,.3)*6+pulse(t,1.5,.34)*5+pulse(t,1.84,.34)*5;
+  const sal=kf(t,[[0,0],[1.0,0],[1.3,1,'back'],[2.0,1],[2.4,0],[3,0]]);
+  pose({sy:1+breath(t)-pulse(t,.62,.3)*.04,hy:nod,tilt:kf(t,[[0,0],[1.0,0],[1.3,6,'out'],[2.1,6],[2.5,0],[3,0]]),capR:-nod*.4,capY:-pulse(t,.66,.3)*4,
+    aR:[152-sal*122,30-sal*74,.4+sal*.6], aL:[152-d*14,30+d*26,.4],
+    eyes:d>.6?'happy':'open',blink:0,lookY:-d*2,open:kf(t,[[0,0],[1.2,0],[1.4,.7,'back'],[2.1,.7],[2.4,0],[3,0]])});
+  const gy=(1-d)*-62; T($('gl'),`translate(0 ${gy})`); O($('gl'),d<.02?0:1);
+  const g=(t-1.05)/.7; $('glint').setAttribute('x',g>0&&g<1?150+g*230:-40); const g2=(t-2.2)/.6; if(g2>0&&g2<1)$('glint').setAttribute('x',150+g2*230);
+  star('s1',410,196,t,1.25,.9,90);star('s2',98,170,t,1.45,.7,-80); }};
+
+// ---------------------------------------------------------------- sleep
+SCENES.sleep={init(){ const z=(id,s)=>`<text id="${id}" font-family="PJS" font-size="${s}" fill="#9A8BFF" stroke="#2A1B8F" stroke-width="2.5" paint-order="stroke" text-anchor="middle" opacity="0">Z</text>`; $('fx').innerHTML=z('z1',44)+z('z2',44)+z('z3',44); },
+ draw(t){ const br=sin(t,1/3); // one slow breath per loop
+  pose({sy:.95+br*.03,hy:6+br*-4,tilt:-9+br*1.5,capY:5+br*-1.5,capR:-7+br*1,wl:br*3,
+    aR:[156,28+br*3,.35], aL:[156,28-br*3,.35], eyes:'sleep',open:.25+br*.2,feet:-1});
+  const z=(el,ph)=>{const u=((t/3+ph)%1); O(el,Math.sin(u*Math.PI)); T(el,`translate(${372+u*56+Math.sin(u*6)*8} ${196-u*118}) rotate(${-8+u*22}) scale(${.4+u*.9})`);};
+  z($('z1'),0);z($('z2'),1/3);z($('z3'),2/3); }};
+
+// ---------------------------------------------------------------- delete: tosses a paper ball into the bin
+SCENES.delete={init(){ $('back').innerHTML=''; $('fx').innerHTML=`<g id="bin"><path d="M-36 -38 h72 l-8 82 q-1 8 -9 8 h-38 q-8 0 -9 -8z" fill="#8B7BFF" stroke="#2A1B8F" stroke-width="3" stroke-linejoin="round"/><path d="M-14 -22 l3 58 M0 -22 v58 M14 -22 l-3 58" stroke="#2A1B8F" stroke-width="3" stroke-linecap="round" opacity=".45"/><path d="M-30 -30 l5 70" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".3"/>
+   <g id="lid"><rect x="-42" y="-50" width="84" height="13" rx="6" fill="#6A55F5" stroke="#2A1B8F" stroke-width="3"/><rect x="-12" y="-59" width="24" height="10" rx="5" fill="#6A55F5" stroke="#2A1B8F" stroke-width="3"/></g></g>
+   <g id="ball"><path d="M-14 -4 l5 -10 l11 -2 l10 6 l3 11 l-7 10 l-12 2 l-9 -7z" fill="#fff" stroke="#8A86A8" stroke-width="2.5" stroke-linejoin="round"/><path d="M-6 -6 l7 5 l-4 8 M5 -9 l2 7" fill="none" stroke="#B9B6CF" stroke-width="2" stroke-linecap="round"/></g>`+starEl('s1',1); },
+ draw(t){ const wind=kf(t,[[0,0],[.2,0],[.55,1,'io'],[.72,1],[.9,-1,'out'],[1.3,-.2],[1.7,0],[3,0]]); // 1 = arm back, -1 = thrown forward
+  const cheer=kf(t,[[0,0],[1.55,0],[1.8,1,'back'],[2.4,1],[2.75,0],[3,0]]);
+  pose({x:-56,sy:1+breath(t)-Math.max(0,wind)*.05+pulse(t,.86,.3)*.05,hy:Math.max(0,wind)*4,tilt:wind*-5+cheer*4,capR:wind*2,wl:wind*8,
+    aR:[110-wind*62-cheer*40,-10-wind*40-cheer*10,.8-Math.max(0,wind)*.4+cheer*.3], aL:[152-cheer*94,30-cheer*46,.4+cheer*.7],
+    lookX:5,lookY:kf(t,[[0,0],[.9,-3],[1.25,3],[1.6,0],[3,0]]),blink:blinkAt(t,.1,2.85),eyes:cheer>.6?'happy':'open',open:cheer*.9});
+  // ball: in the hand until .88, then an arc into the bin
+  const u=(t-.88)/.5; const bx=u<0?null:292+ (412-292)*Math.min(1,u), by=u<0?null:300-150*Math.sin(Math.min(1,u)*Math.PI)+ (364-300)*Math.min(1,u);
+  const hand=$('armR').querySelector('.f1').getBoundingClientRect(), st=$('s').getBoundingClientRect();
+  const ball=$('ball'); const ctm=$('fx').getScreenCTM().inverse(); const pt=$('s').createSVGPoint(); pt.x=hand.x+hand.width/2; pt.y=hand.y+hand.height/2; const hp=pt.matrixTransform(ctm);
+  if(t<.2){O(ball,0);} else if(u<0){O(ball,1);T(ball,`translate(${hp.x} ${hp.y}) rotate(${t*200}) scale(1.7)`);} else if(u<1){O(ball,1);T(ball,`translate(${hp.x+(506-hp.x)*u} ${hp.y+(340-hp.y)*u-120*Math.sin(u*Math.PI)}) rotate(${t*500}) scale(1.7)`);} else O(ball,0);
+  const lidUp=kf(t,[[0,0],[.3,0],[.6,1,'back'],[1.42,1],[1.56,0,'in'],[3,0]]); T($('lid'),`rotate(${lidUp*-58} 42 -44)`);
+  const bs=pulse(t,1.38,.3); T($('bin'),`translate(506 398) scale(${1.25*(1+bs*.06)} ${1.25*(1-bs*.08)})`);
+  star('s1',506,290,t,1.5,.9,90); }};
+
+// ---------------------------------------------------------------- settings: turns the gears
+const gear=(id,r,n,c1,c2)=>{let d='';const ro=r,ri=r*.78;for(let i=0;i<n;i++){const a0=i/n*Math.PI*2,w=Math.PI/n;const p=(a,rr)=>`${(Math.cos(a)*rr).toFixed(1)} ${(Math.sin(a)*rr).toFixed(1)}`;d+=`${i?'L':'M'}${p(a0-w*.5,ri)} L${p(a0-w*.3,ro)} L${p(a0+w*.3,ro)} L${p(a0+w*.5,ri)} `;}
+  return `<g id="${id}"><path d="${d}Z" fill="${c1}" stroke="${c2}" stroke-width="3" stroke-linejoin="round"/><circle r="${r*.34}" fill="#EEF0F5" stroke="${c2}" stroke-width="3"/><circle r="${r*.58}" fill="none" stroke="#fff" stroke-width="2.5" opacity=".35"/></g>`;};
+SCENES.settings={init(){ $('fx').innerHTML=gear('g1',52,9,'#7C6BFF','#2A1B8F')+gear('g2',32,7,'#FFB52E','#C98200')+starEl('s1',1); },
+ draw(t){ const a=kf(t,[[0,0],[.3,0],[1.2,150,'io'],[1.5,150],[2.5,360,'io'],[3,360]]);
+  const push=sin(a/360*2,1)*1; const act=kf(t,[[0,0],[.25,1],[2.6,1],[2.95,0],[3,0]]);
+  pose({x:-52,sy:1+breath(t),tilt:act*5+push*2,hy:push*1.5,capR:-push*1.5,wl:push*5,
+    aR:[152-act*84+push*12,30-act*30+push*-14,.4+act*.55], aL:[152,30,.4],
+    lookX:act*6,lookY:act*-3,blink:blinkAt(t,.12,1.36,2.7),open:pulse(t,1.25,.5)*.6+pulse(t,2.5,.4)*.7,eyes:(t>2.45&&t<2.8)?'happy':'open'});
+  T($('g1'),`translate(462 262) rotate(${a})`); T($('g2'),`translate(526 338) rotate(${-a*9/7+12})`);
+  star('s1',430,180,t,1.2,.8,90); }};
+
+// ---------------------------------------------------------------- secure: shield with a lock
+SCENES.secure={init(){ $('propBody').innerHTML=`<g id="sh"><path d="M0 -62 C22 -48 42 -44 56 -44 C56 4 44 44 0 66 C-44 44 -56 4 -56 -44 C-42 -44 -22 -48 0 -62Z" fill="url(#gCap)" stroke="#231680" stroke-width="3.5" stroke-linejoin="round"/>
+   <path d="M0 -50 C18 -40 34 -36 45 -35 C44 2 35 32 0 52 C-35 32 -44 2 -45 -35 C-34 -36 -18 -40 0 -50Z" fill="none" stroke="#B9AEFF" stroke-width="2.5" opacity=".7"/>
+   <clipPath id="cSh"><path d="M0 -62 C22 -48 42 -44 56 -44 C56 4 44 44 0 66 C-44 44 -56 4 -56 -44 C-42 -44 -22 -48 0 -62Z"/></clipPath>
+   <g clip-path="url(#cSh)"><rect id="shine" x="-90" y="-80" width="26" height="170" fill="#fff" opacity=".5" transform="skewX(-22)"/></g>
+   <g id="shackle"><path d="M-13 -4 v-12 a13 13 0 0 1 26 0 v12" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/></g>
+   <rect x="-21" y="-6" width="42" height="34" rx="8" fill="url(#gStar)" stroke="#C98200" stroke-width="2.5"/><circle cx="0" cy="8" r="5" fill="#8A5A00"/><rect x="-2" y="9" width="4" height="10" rx="2" fill="#8A5A00"/></g>`; $('fx').innerHTML=starEl('s1',1)+starEl('s2',0); },
+ draw(t){ const up=kf(t,[[0,0],[.2,0],[.55,1,'back'],[3,1]]); const lock=kf(t,[[0,0],[.75,0],[.9,1,'in'],[3,1]]); const bump=pulse(t,.88,.25);
+  const nod=pulse(t,1.5,.35)*4;
+  pose({sy:1+breath(t)-bump*.03,hy:nod+bump*3,tilt:kf(t,[[0,0],[1.3,0],[1.6,4],[2.4,4],[2.8,0],[3,0]]),capR:-nod*.3,
+    aR:[196+(1-up)*-44,(1-up)*30+up*38,.4+up*.45], aL:[196+(1-up)*-44,(1-up)*30+up*38,.4+up*.45],
+    eyes:(t>1.35&&t<2.3)?'happy':'open',blink:blinkAt(t,.3,2.6),open:kf(t,[[0,0],[1.3,0],[1.5,.7,'back'],[2.3,.7],[2.6,0],[3,0]])});
+  T($('sh'),`translate(256 ${398+(1-up)*40+bump*3}) scale(${(.2+up*.8+bump*.04)*1.18})`); O($('sh'),up<.03?0:1);
+  T($('shackle'),`translate(0 ${-10+lock*10})`);
+  const g=(t-1.05)/.6, g2=(t-2.3)/.6; $('shine').setAttribute('x',g>0&&g<1?-90+g*200:(g2>0&&g2<1?-90+g2*200:-140));
+  star('s1',380,330,t,.9,.95,90);star('s2',130,340,t,1.05,.75,-80); }};
+
+let cur=null;
+function setScene(n){ cur=SCENES[n]; cur.init(); DUR=cur.dur||3; draw(0); }
+function draw(t){ cur.draw(t); }
+setScene((location.hash||'#wave').slice(1));
+</script></body></html>
