@@ -102,8 +102,11 @@ jobs:
           BASE: http://localhost:4000
           OUT: ../ci-backend
         run: |
-          npm install --no-save --no-audit --no-fund playwright@1.48.2 >/dev/null 2>&1
-          npx playwright install --with-deps chromium >/dev/null 2>&1
+          for i in 1 2 3; do
+            (timeout 200 npm install --no-save --no-audit --no-fund playwright@1.48.2 && timeout 400 npx playwright install --with-deps chromium) > ../ci-backend/web-install.txt 2>&1 && break
+            echo "browser install: try $i failed"; tail -15 ../ci-backend/web-install.txt
+            [ "$i" = "3" ] && exit 1
+          done
           set -o pipefail
           node test/e2e/web.e2e.js 2>&1 | tee ../ci-backend/web.txt
 
