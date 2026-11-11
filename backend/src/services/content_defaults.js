@@ -5,7 +5,7 @@
  * (Admin → Pages & FAQ). Format the app understands:
  *   "# Heading", "## Subheading", "• bullet" lines, "Q: …" followed by "A: …" (FAQ), blank line = new paragraph.
  */
-const UPDATED = '26 October 2026';
+const UPDATED = '12 November 2026';
 
 const privacy = `Last updated: ${UPDATED}
 
@@ -37,7 +37,17 @@ Hushavia only uses your location when you choose to:
 • use Prayer times — the location is used on your phone to calculate times and is not sent to other people.
 
 ## Payments
-If Hushavia Plus is offered and you buy it, we keep the order, plan, amount, currency, status and, for manual payments, the receipt you upload. Card and mobile-wallet details are entered with the payment provider (for example JazzCash or Easypaisa); we never see or store them.
+If you buy Hushavia Plus or Hushavia Coins, we keep the order, what was bought, the amount, currency and status. For a payment made with USDT we also keep the public transaction ID and the network, so we can confirm it on the blockchain. For manual payments we keep the receipt you upload. Card and mobile-wallet details, where those methods are offered, are entered with the payment provider; we never see or store them.
+
+## Hushavia Wallet
+The wallet is non-custodial. Your 12-word recovery phrase and your private keys are created and kept only on your phone, protected by the phone's secure storage. They are never sent to Hushavia, and we cannot see, copy or restore them.
+• We do not keep your wallet balances or your list of transactions.
+• If you switch on "share my addresses", the public addresses you choose are stored so the people you chat with can pay you. You can switch this off at any time.
+• A crypto card you send in a chat (amount, coin, address, transaction ID) is stored like any other message.
+• To show balances, prices and to send transactions, your phone talks directly to public blockchain services (for example TronGrid, public network nodes, mempool.space, BlockCypher and CoinGecko). Those services can see your IP address and the public addresses you ask about. Blockchains are public: anyone can see the transactions of an address.
+
+## Hushavia Coins
+We keep your coin balance and a record of every change to it (packs bought, coins sent or received and with whom, coins spent, adjustments by our team), so the balance is always correct and disputes can be checked.
 
 ## Support requests
 When you contact support we keep your messages, any screenshots you attach and, if you allow it, your phone model and app version.
@@ -70,7 +80,7 @@ Public channels with many subscribers may show clearly labelled sponsored messag
 
 # 7. Who we share information with
 We do not sell or rent your personal data. We share information only:
-• With service providers who help us run Hushavia, under obligations to protect it: our hosting provider (servers in the European Union), Google Firebase (push notifications), our email/SMS delivery provider (login codes) and payment providers.
+• With service providers who help us run Hushavia, under obligations to protect it: our hosting provider (servers in the European Union), Google Firebase (push notifications), our email/SMS delivery provider (login codes) and payment providers. Payments in USDT are read from the public blockchain; no personal data is sent with them.
 • With the people you choose to communicate with, and in public groups and channels with their members and viewers.
 • When required by law, a court order or a valid request from authorities, and only to the extent required.
 • To protect the rights, safety and property of our users, the public or Hushavia, for example to stop fraud or threats.
@@ -125,7 +135,7 @@ Welcome to Hushavia. These Terms of Service ("Terms") are an agreement between y
 # 3. Acceptable use
 You agree not to use Hushavia to:
 • send spam, bulk unsolicited messages, chain messages or automated messages without the recipients' consent;
-• scam, defraud or mislead people, including fake investment, trading, lottery or job offers;
+• scam, defraud or mislead people, including fake investment, trading, crypto, lottery or job offers, or asking anyone for their wallet recovery phrase, login code or password;
 • harass, bully, threaten, stalk or intimidate anyone, or encourage violence or self-harm;
 • share content that sexualises minors, non-consensual intimate images, or content that exploits or endangers children in any way;
 • promote terrorism or violent extremism, or sell illegal goods, weapons or drugs;
@@ -152,39 +162,85 @@ You agree not to use Hushavia to:
 • We may report illegal activity to the authorities and cooperate with lawful requests.
 
 # 7. Hushavia Plus and payments
-• Hushavia is free to use. Hushavia Plus (when available) adds optional extra features for a fee, described in the app with its price in your currency.
-• Payments are handled by the payment methods shown in the app. Your plan starts when payment is confirmed.
+• Hushavia is free to use. Hushavia Plus (when available) adds optional extra features for a fee. Prices are shown in the app in US dollars (USD) unless the app shows another currency.
+• You can pay with the methods shown in the app: USDT sent from your Hushavia Wallet, Hushavia Coins, or another method we offer where you live. Your plan starts when the payment is confirmed.
+• A USDT payment must be sent from the payment screen, for exactly the amount and to exactly the address shown for your order, on the network you chose. A payment with a different amount, on a different network, in a different token or sent long after the order may not be matched automatically; contact support and we will check it, but we cannot promise to recover money sent in a way the app did not ask for.
+• Network fees are charged by the blockchain, not by Hushavia, and are not refundable.
 • Unless the law requires otherwise, payments are not refundable once the plan has started. If a payment was taken but Plus did not start, contact support and we will fix it.
 • We may change prices or features of Plus for future periods; we will not change a plan you have already paid for.
 
-# 8. Sponsored messages
+# 8. Hushavia Wallet
+The Hushavia Wallet is a non-custodial wallet: a tool on your phone that lets you hold and send supported cryptocurrencies yourself. Hushavia is not a bank, an exchange, a broker or a payment institution, and never holds your crypto for you.
+
+## Your 12 words are your wallet
+• When you create a wallet the app shows a 12-word recovery phrase. These words are the only key to your funds.
+• The phrase and your private keys are stored only on your phone. Hushavia does not have them, cannot see them and cannot give them back to you.
+• Write the 12 words down and keep them somewhere safe and private. Do not keep them in a screenshot, a chat, a note or an email.
+• Never share them with anyone. Hushavia, its staff and its support team will never ask for your recovery phrase — not in a chat, by email or by phone. Anyone who asks for it is trying to steal from you.
+• If you lose your phone, delete the app or remove the wallet and you do not have your 12 words, your funds are lost for good. Nobody, including Hushavia, can recover them.
+• Anyone who gets your 12 words, or your unlocked phone, can take everything in the wallet.
+
+## Your transactions are your responsibility
+• You alone decide and confirm every transaction. Hushavia cannot see, approve, stop, freeze, reverse or refund a transaction.
+• Transactions on a blockchain are final. Crypto sent to a wrong address, on a wrong network or to a scammer cannot be returned.
+• Always check the address, the network and the amount before you confirm. The warnings the app shows (first-time address, look-alike address, scam warnings) are a help, not a guarantee.
+• Network fees are set by each blockchain and can change at any moment. A transaction may be slow, or fail, when a network is busy or you do not hold enough of its coin for the fee.
+• Prices and charts come from third-party data and may be late or wrong. Nothing in Hushavia is financial, investment, legal or tax advice. Crypto prices can fall sharply; you can lose all the money you put in.
+• Custom tokens you add yourself are not checked by Hushavia. A token can be worthless or built to deceive.
+
+## What Hushavia is not responsible for
+To the fullest extent allowed by law, Hushavia is not responsible or liable for any loss caused by:
+• a lost, forgotten, stolen, copied or shared recovery phrase, phone or screen lock;
+• a transaction sent to a wrong address or network, or sent to a person who deceived you;
+• delays, failures, fees, forks, attacks or changes on any blockchain network, or problems with the third-party services the wallet connects to;
+• changes in the price or availability of any coin or token;
+• malware, a modified copy of the app, or a phone that has been rooted or tampered with.
+
+## Following the law
+• You are responsible for knowing and following the laws that apply to you, including rules on holding or sending crypto and paying any tax you owe.
+• You may not use the wallet for anything illegal, including fraud, money laundering, financing of terrorism or avoiding sanctions.
+• We may switch the wallet feature on or off in the app, or limit it in some countries. Because the wallet is non-custodial, your funds stay on the blockchain and can always be reached with your 12 words in any compatible wallet app.
+
+## Crypto in chats
+You can send a crypto payment or a payment request as a card in a chat. The card is only a message: the payment itself happens on the blockchain between your wallet and the other person's address. Hushavia is not a party to payments between users and does not settle disputes about them. A card that shows "confirmed" means the app found that transaction on the network; it does not mean the other person will deliver what they promised.
+
+# 9. Hushavia Coins
+• Hushavia Coins are a digital balance for use only inside Hushavia. They are not money, not a cryptocurrency or token, not a deposit and not an investment, and they earn no interest.
+• You get coins by buying a pack at the price shown in the app, or as a gift from another user or from Hushavia. Bonus coins are free extras and have no cash value.
+• You can spend coins on things the app offers (for example Hushavia Plus) and send them to other users as a gift.
+• Coins cannot be withdrawn, exchanged for money or crypto, or sold or traded outside Hushavia. Buying and selling coins or accounts for money outside the app is not allowed.
+• Purchases of coins and anything paid for with coins are final and not refundable, unless the law requires otherwise. A gift you send cannot be taken back.
+• If your account is banned for breaking these Terms, or you delete it, the coins in it are lost. We may remove coins that were obtained by fraud, a mistake, a bug or a reversed payment.
+• We may change the price of packs and the coin price of things in the app for the future, and we may end the coins feature. If we end it we will tell you in the app at least 30 days before, so you can use your coins.
+
+# 10. Sponsored messages
 Some public channels may show clearly labelled sponsored messages. Advertisers must follow our advertising rules and the law; Hushavia may remove any sponsored message.
 
-# 9. Third-party services
-Hushavia works with other services, such as Google Firebase for notifications, Google Drive for your own backups, payment providers and bots or mini apps made by other people. Their own terms and privacy policies apply to them, and we are not responsible for them.
+# 11. Third-party services
+Hushavia works with other services, such as Google Firebase for notifications, Google Drive for your own backups, payment providers, public blockchain networks and the data services the wallet reads them through, and bots or mini apps made by other people. Their own terms and privacy policies apply to them, and we are not responsible for them.
 
-# 10. Availability and changes
+# 12. Availability and changes
 We work hard to keep Hushavia fast and available, but we cannot promise it will always be uninterrupted or error-free. We may change, add or remove features, and may need to pause the service for maintenance. Please keep backups of anything important.
 
-# 11. Intellectual property
+# 13. Intellectual property
 Hushavia, its name, logo, Tavi the mascot, design and software belong to us and are protected by law. You may not copy, modify or reuse them without our written permission, except as allowed by these Terms.
 
-# 12. Disclaimers
-Hushavia is provided "as is" and "as available". To the fullest extent allowed by law, we make no warranties of any kind, express or implied, including fitness for a particular purpose. We do not check every message, and we are not responsible for content sent by users, groups, channels or bots. Trading signals, investment advice or offers you see in chats or channels come from other users, not from Hushavia — always do your own research.
+# 14. Disclaimers
+Hushavia is provided "as is" and "as available". To the fullest extent allowed by law, we make no warranties of any kind, express or implied, including fitness for a particular purpose. We do not check every message, and we are not responsible for content sent by users, groups, channels or bots. Trading signals, investment advice or offers you see in chats or channels come from other users, not from Hushavia — always do your own research. The scam warnings and stranger protection in the app are there to help you, but they cannot catch everything; you remain responsible for whom you trust and pay.
 
-# 13. Limitation of liability
-To the fullest extent allowed by law, Hushavia will not be liable for indirect, incidental, special or consequential damages, loss of profits, data or goodwill, arising from your use of the service. Our total liability for any claim is limited to the amount you paid us for Hushavia Plus in the 12 months before the claim, or PKR 5,000 if you paid nothing. Nothing in these Terms limits liability that cannot be limited by law.
+# 15. Limitation of liability
+To the fullest extent allowed by law, Hushavia will not be liable for indirect, incidental, special or consequential damages, loss of profits, data or goodwill, arising from your use of the service. This includes any loss of cryptocurrency held in or sent from the Hushavia Wallet, which only you control (see section 8). Our total liability for any claim is limited to the amount you paid us for Hushavia Plus and Hushavia Coins in the 12 months before the claim, or USD 20 if you paid nothing. Nothing in these Terms limits liability that cannot be limited by law.
 
-# 14. Ending your use
-You can stop using Hushavia and delete your account at any time from Settings. We may suspend or end your access if you break these Terms, if the law requires it, or to protect users or the service. Sections that by their nature should continue (for example content licences needed to finish delivering messages, disclaimers and limitation of liability) continue after your account ends.
+# 16. Ending your use
+You can stop using Hushavia and delete your account at any time from Settings. We may suspend or end your access if you break these Terms, if the law requires it, or to protect users or the service. Sections that by their nature should continue (for example content licences needed to finish delivering messages, the wallet and coins sections, disclaimers and limitation of liability) continue after your account ends.
 
-# 15. Governing law and disputes
+# 17. Governing law and disputes
 These Terms are governed by the laws of Pakistan. Before going to court, please contact us so we can try to resolve the problem informally. Any dispute that cannot be resolved this way will be handled by the competent courts of Pakistan, unless the law of your country gives you the right to bring a claim where you live.
 
-# 16. Changes to these Terms
+# 18. Changes to these Terms
 We may update these Terms from time to time. We will post the new version here and change the date at the top, and tell you in the app about important changes. If you keep using Hushavia after the changes take effect, you accept the new Terms.
 
-# 17. Contact
+# 19. Contact
 Questions about these Terms? Contact us from the app: Settings → Help & support.`;
 
 const faq = `# Getting started
@@ -245,6 +301,32 @@ A: Yes. Voice and video calls use your internet connection (Wi-Fi or mobile data
 
 Q: What is a voice chat?
 A: A live audio room inside a group or channel that many people can join at once. Admins can start one from the chat menu.
+
+# Wallet and coins
+
+Q: What is the Hushavia Wallet?
+A: Your own crypto wallet inside the app (Settings → Wallet). It holds Bitcoin, Ethereum, BNB, TRON, Solana, Litecoin, Dogecoin, USDT, USDC and more. It is non-custodial: the keys stay on your phone and only you control the money.
+
+Q: What are the 12 words?
+A: Your recovery phrase — the only key to your wallet. Write the words on paper and keep them safe. With them you can bring your wallet back on any phone; without them nobody can, not even Hushavia.
+
+Q: I lost my phone. Is my money gone?
+A: Not if you have your 12 words. Install Hushavia (or any compatible wallet), choose "I already have a wallet" and type them in. If you do not have the words, the wallet cannot be recovered.
+
+Q: Will Hushavia ever ask for my 12 words?
+A: Never. Not in a chat, by email or by phone. Anyone who asks for them — even if they say they are support — is a scammer. Report and block them.
+
+Q: I sent crypto to the wrong address. Can you get it back?
+A: No. Blockchain payments are final and Hushavia cannot reverse, freeze or refund them. Always check the address and the network before you confirm.
+
+Q: What are Hushavia Coins?
+A: A balance for use inside Hushavia (Settings → Coins). Buy a pack with USDT from your wallet, send coins to friends as a gift, or pay for Hushavia Plus with them. Coins are not crypto and cannot be withdrawn or turned back into money.
+
+Q: How do I pay for Hushavia Plus?
+A: Open Settings → Hushavia Plus, pick a plan and pay with USDT from your wallet or with your coins. Plus starts by itself as soon as the payment is confirmed — usually about a minute.
+
+Q: I paid but Plus or my coins did not arrive.
+A: Wait a few minutes — the network may be busy — then open the page again. If it still has not arrived, contact Settings → Help & support with the transaction ID.
 
 # Privacy and security
 
