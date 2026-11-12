@@ -107,6 +107,57 @@ if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='hushav
   sudo -u postgres psql -qc "CREATE DATABASE hushavia OWNER hushavia"
 fi
 
+# ------------------------------------------------------------------ database speed
+# PostgreSQL ships with settings for a tiny machine (128 MB of memory). Give it a fair share of this
+# server, and keep a list of the slowest queries (pg_stat_statements) so they can be found later.
+# Runs once: PostgreSQL restarts only when these settings change, and goes back to the old ones if it won't start.
+PG_CONF_DIR=$(ls -d /etc/postgresql/*/main/conf.d 2>/dev/null | sort -V | tail -1 || true)
+if [ -n "$PG_CONF_DIR" ]; then
+  MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  SB=$((MEM_MB / 5)); [ "$SB" -lt 128 ] && SB=128; [ "$SB" -gt 2048 ] && SB=2048
+  PRELOAD="# pg_stat_statements is not installed"
+  if ls /usr/lib/postgresql/*/lib/pg_stat_statements.so >/dev/null 2>&1; then PRELOAD="shared_preload_libraries = 'pg_stat_statements'"; fi
+  cat > /tmp/hushavia-pg.conf <<EOF
+# written by the Hushavia deploy (server-setup.sh)
+shared_buffers = ${SB}MB
+effective_cache_size = $((MEM_MB / 2))MB
+work_mem = 8MB
+maintenance_work_mem = 128MB
+random_page_cost = 1.1
+effective_io_concurrency = 200
+checkpoint_completion_target = 0.9
+max_wal_size = 1GB
+wal_compression = on
+log_min_duration_statement = 500
+${PRELOAD}
+EOF
+  if ! cmp -s /tmp/hushavia-pg.conf "$PG_CONF_DIR/hushavia.conf"; then
+    log "Tuning PostgreSQL (shared_buffers ${SB} MB)"
+    rm -f /tmp/hushavia-pg.prev
+    if [ -f "$PG_CONF_DIR/hushavia.conf" ]; then cp "$PG_CONF_DIR/hushavia.conf" /tmp/hushavia-pg.prev; fi
+    cp /tmp/hushavia-pg.conf "$PG_CONF_DIR/hushavia.conf"
+    chmod 644 "$PG_CONF_DIR/hushavia.conf"
+    systemctl restart postgresql || true
+    PG_OK=0
+    for _ in $(seq 1 30); do
+      if sudo -u postgres psql -tAc 'SELECT 1' >/dev/null 2>&1; then PG_OK=1; break; fi
+      sleep 1
+    done
+    if [ "$PG_OK" != 1 ]; then
+      echo "postgres: did not start with the new settings — going back to the old ones"
+      rm -f "$PG_CONF_DIR/hushavia.conf"
+      if [ -f /tmp/hushavia-pg.prev ]; then cp /tmp/hushavia-pg.prev "$PG_CONF_DIR/hushavia.conf"; fi
+      systemctl restart postgresql || true
+      for _ in $(seq 1 30); do
+        if sudo -u postgres psql -tAc 'SELECT 1' >/dev/null 2>&1; then break; fi
+        sleep 1
+      done
+    fi
+  fi
+  sudo -u postgres psql -d hushavia -qc "CREATE EXTENSION IF NOT EXISTS pg_stat_statements" >/dev/null 2>&1 || true
+  echo "postgres: shared_buffers $(sudo -u postgres psql -tAc 'SHOW shared_buffers' 2>/dev/null || echo '?')"
+fi
+
 # ------------------------------------------------------------------ app code
 log "Updating the app"
 rm -rf /opt/hushavia/new && mkdir -p /opt/hushavia/new
@@ -172,6 +223,16 @@ cat > /etc/nginx/conf.d/hushavia-limits.conf <<'EOF'
 limit_req_zone $binary_remote_addr zone=hv_auth:10m rate=5r/s;
 limit_req_status 429;
 server_tokens off;
+# nginx keeps a few connections to the app open and reuses them (no new connection for every request)
+upstream hushavia_app {
+    server 127.0.0.1:4000;
+    keepalive 64;
+}
+# websockets ask for "Upgrade"; ordinary requests must not, or the connection can't be reused
+map $http_upgrade $hv_connection {
+    default upgrade;
+    ''      '';
+}
 EOF
 cat > /etc/nginx/sites-available/hushavia <<'EOF'
 server {
@@ -186,8 +247,9 @@ server {
 
     location ~ ^/api/(auth/(otp|email|password|passkey|refresh)|admin/login) {
         limit_req zone=hv_auth burst=40 nodelay;
-        proxy_pass http://127.0.0.1:4000;
+        proxy_pass http://hushavia_app;
         proxy_http_version 1.1;
+        proxy_set_header Connection "";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -202,11 +264,13 @@ server {
     gzip_proxied any;
     gzip_types application/json application/javascript text/css text/plain image/svg+xml;
 
+    gzip_vary on;
+
     location / {
-        proxy_pass http://127.0.0.1:4000;
+        proxy_pass http://hushavia_app;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $hv_connection;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

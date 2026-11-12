@@ -124,14 +124,16 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
           WHERE p.chat_id = c.id AND p.message_id > cm.cleared_before_id ORDER BY p.pinned_at DESC LIMIT 1) AS pinned_message_id,
        (SELECT count(*) FROM pinned_messages p WHERE p.chat_id = c.id) AS pinned_count,
        CASE WHEN cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM chat_join_requests jr WHERE jr.chat_id = c.id) ELSE 0 END AS pending_requests,
-       (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id) AS member_count,
-       (SELECT count(*) FROM messages m
+       c.member_count,
+       -- counted up to 9,999: a chat nobody opened for months must not make the whole list slow
+       (SELECT count(*) FROM (SELECT 1 FROM messages m
           WHERE m.chat_id = c.id
             AND m.id > GREATEST(cm.last_read_message_id, cm.cleared_before_id)
             AND m.deleted_at IS NULL
             AND m.thread_id IS NULL
             AND m.sender_id IS DISTINCT FROM $1
             AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = $1 AND h.message_id = m.id)
+          LIMIT 9999) u
        ) AS unread_count,
        COALESCE((SELECT max(o.last_read_message_id) FROM chat_members o JOIN users ou ON ou.id = o.user_id
                  WHERE o.chat_id = c.id AND o.user_id <> $1

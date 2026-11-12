@@ -1320,3 +1320,21 @@ ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (p
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coins INTEGER;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coin_pack_id BIGINT REFERENCES coin_packs(id) ON DELETE SET NULL;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_submitted_at TIMESTAMPTZ;
+
+-- ------------------------------------------------------------------ speed: the member count is kept on the chat
+-- (counting the members of a big channel for every row of every chat list was the slowest part of opening the app)
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS member_count INTEGER NOT NULL DEFAULT 0;
+CREATE OR REPLACE FUNCTION hushavia_member_count() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE chats SET member_count = member_count + 1 WHERE id = NEW.chat_id;
+    RETURN NEW;
+  END IF;
+  UPDATE chats SET member_count = GREATEST(member_count - 1, 0) WHERE id = OLD.chat_id;
+  RETURN OLD;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS chat_members_count ON chat_members;
+CREATE TRIGGER chat_members_count AFTER INSERT OR DELETE ON chat_members FOR EACH ROW EXECUTE FUNCTION hushavia_member_count();
+-- put right whatever is off (first run, or a restore)
+UPDATE chats c SET member_count = x.n FROM (SELECT chat_id, count(*)::int AS n FROM chat_members GROUP BY chat_id) x WHERE x.chat_id = c.id AND c.member_count <> x.n;
+UPDATE chats c SET member_count = 0 WHERE c.member_count <> 0 AND NOT EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = c.id);
