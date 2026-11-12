@@ -121,7 +121,7 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
         final h = await api.send(again, key);
         key.fillRange(0, key.length, 0);
         total += bal;
-        _say('#$i: ${Units.format(bal, decimals: 18, maxFraction: 2)} USDT sent');
+        _say('#$i: ${Units.format(bal, decimals: 18, maxFraction: 2)} USDT sent (${h.substring(0, 10)}…)');
       }
       mainKey.fillRange(0, mainKey.length, 0);
       _say(total == BigInt.zero ? 'Nothing to collect right now.' : 'Done — ${Units.format(total, decimals: 18, maxFraction: 2)} USDT on its way to your address.');
