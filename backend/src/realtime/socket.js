@@ -154,6 +154,9 @@ function previewRaw(message) {
       return message.text ? `GIF · ${message.text}` : 'GIF';
     case 'crypto':
       return require('../services/wallet.service').previewText(message.meta); // eslint-disable-line global-require
+    case 'gift':
+    case 'giveaway':
+      return require('../services/coinplus.service').previewText(message.type, message.meta); // eslint-disable-line global-require
     case 'contact':
       return `👤 ${(message.meta && message.meta.contact && message.meta.contact.name) || 'Contact'}`;
     default:

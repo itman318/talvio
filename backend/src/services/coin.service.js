@@ -17,7 +17,7 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const KINDS = ['purchase', 'gift_sent', 'gift_received', 'plus', 'admin'];
+const KINDS = ['purchase', 'gift_sent', 'gift_received', 'plus', 'admin', 'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'];
 const MAX_SEND = 100000;
 
 const iso = (d) => (d ? new Date(d).toISOString() : null);

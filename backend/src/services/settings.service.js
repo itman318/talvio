@@ -83,6 +83,7 @@ const DEFINITIONS = {
   feature_web_login: { type: 'boolean', default: true },
   feature_wallet: { type: 'boolean', default: true },
   feature_coins: { type: 'boolean', default: true },
+  coins_creator_percent: { type: 'integer', default: 90, min: 0, max: 100 },
   max_accounts_per_device: { type: 'integer', default: 3, min: 1, max: 10 },
 };
 

@@ -13,7 +13,7 @@ const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
 const EFFECTS = ['confetti', 'hearts', 'balloons', 'fireworks'];
-const SEND_TYPES = ['text', 'image', 'video', 'voice', 'video_note', 'file', 'poll', 'location', 'sticker', 'gif', 'contact', 'crypto'];
+const SEND_TYPES = ['text', 'image', 'video', 'voice', 'video_note', 'file', 'poll', 'location', 'sticker', 'gif', 'contact', 'crypto', 'gift', 'giveaway'];
 const SLOW_MODE_VALUES = [0, 10, 30, 60, 300, 900, 3600];
 const MENTION_RE = /(^|[^A-Za-z0-9_@])@([A-Za-z][A-Za-z0-9_]{3,31})/g;
 const MEDIA_KINDS_FOR_TYPE = {
@@ -225,6 +225,7 @@ async function serializeRows(viewerId, rows) {
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
+      tips: m.coin_tips || 0, // coins tipped to this channel post
       view_once: !!(m.meta && m.meta.view_once),
       opened_by: m.meta && m.meta.view_once ? onceRows.filter((x) => x.message_id === m.id).map((x) => x.user_id).slice(0, 200) : undefined,
       thread_id: m.thread_id || null,
@@ -443,6 +444,12 @@ async function prepareMessage(userId, chat, body, internal = {}) {
     out.text = '';
   } else if (type === 'crypto') {
     out.meta = await require('./wallet.service').cardMeta(body); // eslint-disable-line global-require
+    out.text = '';
+  } else if (type === 'gift' || type === 'giveaway') {
+    // only the coins service posts these (after the coins really moved) — an app can't make one up
+    if (!internal.meta || !internal.meta[type]) throw badRequest('invalid_input', 'This kind of message can’t be sent directly');
+    if (body.schedule_at) throw badRequest('invalid_input', 'This can’t be scheduled');
+    out.meta = internal.meta;
     out.text = '';
   } else if (type === 'contact') {
     const c = body.contact || {};
@@ -977,7 +984,7 @@ async function forwardMessages(userId, body = {}) {
 
   const rows = await db.many(
     `SELECT m.* FROM messages m
-     WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type NOT IN ('system', 'poll', 'call')
+     WHERE m.chat_id = $1 AND m.id = ANY($2::bigint[]) AND m.id > $3 AND m.type NOT IN ('system', 'poll', 'call', 'gift', 'giveaway')
        AND NOT COALESCE((m.meta->>'view_once')::boolean, FALSE)
        AND ${VISIBLE_SQL.replace(/\$USER/g, '$4')}
      ORDER BY m.id`,

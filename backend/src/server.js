@@ -63,6 +63,7 @@ const scheduler = setInterval(() => {
   secretSweepTick = (secretSweepTick + 1) % 240; // about once an hour
   if (secretSweepTick % 4 === 0) messageService.sweepExpired().catch((err) => console.error('disappearing sweep error', err)); // eslint-disable-line no-console
   require('./services/payment.service').sweep().catch(() => {});
+  if (secretSweepTick % 2 === 1) require('./services/coinplus.service').sweep().catch(() => {}); // giveaway draws, subscriptions that ran out
   if (secretSweepTick % 20 === 2) require('./services/qr.service').sweep().catch(() => {});
   require('./services/bot.service').sweep().catch((err) => console.error('bot sweep error', err)); // eslint-disable-line no-console
   // birthday reminders: once a day, after 05:00 UTC

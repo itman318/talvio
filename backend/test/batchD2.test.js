@@ -488,3 +488,97 @@ test('Hushavia Coins: bought with USDT, spent on Plus, sent to a friend, never b
     await settings.update({ feature_coins: true, crypto_pay_bsc_address: '' });
   }
 });
+
+test('coins at work: gifts in chats, tips on posts, paid channels, giveaways', async () => {
+  const coins = require('../src/services/coin.service');
+  const plus = require('../src/services/coinplus.service');
+  const messages = require('../src/services/message.service');
+  const G = await signup('+923260000011', 'Gul');
+  const H = await signup('+923260000012', 'Hina');
+  const I = await signup('+923260000013', 'Irfan');
+  const bal = async (u) => (await users.getMe(u.id)).coins;
+  await coins.adminAdjust(boss.id, G.id, { amount: 5000 });
+
+  // ---- a gift in a private chat
+  const pc = await chats.getOrCreatePrivate(G.id, H.id);
+  const pcId = pc.id || pc.chat.id;
+  await rejects(messages.sendMessage(G.id, pcId, { type: 'gift' }), 'invalid_input'); // an app can't make a gift card up
+  await rejects(plus.sendGift(H.id, { chat_id: pcId, gift_id: 'rose' }), 'not_enough_coins');
+  await rejects(plus.sendGift(G.id, { chat_id: pcId, gift_id: 'unicorn' }), 'invalid_input');
+  const gift = await plus.sendGift(G.id, { chat_id: pcId, gift_id: 'cake', note: 'Happy birthday' });
+  assert.equal(gift.balance, 4950);
+  assert.deepEqual([gift.message.type, gift.message.meta.gift.coins, gift.message.meta.gift.note], ['gift', 50, 'Happy birthday']);
+  assert.equal(await bal(H), 50);
+
+  // ---- tips on a channel post (the owner gets 90%)
+  const ch = await chats.createChannel(H.id, { title: 'Hina Daily', username: 'hina_daily', is_public: true });
+  const chId = ch.id || ch.chat.id;
+  await chats.joinPublic(G.id, chId);
+  const post = await messages.sendMessage(H.id, chId, { text: 'Recipe of the day' });
+  await rejects(plus.tip(H.id, { message_id: post.id, amount: 10 }), 'invalid_input'); // her own channel
+  await rejects(plus.tip(I.id, { message_id: post.id, amount: 10 }), 'chat_not_found');
+  await rejects(plus.tip(G.id, { message_id: post.id, amount: 0 }), 'invalid_input');
+  const tipped = await plus.tip(G.id, { message_id: post.id, amount: 100 });
+  assert.deepEqual([tipped.balance, tipped.tips], [4850, 100]);
+  assert.equal(await bal(H), 140);
+  assert.equal((await messages.listMessages(G.id, chId, {})).messages.find((m) => m.id === post.id).tips, 100);
+
+  // ---- a paid channel
+  await rejects(plus.setPrice(G.id, chId, { price: 300 }), 'forbidden');
+  await plus.setPrice(H.id, chId, { price: 300 });
+  assert.equal((await chats.publicPreview(I.id, 'hina_daily')).sub_price, 300);
+  let err = null;
+  await chats.joinPublic(I.id, chId).catch((e) => { err = e; });
+  assert.deepEqual([err.code, err.extra.price], ['subscription_required', 300]);
+  await rejects(plus.subscribe(I.id, chId, {}), 'not_enough_coins');
+  await rejects(messages.listMessages(I.id, chId, {}), 'chat_not_found');
+  await coins.adminAdjust(boss.id, I.id, { amount: 700 });
+  const sub = await plus.subscribe(I.id, chId, {});
+  assert.equal(sub.balance, 400);
+  assert.ok(new Date(sub.expires_at) > new Date(Date.now() + 29 * 86400e3));
+  assert.equal(await bal(H), 410); // 140 + 90% of 300
+  assert.ok((await messages.listMessages(I.id, chId, {})).messages.length >= 1);
+  assert.equal((await plus.mySubscription(G.id, chId)), null, 'people who were already in stay for free');
+  // the month runs out: renewed from the balance…
+  await db.query(`UPDATE channel_subs SET expires_at = now() - interval '1 minute' WHERE user_id = $1`, [I.id]);
+  await plus.sweepSubs();
+  assert.equal(await bal(I), 100);
+  assert.ok(new Date((await plus.mySubscription(I.id, chId)).expires_at) > new Date(Date.now() + 29 * 86400e3));
+  // …and when there is not enough, the member leaves
+  await db.query(`UPDATE channel_subs SET expires_at = now() - interval '1 minute' WHERE user_id = $1`, [I.id]);
+  await plus.sweepSubs();
+  assert.equal(await bal(I), 100);
+  await rejects(messages.listMessages(I.id, chId, {}), 'chat_not_found');
+  assert.equal(await plus.mySubscription(I.id, chId), null);
+  await plus.setPrice(H.id, chId, { price: 0 });
+  await chats.joinPublic(I.id, chId);
+
+  // ---- a giveaway: 2 winners × 200 coins, held from the start
+  await rejects(plus.createGiveaway(G.id, { chat_id: chId, coins_each: 200, winners: 2, hours: 1 }), 'forbidden');
+  await rejects(plus.createGiveaway(H.id, { chat_id: chId, coins_each: 400, winners: 2, hours: 1 }), 'not_enough_coins');
+  assert.equal((await db.one('SELECT count(*)::int AS n FROM giveaways')).n, 0);
+  await coins.adminAdjust(boss.id, H.id, { amount: 90 }); // 680 now
+  const before = await bal(H);
+  const ga = await plus.createGiveaway(H.id, { chat_id: chId, coins_each: 200, winners: 2, hours: 1 });
+  assert.equal(ga.balance, before - 400);
+  assert.equal(ga.message.meta.giveaway.id, ga.giveaway.id);
+  await rejects(plus.joinGiveaway(H.id, ga.giveaway.id), 'invalid_input');
+  assert.deepEqual([(await plus.joinGiveaway(G.id, ga.giveaway.id)).entries, (await plus.joinGiveaway(G.id, ga.giveaway.id)).entries], [1, 1]);
+  await plus.sweepGiveaways();
+  assert.equal((await plus.getGiveaway(G.id, ga.giveaway.id)).status, 'open', 'not before its time');
+  await db.query(`UPDATE giveaways SET ends_at = now() - interval '1 second' WHERE id = $1`, [ga.giveaway.id]);
+  const gBefore = await bal(G);
+  await plus.sweepGiveaways();
+  await plus.sweepGiveaways(); // a second draw changes nothing
+  const done = await plus.getGiveaway(G.id, ga.giveaway.id);
+  assert.deepEqual([done.status, done.winner_list.map((w) => w.id)], ['done', [G.id]]);
+  assert.equal(await bal(G), gBefore + 200);
+  assert.equal(await bal(H), before - 200, 'the prize nobody could win came back');
+  await rejects(plus.joinGiveaway(I.id, ga.giveaway.id), 'giveaway_over');
+  const last = (await messages.listMessages(G.id, chId, {})).messages[0];
+  assert.match(last.text, /Giveaway finished/);
+
+  // the books still add up
+  const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
+  assert.equal(bad.length, 0);
+});

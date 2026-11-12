@@ -91,6 +91,10 @@ svg{display:block}
       <path d="M188 262 Q208 278 228 262" fill="none" stroke="#231650" stroke-width="6.5" stroke-linecap="round"/>
       <path d="M284 262 Q304 278 324 262" fill="none" stroke="#231650" stroke-width="6.5" stroke-linecap="round"/>
     </g>
+    <g id="brow" opacity="0">
+      <g id="browL"><path d="M-36 -44 H36 V0 H-36Z" fill="#FFD43B"/><path d="M-30 0 H30" stroke="#231650" stroke-width="6" stroke-linecap="round"/></g>
+      <g id="browR"><path d="M-36 -44 H36 V0 H-36Z" fill="#FFD43B"/><path d="M-30 0 H30" stroke="#231650" stroke-width="6" stroke-linecap="round"/></g>
+    </g>
     <!-- beak -->
     <g id="beak">
       <g id="jaw"><path d="M232 300 C236 326 276 326 280 300 C268 306 244 306 232 300 Z" fill="#7A1F2B" stroke="#C4520A" stroke-width="3" stroke-linejoin="round"/><ellipse cx="256" cy="313" rx="12" ry="6" fill="#FF7B8E"/></g>
@@ -164,9 +168,9 @@ function star(id,x,y,t,t0,s0,rot){const el=$(id);const u=(t-t0)/.7;const on=u>0&
 
 // ---- the puppet: one set of numbers per frame
 function pose(p){
-  p=Object.assign({x:0,y:0,sy:1,hy:0,tilt:0,capY:0,capR:0,aR:[150,36,.35],aL:[150,36,.35],shrug:0,blink:0,lookX:0,lookY:0,open:0,eyes:'open',wl:0,eyeS:1,feet:0},p);
+  p=Object.assign({x:0,y:0,sy:1,hy:0,tilt:0,capY:0,capR:0,aR:[150,36,.35],aL:[150,36,.35],shrug:0,lift:0,brow:null,blink:0,lookX:0,lookY:0,open:0,eyes:'open',wl:0,eyeS:1,feet:0},p);
   const sx=1/Math.sqrt(p.sy);
-  T($('stage'),`translate(${240+p.x} 478) scale(.9) translate(-256 -470)`);
+  T($('stage'),`translate(${240+p.x} ${478-p.lift}) scale(.9) translate(-256 -470)`);
   T($('root'),`translate(0 ${p.y}) translate(256 456) scale(${sx} ${p.sy}) translate(-256 -456)`);
   const h=Math.min(1,-p.y/44);
   T($('shadow'),`translate(256 462) scale(${(1-h*.32)*(.96+(sx-1)*1.2)} ${1-h*.3}) translate(-256 -462)`); O($('shadow'),.2-h*.08);
@@ -182,6 +186,9 @@ function pose(p){
   for(const [id,cx] of [['eyeL',208],['eyeR',304]]){T($(id),`translate(${p.lookX} ${p.lookY}) translate(${cx} 264) scale(1 ${es}) translate(${-cx} -264)`);O($(id),closed?0:1);}
   O($('lids'),(p.eyes==='happy'||(p.eyes==='open'&&p.blink>.85))?1:0); O($('lidsSleep'),p.eyes==='sleep'?1:0);
   T($('lids'),`translate(${p.lookX} ${p.lookY})`);
+  // heavy lids: brow = [angle, drop 0..1] — positive angle = angry (inner corners down), negative = sad
+  O($('brow'),p.brow&&!closed?1:0);
+  if(p.brow){const [ang,drop]=p.brow;T($('browL'),`translate(208 ${239+drop*24}) rotate(${ang})`);T($('browR'),`translate(304 ${239+drop*24}) rotate(${-ang})`);}
   T($('jaw'),`translate(0 ${-10+p.open*13}) translate(256 300) scale(1 ${.2+p.open*.9}) translate(-256 -300)`); O($('jaw'),p.open<.03?0:1);
 }
 const breath=t=>sin(t,2/3)*.012;
@@ -321,8 +328,120 @@ SCENES.secure={init(){ $('propBody').innerHTML=`<g id="sh"><path d="M0 -62 C22 -
   const g=(t-1.05)/.6, g2=(t-2.3)/.6; $('shine').setAttribute('x',g>0&&g<1?-90+g*200:(g2>0&&g2<1?-90+g2*200:-140));
   star('s1',380,330,t,.9,.95,90);star('s2',130,340,t,1.05,.75,-80); }};
 
+
+// =================================================================== sticker scenes
+const banner=(text,c1='#7C6BFF',c2='#2A1B8F')=>`<g id="bn" opacity="0"><rect x="${-(text.length*13+34)}" y="-26" width="${text.length*26+68}" height="52" rx="26" fill="${c1}" stroke="${c2}" stroke-width="3.5"/><rect x="${-(text.length*13+22)}" y="-20" width="${text.length*26+44}" height="14" rx="7" fill="#fff" opacity=".22"/><text y="11" font-family="PJS" font-size="34" fill="#fff" text-anchor="middle">${text}</text></g>`;
+function showBanner(t,t0=.5){const u=kf(t,[[0,0],[t0,0],[t0+.35,1,'back'],[2.55,1],[2.85,0],[3,0]]);O($('bn'),Math.min(1,u*1.6));T($('bn'),`translate(256 478) rotate(${sin(t,1)*1.5}) scale(${u})`);}
+const HEART='M0 14 C-26 -6 -18 -26 0 -12 C18 -26 26 -6 0 14Z';
+const heartEl=(id,c='#FF4D8D')=>`<path id="${id}" d="${HEART}" fill="${c}" stroke="#B3134F" stroke-width="2" opacity="0"/>`;
+const rise=(el,x,y,t,ph,s0,dx=18,dy=120)=>{const u=((t/3*1.5+ph)%1);O(el,Math.sin(u*Math.PI));T(el,`translate(${x+Math.sin(u*5+ph*9)*dx} ${y-u*dy}) rotate(${Math.sin(u*6+ph)*14}) scale(${s0*(.5+u*.7)})`);};
+const DROP='M0 -12 C7 -2 9 4 9 8 A9 9 0 0 1 -9 8 C-9 4 -7 -2 0 -12Z';
+
+SCENES.hi=SCENES.wave;
+
+SCENES.love={init(){ $('fx').innerHTML=[0,1,2,3,4].map(i=>heartEl('h'+i,i%2?'#FF7FA8':'#FF4D8D')).join('')+heartEl('hb'); },
+ draw(t){ const sw=sin(t,2/3); const beat=1+Math.max(0,sin(t,2))*.18;
+  pose({sy:1+breath(t)+Math.abs(sin(t,4/3))*.02,x:sw*4,tilt:sw*5,capR:-sw*2,hy:sin(t,4/3)*1.5,wl:sw*6,
+    aR:[204,40+sw*4,.6],aL:[204,40-sw*4,.6],eyes:'happy',open:.45+sin(t,4/3)*.2});
+  [[112,300,.0,1],[410,290,.2,.9],[90,200,.45,.7],[430,180,.65,.75],[256,120,.85,.6]].forEach((h,i)=>rise($('h'+i),h[0],h[1],t,h[2],h[3]));
+  O($('hb'),1);T($('hb'),`translate(256 398) scale(${1.5*beat})`); }};
+
+SCENES.lol={init(){ $('fx').innerHTML=`<path id="d0" d="${DROP}" fill="#7FD3FF" stroke="#2F8FD0" stroke-width="2"/><path id="d1" d="${DROP}" fill="#7FD3FF" stroke="#2F8FD0" stroke-width="2"/><path id="d2" d="${DROP}" fill="#7FD3FF" stroke="#2F8FD0" stroke-width="2"/><path id="d3" d="${DROP}" fill="#7FD3FF" stroke="#2F8FD0" stroke-width="2"/>
+   <text id="ha1" font-family="PJS" font-size="46" fill="#FFC233" stroke="#C98200" stroke-width="2.5" paint-order="stroke" text-anchor="middle" opacity="0">HA</text><text id="ha2" font-family="PJS" font-size="38" fill="#7C6BFF" stroke="#2A1B8F" stroke-width="2.5" paint-order="stroke" text-anchor="middle" opacity="0">HA</text>`; },
+ draw(t){ const sh=sin(t,6); const back=kf(t,[[0,0],[.3,1,'out'],[2.6,1],[3,0]]);
+  pose({sy:1+sh*.035*back,hy:-6*back+sh*2.5*back,tilt:-6*back+sin(t,1)*3,capY:-sh*3*back,capR:sin(t,1,1)*2,wl:sh*6,
+    aR:[196,44+sh*5,.7],aL:[196,44-sh*5,.7],eyes:back>.4?'happy':'open',open:.75+sh*.25*back});
+  const d=(el,x,dir,ph)=>{const u=((t*1.6+ph)%1);O(el,back*Math.sin(u*Math.PI));T(el,`translate(${x+dir*u*46} ${250+u*u*70-u*30}) rotate(${dir*-40}) scale(${.7+u*.3})`);};
+  d($('d0'),176,-1,0);d($('d1'),336,1,.25);d($('d2'),176,-1,.5);d($('d3'),336,1,.75);
+  const ha=(el,x,y,t0,r)=>{const u=pulse((t+3-t0)%3,0,.9);O(el,u);T(el,`translate(${x} ${y-u*14}) rotate(${r}) scale(${.6+u*.5})`);};
+  ha($('ha1'),96,150,.3,-14);ha($('ha2'),424,130,.8,12);ha($('ha1'),96,150,1.6,-14);ha($('ha2'),424,130,2.0,12); }};
+SCENES.lol.draw=((orig)=>function(t){orig(t);const u1=Math.max(pulse(t,.3,.9),pulse(t,1.6,.9)),u2=Math.max(pulse(t,.8,.9),pulse(t,2.0,.9));O($('ha1'),u1);T($('ha1'),`translate(96 ${150-u1*14}) rotate(-14) scale(${.6+u1*.5})`);O($('ha2'),u2);T($('ha2'),`translate(424 ${130-u2*14}) rotate(12) scale(${.6+u2*.5})`);})(SCENES.lol.draw);
+
+SCENES.sad={init(){ $('fx').innerHTML=''; $('glasses').innerHTML=`<path id="t0" d="${DROP}" fill="#7FD3FF" stroke="#2F8FD0" stroke-width="2"/><path id="t1" d="${DROP}" fill="#7FD3FF" stroke="#2F8FD0" stroke-width="2"/>`; },
+ draw(t){ const sob=Math.max(0,sin(t,2))*pulse(t,1.0,1.4);
+  pose({sy:.97+breath(t)-sob*.02,hy:10+sob*3,tilt:-5+sin(t,1/3)*1.5,capY:4,capR:-4,wl:-6,
+    aR:[156,30,.3],aL:[156,30,.3],brow:[-16,.5],lookY:5,lookX:-2,blink:blinkAt(t,.6,2.3),open:sob*.25});
+  const tear=(el,x,ph)=>{const u=((t/1.5+ph)%1);O(el,u<.9?1:(1-u)*10);T(el,`translate(${x} ${288+u*u*64}) scale(${.55+Math.min(u*3,1)*.45})`);};
+  tear($('t0'),196,0);tear($('t1'),316,.5); }};
+
+SCENES.angry={init(){ $('fx').innerHTML=`<g id="mk" opacity="0" fill="none" stroke="#E5484D" stroke-width="8" stroke-linecap="round"><path d="M-20 -8 Q-8 -8 -8 -20 M20 -8 Q8 -8 8 -20 M-20 8 Q-8 8 -8 20 M20 8 Q8 8 8 20"/></g>`+[0,1,2,3].map(i=>`<ellipse id="p${i}" rx="16" ry="12" fill="#fff" stroke="#C9CCDA" stroke-width="2.5" opacity="0"/>`).join(''); },
+ draw(t){ const tr=sin(t,14)*1.6; const stomp=pulse(t%1,.1,.3);
+  pose({x:tr,sy:1-stomp*.05,hy:2+stomp*3,tilt:sin(t,1)*2,capY:-stomp*3,wl:tr*3,
+    aR:[142,74,.45],aL:[142,74,.45],brow:[20,.55],lookY:1,open:pulse(t%1.5,.5,.5)*.4,feet:-stomp*2});
+  const pf=(el,dir,ph)=>{const u=((t/1.2+ph)%1);O(el,Math.sin(u*Math.PI)*.95);T(el,`translate(${256+dir*(128+u*52)} ${214-u*46}) scale(${.5+u*.9})`);};
+  pf($('p0'),-1,0);pf($('p1'),1,.15);pf($('p2'),-1,.5);pf($('p3'),1,.65);
+  const m=1+Math.max(0,sin(t,2))*.25; O($('mk'),1); T($('mk'),`translate(388 118) rotate(12) scale(${m})`); }};
+
+SCENES.wow={init(){ $('fx').innerHTML=`<text id="ex" font-family="PJS" font-size="92" fill="#FFC233" stroke="#C98200" stroke-width="3.5" paint-order="stroke" text-anchor="middle" opacity="0">!</text><text id="ex2" font-family="PJS" font-size="60" fill="#7C6BFF" stroke="#2A1B8F" stroke-width="3" paint-order="stroke" text-anchor="middle" opacity="0">!</text>`+starEl('s1',1)+starEl('s2',0); },
+ draw(t){ const j=hop(t,.05,30); const w=kf(t,[[0,0],[.4,0],[.6,1,'back'],[2.4,1],[2.8,0],[3,0]]);
+  pose({y:j.y,sy:j.sy+breath(t),hy:j.hy-w*4,capY:j.capY-w*10-pulse(t,.6,.5)*14,capR:w*-5,tilt:w*-3,wl:w*-12,
+    aR:[152-w*70,36-w*60,.35+w*.9],aL:[152-w*70,36-w*60,.35+w*.9],eyeS:1+w*.28,lookY:-w*2,open:w*.95,blink:blinkAt(t,2.9)});
+  const e=(el,x,y,t0,r)=>{const u=kf(t,[[0,0],[t0,0],[t0+.25,1,'back'],[2.3,1],[2.6,0],[3,0]]);O(el,Math.min(1,u*1.5));T(el,`translate(${x} ${y+sin(t,3)*3}) rotate(${r}) scale(${u})`);};
+  e($('ex'),420,170,.55,10);e($('ex2'),96,190,.7,-12); star('s1',120,110,t,.6,.9,90);star('s2',400,300,t,.75,.7,-80); }};
+
+SCENES.ok={init(){ $('armR').querySelector('.prop').innerHTML=`<g transform="translate(0 -72) scale(1.3)" id="okb"><circle r="34" fill="#22B573" stroke="#0E7A49" stroke-width="3"/><circle r="27" fill="none" stroke="#fff" stroke-width="2" opacity=".4"/><path d="M-15 1 L-4 12 L16 -11" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></g>`; $('fx').innerHTML=starEl('s1',1)+starEl('s2',0); },
+ draw(t){ const up=kf(t,[[0,0],[.2,0],[.55,1,'back'],[2.4,1],[2.8,0],[3,0]]); const nod=pulse(t,.9,.35)*6+pulse(t,1.3,.35)*6;
+  const pump=pulse(t,.9,.35)+pulse(t,1.3,.35);
+  pose({sy:1+breath(t)-pump*.02,hy:nod,tilt:up*4,capR:-nod*.4,capY:-pump*2,
+    aR:[152-up*96-pump*8,36-up*56,.35+up*.4],aL:[152,36+up*20,.35],eyes:(t>.8&&t<2.2)?'happy':'open',blink:blinkAt(t,.1,2.7),open:up*.5});
+  const pr=$('armR').querySelector('.prop');O(pr,up<.05?0:1);T(pr,`rotate(${-((152-up*96-pump*8)+(36-up*56))} 0 -72)`);
+  star('s1',430,150,t,.6,.95,90);star('s2',380,300,t,.85,.7,-70); }};
+
+SCENES.thanks={init(){ $('fx').innerHTML=heartEl('h0','#FF7FA8')+heartEl('h1','#B9AEFF')+heartEl('h2')+banner('Thank you!','#FF6FA0','#C2386B'); },
+ draw(t){ const b=kf(t,[[0,0],[.3,0],[.7,1,'io'],[1.5,1],[1.9,.25,'io'],[2.2,.8],[2.6,0],[3,0]]);
+  pose({lift:26,sy:1+breath(t)-b*.04,hy:b*14,tilt:0,capY:b*5,capR:0,
+    aR:[204,42,.55],aL:[204,42,.55],eyes:b>.4?'happy':'open',blink:blinkAt(t,.12),open:b*.3});
+  rise($('h0'),120,260,t,.0,.8,12,90);rise($('h1'),400,250,t,.33,.7,12,90);rise($('h2'),430,330,t,.66,.55,10,80); showBanner(t,.4); }};
+
+SCENES.salam={init(){ $('fx').innerHTML=starEl('s1',1)+starEl('s2',0)+banner('Salam!','#12B89C','#0A7A66'); },
+ draw(t){ const up=kf(t,[[0,0],[.15,0],[.5,1,'back'],[2.5,1],[2.85,0],[3,0]]); const bow=kf(t,[[0,0],[.6,0],[.95,1],[1.5,1],[1.85,0],[3,0]]);
+  pose({lift:26,sy:1+breath(t)-bow*.03,hy:bow*12,tilt:bow*2,capY:bow*4,
+    aR:[152+up*56,36+up*8,.35+up*.3],aL:[152,36,.35],eyes:bow>.4?'happy':'open',blink:blinkAt(t,.2,2.6),open:kf(t,[[0,0],[1.9,0],[2.05,.6,'back'],[2.5,.5],[2.8,0],[3,0]])});
+  star('s1',410,160,t,.55,.9,90);star('s2',110,190,t,.8,.7,-80); showBanner(t,.5); }};
+
+SCENES.eid={init(){ $('back').innerHTML=`<g id="moon"><path d="M22 -52 A56 56 0 1 0 22 52 A44 44 0 1 1 22 -52Z" fill="url(#gStar)" stroke="#C98200" stroke-width="3"/><path d="M40 -6 l5 11 l12 1 l-9 8 l3 12 l-11 -6 l-11 6 l3 -12 l-9 -8 l12 -1z" fill="#FFF2B0" stroke="#C98200" stroke-width="2"/></g>`;
+   $('fx').innerHTML=[0,1,2,3,4,5,6,7].map(i=>`<rect id="c${i}" x="-6" y="-4" width="12" height="8" rx="2" fill="${['#7C6BFF','#FFB52E','#FF6FA0','#22B573'][i%4]}" opacity="0"/>`).join('')+starEl('s1',1)+starEl('s2',0)+banner('Eid Mubarak!','#7C6BFF','#2A1B8F'); },
+ draw(t){ const j=hop(t,.1,34); const up=kf(t,[[0,0],[.4,0],[.7,1,'back'],[2.4,1],[2.8,0],[3,0]]); const w=sin(t,2.4)*up;
+  pose({lift:26,y:j.y,sy:j.sy+breath(t),hy:j.hy,capY:j.capY,capR:j.capR,tilt:w*2.5,
+    aR:[152-up*104+w*7,36-up*52,.35+up*.8],aL:[152-up*104-w*7,36-up*52,.35+up*.8],eyes:(t>.95&&t<2.3)?'happy':'open',blink:blinkAt(t,2.7),open:up*.9});
+  T($('moon'),`translate(420 96) rotate(${-18+sin(t,2/3)*7}) scale(.8)`);
+  for(let i=0;i<8;i++){const el=$('c'+i);const u=((t/3*1.4+i/8)%1);O(el,Math.sin(u*Math.PI));T(el,`translate(${70+i*52+Math.sin(u*7+i)*14} ${40+u*300}) rotate(${u*500+i*40})`);}
+  star('s1',96,130,t,.7,.9,90);star('s2',330,60,t,1.0,.6,-70); showBanner(t,.6); }};
+
+SCENES.party={init(){ $('fx').innerHTML=[0,1,2,3,4,5,6,7,8,9].map(i=>`<rect id="c${i}" x="-7" y="-4" width="14" height="8" rx="2" fill="${['#7C6BFF','#FFB52E','#FF6FA0','#22B573','#3C9BEA'][i%5]}" opacity="0"/>`).join('')+starEl('s1',1)+starEl('s2',0)+starEl('s3',1); },
+ draw(t){ const u2=t%1.5; const j=hop(u2,0,40); const w=sin(t,2.6);
+  pose({y:j.y,sy:j.sy,hy:j.hy,capY:j.capY,capR:j.capR,tilt:w*3,wl:w*-6,
+    aR:[46+w*10,-18+sin(t,2.6,-.9)*18,1.1],aL:[46-w*10,-18-sin(t,2.6,-.9)*18,1.1],eyes:'happy',open:.85});
+  for(let i=0;i<10;i++){const el=$('c'+i);const u=((t/3*2+i/10)%1);O(el,Math.sin(u*Math.PI));T(el,`translate(${50+i*46+Math.sin(u*7+i)*16} ${20+u*380}) rotate(${u*600+i*36})`);}
+  star('s1',100,150,t,.5,1,90);star('s2',420,130,t,1.3,.85,-80);star('s3',256,60,t,2.0,.7,60); }};
+
+SCENES.think={init(){ $('fx').innerHTML=`<g id="tb"><ellipse cx="0" cy="0" rx="62" ry="40" fill="#fff" stroke="#B9B6CF" stroke-width="3"/><circle id="k0" cx="-26" cy="0" r="8" fill="#7C6BFF"/><circle id="k1" cx="0" cy="0" r="8" fill="#7C6BFF"/><circle id="k2" cx="26" cy="0" r="8" fill="#7C6BFF"/></g><circle id="b1" r="11" fill="#fff" stroke="#B9B6CF" stroke-width="3"/><circle id="b2" r="6.5" fill="#fff" stroke="#B9B6CF" stroke-width="3"/>`; },
+ draw(t){ const c=kf(t,[[0,0],[.2,0],[.6,1,'back'],[2.5,1],[2.85,0],[3,0]]); const sw=sin(t,2/3);
+  pose({sy:1+breath(t),hy:-c*3,tilt:c*7+sw*1.5,capR:-c*3,wl:c*6,
+    aR:[152-c*204,36-c*44,.35+c*.2],aL:[152+c*46,36+c*10,.35],lookX:-c*5,lookY:-c*6,blink:blinkAt(t,1.2,2.6),open:0,eyeS:1-c*.06});
+  const a=kf(t,[[0,0],[.5,0],[.85,1,'back'],[2.45,1],[2.75,0],[3,0]]);
+  O($('tb'),Math.min(1,a*1.5));T($('tb'),`translate(118 118) scale(${a}) rotate(${sw*2})`);
+  O($('b1'),a>.5?1:0);T($('b1'),`translate(170 176)`);O($('b2'),a>.3?1:0);T($('b2'),`translate(190 200)`);
+  for(let i=0;i<3;i++){const on=((t*2.2)%4)>i+.6;O($('k'+i),on?1:.2);} }};
+
+SCENES.gm={init(){ $('back').innerHTML=`<g id="sun"><g id="rays" stroke="#FFC233" stroke-width="12" stroke-linecap="round">${[...Array(10).keys()].map(i=>`<path d="M0 -92 V-118" transform="rotate(${i*36})"/>`).join('')}</g><circle r="76" fill="url(#gStar)" stroke="#E79A00" stroke-width="4"/><circle cx="-22" cy="-24" r="22" fill="#fff" opacity=".35"/></g>`; $('fx').innerHTML=banner('Good morning!','#FFA41F','#C26A00'); },
+ draw(t){ const r=kf(t,[[0,0],[.9,1,'out'],[3,1]]); const st=kf(t,[[0,0],[.5,0],[1.0,1,'out'],[1.7,1],[2.2,0],[3,0]]);
+  pose({lift:26,sy:1+breath(t)+st*.06,hy:-st*8,tilt:st*-4,capY:-st*4,capR:st*3,
+    aR:[152-st*128,36-st*40,.35+st*.8],aL:[152-st*120,36-st*40,.35+st*.8],eyes:(st>.4&&t<1.8)?'sleep':(t>2.0&&t<2.8?'happy':'open'),blink:blinkAt(t,.15),open:st>.3&&t<1.8?.9:kf(t,[[0,0],[2.0,0],[2.2,.6,'back'],[2.7,.5],[3,0]])});
+  T($('sun'),`translate(${150-r*36} ${300-r*190}) scale(.72)`); T($('rays'),`rotate(${t*40})`); showBanner(t,1.0); }};
+
+SCENES.gn={init(){ $('back').innerHTML=`<g id="moon"><path d="M22 -52 A56 56 0 1 0 22 52 A44 44 0 1 1 22 -52Z" fill="url(#gStar)" stroke="#C98200" stroke-width="3"/></g>`+starEl('s1',1)+starEl('s2',0)+starEl('s3',1); const z=(id)=>`<text id="${id}" font-family="PJS" font-size="44" fill="#9A8BFF" stroke="#2A1B8F" stroke-width="2.5" paint-order="stroke" text-anchor="middle" opacity="0">Z</text>`; $('fx').innerHTML=z('z1')+z('z2')+banner('Good night!','#4A3A9E','#1D1273'); },
+ draw(t){ const br=sin(t,1/3); const d=kf(t,[[0,0],[.5,0],[1.1,1,'io'],[3,1]]);
+  pose({lift:26,sy:1-d*.04+br*.02,hy:d*7+br*-2,tilt:d*-8+br,capY:d*5,capR:d*-6,
+    aR:[154,30,.35],aL:[154,30,.35],eyes:d>.6?'sleep':'open',blink:Math.max(blinkAt(t,.2),d*.7),open:d*.25+br*.1});
+  T($('moon'),`translate(110 104) rotate(${-14+sin(t,1/3)*4}) scale(.78)`);
+  const tw=(id,x,y,ph)=>{const u=.6+Math.sin(t/3*Math.PI*2*2+ph)*.4;O($(id),1);T($(id),`translate(${x} ${y}) scale(${u*.7}) rotate(${t*20})`);};
+  tw('s1',196,70,0);tw('s2',60,190,2);tw('s3',420,90,4);
+  const z=(el,ph)=>{const u=((t/3+ph)%1);O(el,d*Math.sin(u*Math.PI));T(el,`translate(${372+u*50+Math.sin(u*6)*8} ${196-u*110}) rotate(${-8+u*22}) scale(${.4+u*.8})`);};
+  z($('z1'),0);z($('z2'),.5); showBanner(t,.9); }};
+
 let cur=null;
-function setScene(n){ cur=SCENES[n]; cur.init(); DUR=cur.dur||3; draw(0); }
+function setScene(n){ for(const id of ['back','fx','glasses','propBody'])$(id).innerHTML=''; document.querySelectorAll('.prop').forEach(e=>{e.innerHTML='';e.setAttribute('opacity',1);}); cur=SCENES[n]; cur.init(); DUR=cur.dur||3; draw(0); }
 function draw(t){ cur.draw(t); }
 setScene((location.hash||'#wave').slice(1));
 </script></body></html>

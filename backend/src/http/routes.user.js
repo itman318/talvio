@@ -255,6 +255,15 @@ router.get('/coins', h(async (req, res) => res.json(await require('../services/c
 router.get('/coins/history', h(async (req, res) => res.json(await require('../services/coin.service').history(req.userId, req.query))));
 router.post('/coins/send', h(async (req, res) => res.json(await require('../services/coin.service').send(req.userId, req.body))));
 router.post('/coins/plus', h(async (req, res) => res.json(await require('../services/coin.service').buyPlus(req.userId, req.body))));
+router.get('/coins/gifts', h(async (req, res) => res.json(require('../services/coinplus.service').giftList())));
+router.post('/coins/gift', h(async (req, res) => res.json(await require('../services/coinplus.service').sendGift(req.userId, req.body))));
+router.post('/coins/tip', h(async (req, res) => res.json(await require('../services/coinplus.service').tip(req.userId, req.body))));
+router.post('/coins/giveaways', h(async (req, res) => res.json(await require('../services/coinplus.service').createGiveaway(req.userId, req.body))));
+router.get('/coins/giveaways/:id', h(async (req, res) => res.json(await require('../services/coinplus.service').getGiveaway(req.userId, req.params.id))));
+router.post('/coins/giveaways/:id/join', h(async (req, res) => res.json(await require('../services/coinplus.service').joinGiveaway(req.userId, req.params.id))));
+router.post('/chats/:id/subscription', h(async (req, res) => res.json(await require('../services/coinplus.service').setPrice(req.userId, req.params.id, req.body))));
+router.get('/chats/:id/subscription', h(async (req, res) => res.json(await require('../services/coinplus.service').mySubscription(req.userId, req.params.id))));
+router.post('/chats/:id/subscribe', h(async (req, res) => res.json(await require('../services/coinplus.service').subscribe(req.userId, req.params.id, req.body))));
 // ---- premium & payments
 router.get('/premium', h(async (req, res) => res.json(await paymentService.premiumInfo(req.userId, { country: req.get('x-country') || req.query.country, locale: req.get('accept-language') }))));
 router.post('/payments/checkout', h(async (req, res) => res.json(await paymentService.checkout(req.userId, { ...req.body, country: req.body.country || req.get('x-country'), locale: req.get('accept-language') }))));

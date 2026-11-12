@@ -1338,3 +1338,40 @@ CREATE TRIGGER chat_members_count AFTER INSERT OR DELETE ON chat_members FOR EAC
 -- put right whatever is off (first run, or a restore)
 UPDATE chats c SET member_count = x.n FROM (SELECT chat_id, count(*)::int AS n FROM chat_members GROUP BY chat_id) x WHERE x.chat_id = c.id AND c.member_count <> x.n;
 UPDATE chats c SET member_count = 0 WHERE c.member_count <> 0 AND NOT EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = c.id);
+
+-- ------------------------------------------------------------------ coins: gifts, tips, paid channels, giveaways
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+ALTER TABLE messages ADD CONSTRAINT messages_type_check
+  CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact', 'crypto', 'gift', 'giveaway'));
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS coin_tips INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
+ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
+  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'));
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS sub_price INTEGER NOT NULL DEFAULT 0 CHECK (sub_price >= 0);
+CREATE TABLE IF NOT EXISTS channel_subs (
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  price      INTEGER     NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (chat_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS channel_subs_expires_idx ON channel_subs (expires_at);
+CREATE TABLE IF NOT EXISTS giveaways (
+  id         BIGSERIAL   PRIMARY KEY,
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  creator_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id BIGINT,
+  coins_each INTEGER     NOT NULL CHECK (coins_each > 0),
+  winners    INTEGER     NOT NULL CHECK (winners > 0),
+  ends_at    TIMESTAMPTZ NOT NULL,
+  status     VARCHAR(8)  NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS giveaways_due_idx ON giveaways (ends_at) WHERE status = 'open';
+CREATE TABLE IF NOT EXISTS giveaway_entries (
+  giveaway_id BIGINT  NOT NULL REFERENCES giveaways(id) ON DELETE CASCADE,
+  user_id     BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  won         BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (giveaway_id, user_id)
+);
