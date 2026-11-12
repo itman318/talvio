@@ -1,3 +1,5 @@
+import '../core/api_client.dart';
+import '../widgets/coin_cards.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -566,6 +568,17 @@ class _ChannelDirectoryScreenState extends State<ChannelDirectoryScreen> {
       if (!mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id, initial: chat)));
       setState(() => c['is_member'] = true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      final paid = await subscribeIfNeeded(context, e);
+      if (paid != null && mounted) {
+        final chat = await store.getChat(paid);
+        if (!mounted) return;
+        Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: paid, initial: chat)));
+        setState(() => c['is_member'] = true);
+      } else if (e.code != 'subscription_required' && mounted) {
+        showError(context, e);
+      }
     } catch (e) {
       if (mounted) showError(context, e);
     }

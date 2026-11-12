@@ -1467,5 +1467,7 @@ module.exports = {
   regenerateInvite,
   invitePreview,
   joinByInvite,
+  joinChat,
+  findByInvite,
   emitUpdated,
 };

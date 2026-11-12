@@ -620,6 +620,10 @@ class ChatTile extends StatelessWidget {
       return (Icons.location_on_rounded, m.meta?['live'] != null ? 'Live location' : (m.text.isNotEmpty ? m.text : 'Location'));
     case 'contact':
       return (Icons.person_rounded, '${(m.meta?['contact'] as Map?)?['name'] ?? 'Contact'}');
+    case 'gift':
+      return (Icons.card_giftcard_rounded, 'Gift: ${(m.meta?['gift'] as Map?)?['name'] ?? 'coins'}');
+    case 'giveaway':
+      return (Icons.celebration_rounded, 'Giveaway');
     case 'crypto':
       return (Icons.account_balance_wallet_rounded, cryptoLabel(m.meta).replaceFirst('💸 ', ''));
     case 'sticker':

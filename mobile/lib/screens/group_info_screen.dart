@@ -1,4 +1,6 @@
 import 'global_search_screen.dart' show SimilarChannels;
+import 'coins_screen.dart' show CoinIcon, fmtCoins;
+import '../core/services.dart';
 import 'package:flutter/material.dart';
 import '../core/chat_links.dart';
 import 'package:flutter/services.dart';
@@ -149,6 +151,38 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (sec < 60) return '${sec}s';
     if (sec < 3600) return '${sec ~/ 60}m';
     return '${sec ~/ 3600}h';
+  }
+
+  Future<void> _setSubPrice(Chat chat) async {
+    final ctl = TextEditingController(text: chat.subPrice > 0 ? '${chat.subPrice}' : '');
+    final v = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Paid subscription'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: ctl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+            decoration: const InputDecoration(labelText: 'Coins for 30 days', hintText: '0 = free', prefixIcon: Padding(padding: EdgeInsets.all(12), child: CoinIcon(size: 20))),
+          ),
+          const SizedBox(height: 10),
+          const Text('New members pay this to join, and again every 30 days from their balance. People already in the channel, and people you add yourself, stay for free. You receive the coins.',
+              style: TextStyle(color: Brand.muted, fontSize: 12.5, height: 1.35)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, int.tryParse(ctl.text) ?? 0), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (v == null || v == chat.subPrice) return;
+    await _run(() async {
+      await context.read<AppServices>().api.post('/chats/${chat.id}/subscription', {'price': v});
+      chat.subPrice = v;
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _pickSlowMode(Chat chat) async {
@@ -604,6 +638,15 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MemberPermissionsScreen(chatId: chat.id))),
             ),
           if (info) SettingsTile(icon: Icons.timer_rounded, color: const Color(0xFF5E6B8C), title: 'Slow mode', trailing: _slowLabel(chat.slowModeSec), onTap: () => _pickSlowMode(chat)),
+          if (chat.isChannel && chat.isOwner && auth.feature('coins'))
+            SettingsTile(
+              icon: Icons.monetization_on_rounded,
+              color: const Color(0xFFF5A623),
+              title: 'Paid subscription',
+              subtitle: chat.subPrice > 0 ? 'New members pay to join, every 30 days' : 'Free to join',
+              trailing: chat.subPrice > 0 ? '${fmtCoins(chat.subPrice)} coins' : 'Off',
+              onTap: () => _setSubPrice(chat),
+            ),
           if (info && auth.feature('topics'))
             SettingsSwitchTile(
               icon: Icons.topic_rounded,

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import '../widgets/coin_cards.dart';
 import 'package:flutter/material.dart';
 import '../widgets/undo_bar.dart';
 import '../widgets/mascot.dart';
@@ -851,6 +852,9 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// A person (not a bot, not Saved Messages) who can receive a gift.
+  bool _giftable(Chat? c) => c != null && c.type == 'private' && c.peer != null && !c.peer!.isBot && c.peer!.id != _store.myId && !c.peer!.deleted;
+
   Future<void> _attach([String? preset]) async {
     final auth = context.read<AuthState>();
     final multi = _store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false;
@@ -866,6 +870,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (auth.feature('wallet') && !(_store.chatById(chatId)?.isChannel ?? false))
         ('crypto', Icons.account_balance_wallet_rounded, 'Crypto', const [Color(0xFF3FD8C0), Color(0xFF12B89C)]),
       if (multi && auth.feature('polls')) ('poll', Icons.bar_chart_rounded, 'Poll', const [Color(0xFFF7D27E), Color(0xFFE0A43A)]),
+      if (!multi && auth.feature('coins') && _giftable(_store.chatById(chatId) ?? _chat))
+        ('gift', Icons.card_giftcard_rounded, 'Gift', const [Color(0xFFFFB347), Color(0xFFFF6FA0)]),
+      if (multi && auth.feature('coins') && (_store.chatById(chatId)?.isAdmin ?? false))
+        ('giveaway', Icons.celebration_rounded, 'Giveaway', const [Color(0xFF9A7BFF), Color(0xFF4A2FD8)]),
     ];
     final choice = preset ??
         await showModalBottomSheet<String>(
@@ -922,6 +930,17 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (choice == 'location') {
       await _shareLocation();
+      return;
+    }
+    if (choice == 'gift') {
+      if (!mounted) return;
+      final c = _store.chatById(chatId) ?? _chat;
+      await sendGiftFlow(context, chatId, c?.peer?.firstName ?? 'your friend');
+      return;
+    }
+    if (choice == 'giveaway') {
+      if (!mounted) return;
+      await giveawayFlow(context, chatId);
       return;
     }
     if (choice == 'crypto') {
@@ -1358,7 +1377,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (publicLink != null && !chat.noForwards) const MessageMenuItem('copy_link', Icons.link_rounded, 'Copy link'),
       if ((m.type == 'image' || m.type == 'video') && m.media != null && !m.viewOnce && !chat.noForwards)
         const MessageMenuItem('save', Icons.download_rounded, 'Save to gallery'),
-      if (m.type != 'poll' && m.type != 'call' && !m.viewOnce && !chat.noForwards) const MessageMenuItem('forward', Icons.shortcut_rounded, 'Forward'),
+      if (m.type != 'poll' && m.type != 'call' && m.type != 'gift' && m.type != 'giveaway' && !m.viewOnce && !chat.noForwards) const MessageMenuItem('forward', Icons.shortcut_rounded, 'Forward'),
+      if (chat.isChannel && !chat.isOwner && !m.isLocal && context.read<AuthState>().feature('coins')) const MessageMenuItem('tip', Icons.monetization_on_rounded, 'Tip coins'),
       if (chat.type == 'private' || chat.can('pin_messages'))
         MessageMenuItem(chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin', Icons.push_pin_outlined, chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
       if (canEdit) const MessageMenuItem('edit', Icons.edit_outlined, 'Edit'),
@@ -1460,6 +1480,10 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       case 'forward':
         Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])));
+        break;
+      case 'tip':
+        await tipFlow(context, m);
+        if (mounted) setState(() {});
         break;
       case 'delete':
         await _delete(m, chat, mine || (chat.isChannel && chat.can('delete_messages')));

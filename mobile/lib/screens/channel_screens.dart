@@ -1,6 +1,8 @@
 import 'global_search_screen.dart' show SimilarChannels;
 import 'dart:io';
 
+import '../core/api_client.dart';
+import '../widgets/coin_cards.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -482,6 +484,15 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
         return;
       }
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      final paid = await subscribeIfNeeded(context, e);
+      if (paid != null && mounted) {
+        final chat = await store.getChat(paid);
+        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+      } else if (e.code != 'subscription_required' && mounted) {
+        showError(context, e);
+      }
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {

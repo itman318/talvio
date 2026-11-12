@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 
 import 'crypto_card.dart';
+import 'coin_cards.dart';
+import '../screens/coins_screen.dart' show CoinIcon, fmtCoins;
 import 'package:flutter/material.dart';
 
 import 'video_note.dart';
@@ -125,6 +127,10 @@ class MessageBubble extends StatelessWidget {
         return ContactCardView(message: m, accent: accent);
       case 'crypto':
         return CryptoCard(message: m, isMine: isMine, chat: chat);
+      case 'gift':
+        return GiftCard(message: m, isMine: isMine);
+      case 'giveaway':
+        return GiveawayCard(message: m);
       case 'call':
         return CallLogBubble(message: m, isMine: isMine, peer: chat.peer, accent: accent);
       default:
@@ -324,6 +330,12 @@ class MessageBubble extends StatelessWidget {
             ],
             const Spacer(),
             const SizedBox(width: 10),
+            if (m.tips > 0) ...[
+              const CoinIcon(size: 13),
+              const SizedBox(width: 3),
+              Text(fmtCoins(m.tips), style: TextStyle(fontSize: 11.5, color: meta, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 8),
+            ],
             if (!m.isLocal) ...[
               ViewsBadge(count: m.views, color: meta),
               const SizedBox(width: 8),
@@ -568,6 +580,8 @@ String replyLabel(String type, String text, {bool deleted = false}) {
     'location' => '📍 Location',
     'contact' => '👤 Contact',
     'crypto' => '💸 Crypto',
+    'gift' => '🎁 Gift',
+    'giveaway' => '🎉 Giveaway',
     _ => '',
   };
   if (t.isNotEmpty) return t; // a caption says more than the kind

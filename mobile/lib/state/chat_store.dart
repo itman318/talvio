@@ -1773,6 +1773,13 @@ class ChatStore extends ChangeNotifier {
           refreshChat(c.id);
         }
         break;
+      case 'message:tips':
+        final tm = _findMessage(_int(d['chat_id']), _int(d['message_id']));
+        if (tm != null) {
+          tm.tips = _int(d['tips']);
+          _touch([tm.chatId]);
+        }
+        break;
       case 'message:reactions':
         final rm = _findMessage(_int(d['chat_id']), _int(d['message_id']));
         if (rm != null) {

@@ -327,6 +327,7 @@ class Message {
   List<ReactionCount> reactions;
   String? myReaction;
   int views;
+  int tips; // coins tipped to this channel post
   final bool silent;
   final List<int> mentions;
   final Map<String, dynamic>? meta;
@@ -370,6 +371,7 @@ class Message {
     List<ReactionCount>? reactions,
     this.myReaction,
     this.views = 0,
+    this.tips = 0,
     this.silent = false,
     this.mentions = const [],
     this.meta,
@@ -421,6 +423,7 @@ class Message {
       reactions: ReactionCount.listFrom(j['reactions']),
       myReaction: j['my_reaction'] as String?,
       views: _int(j['views'] ?? 0),
+      tips: _int(j['tips'] ?? 0),
       silent: j['silent'] == true,
       mentions: ((j['mentions'] as List?) ?? []).map(_int).toList(),
       meta: j['meta'] == null ? null : Map<String, dynamic>.from(j['meta'] as Map),
@@ -507,6 +510,10 @@ class Message {
         return text.isNotEmpty ? 'GIF · $text' : 'GIF';
       case 'contact':
         return '👤 ${(meta?['contact'] as Map?)?['name'] ?? 'Contact'}';
+      case 'gift':
+        return '🎁 Gift: ${(meta?['gift'] as Map?)?['name'] ?? 'coins'}';
+      case 'giveaway':
+        return '🎉 Giveaway';
       case 'crypto':
         final c = meta?['crypto'] as Map?;
         if (c == null) return '💸 Crypto';
@@ -604,6 +611,7 @@ class Chat {
   bool canPost;
   bool isSuspended;
   int slowModeSec;
+  int subPrice; // coins for 30 days in a paid channel (0 = free)
   int disappearAfterSec; // 0 = off
   bool joinApproval;
   int pendingRequests;
@@ -650,6 +658,7 @@ class Chat {
     this.canPost = true,
     this.isSuspended = false,
     this.slowModeSec = 0,
+    this.subPrice = 0,
     this.disappearAfterSec = 0,
     this.joinApproval = false,
     this.pendingRequests = 0,
@@ -696,6 +705,7 @@ class Chat {
         canPost: j['can_post'] != false,
         isSuspended: j['is_suspended'] == true,
         slowModeSec: _int(j['slow_mode_sec'] ?? 0),
+        subPrice: _int(j['sub_price'] ?? 0),
         disappearAfterSec: _int(j['disappear_after_sec'] ?? 0),
         joinApproval: j['join_approval'] == true,
         pendingRequests: _int(j['pending_requests'] ?? 0),

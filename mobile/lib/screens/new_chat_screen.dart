@@ -2,6 +2,8 @@ import '../widgets/mascot.dart';
 import 'dart:async';
 import 'dart:io';
 
+import '../core/api_client.dart';
+import '../widgets/coin_cards.dart';
 import 'package:flutter/material.dart';
 import '../core/chat_links.dart';
 import 'package:image_picker/image_picker.dart';
@@ -268,6 +270,15 @@ Future<void> openInviteCode(BuildContext context, String code) async {
       return;
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+  } on ApiException catch (e) {
+    if (!context.mounted) return;
+    final paid = await subscribeIfNeeded(context, e, invite: code);
+    if (paid != null && context.mounted) {
+      final chat = await store.getChat(paid);
+      if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+    } else if (e.code != 'subscription_required' && context.mounted) {
+      showError(context, e);
+    }
   } catch (e) {
     if (context.mounted) showError(context, e);
   }
