@@ -174,4 +174,4 @@ async function check(p) {
   return n.id === 'tron' ? checkTron(n, p) : checkEvm(n, p);
 }
 
-module.exports = { NETWORKS, TRANSFER, tronHex, normalizeTx, check, setTransport, judge };
+module.exports = { NETWORKS, TRANSFER, tronHex, normalizeTx, check, setTransport, judge, rpc };

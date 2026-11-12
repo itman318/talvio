@@ -17,7 +17,7 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound } = require('../utils/errors');
 
-const KINDS = ['purchase', 'gift_sent', 'gift_received', 'plus', 'admin', 'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'];
+const KINDS = ['deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin', 'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'];
 const MAX_SEND = 100000;
 
 const iso = (d) => (d ? new Date(d).toISOString() : null);
@@ -87,11 +87,14 @@ async function info(userId) {
   const packs = await db.many('SELECT * FROM coin_packs WHERE is_active ORDER BY sort, coins');
   const plans = s.feature_premium && s.plus_sales_open ? await db.many('SELECT * FROM premium_plans WHERE is_active ORDER BY sort, months') : [];
   const networks = payments.cryptoNetworksPublic(s);
+  const deposit = await require('./deposit.service').publicInfo(); // eslint-disable-line global-require
   return {
     balance: Number(u ? u.coins : 0),
-    packs: networks.length ? packs.map(serializePack) : [],
+    deposit,
+    // with deposits on, any amount works: the fixed packs (one order each) are not needed
+    packs: networks.length && !deposit ? packs.map(serializePack) : [],
     crypto_networks: networks,
-    buy_note: networks.length ? null : 'Buying coins is not open yet.',
+    buy_note: networks.length || deposit ? null : 'Buying coins is not open yet.',
     plus: plans.map((p) => ({ plan_id: p.id, name: p.name, months: p.months, coins: plusPrice(p), badge: p.badge || null })).filter((p) => p.coins),
     history: await history(userId),
     rules: 'Coins are for use inside Hushavia. They can’t be withdrawn or exchanged back for money.',

@@ -586,3 +586,78 @@ test('coins at work: gifts in chats, tips on posts, paid channels, giveaways', a
   const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
   assert.equal(bad.length, 0);
 });
+
+test('coins by deposit: own address per member from an xpub, booked once, too-small deposits, sweep list', async () => {
+  const dep = require('../src/services/deposit.service');
+  const cryptopay = require('../src/services/payments/cryptopay');
+  const keys = require('../src/utils/evmkeys');
+  const XPUB = 'xpub6EF8jXqFeFEW5bwMU7RpQtHkzE4KJxcqJtvkCjJumzW8CPpacXkb92ek4WzLQXjL93HycJwTPUAcuNxCqFPKKU5m5Z2Vq4nCyh5CyPeBFFr';
+  // the "abandon … about" test phrase, m/44'/60'/0'/0/i (checked against an independent implementation)
+  assert.equal(keys.addressAt(XPUB, 0), '0x9858EfFD232B4033E47d90003D41EC34EcaEda94');
+  assert.equal(keys.addressAt(XPUB, 1), '0x6Fac4D18c912343BF86fa7049364Dd4E424Ab9C0');
+  assert.equal(keys.addressAt(XPUB, 1000), '0xaC2Dbb7Dc8Fa82F47021e01255fBD767a2Ec4EaD');
+  assert.equal(keys.parseXpub('xpub123'), null);
+
+  const J = await signup('+923260000021', 'Jamil');
+  const K = await signup('+923260000022', 'Kiran');
+  await rejects(dep.myAddress(J.id), 'deposits_off');
+  await rejects(settings.update({ coins_deposit_xpub: 'abandon abandon abandon' }), 'invalid_setting');
+  await settings.update({ coins_deposit_xpub: XPUB });
+  const a1 = await dep.myAddress(J.id);
+  const a2 = await dep.myAddress(K.id);
+  assert.equal(a1.address, keys.addressAt(XPUB, 1), 'members start at number 1 (0 is the owner’s)');
+  assert.equal(a2.address, keys.addressAt(XPUB, 2));
+  assert.equal((await dep.myAddress(J.id)).address, a1.address, 'the same address every time');
+  assert.equal((await require('../src/services/coin.service').info(J.id)).deposit.coins_per_usdt, 100);
+
+  const pad = (h) => String(h).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+  const U = 10n ** 18n;
+  let head = 1000;
+  const logs = [];
+  const log = (to, amount, block, tx, i = 0) => logs.push({
+    address: cryptopay.NETWORKS.bsc.contract, topics: [`0x${cryptopay.TRANSFER}`, `0x${pad('55'.repeat(20))}`, `0x${pad(to)}`],
+    data: `0x${pad(amount.toString(16))}`, blockNumber: `0x${block.toString(16)}`, transactionHash: `0x${tx.repeat(64).slice(0, 64)}`, logIndex: `0x${i.toString(16)}`,
+  });
+  cryptopay.setTransport(async (url, body) => {
+    if (body.method === 'eth_blockNumber') return { result: `0x${head.toString(16)}` };
+    if (body.method === 'eth_getLogs') {
+      const f = body.params[0];
+      const from = parseInt(f.fromBlock, 16);
+      const to = parseInt(f.toBlock, 16);
+      assert.equal(f.address, cryptopay.NETWORKS.bsc.contract, 'only real USDT counts');
+      const want = f.topics[2];
+      return { result: logs.filter((l) => { const b = parseInt(l.blockNumber, 16); return b >= from && b <= to && want.includes(l.topics[2]); }) };
+    }
+    throw new Error('unexpected');
+  });
+  try {
+    log(a1.address, 5n * U + U / 2n, 900, 'a'); // 5.5 USDT
+    log(a2.address, U / 2n, 950, 'b'); // 0.5 USDT: below the $1 minimum
+    log(a1.address, 3n * U, 990, 'c'); // not deep enough yet (head 1000 − 15)
+    await dep.scan();
+    assert.equal((await users.getMe(J.id)).coins, 550);
+    assert.equal((await users.getMe(K.id)).coins, 0);
+    head = 1010;
+    await dep.scan();
+    await dep.scan();
+    assert.equal((await users.getMe(J.id)).coins, 850, 'confirmed later, booked once');
+    const mine = await dep.myAddress(J.id);
+    assert.deepEqual(mine.deposits.map((d) => [d.usdt, d.coins, d.status]), [[3, 300, 'credited'], [5.5, 550, 'credited']]);
+    assert.equal((await dep.myAddress(K.id)).deposits[0].status, 'too_small');
+
+    // "check now" looks back and books what the scanner already booked only once
+    const chk = await dep.checkMine(J.id);
+    assert.deepEqual([chk.added, chk.balance], [0, 850]);
+
+    // the owner's phone gets the list to collect from — only with the right key
+    await rejects(dep.sweepList('xpubWRONG'), 'forbidden');
+    const sw = await dep.sweepList(XPUB);
+    assert.deepEqual(sw.addresses.map((x) => x.index), [1, 2]);
+
+    const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
+    assert.equal(bad.length, 0);
+  } finally {
+    cryptopay.setTransport(null);
+    await settings.update({ coins_deposit_xpub: '' });
+  }
+});

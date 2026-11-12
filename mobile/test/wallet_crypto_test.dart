@@ -24,6 +24,12 @@ void main() {
     expect(TronCrypto.privateKey('  ABANDON ${phrase.substring(8)}  ').length, 32, reason: 'spaces & case');
   });
 
+  test('receiving key (xpub of m/44\'/60\'/0\'/0) for coin deposits', () {
+    const h = 0x80000000;
+    expect(TronCrypto.xpubOf(TronCrypto.seedOf(phrase), [44 + h, 60 + h, 0 + h, 0]),
+        'xpub6EF8jXqFeFEW5bwMU7RpQtHkzE4KJxcqJtvkCjJumzW8CPpacXkb92ek4WzLQXjL93HycJwTPUAcuNxCqFPKKU5m5Z2Vq4nCyh5CyPeBFFr');
+  });
+
   test('new phrases are valid, 12 words, different every time', () {
     final a = TronCrypto.newPhrase();
     final b = TronCrypto.newPhrase();

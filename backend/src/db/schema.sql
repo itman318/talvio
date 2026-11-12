@@ -1375,3 +1375,35 @@ CREATE TABLE IF NOT EXISTS giveaway_entries (
   won         BOOLEAN NOT NULL DEFAULT FALSE,
   PRIMARY KEY (giveaway_id, user_id)
 );
+
+-- ------------------------------------------------------------------ coins by deposit: an own USDT address for every member
+CREATE TABLE IF NOT EXISTS coin_deposit_addresses (
+  user_id     BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  xpub_fp     VARCHAR(16) NOT NULL,
+  idx         INTEGER     NOT NULL,
+  address     VARCHAR(42) NOT NULL,
+  watch_until TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, xpub_fp),
+  UNIQUE (xpub_fp, idx),
+  UNIQUE (xpub_fp, address)
+);
+CREATE INDEX IF NOT EXISTS coin_deposit_addresses_watch_idx ON coin_deposit_addresses (xpub_fp, watch_until);
+CREATE TABLE IF NOT EXISTS coin_deposits (
+  id         BIGSERIAL    PRIMARY KEY,
+  user_id    BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  address    VARCHAR(42)  NOT NULL,
+  tx_hash    VARCHAR(66)  NOT NULL,
+  log_index  INTEGER      NOT NULL,
+  block      BIGINT       NOT NULL,
+  amount     NUMERIC(40, 0) NOT NULL,
+  coins      INTEGER      NOT NULL DEFAULT 0,
+  status     VARCHAR(10)  NOT NULL CHECK (status IN ('credited', 'too_small')),
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  UNIQUE (tx_hash, log_index)
+);
+CREATE INDEX IF NOT EXISTS coin_deposits_user_idx ON coin_deposits (user_id, id DESC);
+CREATE TABLE IF NOT EXISTS coin_deposit_state (id INTEGER PRIMARY KEY CHECK (id = 1), last_block BIGINT NOT NULL);
+ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
+ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
+  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'));

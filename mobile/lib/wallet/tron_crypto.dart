@@ -79,6 +79,37 @@ class TronCrypto {
     return _fromBig(k);
   }
 
+  /// The extended PUBLIC key ("xpub") of a path, e.g. m/44'/60'/0'/0 — it can make the addresses
+  /// below it but can never spend. Used for receiving Hushavia coin deposits.
+  static String xpubOf(Uint8List seed, List<int> path) {
+    var i = _hmac512(utf8.encode('Bitcoin seed'), seed);
+    var k = _toBig(i.sublist(0, 32));
+    var chain = i.sublist(32);
+    var parent = k;
+    for (final idx in path) {
+      parent = k;
+      final data = BytesBuilder();
+      if (idx >= 0x80000000) {
+        data.addByte(0);
+        data.add(_fromBig(k));
+      } else {
+        data.add((_params.G * k)!.getEncoded(true));
+      }
+      data.add([(idx >> 24) & 0xff, (idx >> 16) & 0xff, (idx >> 8) & 0xff, idx & 0xff]);
+      i = _hmac512(chain, data.toBytes());
+      k = (_toBig(i.sublist(0, 32)) + k) % _n;
+      chain = i.sublist(32);
+    }
+    final parentPub = (_params.G * parent)!.getEncoded(true);
+    final fp = RIPEMD160Digest().process(Uint8List.fromList(_sha256(parentPub))).sublist(0, 4);
+    final last = path.isEmpty ? 0 : path.last;
+    return base58check(Uint8List.fromList([
+      0x04, 0x88, 0xB2, 0x1E, path.length, ...(path.isEmpty ? [0, 0, 0, 0] : fp),
+      (last >> 24) & 0xff, (last >> 16) & 0xff, (last >> 8) & 0xff, last & 0xff,
+      ...chain, ...(_params.G * k)!.getEncoded(true),
+    ]));
+  }
+
   static Uint8List publicKey(Uint8List priv) => (_params.G * _toBig(priv))!.getEncoded(false); // 65 bytes, 04‖x‖y
 
   // ------------------------------------------------------------------ addresses

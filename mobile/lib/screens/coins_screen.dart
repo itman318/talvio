@@ -11,6 +11,7 @@ import '../state/auth_state.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
 import 'crypto_checkout.dart';
+import 'deposit_screen.dart';
 import 'new_chat_screen.dart' show PickUsersScreen;
 
 /// 12345 → "12,345"
@@ -193,6 +194,7 @@ class _CoinsScreenState extends State<CoinsScreen> {
     'gift_received': ('From', Icons.card_giftcard_rounded, Brand.green),
     'plus': ('Hushavia Plus', Icons.star_rounded, Brand.premium),
     'admin': ('Hushavia', Icons.verified_rounded, Brand.sky),
+    'deposit': ('USDT deposit', Icons.south_west_rounded, Brand.green),
     'tip_sent': ('Tip to', Icons.volunteer_activism_rounded, Brand.rose),
     'tip_received': ('Tip from', Icons.volunteer_activism_rounded, Brand.green),
     'sub_paid': ('Subscription', Icons.campaign_rounded, Brand.violet),
@@ -260,9 +262,26 @@ class _CoinsScreenState extends State<CoinsScreen> {
                 const SizedBox(height: 20),
                 const Text('Get coins', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                 const SizedBox(height: 2),
-                const Text('Paid with USDT from your wallet', style: TextStyle(color: Brand.muted, fontSize: 13)),
+                Text(info['deposit'] is Map ? 'From your wallet or any exchange' : 'Paid with USDT from your wallet', style: const TextStyle(color: Brand.muted, fontSize: 13)),
                 const SizedBox(height: 10),
-                if ((info['packs'] as List).isEmpty)
+                if (info['deposit'] is Map)
+                  Material(
+                    color: card,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(14, 6, 12, 6),
+                      leading: const CircleAvatar(backgroundColor: Color(0xFF26A17B), child: Text('₮', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))),
+                      title: const Text('Add coins with USDT', style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Text('Any amount · 1 USDT = ${(info['deposit'] as Map)['coins_per_usdt']} coins'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () async {
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => const DepositScreen()));
+                        if (mounted) _load(resume: false);
+                      },
+                    ),
+                  ),
+                if ((info['packs'] as List).isEmpty && info['deposit'] is! Map)
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(color: Brand.amber.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),

@@ -23,6 +23,7 @@ import '../wallet/tron_crypto.dart';
 import '../wallet/solana.dart';
 import '../wallet/utxo.dart';
 import '../wallet/wallet_store.dart';
+import 'receiving_screen.dart';
 
 // Wallet palette: deep night card, mint for "in", warm for "out". Values in US dollars.
 const _mint = Color(0xFF12B89C);
@@ -671,6 +672,15 @@ class _WalletHomeState extends State<_WalletHome> {
                   context,
                   MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: _AddressBookScreen(onSend: (addr) => _openSend(to: addr)))),
                 );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.storefront_rounded),
+              title: const Text('Receive coin payments'),
+              subtitle: const Text('For the Hushavia team: receiving key and collecting deposits'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => ChangeNotifierProvider.value(value: w, child: const ReceivingScreen())));
               },
             ),
             _ShareSwitch(store: w),
@@ -2027,7 +2037,9 @@ class _SendScreenState extends State<_SendScreen> {
           ),
           const SizedBox(height: 6),
           if (widget.locked)
-            _Note(icon: Icons.lock_rounded, text: 'Payment to ${widget.toName ?? 'Hushavia'}. The address and the amount are set for this order — you only confirm.'),
+            _Note(icon: Icons.lock_rounded, text: widget.amount == null
+                ? 'Payment to ${widget.toName ?? 'Hushavia'}. The address is set — choose the amount.'
+                : 'Payment to ${widget.toName ?? 'Hushavia'}. The address and the amount are set for this order — you only confirm.'),
           if (widget.locked) const SizedBox(height: 10),
           TextField(
             controller: _to,
@@ -2123,7 +2135,7 @@ class _SendScreenState extends State<_SendScreen> {
           const SizedBox(height: 14),
           TextField(
             controller: _amount,
-            readOnly: widget.locked,
+            readOnly: widget.locked && widget.amount != null,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
@@ -2139,7 +2151,7 @@ class _SendScreenState extends State<_SendScreen> {
             Expanded(child: Text('Available: ${Units.format(_have, decimals: a.decimals, maxFraction: 6)} ${a.symbol}', style: const TextStyle(color: Brand.muted))),
           ]),
           const SizedBox(height: 6),
-          if (!widget.locked)
+          if (!widget.locked || widget.amount == null)
           Row(children: [
             for (final pc in const [25, 50, 75, 100]) ...[
               Expanded(
@@ -2653,7 +2665,7 @@ Future<Map<String, dynamic>?> walletSendForChat(BuildContext context,
       showInfo(context, 'Can’t reach the ${asset.networkName} network right now. Check your internet and try again.');
       return null;
     }
-    if (locked && (amount == null || asset.balance! < amount)) {
+    if (locked && amount != null && asset.balance! < amount) {
       showInfo(context, 'Not enough ${asset.symbol} on ${asset.networkName} in your wallet. Add some (Wallet → Receive) and try again.');
       return null;
     }
