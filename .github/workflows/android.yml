@@ -141,6 +141,13 @@ jobs:
           mkdir -p ../ci-report/mascot
           MASCOT_OUT=$PWD/../ci-report/mascot flutter test test/mascot_preview_test.dart 2>&1 | tail -40 | tee ../ci-report/mascot.txt
 
+      - name: Render screen previews
+        continue-on-error: true
+        run: |
+          mkdir -p ../ci-report/screens
+          fc-list 2>/dev/null | grep -i emoji | head -3 || true
+          SCREENS_OUT=$PWD/../ci-report/screens flutter test test/screens_preview_test.dart 2>&1 | tail -60 | tee ../ci-report/screens.txt
+
       # Maven Central mirrors go FIRST: when Central (or the GitHub downloads behind some of its files)
       # answers 504, the build takes the same files from Google's / Aliyun's copy instead.
       - name: Maven mirrors
