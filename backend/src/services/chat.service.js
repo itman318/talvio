@@ -1009,7 +1009,9 @@ async function joinChat(userId, chat) {
     }
   }
   // a paid channel: the month is paid first (coinplus.subscribe), people an admin adds come in free
-  if (!existing && chat.type === 'channel' && chat.sub_price > 0 && !chat.paid_ok && !chat.admin_ok) {
+  if (!existing && chat.type === 'channel' && chat.sub_price > 0 && !chat.paid_ok && !chat.admin_ok
+      // someone who left and comes back inside a month they already paid for gets in
+      && !(await db.one('SELECT 1 AS x FROM channel_subs WHERE chat_id = $1 AND user_id = $2 AND expires_at > now()', [chat.id, userId]))) {
     throw forbidden('subscription_required', `This channel costs ${Number(chat.sub_price).toLocaleString('en-US')} coins for 30 days`, { chat_id: chat.id, price: chat.sub_price, title: chat.title, days: 30 });
   }
   if (!existing && chat.join_approval) {

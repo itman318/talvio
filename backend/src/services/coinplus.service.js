@@ -218,6 +218,7 @@ function serializeGiveaway(g, extra = {}) {
     status: g.status, // open | done
     entries: Number(g.entries || 0),
     joined: !!g.joined,
+    mine: !!extra.mine,
     winner_list: extra.winners || [],
   };
 }
@@ -239,7 +240,7 @@ async function getGiveaway(userId, idRaw) {
   const winners = g.status === 'done'
     ? await db.many(`SELECT u.id, u.first_name, u.last_name, u.username FROM giveaway_entries e JOIN users u ON u.id = e.user_id WHERE e.giveaway_id = $1 AND e.won ORDER BY e.user_id`, [g.id])
     : [];
-  return serializeGiveaway(g, { winners: winners.map((w) => ({ id: w.id, name: `${w.first_name || ''} ${w.last_name || ''}`.trim(), username: w.username })) });
+  return serializeGiveaway(g, { mine: g.creator_id === userId, winners: winners.map((w) => ({ id: w.id, name: `${w.first_name || ''} ${w.last_name || ''}`.trim(), username: w.username })) });
 }
 
 /** The coins are taken from the creator now and held until the draw. */

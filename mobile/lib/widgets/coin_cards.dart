@@ -141,7 +141,7 @@ class _GiveawayCardState extends State<GiveawayCard> {
     final g = _g;
     final done = g?['status'] == 'done';
     final joined = g?['joined'] == true;
-    final mine = widget.message.senderId == context.read<ChatStore>().myId;
+    final mine = g?['mine'] == true || widget.message.senderId == context.read<ChatStore>().myId;
     final list = [for (final w in (g?['winner_list'] as List? ?? const [])) w as Map];
     return Container(
       width: 250,

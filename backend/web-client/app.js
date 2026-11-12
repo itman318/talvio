@@ -142,6 +142,9 @@
       case 'sticker': return `${(m.meta && m.meta.sticker && m.meta.sticker.emoji) || '🙂'} Sticker`;
       case 'gif': return m.text ? `GIF · ${m.text}` : 'GIF';
       case 'contact': return `👤 ${m.text || 'Contact'}`;
+      case 'gift': return `🎁 Gift: ${(m.meta && m.meta.gift && m.meta.gift.name) || 'coins'}`;
+      case 'giveaway': return '🎉 Giveaway';
+      case 'crypto': return '💸 Crypto';
       case 'call': {
         const c = (m.meta && m.meta.call) || {};
         if (c.status === 'missed' || c.status === 'busy') return '📞 Missed call';
@@ -979,6 +982,30 @@
             el('div', { style: 'font-weight:700' }, ct.name || 'Contact'),
             ct.phone ? el('div', { class: 'muted', style: 'font-size:12px' }, ct.phone) : null,
             ct.email ? el('div', { class: 'muted', style: 'font-size:12px' }, ct.email) : null))];
+      }
+      case 'gift': {
+        const g = (m.meta && m.meta.gift) || {};
+        return [el('div', { class: 'contact' },
+          el('span', { class: 'ic' }, g.emoji || '🎁'),
+          el('span', {},
+            el('div', { style: 'font-weight:700' }, `${g.name || 'Gift'} · ${Number(g.coins || 0).toLocaleString()} coins`),
+            g.note ? el('div', { class: 'muted', style: 'font-size:12px' }, g.note) : null))];
+      }
+      case 'giveaway': {
+        const g = (m.meta && m.meta.giveaway) || {};
+        return [el('div', { class: 'contact' },
+          el('span', { class: 'ic' }, '🎉'),
+          el('span', {},
+            el('div', { style: 'font-weight:700' }, `Giveaway · ${Number(g.coins_each || 0).toLocaleString()} coins × ${g.winners || 1}`),
+            el('div', { class: 'muted', style: 'font-size:12px' }, 'Open the Hushavia app to join')))];
+      }
+      case 'crypto': {
+        const c = (m.meta && m.meta.crypto) || {};
+        return [el('div', { class: 'contact' },
+          el('span', { class: 'ic' }, '💸'),
+          el('span', {},
+            el('div', { style: 'font-weight:700' }, c.kind === 'request' ? `Payment request · ${c.symbol || ''}` : `Sent ${c.symbol || 'crypto'}`),
+            el('div', { class: 'muted', style: 'font-size:12px' }, 'Open the Hushavia app to see it')))];
       }
       case 'call': {
         const call = (m.meta && m.meta.call) || {};

@@ -140,7 +140,6 @@ void main() {
     tester.view.physicalSize = const Size(780, 1688); // a 390 × 844 phone at 2×
     tester.view.devicePixelRatio = 2;
     final shot = GlobalKey();
-    final nav = GlobalKey<NavigatorState>();
 
     Future<void> save(String name) async {
       await tester.runAsync(() async {
@@ -163,7 +162,6 @@ void main() {
           ],
           child: MaterialApp(
             key: ValueKey(name),
-            navigatorKey: nav,
             debugShowCheckedModeBanner: false,
             theme: base.copyWith(textTheme: base.textTheme.apply(fontFamilyFallback: const ['Emoji'])),
             home: screen,

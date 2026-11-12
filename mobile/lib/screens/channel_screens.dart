@@ -538,7 +538,7 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             child: Text(i['is_member'] == true
                 ? 'Open'
-                : (isChannel ? 'Join channel' : (i['join_approval'] == true ? 'Request to join' : 'Join group'))),
+                : (isChannel ? (((i['sub_price'] as num?) ?? 0) > 0 ? 'Join · ${i['sub_price']} coins / 30 days' : 'Join channel') : (i['join_approval'] == true ? 'Request to join' : 'Join group'))),
           ),
           if (isChannel) ...[const SizedBox(height: 12), SimilarChannels(chatId: (i['chat_id'] as num).toInt())],
         ],

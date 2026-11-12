@@ -539,6 +539,10 @@ test('coins at work: gifts in chats, tips on posts, paid channels, giveaways', a
   assert.equal(await bal(H), 410); // 140 + 90% of 300
   assert.ok((await messages.listMessages(I.id, chId, {})).messages.length >= 1);
   assert.equal((await plus.mySubscription(G.id, chId)), null, 'people who were already in stay for free');
+  // leaving and coming back inside the paid month costs nothing
+  await chats.leaveChat(I.id, chId);
+  await chats.joinPublic(I.id, chId);
+  assert.equal(await bal(I), 400);
   // the month runs out: renewed from the balance…
   await db.query(`UPDATE channel_subs SET expires_at = now() - interval '1 minute' WHERE user_id = $1`, [I.id]);
   await plus.sweepSubs();

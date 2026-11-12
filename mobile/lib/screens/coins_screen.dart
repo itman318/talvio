@@ -193,7 +193,22 @@ class _CoinsScreenState extends State<CoinsScreen> {
     'gift_received': ('From', Icons.card_giftcard_rounded, Brand.green),
     'plus': ('Hushavia Plus', Icons.star_rounded, Brand.premium),
     'admin': ('Hushavia', Icons.verified_rounded, Brand.sky),
+    'tip_sent': ('Tip to', Icons.volunteer_activism_rounded, Brand.rose),
+    'tip_received': ('Tip from', Icons.volunteer_activism_rounded, Brand.green),
+    'sub_paid': ('Subscription', Icons.campaign_rounded, Brand.violet),
+    'sub_income': ('Subscriber', Icons.campaign_rounded, Brand.green),
+    'giveaway': ('Giveaway started', Icons.celebration_rounded, Brand.violet),
+    'giveaway_win': ('Giveaway prize', Icons.emoji_events_rounded, Brand.amber),
+    'giveaway_refund': ('Giveaway refund', Icons.undo_rounded, Brand.sky),
   };
+
+  /// "Sent to Hina", "Tip to Bilal", "Subscription · Hina Daily"
+  String _title(Map h, String label) {
+    final peer = h['peer'] as Map?;
+    final kind = '${h['kind']}';
+    if (kind.startsWith('sub_') || kind.startsWith('giveaway')) return label;
+    return peer != null ? '$label ${peer['name']}' : label;
+  }
 
   String _when(String? iso) {
     if (iso == null) return '';
@@ -305,8 +320,10 @@ class _CoinsScreenState extends State<CoinsScreen> {
                   const SizedBox(height: 12),
                   const Text('Use your coins', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                   const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(18)),
+                  Material(
+                    color: card,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
                     child: Column(children: [
                       for (final raw in info['plus'] as List)
                         ListTile(
@@ -315,7 +332,7 @@ class _CoinsScreenState extends State<CoinsScreen> {
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                             const CoinIcon(size: 16),
                             const SizedBox(width: 5),
-                            Text(fmtCoins((raw['coins'] as num).toInt()), style: TextStyle(fontWeight: FontWeight.w800, color: _balance >= (raw['coins'] as num) ? null : Brand.muted)),
+                            Text(fmtCoins((raw['coins'] as num).toInt()), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _balance >= (raw['coins'] as num) ? Theme.of(context).colorScheme.onSurface : Brand.muted)),
                           ]),
                           onTap: _busy ? null : () => _plus(Map<String, dynamic>.from(raw)),
                         ),
@@ -328,16 +345,17 @@ class _CoinsScreenState extends State<CoinsScreen> {
                 if ((info['history'] as List).isEmpty)
                   const Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Center(child: Text('Nothing yet', style: TextStyle(color: Brand.muted))))
                 else
-                  Container(
-                    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(18)),
+                  Material(
+                    color: card,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
                     child: Column(children: [
                       for (final raw in info['history'] as List)
                         Builder(builder: (_) {
                           final h = raw as Map;
                           final k = _kinds['${h['kind']}'] ?? ('Coins', Icons.circle, Brand.muted);
                           final delta = (h['delta'] as num).toInt();
-                          final peer = h['peer'] as Map?;
-                          final title = peer != null ? '${k.$1} ${peer['name']}' : k.$1;
+                          final title = _title(h, k.$1);
                           return ListTile(
                             dense: true,
                             leading: CircleAvatar(radius: 18, backgroundColor: k.$3.withValues(alpha: 0.14), child: Icon(k.$2, color: k.$3, size: 19)),
