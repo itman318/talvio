@@ -690,8 +690,8 @@ test('@HushaviaWalletBot: money news in a chat, balance, history, prices', async
   assert.match(await last(), /You received 250 coins/);
   await ask('/balance', /250 coins/);
   await ask('/history', /250 · From Hushavia/);
-  await ask('/price btc', /Bitcoin \(BTC\): \$101,235 · Rs 28,300,000 🟢 \+2\.3%/);
-  await ask('/eth', /Ethereum \(ETH\): \$3,500.*🔴 -1\.2%/);
+  await ask('/price btc', /Bitcoin\*\* \(BTC\): \$101,235 · Rs 28,300,000 🟢 \+2\.3%/);
+  await ask('/eth', /Ethereum\*\* \(ETH\): \$3,500.*🔴 -1\.2%/);
   await ask('/price shiba', /Which coin/);
   await ask('/deposit', /not open yet/);
   walletbot.setFetcher(async () => { throw new Error('down'); });
