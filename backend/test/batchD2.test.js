@@ -663,6 +663,7 @@ test('coins by deposit: own address per member from an xpub, booked once, too-sm
 });
 
 test('@HushaviaWalletBot: money news in a chat, balance, history, prices', async () => {
+  require('../src/services/bot.service'); // routes messages sent to bots
   const sysbots = require('../src/services/sysbots.service');
   const walletbot = require('../src/services/walletbot.service');
   const coins = require('../src/services/coin.service');
