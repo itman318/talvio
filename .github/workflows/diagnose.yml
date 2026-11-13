@@ -37,6 +37,8 @@ jobs:
           echo "--- database"
           sudo -u postgres psql -tAc "SELECT 'shared_buffers '||current_setting('shared_buffers')||' · db size '||pg_size_pretty(pg_database_size('hushavia'))" 2>&1
           sudo -u postgres psql -d hushavia -tAc "SELECT round(mean_exec_time::numeric,1)||' ms avg · '||calls||' calls · '||round(total_exec_time::numeric/1000,1)||' s total · '||left(regexp_replace(query, '\s+', ' ', 'g'), 110) FROM pg_stat_statements WHERE calls > 5 ORDER BY total_exec_time DESC LIMIT 12" 2>&1 | head -14
+          echo "--- pages edited in the admin panel (these override the built-in text)"
+          sudo -u postgres psql -d hushavia -tAc "SELECT slug||': '||length(body)||' chars, '||to_char(updated_at,'YYYY-MM-DD') FROM content_pages WHERE length(trim(body)) > 0" 2>&1
           echo "--- coin deposits"
           sudo -u postgres psql -d hushavia -tAc "SELECT 'xpub set: '||(length(coalesce(value#>>'{}',''))>100)::text FROM app_settings WHERE key='coins_deposit_xpub'" 2>&1
           sudo -u postgres psql -d hushavia -tAc "SELECT 'scanner at block '||last_block FROM coin_deposit_state" 2>&1

@@ -5,7 +5,7 @@
  * (Admin → Pages & FAQ). Format the app understands:
  *   "# Heading", "## Subheading", "• bullet" lines, "Q: …" followed by "A: …" (FAQ), blank line = new paragraph.
  */
-const UPDATED = '12 November 2026';
+const UPDATED = '13 November 2026';
 
 const privacy = `Last updated: ${UPDATED}
 
@@ -47,7 +47,10 @@ The wallet is non-custodial. Your 12-word recovery phrase and your private keys 
 • To show balances, prices and to send transactions, your phone talks directly to public blockchain services (for example TronGrid, public network nodes, mempool.space, BlockCypher and CoinGecko). Those services can see your IP address and the public addresses you ask about. Blockchains are public: anyone can see the transactions of an address.
 
 ## Hushavia Coins
-We keep your coin balance and a record of every change to it (packs bought, coins sent or received and with whom, coins spent, adjustments by our team), so the balance is always correct and disputes can be checked.
+We keep your coin balance and a record of every change to it (deposits and packs bought, gifts and tips sent or received and with whom, channel subscriptions, giveaway entries and prizes, coins spent, adjustments by our team), so the balance is always correct and disputes can be checked.
+• Your deposit address: when you open "Add coins", we create your own USDT address and remember that it is yours. We read the public blockchain to see the USDT that arrives at it, and keep each deposit's transaction ID, amount and time. Anyone can see the payments to an address on the blockchain.
+• Giveaways: if you join one, the channel's admins and members can see the winners' names when it ends.
+• Paid channels: the channel's owner receives your coins for the subscription; we keep when it started and ends.
 
 ## Support requests
 When you contact support we keep your messages, any screenshots you attach and, if you allow it, your phone model and app version.
@@ -123,6 +126,7 @@ Welcome to Hushavia. These Terms of Service ("Terms") are an agreement between y
 
 # 1. Who can use Hushavia
 • You must be at least 13 years old, or older if the law of your country requires it.
+• To use the Hushavia Wallet, buy or use Hushavia Coins, or pay for Hushavia Plus, you must be at least 18 years old (or the age of majority where you live).
 • You must give a phone number or email address that belongs to you and keep your login codes and passwords private.
 • You are responsible for everything done with your account. Tell us right away if you think someone else has access to it.
 • You may not use Hushavia if we have previously banned you, or if the law forbids you from using it.
@@ -206,12 +210,25 @@ You can send a crypto payment or a payment request as a card in a chat. The card
 
 # 9. Hushavia Coins
 • Hushavia Coins are a digital balance for use only inside Hushavia. They are not money, not a cryptocurrency or token, not a deposit and not an investment, and they earn no interest.
-• You get coins by buying a pack at the price shown in the app, or as a gift from another user or from Hushavia. Bonus coins are free extras and have no cash value.
-• You can spend coins on things the app offers (for example Hushavia Plus) and send them to other users as a gift.
+
+## Getting coins
+• Deposit: in Coins → "Add coins" you get your own USDT address on BNB Smart Chain (BEP-20). USDT that arrives there is turned into coins at the rate shown in the app (now 1 USDT = 100 coins) after the network confirms it.
+• Only USDT on BNB Smart Chain counts. Other coins, tokens or networks sent to that address are lost and cannot be returned. Deposits below the minimum shown in the app give no coins.
+• If an exchange or wallet takes a fee from the amount, you get coins for what actually arrives.
+• You can also get coins as a gift from another user, as a tip or subscription income, as a giveaway prize, or from Hushavia. Bonus coins are free extras and have no cash value.
+
+## Using coins
+• You can pay for Hushavia Plus with coins, send gifts in private chats, tip channel posts, subscribe to paid channels and start giveaways.
+• Gifts and tips go to the other person or channel and cannot be taken back.
+• Tips and channel subscriptions: the channel's owner receives the share shown in the app (now 90%); the rest is Hushavia's fee.
+• Paid channels: the price is set by the channel's owner, not by Hushavia. A subscription lasts 30 days and renews from your balance; if your balance is too low, it ends and you leave the channel. Hushavia does not check or guarantee what a channel posts — choose channels you trust.
+• Giveaways: the prize coins are taken from the creator when the giveaway starts. Winners are picked at random by the app among people who joined and are still members when it ends. Prizes nobody could win go back to the creator. Giveaways must not be used for gambling, selling entries or anything illegal.
+
+## Rules
 • Coins cannot be withdrawn, exchanged for money or crypto, or sold or traded outside Hushavia. Buying and selling coins or accounts for money outside the app is not allowed.
-• Purchases of coins and anything paid for with coins are final and not refundable, unless the law requires otherwise. A gift you send cannot be taken back.
+• Deposits, purchases and anything paid for with coins are final and not refundable, unless the law requires otherwise.
 • If your account is banned for breaking these Terms, or you delete it, the coins in it are lost. We may remove coins that were obtained by fraud, a mistake, a bug or a reversed payment.
-• We may change the price of packs and the coin price of things in the app for the future, and we may end the coins feature. If we end it we will tell you in the app at least 30 days before, so you can use your coins.
+• We may change the coin rate and the coin price of things in the app for the future, and we may end the coins feature. If we end it we will tell you in the app at least 30 days before, so you can use your coins.
 
 # 10. Sponsored messages
 Some public channels may show clearly labelled sponsored messages. Advertisers must follow our advertising rules and the law; Hushavia may remove any sponsored message.
@@ -223,7 +240,7 @@ Hushavia works with other services, such as Google Firebase for notifications, G
 We work hard to keep Hushavia fast and available, but we cannot promise it will always be uninterrupted or error-free. We may change, add or remove features, and may need to pause the service for maintenance. Please keep backups of anything important.
 
 # 13. Intellectual property
-Hushavia, its name, logo, Tavi the mascot, design and software belong to us and are protected by law. You may not copy, modify or reuse them without our written permission, except as allowed by these Terms.
+Hushavia, its name, logo, its mascots and stickers, design and software belong to us and are protected by law. You may not copy, modify or reuse them without our written permission, except as allowed by these Terms.
 
 # 14. Disclaimers
 Hushavia is provided "as is" and "as available". To the fullest extent allowed by law, we make no warranties of any kind, express or implied, including fitness for a particular purpose. We do not check every message, and we are not responsible for content sent by users, groups, channels or bots. Trading signals, investment advice or offers you see in chats or channels come from other users, not from Hushavia — always do your own research. The scam warnings and stranger protection in the app are there to help you, but they cannot catch everything; you remain responsible for whom you trust and pay.
@@ -320,7 +337,22 @@ Q: I sent crypto to the wrong address. Can you get it back?
 A: No. Blockchain payments are final and Hushavia cannot reverse, freeze or refund them. Always check the address and the network before you confirm.
 
 Q: What are Hushavia Coins?
-A: A balance for use inside Hushavia (Settings → Coins). Buy a pack with USDT from your wallet, send coins to friends as a gift, or pay for Hushavia Plus with them. Coins are not crypto and cannot be withdrawn or turned back into money.
+A: A balance for use inside Hushavia (Settings → Coins). Use them for Hushavia Plus, gifts, tips, paid channels and giveaways. Coins are not crypto and cannot be withdrawn or turned back into money.
+
+Q: How do I add coins?
+A: Settings → Coins → "Add coins with USDT". You get your own address: send USDT on BNB Smart Chain (BEP-20) from any exchange or wallet — 1 USDT = 100 coins. They arrive about a minute after the network confirms the payment. Sending from an exchange needs no BNB; sending from your Hushavia Wallet needs a little BNB for the network fee.
+
+Q: I sent USDT but no coins came.
+A: Open "Add coins" and tap "I've sent it — check now". Make sure you sent USDT on BNB Smart Chain (not TRON or Ethereum) and at least the minimum amount. Still missing? Contact Help & support with the transaction ID.
+
+Q: How do gifts and tips work?
+A: In a private chat, tap the attachment button → Gift: your friend gets the coins of the gift. In a channel, long-press a post → Tip coins: the coins go to the channel's owner.
+
+Q: What is a paid channel?
+A: A channel whose owner set a price in coins for 30 days. You pay when you join and it renews from your balance. Owners set it in the channel info → Paid subscription.
+
+Q: How do giveaways work?
+A: An admin starts one from the attachment button → Giveaway, with a prize for each winner. Members tap Join; when the time is up the app picks winners at random and the coins go straight to them.
 
 Q: How do I pay for Hushavia Plus?
 A: Open Settings → Hushavia Plus, pick a plan and pay with USDT from your wallet or with your coins. Plus starts by itself as soon as the payment is confirmed — usually about a minute.
@@ -389,7 +421,10 @@ Hushavia is a fast, secure messaging app made for everyday conversations and gro
 • Vault chats: end-to-end encrypted conversations only you and the other person can read.
 • Stories and highlights: share moments with the people you choose.
 • Bots and BotForge: create bots, connect them with the Hushavia Bot API and reach people in chats and inline.
-• Tavi: our own animated mascot and stickers, made just for Hushavia.
+• Wallet: your own crypto wallet for Bitcoin, Ethereum, BNB, TRON, Solana, USDT, USDC and more — the keys stay on your phone.
+• Coins: gifts for friends, tips for channels, paid channels and giveaways.
+• Hushavia Plus: extra features, bigger uploads and no ads.
+• Our own animated mascot and sticker packs, made just for Hushavia.
 • Prayer times with Qibla, Suhoor and Iftar reminders.
 
 # Privacy first
