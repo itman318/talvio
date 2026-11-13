@@ -1386,7 +1386,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if ((m.type == 'image' || m.type == 'video') && m.media != null && !m.viewOnce && !chat.noForwards)
         const MessageMenuItem('save', Icons.download_rounded, 'Save to gallery'),
       if (m.type != 'poll' && m.type != 'call' && m.type != 'gift' && m.type != 'giveaway' && !m.viewOnce && !chat.noForwards) const MessageMenuItem('forward', Icons.shortcut_rounded, 'Forward'),
-      if (chat.isChannel && !chat.isOwner && !m.isLocal && context.read<AuthState>().feature('coins')) const MessageMenuItem('tip', Icons.monetization_on_rounded, 'Tip coins'),
+      if (chat.isChannel && chat.monetized && !chat.isOwner && !m.isLocal && context.read<AuthState>().feature('coins')) const MessageMenuItem('tip', Icons.monetization_on_rounded, 'Tip coins'),
       if (chat.type == 'private' || chat.can('pin_messages'))
         MessageMenuItem(chat.pinnedMessage?.id == m.id ? 'unpin' : 'pin', Icons.push_pin_outlined, chat.pinnedMessage?.id == m.id ? 'Unpin' : 'Pin'),
       if (canEdit) const MessageMenuItem('edit', Icons.edit_outlined, 'Edit'),

@@ -613,6 +613,7 @@ class Chat {
   int slowModeSec;
   int subPrice; // coins for 30 days in a paid channel (0 = free)
   bool adsOff; // the owner turned sponsored messages off
+  bool monetized; // the channel earns (ad share, tips, paid subscription)
   int disappearAfterSec; // 0 = off
   bool joinApproval;
   int pendingRequests;
@@ -661,6 +662,7 @@ class Chat {
     this.slowModeSec = 0,
     this.subPrice = 0,
     this.adsOff = false,
+    this.monetized = false,
     this.disappearAfterSec = 0,
     this.joinApproval = false,
     this.pendingRequests = 0,
@@ -709,6 +711,7 @@ class Chat {
         slowModeSec: _int(j['slow_mode_sec'] ?? 0),
         subPrice: _int(j['sub_price'] ?? 0),
         adsOff: j['ads_off'] == true,
+        monetized: j['monetized'] == true,
         disappearAfterSec: _int(j['disappear_after_sec'] ?? 0),
         joinApproval: j['join_approval'] == true,
         pendingRequests: _int(j['pending_requests'] ?? 0),

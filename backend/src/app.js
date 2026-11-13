@@ -20,7 +20,8 @@ function createApp() {
   app.disable('x-powered-by');
   app.use(securityHeaders);
   app.use(cors);
-  app.use(express.json({ limit: '1mb' }));
+  // card-payment webhooks are signed over the exact bytes: keep them
+  app.use(express.json({ limit: '1mb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/pay/stripe/')) req.rawBody = buf.toString('utf8'); } }));
 
   app.get('/health', async (req, res) => {
     try {

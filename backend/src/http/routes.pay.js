@@ -13,6 +13,16 @@ const config = require('../config');
 const payments = require('../services/payment.service');
 
 const router = express.Router();
+
+// ---- Stripe (card): the signed webhook, and the page the browser comes back to
+router.post('/stripe/webhook', async (req, res) => {
+  try {
+    const r = await payments.stripeWebhook(req.rawBody || '', req.get('stripe-signature'));
+    res.status(r.status).json({ received: r.ok });
+  } catch (_) {
+    res.status(500).json({ received: false }); // Stripe tries again later
+  }
+});
 router.use(express.urlencoded({ extended: false, limit: '64kb' }));
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -81,6 +91,23 @@ router.get('/easypaisa/done', async (req, res) => {
     result(res, await payments.easypaisaDone(req.query.order, req.query.t, req.query));
   } catch (err) {
     fail(res, err);
+  }
+});
+
+router.get('/stripe/done', async (req, res) => {
+  try {
+    const id = parseInt(req.query.order, 10);
+    const o = Number.isInteger(id) ? await require('../db').one('SELECT * FROM payment_orders WHERE id = $1 AND provider = $2', [id, 'stripe']) : null; // eslint-disable-line global-require
+    if (!o || req.query.t !== payments.payToken(o.id)) throw Object.assign(new Error('Payment not found'), { status: 404 });
+    if (req.query.cancel) {
+      return page(res, 'Payment cancelled', '<h1>Payment cancelled</h1><p>Nothing was charged. You can go back to Hushavia.</p>');
+    }
+    const st = o.status === 'paid' ? 'paid' : await payments.confirmStripe(o.stripe_session).catch(() => null);
+    return st === 'paid'
+      ? page(res, 'Payment received', `<h1 class="ok">Payment received ✓</h1><p>${Number(o.coins).toLocaleString('en-US')} coins are in your Hushavia balance. You can go back to the app.</p>`)
+      : page(res, 'Confirming…', '<h1>Confirming your payment…</h1><p>This takes a moment. Go back to Hushavia — your coins arrive as soon as the card payment is confirmed.</p>');
+  } catch (err) {
+    return fail(res, err);
   }
 });
 

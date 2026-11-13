@@ -52,6 +52,10 @@ Future<bool> resumeWalletPayment(BuildContext context) async {
 Future<bool> _wait(BuildContext context, int orderId) async =>
     await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => _WaitForNetwork(orderId: orderId)) == true;
 
+/// Waits for a card payment made in the browser. True when it was confirmed.
+Future<bool> waitForCardPayment(BuildContext context, int orderId) async =>
+    await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => _WaitForNetwork(orderId: orderId, card: true)) == true;
+
 /// [body]: what is bought — {'plan_id': 3} or {'coin_pack_id': 2}. [networks]: "crypto_networks" from the server.
 /// Returns true when the payment was confirmed while the person waited.
 Future<bool> payWithWallet(BuildContext context, {required Map<String, dynamic> body, required List networks, required String what}) async {
@@ -124,8 +128,9 @@ Future<bool> payWithWallet(BuildContext context, {required Map<String, dynamic> 
 
 /// Waits until the network confirmed the payment (socket event, or polling as a fallback).
 class _WaitForNetwork extends StatefulWidget {
-  const _WaitForNetwork({required this.orderId});
+  const _WaitForNetwork({required this.orderId, this.card = false});
   final int orderId;
+  final bool card;
 
   @override
   State<_WaitForNetwork> createState() => _WaitForNetworkState();
@@ -176,7 +181,9 @@ class _WaitForNetworkState extends State<_WaitForNetwork> {
               ? 'The transaction failed on the network, so nothing was paid. You can try again.'
               : review
                   ? 'Your payment needs a look from our team. You’ll get a notification — nothing more to do.'
-                  : 'Your payment was sent. The network is confirming it — usually about a minute. You can close this: it finishes by itself.'),
+                  : widget.card
+                      ? 'Finish the payment on the card page, then come back here. Your coins arrive as soon as it’s confirmed.'
+                      : 'Your payment was sent. The network is confirming it — usually about a minute. You can close this: it finishes by itself.'),
         ),
       ]),
       actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(failed || review ? 'OK' : 'Close'))],

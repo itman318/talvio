@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/services.dart';
 import '../core/socket_service.dart';
@@ -97,6 +98,48 @@ class _CoinsScreenState extends State<CoinsScreen> {
         showInfo(context, '${fmtCoins((pack['total'] as num).toInt())} coins added 🪙');
       }
       if (mounted) _load(resume: false);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _card(Map<String, dynamic> info) async {
+    final packs = [for (final p in ((info['card'] as Map)['packs'] as List)) Map<String, dynamic>.from(p as Map)];
+    final pick = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Align(alignment: Alignment.centerLeft, child: Text('Buy coins by card', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+          ),
+          for (final p in packs)
+            ListTile(
+              leading: const CoinIcon(size: 30),
+              title: Text(fmtCoins((p['total'] as num).toInt()), style: const TextStyle(fontWeight: FontWeight.w800)),
+              subtitle: (p['bonus'] as num) > 0 ? Text('incl. ${fmtCoins((p['bonus'] as num).toInt())} bonus', style: const TextStyle(color: Brand.green)) : null,
+              trailing: Text('${p['price_text']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              onTap: () => Navigator.pop(ctx, p),
+            ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text('You pay on a secure Stripe page. Hushavia never sees your card.', style: TextStyle(color: Brand.muted, fontSize: 12.5)),
+          ),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final r = Map<String, dynamic>.from(await context.read<AppServices>().api.post('/coins/card', {'coin_pack_id': pick['id']}) as Map);
+      await launchUrl(Uri.parse('${r['pay_url']}'), mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      final ok = await waitForCardPayment(context, ((r['order'] as Map)['id'] as num).toInt());
+      if (ok && mounted) showInfo(context, '${fmtCoins((pick['total'] as num).toInt())} coins added 🪙');
+      if (mounted) _load(resume: false);
+    } catch (e) {
+      if (mounted) showError(context, e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -281,6 +324,22 @@ class _CoinsScreenState extends State<CoinsScreen> {
                       },
                     ),
                   ),
+                if (info['card'] is Map) ...[
+                  const SizedBox(height: 10),
+                  Material(
+                    color: card,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.fromLTRB(14, 6, 12, 6),
+                      leading: const CircleAvatar(backgroundColor: Color(0xFF635BFF), child: Icon(Icons.credit_card_rounded, color: Colors.white)),
+                      title: const Text('Pay by card', style: TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: const Text('Visa, Mastercard, Apple Pay, Google Pay'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: _busy ? null : () => _card(info),
+                    ),
+                  ),
+                ],
                 if ((info['packs'] as List).isEmpty && info['deposit'] is! Map)
                   Container(
                     padding: const EdgeInsets.all(14),

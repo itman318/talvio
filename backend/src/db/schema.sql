@@ -1442,3 +1442,11 @@ ALTER TABLE chats ADD COLUMN IF NOT EXISTS ads_off BOOLEAN NOT NULL DEFAULT FALS
 ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
 ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
   'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income'));
+
+-- ------------------------------------------------------------------ channel monetization, card payments
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS monetized BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS monetized_at TIMESTAMPTZ;
+ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_check;
+ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins', 'stripe'));
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS stripe_session VARCHAR(255);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_stripe_idx ON payment_orders (stripe_session) WHERE stripe_session IS NOT NULL;

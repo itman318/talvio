@@ -515,6 +515,17 @@ test('coins at work: gifts in chats, tips on posts, paid channels, giveaways', a
   const chId = ch.id || ch.chat.id;
   await chats.joinPublic(G.id, chId);
   const post = await messages.sendMessage(H.id, chId, { text: 'Recipe of the day' });
+  await rejects(plus.tip(G.id, { message_id: post.id, amount: 5 }), 'not_monetized');
+  await rejects(plus.setPrice(H.id, chId, { price: 300 }), 'not_monetized');
+  const mon = require('../src/services/monetize.service');
+  const st0 = await mon.status(H.id, chId);
+  assert.equal(st0.eligible, false);
+  await rejects(mon.enable(H.id, chId), 'not_eligible');
+  await rejects(mon.status(G.id, chId), 'forbidden');
+  // meet the bar (smaller in this test), then turn it on
+  await settings.update({ monetize_min_subscribers: 2, monetize_min_days: 0, monetize_min_posts: 1, monetize_require_2fa: false });
+  assert.equal((await mon.status(H.id, chId)).eligible, true);
+  assert.equal((await mon.enable(H.id, chId)).monetized, true);
   await rejects(plus.tip(H.id, { message_id: post.id, amount: 10 }), 'invalid_input'); // her own channel
   await rejects(plus.tip(I.id, { message_id: post.id, amount: 10 }), 'chat_not_found');
   await rejects(plus.tip(G.id, { message_id: post.id, amount: 0 }), 'invalid_input');
@@ -710,7 +721,7 @@ test('self-service ads: budget held, review, paid views, owner share, daily cap,
   await settings.update({ feature_ads: true, ads_min_subscribers: 3, ads_min_cpm: 50, ads_min_budget: 100 });
   const ch = await chats.createChannel(O1.id, { title: 'Tech Daily', username: 'tech_daily_pk', is_public: true });
   const chId = ch.id || ch.chat.id;
-  await db.query(`UPDATE chats SET category = 'tech' WHERE id = $1`, [chId]);
+  await db.query(`UPDATE chats SET category = 'tech', monetized = TRUE WHERE id = $1`, [chId]);
   for (const u of [V1, V2, V3]) await chats.joinPublic(u.id, chId);
 
   await rejects(ads.create(A1.id, { advertiser: 'Shop', text: 'Best phones', url: 'https://shop.example', cpm_coins: 100, budget_coins: 200 }), 'not_enough_coins');
@@ -777,4 +788,52 @@ test('self-service ads: budget held, review, paid views, owner share, daily cap,
   const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
   assert.equal(bad.length, 0);
   await settings.update({ feature_ads: false, ads_min_subscribers: 3 });
+});
+
+test('card payments (Stripe): off by default, signed webhook only, amount checked, coins once', async () => {
+  const stripe = require('../src/services/payments/stripe');
+  const coins = require('../src/services/coin.service');
+  const crypto = require('crypto');
+  const S = await signup('+923260000051', 'Sana');
+  await rejects(payments.checkoutCard(S.id, { coin_pack_id: 1 }), 'provider_unavailable');
+  process.env.STRIPE_SECRET_KEY = 'sk_test_x';
+  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+  await rejects(payments.checkoutCard(S.id, { coin_pack_id: 1 }), 'provider_unavailable'); // still off in the admin panel
+  await settings.update({ stripe_enabled: true });
+  const sessions = {};
+  stripe.setTransport(async (method, path, form) => {
+    if (method === 'POST') {
+      const id = `cs_test_${Object.keys(sessions).length + 1}`;
+      sessions[id] = { id, url: `https://checkout.stripe.com/c/pay/${id}`, client_reference_id: form.client_reference_id, amount_total: Number(form['line_items[0][price_data][unit_amount]']), currency: 'usd', payment_status: 'unpaid', status: 'open' };
+      return sessions[id];
+    }
+    return sessions[path.split('/').pop()];
+  });
+  try {
+    assert.ok((await coins.info(S.id)).card.packs.length >= 1);
+    const pack = (await db.one('SELECT * FROM coin_packs WHERE is_active ORDER BY coins LIMIT 1'));
+    const co = await payments.checkoutCard(S.id, { coin_pack_id: pack.id });
+    assert.match(co.pay_url, /^https:\/\/checkout\.stripe\.com\//);
+    const sid = Object.keys(sessions)[0];
+    // a forged webhook does nothing
+    const body = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: sid } } });
+    assert.equal((await payments.stripeWebhook(body, 't=1,v1=abc')).status, 400);
+    assert.equal((await payments.getOrder(S.id, co.order.id)).status, 'pending', 'not paid yet');
+    // paid, but a different amount: no coins
+    sessions[sid].payment_status = 'paid';
+    sessions[sid].amount_total += 1;
+    const t = Math.floor(Date.now() / 1000);
+    const sig = `t=${t},v1=${crypto.createHmac('sha256', 'whsec_test').update(`${t}.${body}`).digest('hex')}`;
+    await payments.stripeWebhook(body, sig);
+    assert.equal((await users.getMe(S.id)).coins, 0);
+    sessions[sid].amount_total -= 1;
+    assert.equal((await payments.stripeWebhook(body, sig)).status, 200);
+    await payments.stripeWebhook(body, sig); // Stripe sends it again: once only
+    assert.equal((await users.getMe(S.id)).coins, pack.coins + pack.bonus);
+    assert.equal((await payments.getOrder(S.id, co.order.id)).status, 'paid');
+  } finally {
+    stripe.setTransport(null);
+    delete process.env.STRIPE_SECRET_KEY;
+    await settings.update({ stripe_enabled: false });
+  }
 });

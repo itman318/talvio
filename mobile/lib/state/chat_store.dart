@@ -840,10 +840,14 @@ class ChatStore extends ChangeNotifier {
         local.outbox!['media_id'] = info.id;
         local.uploadKind = null;
       } on ApiException catch (e) {
-        _fail(local, e.message);
+        if (e.status == 0 || e.status >= 500 || e.status == 408 || e.status == 429) {
+          _waitForNetwork(local, e.message);
+        } else {
+          _fail(local, e.message);
+        }
         return;
       } catch (e) {
-        _fail(local, 'Upload failed');
+        _waitForNetwork(local, 'Upload failed');
         return;
       } finally {
         pulse.cancel();
@@ -853,27 +857,104 @@ class ChatStore extends ChangeNotifier {
     await _deliver(local);
   }
 
+  /// Sends a message that waits on this phone. The same client id is used every time, so the server
+  /// keeps one copy however often it is tried (a reply that got lost on the way is not a lost message).
+  ///  - the live connection first; if it doesn't answer quickly, the same message over plain HTTPS;
+  ///  - no network at all: the message stays "sending" and goes out by itself when the phone is back online.
+  /// Only a real refusal from the server (not allowed, too long…) marks it as failed.
   Future<Message?> _deliver(Message local) async {
     final payload = <String, dynamic>{...local.outbox!, 'chat_id': local.chatId, 'client_id': local.clientId};
-    try {
-      Map<String, dynamic> json;
-      if (socket.isConnected) {
-        final r = Map<String, dynamic>.from(await socket.request('message:send', payload) as Map);
-        if (r['queued'] != null) return _queued(local);
-        json = Map<String, dynamic>.from(r['message'] as Map);
-      } else {
-        json = Map<String, dynamic>.from(await api.post('/chats/${local.chatId}/messages', payload) as Map);
-        if (json['queued'] != null) return _queued(local);
-      }
-      final real = Message.fromJson(json);
-      _confirm(local, real);
-      return real;
-    } on ApiException catch (e) {
-      _fail(local, e.message);
-    } catch (_) {
-      _fail(local, 'Could not send');
+    Map<String, dynamic>? r;
+    ApiException? lastNet;
+    if (socket.isConnected) {
+      try {
+        r = Map<String, dynamic>.from(await socket.request('message:send', payload, timeout: const Duration(seconds: 8)) as Map);
+      } on ApiException catch (e) {
+        if (e.status != 0) return _refused(local, e);
+        lastNet = e; // the connection is half-dead (a network change): try HTTPS below
+      } catch (_) {}
     }
+    if (r == null) {
+      try {
+        final j = Map<String, dynamic>.from(await api.post('/chats/${local.chatId}/messages', payload) as Map);
+        r = j['queued'] != null ? j : {'message': j};
+      } on ApiException catch (e) {
+        if (e.status != 0 && e.status != 408 && e.status != 429 && e.status < 500) return _refused(local, e);
+        lastNet = e;
+      } catch (_) {}
+    }
+    if (r == null) {
+      _waitForNetwork(local, lastNet?.message);
+      return null;
+    }
+    _pending.remove(local);
+    if (r['queued'] != null) return _queued(local);
+    final real = Message.fromJson(Map<String, dynamic>.from(r['message'] as Map));
+    _confirm(local, real);
+    return real;
+  }
+
+  Message? _refused(Message local, ApiException e) {
+    _pending.remove(local);
+    _fail(local, e.message);
     return null;
+  }
+
+  // ------------------------------------------------------------------ messages waiting for the network
+  final Set<Message> _pending = {};
+  Timer? _pendingTimer;
+  int _pendingTries = 0;
+  StreamSubscription<bool>? _pendingConn;
+
+  void _waitForNetwork(Message local, String? why) {
+    _pending.add(local);
+    // still "sending" (a clock), not an error: it will go by itself
+    if (local.sendState != SendState.sending) {
+      local.sendState = SendState.sending;
+      local.errorText = null;
+      notifyListeners();
+    }
+    _pendingConn ??= socket.connectionChanges.listen((up) {
+      if (up) _flushPending(soon: true);
+    });
+    _schedulePending();
+  }
+
+  void _schedulePending() {
+    if (_pendingTimer?.isActive ?? false) return;
+    // 3 s, 6 s, 12 s … up to a minute between tries
+    final wait = Duration(seconds: (3 * (1 << _pendingTries.clamp(0, 4))).clamp(3, 60));
+    _pendingTimer = Timer(wait, () => _flushPending());
+  }
+
+  Future<void> _flushPending({bool soon = false}) async {
+    if (soon) _pendingTries = 0;
+    _pendingTimer?.cancel();
+    if (_pending.isEmpty) return;
+    final batch = _pending.toList()..sort((a, b) => b.id.compareTo(a.id)); // oldest (least negative) first
+    _pending.clear();
+    _pendingTries++;
+    for (final m in batch) {
+      if (!(_messages[m.chatId]?.contains(m) ?? false)) continue; // deleted meanwhile
+      if (m.uploadKind != null) {
+        await _uploadAndDeliver(m);
+      } else {
+        await _deliver(m);
+      }
+    }
+    if (_pending.isNotEmpty) {
+      // after ~2 minutes without network, show it as "not sent" — it still goes by itself when the network is back
+      if (_pendingTries >= 6) {
+        for (final m in _pending) {
+          m.sendState = SendState.failed;
+          m.errorText = 'Waiting for the internet — will send automatically';
+        }
+        notifyListeners();
+      }
+      _schedulePending();
+    } else {
+      _pendingTries = 0;
+    }
   }
 
   /// A channel post that waits for an admin's approval (or was saved as a draft).
@@ -921,6 +1002,7 @@ class ChatStore extends ChangeNotifier {
   }
 
   Future<void> retry(Message local) async {
+    _pending.remove(local);
     local.sendState = SendState.sending;
     local.errorText = null;
     notifyListeners();
@@ -928,6 +1010,7 @@ class ChatStore extends ChangeNotifier {
   }
 
   void discard(Message local) {
+    _pending.remove(local);
     _messages[local.chatId]?.remove(local);
     final chat = chatById(local.chatId);
     if (chat != null && chat.lastMessage == local) {

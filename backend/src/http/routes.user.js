@@ -255,6 +255,12 @@ router.get('/coins', h(async (req, res) => res.json(await require('../services/c
 router.get('/coins/history', h(async (req, res) => res.json(await require('../services/coin.service').history(req.userId, req.query))));
 router.post('/coins/send', h(async (req, res) => res.json(await require('../services/coin.service').send(req.userId, req.body))));
 router.post('/coins/plus', h(async (req, res) => res.json(await require('../services/coin.service').buyPlus(req.userId, req.body))));
+router.post('/coins/card', h(async (req, res) => res.json(await paymentService.checkoutCard(req.userId, req.body))));
+router.get('/chats/:id/monetization', h(async (req, res) => res.json(await require('../services/monetize.service').status(req.userId, req.params.id))));
+router.post('/chats/:id/monetization', h(async (req, res) => {
+  const m = require('../services/monetize.service'); // eslint-disable-line global-require
+  res.json(req.body && req.body.on === false ? await m.disable(req.userId, req.params.id) : await m.enable(req.userId, req.params.id));
+}));
 router.get('/coins/deposit', h(async (req, res) => res.json(await require('../services/deposit.service').myAddress(req.userId))));
 router.post('/coins/deposit/check', h(async (req, res) => res.json(await require('../services/deposit.service').checkMine(req.userId))));
 router.post('/coins/sweep-list', h(async (req, res) => res.json(await require('../services/deposit.service').sweepList(req.body && req.body.xpub))));

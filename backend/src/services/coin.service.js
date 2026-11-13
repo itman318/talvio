@@ -91,6 +91,8 @@ async function info(userId) {
   return {
     balance: Number(u ? u.coins : 0),
     deposit,
+    // packs paid by card (Stripe), when switched on
+    card: (await payments.cardOpen()) ? { packs: packs.map(serializePack) } : null,
     // with deposits on, any amount works: the fixed packs (one order each) are not needed
     packs: networks.length && !deposit ? packs.map(serializePack) : [],
     crypto_networks: networks,

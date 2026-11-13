@@ -64,6 +64,8 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           OTP_DEV_MODE: ${{ vars.OTP_DEV_MODE }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
@@ -103,6 +105,9 @@ jobs:
               printf 'export MAIL_PROVIDER=brevo BREVO_API_KEY=%q MAIL_FROM=%q\n' "$BREVO_API_KEY" "$MAIL_FROM"
             fi
             printf 'export OTP_DEV_MODE=%q\n' "$OTP_DEV_MODE"
+            if [ -n "$STRIPE_SECRET_KEY" ]; then
+              printf 'export STRIPE_SECRET_KEY=%q STRIPE_WEBHOOK_SECRET=%q\n' "$STRIPE_SECRET_KEY" "$STRIPE_WEBHOOK_SECRET"
+            fi
             if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
               # push notifications: the Firebase key goes into a root-only file on the server
               printf 'export FIREBASE_SA_B64=%q\n' "$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | base64 -w0)"

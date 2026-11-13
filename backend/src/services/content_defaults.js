@@ -215,6 +215,7 @@ You can send a crypto payment or a payment request as a card in a chat. The card
 • Deposit: in Coins → "Add coins" you get your own USDT address on BNB Smart Chain (BEP-20). USDT that arrives there is turned into coins at the rate shown in the app (now 1 USDT = 100 coins) after the network confirms it.
 • Only USDT on BNB Smart Chain counts. Other coins, tokens or networks sent to that address are lost and cannot be returned. Deposits below the minimum shown in the app give no coins.
 • If an exchange or wallet takes a fee from the amount, you get coins for what actually arrives.
+• Card: where offered, coin packs can be bought by card on a payment page run by Stripe. Hushavia never sees or stores your card number. Coins arrive when Stripe confirms the payment; a charge that is reversed or disputed removes the coins it gave.
 • You can also get coins as a gift from another user, as a tip or subscription income, as a giveaway prize, or from Hushavia. Bonus coins are free extras and have no cash value.
 
 ## Using coins
@@ -234,7 +235,11 @@ You can send a crypto payment or a payment request as a card in a chat. The card
 • Public channels with enough subscribers may show one clearly labelled sponsored message at the end. Hushavia Plus members see no ads. Ads are chosen by the channel's topic and the viewer's country — never by the content of private messages.
 • Anyone 18 or older can advertise in Settings → Advertise. You pay in coins: the budget is held when you make the ad, each counted view costs your price per 1,000 views, and unspent coins come back when the ad ends, is stopped or is not approved. A person is counted at most once per ad per day.
 • Every ad is reviewed before it runs and may be removed at any time. Not allowed: scams and fake offers, investment or trading promises, gambling, adult content, weapons, drugs, hate, misleading claims, copying another brand, and anything illegal where it is shown. You are responsible for your ad, your link and what you offer.
-• Channel owners earn the share shown in the app (now 50%) of the coins spent on views in their channel, and can turn ads off in the channel's settings.
+• Channel owners earn the share shown in the app (now 50%) of the coins spent on views in their channel — once the channel is monetized — and can turn ads off in the channel's settings.
+
+## Channel monetization
+• A channel earns (ad share, tips, paid subscription) only after its owner turns on monetization, which is possible when the channel meets the requirements shown in the app (for example a minimum number of subscribers, the age of the channel and of the owner's account, regular posts, two-step verification, and no limits on the channel or account).
+• We may turn monetization off and remove earnings obtained by fake subscribers or views, scams, stolen or illegal content, or by breaking these Terms. A suspended channel does not earn.
 • Hushavia does not promise a number of views, clicks or sales. Coins spent on views that were shown are not refunded.
 
 # 11. Third-party services

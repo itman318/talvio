@@ -105,7 +105,7 @@ async function emitUpdated(chatId, extraUserIds = []) {
 const CHAT_ROWS_SQL = `
 SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
-       c.slow_mode_sec, c.sub_price, c.ads_off, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
+       c.slow_mode_sec, c.sub_price, c.ads_off, c.monetized, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
        c.welcome_text, c.rules, c.new_member_limits, c.protected_content, c.allowed_reactions, c.category, c.linked_chat_id,
        cm.admin_rights AS my_rights, cm.admin_title AS my_title, cm.cleared_before_id AS my_cleared_before, cm.restricted_until AS my_restricted_until, cm.draft, cm.draft_at,
        (SELECT json_build_object('id', vc.id, 'title', vc.title, 'count',
@@ -218,7 +218,8 @@ async function serializeChats(userId, rows) {
       draft: r.draft || '',
       draft_at: r.draft_at ? new Date(r.draft_at).toISOString() : null,
       slow_mode_sec: r.slow_mode_sec,
-      sub_price: r.sub_price || 0,
+      sub_price: r.monetized ? r.sub_price || 0 : 0,
+      monetized: !!r.monetized,
       ads_off: !!r.ads_off,
       disappear_after_sec: r.disappear_after_sec || 0,
       join_approval: r.join_approval,
@@ -1010,7 +1011,7 @@ async function joinChat(userId, chat) {
     }
   }
   // a paid channel: the month is paid first (coinplus.subscribe), people an admin adds come in free
-  if (!existing && chat.type === 'channel' && chat.sub_price > 0 && !chat.paid_ok && !chat.admin_ok
+  if (!existing && chat.type === 'channel' && chat.sub_price > 0 && chat.monetized && !chat.paid_ok && !chat.admin_ok
       // someone who left and comes back inside a month they already paid for gets in
       && !(await db.one('SELECT 1 AS x FROM channel_subs WHERE chat_id = $1 AND user_id = $2 AND expires_at > now()', [chat.id, userId]))) {
     throw forbidden('subscription_required', `This channel costs ${Number(chat.sub_price).toLocaleString('en-US')} coins for 30 days`, { chat_id: chat.id, price: chat.sub_price, title: chat.title, days: 30 });
@@ -1254,7 +1255,7 @@ function publicSummary(c, memberCount, isMember) {
     member_count: memberCount,
     is_member: isMember,
     join_approval: c.type === 'group' && !!c.join_approval,
-    sub_price: c.type === 'channel' ? c.sub_price || 0 : 0,
+    sub_price: c.type === 'channel' && c.monetized ? c.sub_price || 0 : 0,
   };
 }
 

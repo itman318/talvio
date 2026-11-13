@@ -18,6 +18,7 @@ const settings = require('./settings.service');
 const jazzcash = require('./payments/jazzcash');
 const easypaisa = require('./payments/easypaisa');
 const cryptopay = require('./payments/cryptopay');
+const stripe = require('./payments/stripe');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
@@ -366,7 +367,75 @@ async function myOrder(userId, idRaw) {
 }
 
 async function getOrder(userId, idRaw) {
-  return serializeOrder(await myOrder(userId, idRaw));
+  let o = await myOrder(userId, idRaw);
+  // a card payment whose webhook hasn't arrived (yet): ask Stripe directly
+  if (o.provider === 'stripe' && o.status === 'pending' && o.stripe_session) {
+    await confirmStripe(o.stripe_session).catch(() => {});
+    o = await myOrder(userId, o.id);
+  }
+  return serializeOrder(o);
+}
+
+// ------------------------------------------------------------------ card payments (Stripe Checkout)
+async function cardOpen() {
+  const s = await settings.getAll();
+  return !!(s.stripe_enabled && s.feature_coins && stripe.configured());
+}
+
+/** A pack of coins paid by card: an order + a Stripe Checkout page to open in the browser. */
+async function checkoutCard(userId, body = {}) {
+  if (!(await cardOpen())) throw forbidden('provider_unavailable', 'Card payments are not available right now');
+  const pack = await db.one('SELECT * FROM coin_packs WHERE id = $1 AND is_active', [v.id(body.coin_pack_id, 'coin_pack_id')]);
+  if (!pack) throw notFound('pack_not_found', 'This pack is not available');
+  rateLimit.enforce(`checkout:${userId}`, 10, 60 * 60 * 1000, 'Too many payment attempts. Try again later.');
+  const coinsTotal = pack.coins + pack.bonus;
+  const cents = Math.round(Number(pack.price_usd) * 100);
+  const o = await db.one(
+    `INSERT INTO payment_orders (user_id, months, amount_pkr, provider, txn_ref, currency, amount, coins, coin_pack_id)
+     VALUES ($1, 0, 0, 'stripe', $2, 'USD', $3, $4, $5) RETURNING *`,
+    [userId, newTxnRef(), Number(pack.price_usd), coinsTotal, pack.id],
+  );
+  const u = await db.one('SELECT email FROM users WHERE id = $1', [userId]);
+  const s = await stripe.createSession({
+    orderId: o.id,
+    cents,
+    name: `${coinsTotal.toLocaleString('en-US')} Hushavia Coins`,
+    successUrl: `${config.publicUrl}/pay/stripe/done?order=${o.id}&t=${payToken(o.id)}`,
+    cancelUrl: `${config.publicUrl}/pay/stripe/done?order=${o.id}&t=${payToken(o.id)}&cancel=1`,
+    email: u && u.email,
+  });
+  await db.query('UPDATE payment_orders SET stripe_session = $2 WHERE id = $1', [o.id, s.id]);
+  return { order: serializeOrder({ ...o, stripe_session: s.id }), pay_url: s.url };
+}
+
+/** Marks the order of a Checkout Session paid when Stripe says it is (and the amount matches). */
+async function confirmStripe(sessionId) {
+  const o = await db.one(`SELECT * FROM payment_orders WHERE stripe_session = $1 AND provider = 'stripe'`, [String(sessionId)]);
+  if (!o || o.status === 'paid') return o ? 'paid' : null;
+  const s = await stripe.getSession(sessionId);
+  const cents = Math.round(Number(o.amount) * 100);
+  if (s.payment_status === 'paid' && Number(s.amount_total) === cents && String(s.currency).toLowerCase() === 'usd' && String(s.client_reference_id) === String(o.id)) {
+    await markPaid(o.id, { providerRef: s.payment_intent || s.id, message: 'Paid by card' });
+    return 'paid';
+  }
+  if (s.status === 'expired') await markFailed(o.id, { status: 'cancelled', message: 'The card payment was not finished' });
+  return s.payment_status;
+}
+
+/** Stripe → us. Only signed events are trusted, and even then the session is read back from Stripe. */
+async function stripeWebhook(rawBody, signature) {
+  if (!stripe.verify(rawBody, signature)) return { ok: false, status: 400 };
+  let ev;
+  try {
+    ev = JSON.parse(rawBody);
+  } catch (_) {
+    return { ok: false, status: 400 };
+  }
+  const obj = ev && ev.data && ev.data.object;
+  if (ev.type === 'checkout.session.completed' || ev.type === 'checkout.session.async_payment_succeeded' || ev.type === 'checkout.session.expired') {
+    await confirmStripe(obj.id);
+  }
+  return { ok: true, status: 200 };
 }
 
 async function listMyOrders(userId) {
@@ -512,6 +581,11 @@ async function sweep() {
     `UPDATE payment_orders SET status = 'cancelled', provider_message = 'Expired'
      WHERE status = 'pending' AND provider IN ('jazzcash', 'easypaisa') AND created_at < now() - interval '2 hours'`,
   );
+  // card checkouts nobody finished (Stripe pages expire after a day)
+  await db.query(
+    `UPDATE payment_orders SET status = 'cancelled', provider_message = 'Expired'
+     WHERE status = 'pending' AND provider = 'stripe' AND created_at < now() - interval '25 hours'`,
+  );
   // crypto orders nobody paid
   await db.query(
     `UPDATE payment_orders SET status = 'cancelled', provider_message = 'Expired'
@@ -548,7 +622,7 @@ async function adminListOrders(query = {}) {
     where.push(`o.status = $${params.length}`);
   }
   if (query.provider) {
-    params.push(v.oneOf(query.provider, ['jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins'], 'provider'));
+    params.push(v.oneOf(query.provider, ['jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins', 'stripe'], 'provider'));
     where.push(`o.provider = $${params.length}`);
   }
   if (query.user_id) {
@@ -671,6 +745,10 @@ module.exports = {
   cancelOrder,
   submitProof,
   submitCryptoTx,
+  checkoutCard,
+  confirmStripe,
+  stripeWebhook,
+  cardOpen,
   verifyCrypto,
   markPaid,
   markFailed,

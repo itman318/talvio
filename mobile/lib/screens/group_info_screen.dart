@@ -1,5 +1,6 @@
 import 'global_search_screen.dart' show SimilarChannels;
 import 'coins_screen.dart' show CoinIcon, fmtCoins;
+import 'monetize_screen.dart';
 import '../core/services.dart';
 import 'package:flutter/material.dart';
 import '../core/chat_links.dart';
@@ -640,6 +641,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           if (info) SettingsTile(icon: Icons.timer_rounded, color: const Color(0xFF5E6B8C), title: 'Slow mode', trailing: _slowLabel(chat.slowModeSec), onTap: () => _pickSlowMode(chat)),
           if (chat.isChannel && chat.isOwner && auth.feature('coins'))
             SettingsTile(
+              icon: Icons.verified_rounded,
+              color: const Color(0xFF12B89C),
+              title: 'Monetization',
+              subtitle: chat.monetized ? 'On — the channel earns from ads, tips and subscriptions' : 'See the requirements and start earning',
+              trailing: chat.monetized ? 'On' : 'Off',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MonetizeScreen(chat: chat))).then((_) {
+                if (mounted) setState(() {});
+              }),
+            ),
+          if (chat.isChannel && chat.isOwner && chat.monetized && auth.feature('coins'))
+            SettingsTile(
               icon: Icons.monetization_on_rounded,
               color: const Color(0xFFF5A623),
               title: 'Paid subscription',
@@ -647,7 +659,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               trailing: chat.subPrice > 0 ? '${fmtCoins(chat.subPrice)} coins' : 'Off',
               onTap: () => _setSubPrice(chat),
             ),
-          if (chat.isChannel && chat.isOwner && auth.feature('coins'))
+          if (chat.isChannel && chat.isOwner && chat.monetized && auth.feature('coins'))
             SettingsSwitchTile(
               icon: Icons.campaign_rounded,
               color: const Color(0xFFE5484D),

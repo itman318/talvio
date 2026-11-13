@@ -78,6 +78,8 @@ set_env MAIL_PROVIDER "${MAIL_PROVIDER:-}"
 set_env MAIL_FROM "${MAIL_FROM:-}"
 set_env BREVO_API_KEY "${BREVO_API_KEY:-}"
 set_env OTP_DEV_MODE "${OTP_DEV_MODE:-}"
+set_env STRIPE_SECRET_KEY "${STRIPE_SECRET_KEY:-}"
+set_env STRIPE_WEBHOOK_SECRET "${STRIPE_WEBHOOK_SECRET:-}"
 # push notifications (Firebase service account from the FIREBASE_SERVICE_ACCOUNT secret)
 if [ -n "${FIREBASE_SA_B64:-}" ]; then
   if echo "$FIREBASE_SA_B64" | base64 -d > /etc/hushavia/firebase.json.tmp 2>/dev/null && grep -q '"private_key"' /etc/hushavia/firebase.json.tmp; then

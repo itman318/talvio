@@ -96,6 +96,7 @@ async function tip(userId, body = {}) {
   const owner = await db.one(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND role = 'owner' LIMIT 1`, [chat.id]);
   if (!owner) throw badRequest('invalid_input', 'This channel can’t receive tips');
   if (owner.user_id === userId) throw badRequest('invalid_input', 'This is your own channel');
+  if (!(await require('./monetize.service').earns(chat.id))) throw forbidden('not_monetized', 'This channel doesn’t accept tips yet'); // eslint-disable-line global-require
   rateLimit.enforce(`coins:tip:${userId}`, 60, 60 * 60 * 1000, 'Too many tips. Try again later.');
   const part = await creatorPart(amount);
   const r = await db.tx(async (c) => {
@@ -122,6 +123,7 @@ async function setPrice(userId, chatIdRaw, body = {}) {
   if (chat.my_role !== 'owner') throw forbidden('forbidden', 'Only the owner can set the price');
   const price = Number(body.price);
   if (!Number.isInteger(price) || price < 0 || price > 100000) throw badRequest('invalid_input', 'The price must be 0 – 100,000 coins');
+  if (price > 0 && !(await require('./monetize.service').earns(chat.id))) throw forbidden('not_monetized', 'Turn on monetization for this channel first (channel info → Monetization)'); // eslint-disable-line global-require
   await db.query('UPDATE chats SET sub_price = $2 WHERE id = $1', [chat.id, price]);
   await chats().emitUpdated(chat.id);
   return { sub_price: price, days: SUB_DAYS };
@@ -139,6 +141,7 @@ async function subscribe(userId, chatIdRaw, body = {}) {
     chat = viaInvite;
   }
   if (!(chat.sub_price > 0)) throw badRequest('invalid_input', 'This channel is free to join');
+  if (!chat.monetized || chat.is_suspended) throw badRequest('invalid_input', 'This channel is free to join right now');
   if (member && ['owner', 'admin'].includes(member.role)) throw badRequest('invalid_input', 'Admins don’t pay for their own channel');
   if (!member && (await chats().isBanned(chat.id, userId))) throw forbidden('banned_from_chat', 'An admin removed you from this channel');
   const owner = await db.one(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND role = 'owner' LIMIT 1`, [chat.id]);

@@ -117,7 +117,7 @@ async function recordView(userId, idRaw, body = {}) {
     let channel = null;
     if (chatId) {
       channel = (await c.query(
-        `SELECT ch.id, (SELECT o.user_id FROM chat_members o WHERE o.chat_id = ch.id AND o.role = 'owner' LIMIT 1) AS owner
+        `SELECT ch.id, (ch.monetized AND NOT ch.is_suspended) AS monetized, (SELECT o.user_id FROM chat_members o WHERE o.chat_id = ch.id AND o.role = 'owner' LIMIT 1) AS owner
          FROM chats ch JOIN chat_members m ON m.chat_id = ch.id AND m.user_id = $2 WHERE ch.id = $1 AND ch.type = 'channel' AND NOT ch.ads_off`,
         [chatId, userId],
       )).rows[0] || null;
@@ -133,7 +133,8 @@ async function recordView(userId, idRaw, body = {}) {
        ON CONFLICT (campaign_id, day) DO UPDATE SET views = ad_daily.views + 1, millis = ad_daily.millis + $2`,
       [id, cost],
     );
-    if (paid && channel && channel.owner && channel.owner !== camp.owner_id) {
+    // the owner's share only for monetized channels (the view still counts for the advertiser)
+    if (paid && channel && channel.owner && channel.owner !== camp.owner_id && channel.monetized) {
       const share = Math.floor((cost * s.ads_owner_percent) / 100);
       if (share > 0) {
         await c.query(
