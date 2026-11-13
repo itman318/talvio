@@ -58,6 +58,11 @@ router.put('/plans/:id', requireAdmin('payments'), h(async (req, res) => res.jso
 router.get('/ads', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminList())));
 router.post('/ads', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminSave(req.admin.id, null, req.body))));
 router.put('/ads/:id', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminSave(req.admin.id, req.params.id, req.body))));
+router.post('/ads/:id/review', requireAdmin('payments'), h(async (req, res) => {
+  const r = await ads.adminReview(req.params.id, req.body);
+  await admin.log(req.admin.id, `ad.${req.body.decision}`, 'ad', parseInt(req.params.id, 10), { reason: req.body.reason }, req.ip);
+  res.json(r);
+}));
 router.delete('/ads/:id', requireAdmin('payments'), h(async (req, res) => res.json(await ads.adminDelete(req.params.id))));
 
 router.get('/bots', requireAdmin('users.view'), h(async (req, res) => res.json(await bots.adminList(req.query))));

@@ -9,6 +9,7 @@ import 'notifications_screen.dart';
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'ads_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -94,6 +95,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (context.mounted) showError(context, e);
           }
         }),
+      if (auth.feature('coins'))
+      _Item(acc, Icons.campaign_rounded, const Color(0xFFE5484D), 'Advertise', subtitle: 'Show your ad in channels, paid with coins', keywords: 'ads ad sponsored promote marketing', onTap: () => go(const AdsScreen())),
       if (auth.feature('coins'))
       _Item(acc, Icons.monetization_on_rounded, const Color(0xFFF5A623), 'Coins', subtitle: 'Your Hushavia Coins: buy, send to friends, pay for Plus', keywords: 'coin coins gift balance stars money', onTap: () => go(const CoinsScreen())),
       if (auth.feature('wallet'))

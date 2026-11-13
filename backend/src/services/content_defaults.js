@@ -230,8 +230,12 @@ You can send a crypto payment or a payment request as a card in a chat. The card
 • If your account is banned for breaking these Terms, or you delete it, the coins in it are lost. We may remove coins that were obtained by fraud, a mistake, a bug or a reversed payment.
 • We may change the coin rate and the coin price of things in the app for the future, and we may end the coins feature. If we end it we will tell you in the app at least 30 days before, so you can use your coins.
 
-# 10. Sponsored messages
-Some public channels may show clearly labelled sponsored messages. Advertisers must follow our advertising rules and the law; Hushavia may remove any sponsored message.
+# 10. Sponsored messages and advertising
+• Public channels with enough subscribers may show one clearly labelled sponsored message at the end. Hushavia Plus members see no ads. Ads are chosen by the channel's topic and the viewer's country — never by the content of private messages.
+• Anyone 18 or older can advertise in Settings → Advertise. You pay in coins: the budget is held when you make the ad, each counted view costs your price per 1,000 views, and unspent coins come back when the ad ends, is stopped or is not approved. A person is counted at most once per ad per day.
+• Every ad is reviewed before it runs and may be removed at any time. Not allowed: scams and fake offers, investment or trading promises, gambling, adult content, weapons, drugs, hate, misleading claims, copying another brand, and anything illegal where it is shown. You are responsible for your ad, your link and what you offer.
+• Channel owners earn the share shown in the app (now 50%) of the coins spent on views in their channel, and can turn ads off in the channel's settings.
+• Hushavia does not promise a number of views, clicks or sales. Coins spent on views that were shown are not refunded.
 
 # 11. Third-party services
 Hushavia works with other services, such as Google Firebase for notifications, Google Drive for your own backups, payment providers, public blockchain networks and the data services the wallet reads them through, and bots or mini apps made by other people. Their own terms and privacy policies apply to them, and we are not responsible for them.

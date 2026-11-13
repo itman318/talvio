@@ -64,6 +64,7 @@ const scheduler = setInterval(() => {
   if (secretSweepTick % 4 === 0) messageService.sweepExpired().catch((err) => console.error('disappearing sweep error', err)); // eslint-disable-line no-console
   require('./services/payment.service').sweep().catch(() => {});
   require('./services/deposit.service').scan().catch((err) => console.error('deposit scan', err && err.message)); // eslint-disable-line no-console
+  if (secretSweepTick % 4 === 3) require('./services/ads.service').sweep().catch(() => {}); // pay channel owners, end spent ads
   if (secretSweepTick % 2 === 1) require('./services/coinplus.service').sweep().catch(() => {}); // giveaway draws, subscriptions that ran out
   if (secretSweepTick % 20 === 2) require('./services/qr.service').sweep().catch(() => {});
   require('./services/bot.service').sweep().catch((err) => console.error('bot sweep error', err)); // eslint-disable-line no-console

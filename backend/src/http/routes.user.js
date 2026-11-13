@@ -278,7 +278,14 @@ router.post('/payments/orders/:id/proof', h(async (req, res) => res.json(await p
 
 // ---- sponsored messages
 router.get('/chats/:id/sponsored', h(async (req, res) => res.json(await adsService.sponsoredFor(req.userId, req.params.id))));
-router.post('/ads/:id/view', h(async (req, res) => res.json(await adsService.recordView(req.userId, req.params.id))));
+router.post('/ads/:id/view', h(async (req, res) => res.json(await adsService.recordView(req.userId, req.params.id, req.body))));
+// self-service advertising (paid with coins)
+router.get('/ads/meta', h(async (req, res) => res.json(await adsService.meta(req.userId))));
+router.get('/ads/mine', h(async (req, res) => res.json(await adsService.mine(req.userId))));
+router.post('/ads', h(async (req, res) => res.json(await adsService.create(req.userId, req.body))));
+router.get('/ads/:id/stats', h(async (req, res) => res.json(await adsService.stats(req.userId, req.params.id))));
+router.post('/ads/:id/:action(pause|resume|stop|topup)', h(async (req, res) => res.json(await adsService.setState(req.userId, req.params.id, req.params.action, req.body))));
+router.post('/chats/:id/ads', h(async (req, res) => res.json(await adsService.setChannelAds(req.userId, req.params.id, req.body))));
 router.post('/ads/:id/click', h(async (req, res) => res.json(await adsService.recordClick(req.userId, req.params.id))));
 
 // ---- bots (my bots) & mini apps

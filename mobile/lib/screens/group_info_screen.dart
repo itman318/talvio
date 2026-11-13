@@ -647,6 +647,19 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               trailing: chat.subPrice > 0 ? '${fmtCoins(chat.subPrice)} coins' : 'Off',
               onTap: () => _setSubPrice(chat),
             ),
+          if (chat.isChannel && chat.isOwner && auth.feature('coins'))
+            SettingsSwitchTile(
+              icon: Icons.campaign_rounded,
+              color: const Color(0xFFE5484D),
+              title: 'Sponsored messages',
+              subtitle: 'Earn coins from ads shown at the end of your channel (public channels with enough subscribers)',
+              value: !chat.adsOff,
+              onChanged: (v) => _run(() async {
+                await context.read<AppServices>().api.post('/chats/${chat.id}/ads', {'off': !v});
+                chat.adsOff = !v;
+                if (mounted) setState(() {});
+              }),
+            ),
           if (info && auth.feature('topics'))
             SettingsSwitchTile(
               icon: Icons.topic_rounded,

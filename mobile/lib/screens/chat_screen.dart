@@ -8,6 +8,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../widgets/coin_cards.dart';
+import 'ads_screen.dart';
 import 'package:flutter/material.dart';
 import '../widgets/undo_bar.dart';
 import '../widgets/mascot.dart';
@@ -604,7 +605,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final api = context.read<AppServices>().api;
     if (!_adSeen) {
       _adSeen = true;
-      api.post('/ads/${ad['id']}/view').catchError((_) => null);
+      api.post('/ads/${ad['id']}/view', {'chat_id': chatId}).catchError((_) => null);
     }
     final colors = ChatColors.of(context);
     return Container(
@@ -629,14 +630,21 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Text('${ad['button_text']}'),
           ),
         ),
-        if (context.read<AuthState>().plusAvailable)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
-              child: const Text('Remove ads with Hushavia Plus ⭐', style: TextStyle(fontSize: 12)),
+        Row(children: [
+          if (context.read<AuthState>().feature('coins'))
+            TextButton(
+              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), visualDensity: VisualDensity.compact),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdsScreen())),
+              child: const Text('Advertise here', style: TextStyle(fontSize: 12)),
             ),
-          ),
+          const Spacer(),
+          if (context.read<AuthState>().plusAvailable)
+            TextButton(
+              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), visualDensity: VisualDensity.compact),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
+              child: const Text('No ads with Plus ⭐', style: TextStyle(fontSize: 12)),
+            ),
+        ]),
       ]),
     );
   }

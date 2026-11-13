@@ -697,3 +697,84 @@ test('@HushaviaWalletBot: money news in a chat, balance, history, prices', async
   walletbot.setFetcher(async () => { throw new Error('down'); });
   await ask('/prices', /not available/);
 });
+
+test('self-service ads: budget held, review, paid views, owner share, daily cap, refund', async () => {
+  const ads = require('../src/services/ads.service');
+  const coins = require('../src/services/coin.service');
+  const A1 = await signup('+923260000041', 'Adeel'); // advertiser
+  const O1 = await signup('+923260000042', 'Owais'); // channel owner
+  const V1 = await signup('+923260000043', 'Vania');
+  const V2 = await signup('+923260000044', 'Wasim');
+  const V3 = await signup('+923260000045', 'Yasir');
+  const bal = async (u) => (await users.getMe(u.id)).coins;
+  await settings.update({ feature_ads: true, ads_min_subscribers: 3, ads_min_cpm: 50, ads_min_budget: 100 });
+  const ch = await chats.createChannel(O1.id, { title: 'Tech Daily', username: 'tech_daily_pk', is_public: true });
+  const chId = ch.id || ch.chat.id;
+  await db.query(`UPDATE chats SET category = 'tech' WHERE id = $1`, [chId]);
+  for (const u of [V1, V2, V3]) await chats.joinPublic(u.id, chId);
+
+  await rejects(ads.create(A1.id, { advertiser: 'Shop', text: 'Best phones', url: 'https://shop.example', cpm_coins: 100, budget_coins: 200 }), 'not_enough_coins');
+  await coins.adminAdjust(boss.id, A1.id, { amount: 1000 });
+  await rejects(ads.create(A1.id, { advertiser: 'Shop', text: 'Best phones', url: 'https://shop.example', cpm_coins: 10, budget_coins: 200 }), 'invalid_input');
+  await rejects(ads.create(A1.id, { advertiser: 'Shop', text: 'Best phones', url: 'javascript:alert(1)', cpm_coins: 100, budget_coins: 200 }), 'invalid_url');
+  // 100 coins for 1,000 views = 0.1 coin a view; budget 200 coins
+  const ad = await ads.create(A1.id, { advertiser: 'Shop', text: 'Best phones in town', url: '@tech_daily_pk', categories: ['tech'], cpm_coins: 50000, budget_coins: 200 });
+  assert.equal(ad.balance, 800, 'the budget is held at once');
+  assert.equal(ad.ad.review, 'pending');
+  assert.match(ad.ad.url, /\/c\/tech_daily_pk$/);
+  assert.equal((await ads.sponsoredFor(V1.id, chId)).ad, null, 'not before review');
+
+  await ads.adminReview(ad.ad.id, { decision: 'approve' });
+  const shown = await ads.sponsoredFor(V1.id, chId);
+  assert.equal(shown.ad.id, ad.ad.id);
+  assert.equal((await ads.sponsoredFor(A1.id, chId)).ad, null, 'never your own ad');
+  // 50,000 coins per 1,000 views = 50 coins a view; owner gets 50%
+  await ads.recordView(V1.id, ad.ad.id, { chat_id: chId });
+  await ads.recordView(V1.id, ad.ad.id, { chat_id: chId }); // same day, same person: once
+  await ads.recordView(V2.id, ad.ad.id, { chat_id: chId });
+  let st = await ads.stats(A1.id, ad.ad.id);
+  assert.deepEqual([st.impressions, st.spent_coins, st.left_coins], [2, 100, 100]);
+  assert.equal(st.days[st.days.length - 1].views, 2);
+  assert.equal(st.top_channels[0].title, 'Tech Daily');
+  await ads.sweep();
+  assert.equal(await bal(O1), 50, 'the owner is paid in whole coins');
+
+  // a category that doesn't match: not shown
+  const other = await ads.create(A1.id, { advertiser: 'Game', text: 'Play now free', url: 'https://g.example', categories: ['gaming'], cpm_coins: 100, budget_coins: 100 });
+  await ads.adminReview(other.ad.id, { decision: 'approve' });
+  assert.notEqual((await ads.sponsoredFor(V3.id, chId)).ad && (await ads.sponsoredFor(V3.id, chId)).ad.id, other.ad.id);
+  // rejected: the whole budget comes back
+  const before = await bal(A1);
+  await ads.adminReview(other.ad.id, { decision: 'reject', reason: 'Gambling' });
+  assert.equal(await bal(A1), before + 100);
+
+  // pause hides it; top-up; stop gives back the rest
+  await ads.setState(A1.id, ad.ad.id, 'pause');
+  assert.equal((await ads.sponsoredFor(V3.id, chId)).ad, null);
+  await ads.setState(A1.id, ad.ad.id, 'resume');
+  await ads.recordView(V3.id, ad.ad.id, { chat_id: chId });
+  // budget used up (3 views × 50 = 150 of 200 … one more would pass it? 200 left 50) → a 4th person
+  const V4 = await signup('+923260000046', 'Zara');
+  await chats.joinPublic(V4.id, chId);
+  await ads.recordView(V4.id, ad.ad.id, { chat_id: chId });
+  st = await ads.stats(A1.id, ad.ad.id);
+  assert.equal(st.spent_coins, 200);
+  await ads.sweep();
+  st = await ads.stats(A1.id, ad.ad.id);
+  assert.equal(st.status, 'ended', 'ends when the budget is used up');
+  assert.equal(await bal(O1), 100);
+
+  // the owner can turn ads off on the channel
+  await rejects(ads.setChannelAds(V1.id, chId, { off: true }), 'forbidden');
+  await ads.setChannelAds(O1.id, chId, { off: true });
+  const third = await ads.create(A1.id, { advertiser: 'Shop2', text: 'Another good offer', url: 'https://s.example', cpm_coins: 100, budget_coins: 100 });
+  await ads.adminReview(third.ad.id, { decision: 'approve' });
+  assert.equal((await ads.sponsoredFor(V1.id, chId)).ad, null);
+  const b2 = await bal(A1);
+  await ads.setState(A1.id, third.ad.id, 'stop');
+  assert.equal(await bal(A1), b2 + 100);
+
+  const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
+  assert.equal(bad.length, 0);
+  await settings.update({ feature_ads: false, ads_min_subscribers: 3 });
+});

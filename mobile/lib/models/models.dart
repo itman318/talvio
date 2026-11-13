@@ -612,6 +612,7 @@ class Chat {
   bool isSuspended;
   int slowModeSec;
   int subPrice; // coins for 30 days in a paid channel (0 = free)
+  bool adsOff; // the owner turned sponsored messages off
   int disappearAfterSec; // 0 = off
   bool joinApproval;
   int pendingRequests;
@@ -659,6 +660,7 @@ class Chat {
     this.isSuspended = false,
     this.slowModeSec = 0,
     this.subPrice = 0,
+    this.adsOff = false,
     this.disappearAfterSec = 0,
     this.joinApproval = false,
     this.pendingRequests = 0,
@@ -706,6 +708,7 @@ class Chat {
         isSuspended: j['is_suspended'] == true,
         slowModeSec: _int(j['slow_mode_sec'] ?? 0),
         subPrice: _int(j['sub_price'] ?? 0),
+        adsOff: j['ads_off'] == true,
         disappearAfterSec: _int(j['disappear_after_sec'] ?? 0),
         joinApproval: j['join_approval'] == true,
         pendingRequests: _int(j['pending_requests'] ?? 0),

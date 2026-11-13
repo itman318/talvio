@@ -1450,6 +1450,10 @@
     payment_intl_instructions: ['International payment instructions', 'For people outside Pakistan (Wise, Payoneer, PayPal, card link…). Empty = “coming soon”.'],
     feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Hushavia Plus users).'],
     ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
+    ads_self_serve: ['Members can run their own ads', 'In the app: Settings → Advertise. Paid in coins; every new ad waits for your review under Sponsored messages.'],
+    ads_owner_percent: ['Channel owners’ share of ad money (%)', 'What a channel’s owner earns from the coins advertisers pay for views in that channel.'],
+    ads_min_cpm: ['Lowest price for 1,000 views (coins)', ''],
+    ads_min_budget: ['Smallest ad budget (coins)', ''],
     feature_secret_chats: ['Vault chats', 'End-to-end encrypted chats. Their messages can’t be read by admins or the server — only counts are shown.'],
     turn_urls: ['TURN servers', 'One per line, e.g. turn:turn.yourdomain.com:3478 and turns:turn.yourdomain.com:5349. The secret is set on the server (TURN_SECRET).'],
   };
@@ -1459,7 +1463,7 @@
     ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'feature_coins', 'coins_deposit_xpub', 'coins_deposit_min_usd', 'coins_creator_percent', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'plus_usd_only', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions', 'crypto_pay_bsc_address', 'crypto_pay_tron_address']],
-    ['Sponsored messages', ['feature_ads', 'ads_min_subscribers']],
+    ['Sponsored messages', ['feature_ads', 'ads_min_subscribers', 'ads_self_serve', 'ads_owner_percent', 'ads_min_cpm', 'ads_min_budget']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
     ['Security', ['require_admin_2fa', 'blocked_ips']],
@@ -2167,22 +2171,36 @@
         return !!r;
       });
     };
+    const review = async (c, decision) => {
+      let reason = '';
+      if (decision === 'reject') {
+        reason = prompt('Why is it not approved? (the member sees this)', 'It doesn’t follow the advertising rules.');
+        if (reason === null) return;
+      }
+      if (await action(() => api('POST', `/ads/${c.id}/review`, { decision, reason }), decision === 'approve' ? 'Approved — the ad is running' : 'Rejected — the budget went back')) pageAds();
+    };
     const rows = list.map((c) => {
-      const [label, cls] = AD_STATUS[c.status] || [c.status, ''];
+      const [label, cls] = c.review === 'pending' && c.status !== 'ended' ? ['To review', 'warn'] : c.review === 'rejected' ? ['Rejected', ''] : (AD_STATUS[c.status] || [c.status, '']);
       return el('tr', {},
-        el('td', {}, el('b', {}, c.advertiser), el('div', { class: 'muted' }, c.text)),
+        el('td', {}, el('b', {}, c.advertiser), el('div', { class: 'muted' }, c.text),
+          el('div', { class: 'muted', style: 'font-size:12px' }, c.url),
+          c.owner ? el('div', { style: 'font-size:12px' }, 'by ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(c.owner.id); } }, c.owner.name || `#${c.owner.id}`)) : null,
+          c.categories && c.categories.length ? el('div', { class: 'muted', style: 'font-size:12px' }, `Topics: ${c.categories.join(', ')}`) : null),
         el('td', {}, el('span', { class: `chip ${cls}` }, label), c.ends_at ? el('div', { class: 'muted' }, `until ${new Date(c.ends_at).toLocaleDateString()}`) : null),
         el('td', { class: 'num' }, `${fmtNum(c.impressions)}${c.max_impressions ? ` / ${fmtNum(c.max_impressions)}` : ''}`),
         el('td', { class: 'num' }, fmtNum(c.clicks)),
         el('td', { class: 'num' }, `${c.ctr}%`),
-        el('td', { class: 'num' }, rs(c.price_pkr)),
+        el('td', { class: 'num' }, c.self_serve ? `${fmtNum(c.spent_coins)} / ${fmtNum(c.budget_coins)} coins` : rs(c.price_pkr)),
         el('td', {}, el('div', { class: 'btn-row' },
-          el('button', { class: 'btn small', onclick: () => edit(c) }, 'Edit'),
+          c.self_serve && c.review === 'pending' && c.status !== 'ended' ? el('button', { class: 'btn small primary', onclick: () => review(c, 'approve') }, 'Approve') : null,
+          c.self_serve && c.review !== 'rejected' && c.status !== 'ended' ? el('button', { class: 'btn small', onclick: () => review(c, 'reject') }, 'Reject') : null,
+          c.self_serve ? null : el('button', { class: 'btn small', onclick: () => edit(c) }, 'Edit'),
           el('button', { class: 'btn small danger', onclick: async () => { if (await action(() => api('DELETE', `/ads/${c.id}`), 'Deleted')) pageAds(); } }, 'Delete'))));
     });
     main.replaceChildren(head('Sponsored messages', el('button', { class: 'btn primary', onclick: () => edit(null) }, 'New campaign')),
       el('p', { class: 'muted' }, 'Shown at the end of big public channels, never to Hushavia Plus users. Turn on in Settings → Sponsored messages.'),
-      table(['Campaign', 'Status', 'Views', 'Clicks', 'CTR', 'Price', ''], rows, 'No campaigns yet'));
+      el('p', { class: 'muted' }, 'Members’ own ads (paid in coins) wait here for review: check the text and the link, then Approve or Reject (rejecting gives the whole budget back).'),
+      table(['Campaign', 'Status', 'Views', 'Clicks', 'CTR', 'Price / spent', ''], rows, 'No campaigns yet'));
   }
 
   const PAGES = {

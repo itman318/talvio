@@ -78,6 +78,10 @@ const DEFINITIONS = {
   crypto_pay_tron_address: { type: 'string', default: '', max: 34, check: (a) => require('./payments/cryptopay').tronHex(a) !== null, hint: 'a TRON address (T… 34 characters)' },
   feature_ads: { type: 'boolean', default: false },
   ads_min_subscribers: { type: 'integer', default: 1000, min: 0, max: 100000000 },
+  ads_self_serve: { type: 'boolean', default: true },
+  ads_owner_percent: { type: 'integer', default: 50, min: 0, max: 90 },
+  ads_min_cpm: { type: 'integer', default: 50, min: 1, max: 100000 },
+  ads_min_budget: { type: 'integer', default: 1000, min: 100, max: 10000000 },
 
   // ---- Batch E
   feature_web_login: { type: 'boolean', default: true },

@@ -1407,3 +1407,38 @@ CREATE TABLE IF NOT EXISTS coin_deposit_state (id INTEGER PRIMARY KEY CHECK (id 
 ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
 ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
   'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'));
+
+-- ------------------------------------------------------------------ self-service ads (paid with coins)
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS owner_id BIGINT REFERENCES users(id) ON DELETE SET NULL; -- the member who runs it (NULL = sold by the team)
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS review VARCHAR(10) NOT NULL DEFAULT 'approved' CHECK (review IN ('pending', 'approved', 'rejected'));
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS reject_reason VARCHAR(300);
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS cpm_coins INTEGER NOT NULL DEFAULT 0;      -- coins for 1,000 views
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS budget_coins INTEGER NOT NULL DEFAULT 0;   -- held when the ad was made / topped up
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS spent_millis BIGINT NOT NULL DEFAULT 0;    -- 1 coin = 1,000 millis (one view costs cpm millis)
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS refunded_coins INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS daily_cap_coins INTEGER;
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS categories JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS countries JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS ad_campaigns_owner_idx ON ad_campaigns (owner_id, id DESC) WHERE owner_id IS NOT NULL;
+ALTER TABLE ad_views ADD COLUMN IF NOT EXISTS chat_id BIGINT;
+ALTER TABLE ad_views ADD COLUMN IF NOT EXISTS cost_millis INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS ad_daily (
+  campaign_id BIGINT  NOT NULL REFERENCES ad_campaigns(id) ON DELETE CASCADE,
+  day         DATE    NOT NULL DEFAULT current_date,
+  views       INTEGER NOT NULL DEFAULT 0,
+  clicks      INTEGER NOT NULL DEFAULT 0,
+  millis      BIGINT  NOT NULL DEFAULT 0,
+  PRIMARY KEY (campaign_id, day)
+);
+-- channel owners' share, paid out in whole coins
+CREATE TABLE IF NOT EXISTS ad_owner_earnings (
+  owner_id       BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  pending_millis BIGINT NOT NULL DEFAULT 0,
+  paid_coins     BIGINT NOT NULL DEFAULT 0,
+  views          BIGINT NOT NULL DEFAULT 0
+);
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS ads_off BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
+ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
+  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income'));
