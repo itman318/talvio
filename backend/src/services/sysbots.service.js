@@ -50,6 +50,19 @@ const BOTS = {
     about: 'I send your Hushavia login codes here, so you don’t need email or SMS when you’re already logged in on another device.',
     commands: [],
   },
+  wallet: {
+    username: 'HushaviaWalletBot',
+    name: 'Hushavia Wallet',
+    bio: 'Coins that arrive, Hushavia Plus payments, your balance and coin prices — all in one chat.',
+    about: 'I tell you when coins arrive and show your balance, deposit address and coin prices. I never ask for your 12 words.',
+    commands: [
+      { command: 'balance', description: 'My coins' },
+      { command: 'deposit', description: 'My USDT address for adding coins' },
+      { command: 'history', description: 'My last coin activity' },
+      { command: 'price', description: 'Price of a coin, e.g. /price btc' },
+      { command: 'prices', description: 'Main coins at a glance' },
+    ],
+  },
   buttons: {
     username: 'HushaviaButtonsBot',
     name: 'Button Maker',
@@ -309,6 +322,7 @@ async function onMessage(botId, senderId, chat, row) {
   if (key === 'support') await supportMessage(senderId, chat.id, row);
   if (key === 'spam') await spamMessage(senderId, chat.id, row);
   if (key === 'buttons') await require('./buttonbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
+  if (key === 'wallet') await require('./walletbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
   if (key === 'login') await say('login', chat.id, 'I only send login codes and security alerts. For help, write to @HushaviaSupportBot.');
   return true;
 }
@@ -323,6 +337,7 @@ async function onCallback(botId, userId, chatId, data) {
     }
   }
   if (key === 'buttons') return require('./buttonbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
+  if (key === 'wallet') return require('./walletbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
   if (key === 'spam' && data === 'appeal') {
     const user = await db.one('SELECT id, restricted_until, restrict_reason FROM users WHERE id = $1', [userId]);
     return spamAppeal(user, chatId, '');

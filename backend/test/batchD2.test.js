@@ -661,3 +661,38 @@ test('coins by deposit: own address per member from an xpub, booked once, too-sm
     await settings.update({ coins_deposit_xpub: '' });
   }
 });
+
+test('@HushaviaWalletBot: money news in a chat, balance, history, prices', async () => {
+  const sysbots = require('../src/services/sysbots.service');
+  const walletbot = require('../src/services/walletbot.service');
+  const coins = require('../src/services/coin.service');
+  const messages = require('../src/services/message.service');
+  const ids = await sysbots.ensure();
+  const W = await signup('+923260000031', 'Waqar');
+  const chat = await chats.getOrCreatePrivate(W.id, ids.wallet);
+  const chatId = chat.id || chat.chat.id;
+  const last = async () => (await db.one('SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [chatId, ids.wallet]) || {}).text || '';
+  const ask = async (text, want) => {
+    await messages.sendMessage(W.id, chatId, { text });
+    let r = '';
+    for (let i = 0; i < 40 && !want.test(r); i += 1) {
+      await new Promise((ok) => setTimeout(ok, 100));
+      r = await last();
+    }
+    assert.match(r, want);
+  };
+  walletbot.setFetcher(async () => ({ bitcoin: { usd: 101234.5, pkr: 28300000, usd_24h_change: 2.345 }, ethereum: { usd: 3500, pkr: 980000, usd_24h_change: -1.2 } }));
+
+  await ask('/start', /Wallet assistant/);
+  // coins that arrive come as a message from the bot
+  await coins.adminAdjust(boss.id, W.id, { amount: 250, note: 'Welcome' });
+  assert.match(await last(), /You received 250 coins/);
+  await ask('/balance', /250 coins/);
+  await ask('/history', /250 · From Hushavia/);
+  await ask('/price btc', /Bitcoin \(BTC\): \$101,235 · Rs 28,300,000 🟢 \+2\.3%/);
+  await ask('/eth', /Ethereum \(ETH\): \$3,500.*🔴 -1\.2%/);
+  await ask('/price shiba', /Which coin/);
+  await ask('/deposit', /not open yet/);
+  walletbot.setFetcher(async () => { throw new Error('down'); });
+  await ask('/prices', /not available/);
+});

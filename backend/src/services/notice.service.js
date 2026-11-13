@@ -45,8 +45,10 @@ async function notify(userId, kind, title, body = '', data = {}) {
       [userId],
     );
     bus.emit('rt:emit', { event: 'notice:new', payload: serialize(n), userIds: [userId] });
+    // money news also comes as a message from @HushaviaWalletBot — that message already makes a phone notification
+    const viaBot = kind === 'payment' && (await require('./walletbot.service').tell(userId, title, body)); // eslint-disable-line global-require
     // not looking at the app → a phone notification too (support replies already push on their own)
-    if (kind !== 'support') {
+    if (kind !== 'support' && !viaBot) {
       try {
         const presence = require('./presence'); // eslint-disable-line global-require
         if (!presence.isActive(userId)) {
