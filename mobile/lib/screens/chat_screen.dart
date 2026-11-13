@@ -870,9 +870,9 @@ class _ChatScreenState extends State<ChatScreen> {
       ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
       ('photo', Icons.photo_library_rounded, 'Gallery', const [Color(0xFF8E7CF8), Color(0xFF6C5BE3)]),
       ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFF6D4AFF)]),
-      ('file', Icons.insert_drive_file_rounded, 'Document', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
+      ('file', Icons.insert_drive_file_rounded, 'File', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
       ('checklist', Icons.checklist_rounded, 'Checklist', const [Color(0xFF6FCB8C), Color(0xFF2F9D5A)]),
-      if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Video note', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),
+      if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Round video', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),
       if (auth.feature('location')) ('location', Icons.location_on_rounded, 'Location', const [Color(0xFF4FD8A6), Color(0xFF10B37A)]),
       ('contact', Icons.person_rounded, 'Contact', const [Color(0xFF5FD0E6), Color(0xFF1597B8)]),
       if (auth.feature('wallet') && !(_store.chatById(chatId)?.isChannel ?? false))
@@ -895,32 +895,46 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
                 child: Text('Share', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               ),
-              GridView(
-                // fixed row height: narrow phones and bigger font sizes no longer overflow the tile
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisSpacing: 10, crossAxisSpacing: 4, mainAxisExtent: 90),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  for (final (key, icon, label, colors) in items)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () => Navigator.pop(ctx, key),
-                      child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
-                        Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                          ),
-                          child: Icon(icon, color: Colors.white, size: 25),
+              // two rows: 5 on screen, more slide in from the side
+              LayoutBuilder(builder: (ctx2, box) {
+                final w = box.maxWidth / 5;
+                return SizedBox(
+                  height: 2 * 88 + 8,
+                  child: GridView(
+                    scrollDirection: Axis.horizontal,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 0, crossAxisSpacing: 8, mainAxisExtent: w),
+                    physics: items.length > 10 ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
+                    children: [
+                      for (final (key, icon, label, colors) in items)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.pop(ctx, key);
+                          },
+                          child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(17),
+                                gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                                boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
+                              ),
+                              child: Icon(icon, color: Colors.white, size: 24),
+                            ),
+                            const SizedBox(height: 7),
+                            Text(label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.1),
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                          ]),
                         ),
-                        const SizedBox(height: 7),
-                        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.2), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ]),
-                    ),
-                ],
-              ),
+                    ],
+                  ),
+                );
+              }),
               ]),
             ),
           ),
