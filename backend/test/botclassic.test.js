@@ -230,10 +230,18 @@ test('helper bots: support requests in a chat, team replies come back; account s
   await flush(400);
   assert.match((await last(s.id, ids.support)).text, /Hushavia Support/);
   await messages.sendMessage(U.id, s.id, { text: 'My voice messages do not play' });
-  await flush(400);
-  const t = await db.one('SELECT * FROM support_tickets WHERE user_id = $1 AND device = $2 ORDER BY id DESC LIMIT 1', [U.id, sysbots.TAG]);
+  let t = null;
+  for (let i = 0; i < 40 && !t; i += 1) {
+    await flush(100);
+    t = await db.one('SELECT * FROM support_tickets WHERE user_id = $1 AND device = $2 ORDER BY id DESC LIMIT 1', [U.id, sysbots.TAG]);
+  }
   assert.ok(t);
-  assert.match((await last(s.id, ids.support)).text, new RegExp(`Request #${t.number} received`));
+  let first = '';
+  for (let i = 0; i < 40 && !new RegExp(`Request #${t.number} received`).test(first); i += 1) {
+    await flush(100);
+    first = (await last(s.id, ids.support)).text;
+  }
+  assert.match(first, new RegExp(`Request #${t.number} received`));
   await messages.sendMessage(U.id, s.id, { text: 'It happens on Wi-Fi only' });
   // the bot answers in the background: wait for its reply (a fixed pause was flaky on slow runners)
   let reply = '';
