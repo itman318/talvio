@@ -59,6 +59,13 @@ class WalletException implements Exception {
   String toString() => message;
 }
 
+/// The connection dropped while a signed transfer was being handed to the network: it may or may
+/// not have gone through. [txId] is known (it is worked out before sending), so it can be looked up.
+class UncertainSend extends WalletException {
+  UncertainSend(this.txId) : super('The connection dropped while sending. It may still have gone through — check the history before you send again.');
+  final String txId;
+}
+
 /// Talks to the public TRON network directly over https. Nothing here ever sees the key:
 /// transactions come back unsigned, are CHECKED field by field, and are signed on the phone.
 class TronApi {
@@ -224,9 +231,20 @@ class TronApi {
     final raw = TronCrypto.fromHex('${p.json['raw_data_hex']}');
     if (TronCrypto.hex(TronCrypto.sha256(raw)) != TronCrypto.hex(p.id)) throw WalletException('Bad transaction');
     final tx = <int>[0x0a, ..._varint(raw.length), ...raw, 0x12, ..._varint(sig.length), ...sig];
-    final r = await _post('/wallet/broadcasthex', {'transaction': TronCrypto.hex(tx)});
-    if (r['result'] != true) throw WalletException(_why(r) ?? 'The network did not accept the transfer');
-    return TronCrypto.hex(p.id);
+    final id = TronCrypto.hex(p.id);
+    Map<String, dynamic> r;
+    try {
+      r = await _post('/wallet/broadcasthex', {'transaction': TronCrypto.hex(tx)});
+    } on WalletException {
+      rethrow; // the network answered and said no
+    } catch (_) {
+      throw UncertainSend(id); // no answer at all: it may have arrived
+    }
+    if (r['result'] != true) {
+      if ('${r['code']}' == 'DUP_TRANSACTION_ERROR') return id; // it is already there (an earlier try whose answer got lost)
+      throw WalletException(_why(r) ?? 'The network did not accept the transfer');
+    }
+    return id;
   }
 
   static List<int> _varint(int v) {

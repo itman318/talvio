@@ -621,8 +621,16 @@ async function setGroupSuspended(admin, chatIdRaw, suspended, reason, ip) {
 async function deleteGroup(admin, chatIdRaw, ip) {
   const id = v.id(chatIdRaw, 'chat_id');
   const memberIds = (await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1', [id])).map((r) => r.user_id);
-  const c = await db.one(`DELETE FROM chats WHERE id = $1 AND type IN ('group', 'channel') RETURNING id, title`, [id]);
+  const coinplus = require('./coinplus.service'); // eslint-disable-line global-require
+  let refunds = [];
+  const c = await db.tx(async (t) => {
+    const found = (await t.query(`SELECT id FROM chats WHERE id = $1 AND type IN ('group', 'channel') FOR UPDATE`, [id])).rows[0];
+    if (!found) return null;
+    refunds = await coinplus.refundForChat(t, id); // coins held for running giveaways go back first
+    return (await t.query('DELETE FROM chats WHERE id = $1 RETURNING id, title', [id])).rows[0];
+  });
   if (!c) throw notFound('chat_not_found', 'Group not found');
+  for (const r of refunds) require('./coin.service').announce(r.userId, r.balance); // eslint-disable-line global-require
   bus.emit('chat:removed', { chatId: id, userIds: memberIds });
   await log(admin.id, 'group.delete', 'chat', id, { title: c.title }, ip);
   return { ok: true };

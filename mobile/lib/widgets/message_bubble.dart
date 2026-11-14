@@ -150,7 +150,12 @@ class MessageBubble extends StatelessWidget {
     // My bubbles are deep ink with light text, so they use the dark theme inside.
     // on my violet bubble the accent (reply bar, links, names) is a light lilac so it stays readable
     final soft = isMine && softMineOf(context);
-    final accent = soft ? MineInk.accent : isMine ? const Color(0xFFDCD3FF) : colorForId(m.senderId ?? 0);
+    // on a dark bubble the sender's colour is lightened so names, quotes and "Forwarded from" stay readable
+    final accent = soft
+        ? MineInk.accent
+        : isMine
+            ? const Color(0xFFDCD3FF)
+            : (dark ? Color.lerp(colorForId(m.senderId ?? 0), Colors.white, 0.38)! : colorForId(m.senderId ?? 0));
     final hasText = m.text.isNotEmpty && m.type != 'poll' && m.type != 'location';
     final colors = ChatColors.of(context);
     final meta = soft ? const Color(0xFF8A85AD) : isMine ? Colors.white.withAlpha(150) : colors.meta;

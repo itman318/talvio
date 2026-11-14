@@ -21,7 +21,9 @@ const NET = cryptopay.NETWORKS.bsc;
 const UNIT = 10n ** BigInt(NET.decimals); // 1 USDT
 const COINS_PER_USDT = 100n;
 const CONFIRMATIONS = 15;
-const WATCH_DAYS = 30;
+const WATCH_DAYS = 180;
+const MAX_SPANS = 60; // per round: catching up after a pause takes a few rounds, nothing is skipped
+const GIVE_UP = 2000000; // blocks (weeks): older than this the public nodes no longer answer
 const SCAN_SPAN = 2000; // blocks per log query
 const CHECK_BACK = 20000; // "check now": about 4 hours of blocks
 
@@ -138,12 +140,16 @@ async function scan() {
     const safe = head - CONFIRMATIONS;
     const st = await db.one('SELECT last_block FROM coin_deposit_state WHERE id = 1');
     let last = st ? Number(st.last_block) : safe - 200;
-    if (safe - last > 50000) last = safe - 50000; // a long pause: don't fall hours behind forever
-    const watched = await db.many(`SELECT user_id, address FROM coin_deposit_addresses WHERE xpub_fp = $1 AND watch_until > now() LIMIT 5000`, [c.fp]);
+    // after a pause (a restart, the network away) every block is still read — a deposit made meanwhile must not be missed
+    if (safe - last > GIVE_UP) last = safe - GIVE_UP;
+    // addresses made from an earlier receiving key are still watched: people keep an address they once copied
+    const watched = await db.many(`SELECT user_id, address FROM coin_deposit_addresses WHERE watch_until > now() ORDER BY watch_until DESC LIMIT 5000`);
     const byAddress = new Map(watched.map((w) => [w.address, w.user_id]));
     const results = [];
     let at = last;
-    while (at < safe) {
+    let spans = 0;
+    while (at < safe && spans < MAX_SPANS) {
+      spans += 1;
       const to = Math.min(safe, at + SCAN_SPAN);
       if (byAddress.size) {
         for (const log of await logsTo([...byAddress.keys()], at + 1, to)) results.push(await book(log, byAddress, c.minUsd));
@@ -166,13 +172,15 @@ async function checkMine(userId) {
   rateLimit.enforce(`dep:check:${userId}`, 6, 10 * 60 * 1000, 'Please wait a minute and check again.');
   const row = await db.one('SELECT address FROM coin_deposit_addresses WHERE user_id = $1 AND xpub_fp = $2', [userId, c.fp]);
   if (!row) throw badRequest('invalid_input', 'Open “Add coins” first to get your address');
-  await db.query(`UPDATE coin_deposit_addresses SET watch_until = now() + make_interval(days => $2) WHERE user_id = $1 AND xpub_fp = $3`, [userId, WATCH_DAYS, c.fp]);
+  await db.query(`UPDATE coin_deposit_addresses SET watch_until = now() + make_interval(days => $2) WHERE user_id = $1`, [userId, WATCH_DAYS]);
+  // every address this member ever had (also from an earlier receiving key)
+  const mine = (await db.many('SELECT address FROM coin_deposit_addresses WHERE user_id = $1', [userId])).map((r) => r.address);
   const head = Number(BigInt(await cryptopay.rpc(NET, 'eth_blockNumber', [])));
   const safe = head - CONFIRMATIONS;
-  const byAddress = new Map([[row.address, userId]]);
+  const byAddress = new Map(mine.map((a) => [a, userId]));
   const results = [];
   for (let from = Math.max(0, safe - CHECK_BACK); from <= safe; from += SCAN_SPAN + 1) {
-    for (const log of await logsTo([row.address], from, Math.min(safe, from + SCAN_SPAN))) results.push(await book(log, byAddress, c.minUsd));
+    for (const log of await logsTo(mine, from, Math.min(safe, from + SCAN_SPAN))) results.push(await book(log, byAddress, c.minUsd));
   }
   await announce(results);
   const fresh = results.filter((r) => r && r.status === 'credited');

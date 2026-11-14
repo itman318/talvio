@@ -311,6 +311,7 @@ async function checkoutCrypto(userId, item, body) {
 }
 
 const ORDER_WINDOW_HOURS = 23;
+const TIMED_OUT = 'Not confirmed on the network after 2 hours';
 
 /** The app tells us which network transaction paid the order; we check it ourselves. */
 async function submitCryptoTx(userId, idRaw, body = {}) {
@@ -336,7 +337,12 @@ async function submitCryptoTx(userId, idRaw, body = {}) {
 
 /** One look at the network for an order with a submitted transaction. */
 async function verifyCrypto(orderId) {
-  const o = await db.one(`SELECT * FROM payment_orders WHERE id = $1 AND provider = 'crypto' AND status = 'pending' AND crypto_tx IS NOT NULL`, [orderId]);
+  // also orders that only timed out (the network or our connection to it was slow): they are still looked at for a few days
+  const o = await db.one(
+    `SELECT * FROM payment_orders WHERE id = $1 AND provider = 'crypto' AND crypto_tx IS NOT NULL
+       AND (status = 'pending' OR (status = 'review' AND provider_message = $2))`,
+    [orderId, TIMED_OUT],
+  );
   if (!o) return null;
   await db.query('UPDATE payment_orders SET crypto_checked_at = now() WHERE id = $1', [o.id]);
   const r = await cryptopay.check({
@@ -354,7 +360,7 @@ async function verifyCrypto(orderId) {
     await markFailed(o.id, { message: r.reason });
   } else if (r.state === 'mismatch') {
     // real money may have moved: a person decides (Payments → To review)
-    await db.query(`UPDATE payment_orders SET status = 'review', provider_message = $2 WHERE id = $1 AND status = 'pending'`, [o.id, String(r.reason).slice(0, 300)]);
+    await db.query(`UPDATE payment_orders SET status = 'review', provider_message = $2 WHERE id = $1 AND status IN ('pending', 'review')`, [o.id, String(r.reason).slice(0, 300)]);
     bus.emit('rt:emit', { event: 'payment:updated', payload: { order_id: o.id, status: 'review' }, userIds: [o.user_id] });
   }
   return r.state;
@@ -396,14 +402,21 @@ async function checkoutCard(userId, body = {}) {
     [userId, newTxnRef(), Number(pack.price_usd), coinsTotal, pack.id],
   );
   const u = await db.one('SELECT email FROM users WHERE id = $1', [userId]);
-  const s = await stripe.createSession({
-    orderId: o.id,
-    cents,
-    name: `${coinsTotal.toLocaleString('en-US')} Hushavia Coins`,
-    successUrl: `${config.publicUrl}/pay/stripe/done?order=${o.id}&t=${payToken(o.id)}`,
-    cancelUrl: `${config.publicUrl}/pay/stripe/done?order=${o.id}&t=${payToken(o.id)}&cancel=1`,
-    email: u && u.email,
-  });
+  let s;
+  try {
+    s = await stripe.createSession({
+      orderId: o.id,
+      cents,
+      name: `${coinsTotal.toLocaleString('en-US')} Hushavia Coins`,
+      successUrl: `${config.publicUrl}/pay/stripe/done?order=${o.id}&t=${payToken(o.id)}`,
+      cancelUrl: `${config.publicUrl}/pay/stripe/done?order=${o.id}&t=${payToken(o.id)}&cancel=1`,
+      email: u && u.email,
+    });
+  } catch (e) {
+    // no payment page was made: don't leave an order "waiting" for a day
+    await db.query(`UPDATE payment_orders SET status = 'cancelled', provider_message = 'The card page could not be opened' WHERE id = $1 AND status = 'pending'`, [o.id]);
+    throw badRequest('card_unavailable', 'The card payment page could not be opened. Try again in a moment.');
+  }
   await db.query('UPDATE payment_orders SET stripe_session = $2 WHERE id = $1', [o.id, s.id]);
   return { order: serializeOrder({ ...o, stripe_session: s.id }), pay_url: s.url };
 }
@@ -415,8 +428,10 @@ async function confirmStripe(sessionId) {
   const s = await stripe.getSession(sessionId);
   const cents = Math.round(Number(o.amount) * 100);
   if (s.payment_status === 'paid' && Number(s.amount_total) === cents && String(s.currency).toLowerCase() === 'usd' && String(s.client_reference_id) === String(o.id)) {
-    await markPaid(o.id, { providerRef: s.payment_intent || s.id, message: 'Paid by card' });
-    return 'paid';
+    const done = await markPaid(o.id, { providerRef: s.payment_intent || s.id, message: 'Paid by card', revive: true });
+    if (done) return 'paid';
+    const now = await db.one('SELECT status FROM payment_orders WHERE id = $1', [o.id]);
+    return now && now.status === 'paid' ? 'paid' : 'review';
   }
   if (s.status === 'expired') await markFailed(o.id, { status: 'cancelled', message: 'The card payment was not finished' });
   return s.payment_status;
@@ -435,6 +450,14 @@ async function stripeWebhook(rawBody, signature) {
   if (ev.type === 'checkout.session.completed' || ev.type === 'checkout.session.async_payment_succeeded' || ev.type === 'checkout.session.expired') {
     await confirmStripe(obj.id);
   }
+  // money that went back to the card: the coins stay where they are until a person decides —
+  // the order is marked so it stands out in Payments
+  if ((ev.type === 'charge.refunded' || ev.type === 'charge.dispute.created') && obj && obj.payment_intent) {
+    await db.query(
+      `UPDATE payment_orders SET review_note = $2 WHERE provider = 'stripe' AND provider_ref = $1`,
+      [String(obj.payment_intent), ev.type === 'charge.refunded' ? 'REFUNDED at Stripe — check the member’s coins' : 'DISPUTED (chargeback) at Stripe — check the member’s coins'],
+    );
+  }
   return { ok: true, status: 200 };
 }
 
@@ -445,8 +468,10 @@ async function listMyOrders(userId) {
 
 async function cancelOrder(userId, idRaw) {
   const o = await myOrder(userId, idRaw);
-  const r = await db.one(`UPDATE payment_orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING *`, [o.id]);
-  return serializeOrder(r || o);
+  // money may already be on its way: such an order is never cancelled (the network check finishes it)
+  if (o.provider === 'crypto' && o.crypto_tx && o.status === 'pending') throw conflict('order_busy', 'This payment is being confirmed on the network — it can’t be cancelled now');
+  const r = await db.one(`UPDATE payment_orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' AND (provider <> 'crypto' OR crypto_tx IS NULL) RETURNING *`, [o.id]);
+  return serializeOrder(r || (await myOrder(userId, o.id)));
 }
 
 /** Manual payment: user uploads the screenshot and transaction id → waits for an admin. */
@@ -466,13 +491,17 @@ async function submitProof(userId, idRaw, body = {}) {
 }
 
 /** Marks an order paid exactly once and extends the user's premium. */
-async function markPaid(orderId, { providerRef = null, raw = null, message = null, adminId = null } = {}) {
+/**
+ * @param revive the payment provider itself confirmed the money (card, gateway): an order the person
+ *   cancelled, or that expired while they were still paying, is paid all the same — never money without goods.
+ */
+async function markPaid(orderId, { providerRef = null, raw = null, message = null, adminId = null, revive = false } = {}) {
   const r = await db.tx(async (c) => {
     const o = (await c.query(
       `UPDATE payment_orders SET status = 'paid', paid_at = now(), provider_ref = COALESCE($2, provider_ref),
          raw_response = COALESCE($3, raw_response), provider_message = COALESCE($4, provider_message), reviewed_by = COALESCE($5, reviewed_by)
-       WHERE id = $1 AND status IN ('pending', 'review', 'failed', 'rejected') RETURNING *`,
-      [orderId, providerRef, raw ? JSON.stringify(raw) : null, message, adminId],
+       WHERE id = $1 AND (status IN ('pending', 'review', 'failed', 'rejected') OR ($6 AND status = 'cancelled')) RETURNING *`,
+      [orderId, providerRef, raw ? JSON.stringify(raw) : null, message, adminId, !!revive],
     )).rows[0];
     if (!o) return null;
     if (o.coins > 0) {
@@ -528,11 +557,11 @@ async function jazzcashReturn(body) {
   const o = await db.one(`SELECT * FROM payment_orders WHERE txn_ref = $1 AND provider = 'jazzcash'`, [r.txnRef]);
   if (!o) return { ok: false, message: 'Payment not found' };
   if (!r.valid) {
-    await markFailed(o.id, { message: 'Invalid signature from gateway', raw: body });
+    // an unsigned message proves nothing — not even that the payment failed: the order is left as it is
     return { ok: false, message: 'We could not verify this payment.', order: o };
   }
   if (r.paid && r.amountPkr === o.amount_pkr) {
-    await markPaid(o.id, { providerRef: r.providerRef, raw: body, message: r.message });
+    await markPaid(o.id, { providerRef: r.providerRef, raw: body, message: r.message, revive: true });
     return { ok: true, message: 'Payment successful — Hushavia Plus is active.', order: o };
   }
   await markFailed(o.id, { message: `${r.code} ${r.message}`.trim(), raw: body });
@@ -556,7 +585,7 @@ async function easypaisaDone(orderIdRaw, token, query = {}) {
     try {
       const q = await easypaisa.inquire(o.txn_ref);
       if (q.paid && q.amountPkr === o.amount_pkr) {
-        await markPaid(o.id, { providerRef: q.providerRef, raw: q.raw, message: q.status });
+        await markPaid(o.id, { providerRef: q.providerRef, raw: q.raw, message: q.status, revive: true });
         return { ok: true, message: 'Payment successful — Hushavia Plus is active.', order: o };
       }
       if (String(query.status || '') !== '0000') {
@@ -593,16 +622,21 @@ async function sweep() {
   );
   // a transaction that is still not final after 2 hours: a person looks at it
   await db.query(
-    `UPDATE payment_orders SET status = 'review', provider_message = 'Not confirmed on the network after 2 hours'
+    `UPDATE payment_orders SET status = 'review', provider_message = $1
      WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NOT NULL AND COALESCE(crypto_submitted_at, created_at) < now() - interval '2 hours'`,
+    [TIMED_OUT],
   );
   if (sweeping) return;
   sweeping = true;
   try {
     const due = await db.many(
-      `SELECT id FROM payment_orders WHERE status = 'pending' AND provider = 'crypto' AND crypto_tx IS NOT NULL
-         AND (crypto_checked_at IS NULL OR crypto_checked_at < now() - interval '20 seconds')
+      `SELECT id FROM payment_orders WHERE provider = 'crypto' AND crypto_tx IS NOT NULL
+         AND ((status = 'pending' AND (crypto_checked_at IS NULL OR crypto_checked_at < now() - interval '20 seconds'))
+           -- timed out: a slower look, for three days, so a late confirmation still pays the order by itself
+           OR (status = 'review' AND provider_message = $1 AND COALESCE(crypto_submitted_at, created_at) > now() - interval '3 days'
+               AND (crypto_checked_at IS NULL OR crypto_checked_at < now() - interval '10 minutes')))
        ORDER BY crypto_checked_at NULLS FIRST LIMIT 5`,
+      [TIMED_OUT],
     );
     for (const d of due) await verifyCrypto(d.id).catch(() => {}); // network trouble: the next round tries again
   } finally {

@@ -61,6 +61,15 @@ async function sendGift(userId, body = {}) {
   if (!peer || peer.is_bot || peer.status !== 'active') throw badRequest('invalid_input', 'This chat can’t receive gifts');
   if (await require('./user.service').isBlockedEither(userId, peer.id)) throw forbidden('blocked', 'You can’t send a gift to this person'); // eslint-disable-line global-require
   const note = v.str(body.note, { field: 'note', max: 120 }) || null;
+  // the same gift sent again (the first answer got lost on a bad connection): no second payment
+  if (body.client_id) {
+    const sent = await db.one(`SELECT id FROM messages WHERE sender_id = $1 AND client_id = $2`, [userId, String(body.client_id).slice(0, 64)]);
+    if (sent) {
+      const u = await db.one('SELECT coins FROM users WHERE id = $1', [userId]);
+      // sendMessage answers a repeated client_id with the message that is already there
+      return { balance: Number(u.coins), message: await messages().sendMessage(userId, chat.id, { type: 'gift', client_id: body.client_id }, {}), repeated: true };
+    }
+  }
   rateLimit.enforce(`coins:gift:${userId}`, 40, 60 * 60 * 1000, 'Too many gifts. Try again later.');
   const move = (from, to, a, b) => db.tx(async (c) => {
     await c.query('SELECT id FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE', [from, to]);
@@ -148,7 +157,8 @@ async function subscribe(userId, chatIdRaw, body = {}) {
   if (!owner) throw badRequest('invalid_input', 'This channel can’t take subscriptions right now');
   rateLimit.enforce(`coins:sub:${userId}`, 20, 60 * 60 * 1000, 'Too many attempts. Try again later.');
   const r = await charge(userId, owner.user_id, chat);
-  if (!member) await chats().joinChat(userId, { ...chat, paid_ok: true });
+  // whoever paid is in — a paid channel doesn't make them wait for an approval on top
+  if (!member) await chats().joinChat(userId, { ...chat, paid_ok: true, join_approval: false });
   coins.announce(userId, r.mine);
   if (r.theirs !== null) coins.announce(owner.user_id, r.theirs);
   return { balance: r.mine, expires_at: iso(r.expires_at), chat_id: chat.id };
@@ -179,14 +189,14 @@ async function mySubscription(userId, chatIdRaw) {
 /** Subscriptions that ran out: renew from the balance when there is enough, otherwise the member leaves. */
 async function sweepSubs() {
   const due = await db.many(
-    `SELECT s.chat_id, s.user_id, c.title, c.sub_price, c.type, m.role,
+    `SELECT s.chat_id, s.user_id, c.title, c.sub_price, c.type, m.role, (c.monetized AND NOT c.is_suspended) AS paid,
             (SELECT o.user_id FROM chat_members o WHERE o.chat_id = s.chat_id AND o.role = 'owner' LIMIT 1) AS owner_id
      FROM channel_subs s JOIN chats c ON c.id = s.chat_id LEFT JOIN chat_members m ON m.chat_id = s.chat_id AND m.user_id = s.user_id
      WHERE s.expires_at < now() ORDER BY s.expires_at LIMIT 50`,
   );
   for (const d of due) {
     try {
-      const stays = !d.role || d.role !== 'member' || !(d.sub_price > 0) || !d.owner_id;
+      const stays = !d.role || d.role !== 'member' || !(d.sub_price > 0) || !d.owner_id || !d.paid;
       if (stays) {
         // left already, became an admin, or the channel is free now: nothing to pay for
         await db.query('DELETE FROM channel_subs WHERE chat_id = $1 AND user_id = $2', [d.chat_id, d.user_id]);
@@ -336,6 +346,19 @@ async function sweepGiveaways() {
   }
 }
 
+/**
+ * A group / channel is being deleted: the coins held for its running giveaways go back to whoever put them up.
+ * Call inside the transaction that deletes the chat, BEFORE the delete. Returns [{ userId, balance }] to announce.
+ */
+async function refundForChat(c, chatId) {
+  const open = (await c.query(`UPDATE giveaways SET status = 'done' WHERE chat_id = $1 AND status = 'open' RETURNING creator_id, coins_each, winners`, [chatId])).rows;
+  const out = [];
+  for (const g of open) {
+    out.push({ userId: g.creator_id, balance: await coins.change(c, g.creator_id, g.coins_each * g.winners, 'giveaway_refund', { note: 'Giveaway (chat deleted)' }) });
+  }
+  return out;
+}
+
 async function sweep() {
   await sweepGiveaways();
   await sweepSubs();
@@ -346,4 +369,4 @@ function previewText(type, meta) {
   return '🎉 Giveaway';
 }
 
-module.exports = { GIFTS, giftList, sendGift, tip, setPrice, subscribe, mySubscription, createGiveaway, getGiveaway, joinGiveaway, sweep, sweepSubs, sweepGiveaways, previewText, SUB_DAYS };
+module.exports = { refundForChat, GIFTS, giftList, sendGift, tip, setPrice, subscribe, mySubscription, createGiveaway, getGiveaway, joinGiveaway, sweep, sweepSubs, sweepGiveaways, previewText, SUB_DAYS };

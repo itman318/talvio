@@ -624,8 +624,9 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
     if (del.rows.length === 0) return { removed: false };
     const left = await c.query('SELECT count(*) AS n FROM chat_members WHERE chat_id = $1', [chatId]);
     if (left.rows[0].n === 0) {
+      const refunds = await require('./coinplus.service').refundForChat(c, chatId); // eslint-disable-line global-require
       await c.query('DELETE FROM chats WHERE id = $1', [chatId]);
-      return { removed: true, chatDeleted: true, chatType };
+      return { removed: true, chatDeleted: true, chatType, refunds };
     }
     let newOwner = null;
     if (del.rows[0].role === 'owner') {
@@ -643,6 +644,7 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
   // Group Guard writes its own log line ("Guard removed X")
   if (!outcome.chatDeleted && reason !== 'guard') await logEvent(chatId, by || userId, reason === 'removed' ? 'member_removed' : 'member_left', userId);
   bus.emit('chat:removed', { chatId, userIds: [userId] });
+  for (const r of outcome.refunds || []) require('./coin.service').announce(r.userId, r.balance); // eslint-disable-line global-require
   if (!outcome.chatDeleted) {
     const event = reason === 'removed' ? 'member_removed' : 'member_left';
     const quiet = reason === 'left' && (await db.one('SELECT hide_service FROM chats WHERE id = $1', [chatId]) || {}).hide_service;

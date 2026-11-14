@@ -155,7 +155,7 @@ test('JazzCash: signed request, verified callback activates Premium; tampered or
   };
   const forged = { ...reply({}), pp_Amount: '100' }; // changed after signing
   assert.equal((await payments.jazzcashReturn(forged)).ok, false);
-  assert.equal((await db.one('SELECT status FROM payment_orders WHERE id = $1', [co.order.id])).status, 'failed');
+  assert.equal((await db.one('SELECT status FROM payment_orders WHERE id = $1', [co.order.id])).status, 'pending', 'an unsigned message changes nothing — it cannot even fail the order');
 
   const co2 = await payments.checkout(B.id, { plan_id: plan1.id, provider: 'jazzcash' });
   const declined = { pp_TxnRefNo: co2.order.txn_ref, pp_Amount: '29900', pp_ResponseCode: '124', pp_ResponseMessage: 'Insufficient balance' };
@@ -371,6 +371,13 @@ test('Plus with USDT from the wallet: unique amount, checked on the network, one
     await db.query(`UPDATE payment_orders SET created_at = now() WHERE id = $1`, [b6.order.id]);
     const t = 'ab'.repeat(32);
     assert.equal((await payments.submitCryptoTx(B.id, b6.order.id, { tx: t })).status, 'pending');
+    // money may be on its way: the order can't be cancelled now
+    await rejects(payments.cancelOrder(B.id, b6.order.id), 'order_busy');
+    // the network was slow for hours: the order goes to "review", but a late confirmation still pays it by itself
+    await db.query(`UPDATE payment_orders SET crypto_submitted_at = now() - interval '3 hours' WHERE id = $1`, [b6.order.id]);
+    await payments.sweep();
+    assert.equal((await payments.getOrder(B.id, b6.order.id)).status, 'review');
+    await db.query(`UPDATE payment_orders SET crypto_checked_at = now() - interval '1 hour' WHERE id = $1`, [b6.order.id]);
     tron[t] = {
       id: t, blockNumber: 5, blockTimeStamp: Date.now(), receipt: { result: 'SUCCESS' },
       log: [{ address: 'a614f803b6fd780986a42c78ec9c7f77e6ded13c', topics: [cryptopay.TRANSFER, pad('33'.repeat(20)), pad(cryptopay.tronHex(TRON))], data: pad(BigInt(b6.crypto.amount).toString(16)) }],
@@ -447,6 +454,8 @@ test('Hushavia Coins: bought with USDT, spent on Plus, sent to a friend, never b
     const got = await coins.buyPlus(A.id, { plan_id: plans[0].id });
     assert.deepEqual([got.spent, got.balance], [399, 701]);
     assert.ok(new Date(got.premium_until) > new Date(new Date(before || Date.now()).getTime() + 27 * 86400e3));
+    await rejects(coins.buyPlus(A.id, { plan_id: plans[0].id }), 'just_bought'); // a second tap is not a second purchase
+    assert.equal((await users.getMe(A.id)).coins, 701);
 
     // a gift
     await rejects(coins.send(A.id, { user_id: A.id, amount: 5 }), 'invalid_input');
@@ -592,6 +601,19 @@ test('coins at work: gifts in chats, tips on posts, paid channels, giveaways', a
   await rejects(plus.joinGiveaway(I.id, ga.giveaway.id), 'giveaway_over');
   const last = (await messages.listMessages(G.id, chId, {})).messages[0];
   assert.match(last.text, /Giveaway finished/);
+
+  // a chat deleted while a giveaway is running: the coins held for it go back
+  const hNow = await bal(H);
+  await plus.createGiveaway(H.id, { chat_id: chId, coins_each: 50, winners: 2, hours: 1 });
+  assert.equal(await bal(H), hNow - 100);
+  await admin.deleteGroup({ id: null }, chId, '127.0.0.1').catch(async () => {
+    // (the admin log needs a real admin row: do the same steps directly)
+    await db.tx(async (c) => {
+      await plus.refundForChat(c, chId);
+      await c.query('DELETE FROM chats WHERE id = $1', [chId]);
+    });
+  });
+  assert.equal(await bal(H), hNow, 'the giveaway money came back');
 
   // the books still add up
   const bad = await db.many(`SELECT u.id FROM users u WHERE u.coins <> (SELECT COALESCE(sum(delta), 0) FROM coin_tx t WHERE t.user_id = u.id)`);
@@ -831,6 +853,27 @@ test('card payments (Stripe): off by default, signed webhook only, amount checke
     await payments.stripeWebhook(body, sig); // Stripe sends it again: once only
     assert.equal((await users.getMe(S.id)).coins, pack.coins + pack.bonus);
     assert.equal((await payments.getOrder(S.id, co.order.id)).status, 'paid');
+
+    // cancelled in the app, but the card page was still open and the money was taken: the coins come all the same
+    const had = (await users.getMe(S.id)).coins;
+    const co2 = await payments.checkoutCard(S.id, { coin_pack_id: pack.id });
+    const sid2 = Object.keys(sessions)[1];
+    assert.equal((await payments.cancelOrder(S.id, co2.order.id)).status, 'cancelled');
+    sessions[sid2].payment_status = 'paid';
+    const body2 = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: sid2 } } });
+    const t2 = Math.floor(Date.now() / 1000);
+    await payments.stripeWebhook(body2, `t=${t2},v1=${crypto.createHmac('sha256', 'whsec_test').update(`${t2}.${body2}`).digest('hex')}`);
+    assert.equal((await payments.getOrder(S.id, co2.order.id)).status, 'paid');
+    assert.equal((await users.getMe(S.id)).coins, had + pack.coins + pack.bonus);
+    // a refund at Stripe marks the order for a person to look at
+    const paidRef = (await db.one('SELECT provider_ref FROM payment_orders WHERE id = $1', [co2.order.id])).provider_ref;
+    const body3 = JSON.stringify({ type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: paidRef } } });
+    await payments.stripeWebhook(body3, `t=${t2},v1=${crypto.createHmac('sha256', 'whsec_test').update(`${t2}.${body3}`).digest('hex')}`);
+    assert.match((await payments.getOrder(S.id, co2.order.id)).review_note, /REFUNDED/);
+    // the card page could not be made: no order is left waiting
+    stripe.setTransport(async () => { throw new Error('Stripe is down'); });
+    await rejects(payments.checkoutCard(S.id, { coin_pack_id: pack.id }), 'card_unavailable');
+    assert.equal((await db.one(`SELECT count(*)::int AS n FROM payment_orders WHERE user_id = $1 AND status = 'pending'`, [S.id])).n, 0);
   } finally {
     stripe.setTransport(null);
     delete process.env.STRIPE_SECRET_KEY;

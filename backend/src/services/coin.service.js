@@ -15,7 +15,7 @@ const bus = require('../bus');
 const settings = require('./settings.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
-const { badRequest, forbidden, notFound } = require('../utils/errors');
+const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
 
 const KINDS = ['deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin', 'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income'];
 const MAX_SEND = 100000;
@@ -140,6 +140,10 @@ async function buyPlus(userId, body = {}) {
   if (!price) throw notFound('plan_not_found', 'This plan is not available');
   rateLimit.enforce(`coins:plus:${userId}`, 10, 60 * 60 * 1000, 'Too many attempts. Try again later.');
   const r = await db.tx(async (c) => {
+    // one purchase at a time, and a second tap right after the first is not a second purchase
+    await c.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    const twice = (await c.query(`SELECT 1 FROM payment_orders WHERE user_id = $1 AND provider = 'coins' AND created_at > now() - interval '15 seconds' LIMIT 1`, [userId])).rows[0];
+    if (twice) throw conflict('just_bought', 'You bought Hushavia Plus a moment ago — check “My payments” before buying again');
     const o = (await c.query(
       `INSERT INTO payment_orders (user_id, plan_id, months, amount_pkr, provider, status, txn_ref, currency, amount, paid_at, provider_message)
        VALUES ($1, $2, $3, 0, 'coins', 'paid', $4, 'USD', 0, now(), $5) RETURNING id`,
@@ -175,7 +179,7 @@ async function adminAdjust(adminId, userIdRaw, body = {}) {
 async function adminPacks() {
   const stats = await db.one(
     `SELECT (SELECT COALESCE(sum(coins), 0) FROM users) AS in_wallets,
-            (SELECT COALESCE(sum(delta), 0) FROM coin_tx WHERE kind = 'purchase') AS bought,
+            (SELECT COALESCE(sum(delta), 0) FROM coin_tx WHERE kind IN ('purchase', 'deposit')) AS bought,
             (SELECT COALESCE(-sum(delta), 0) FROM coin_tx WHERE kind = 'plus') AS spent_on_plus,
             (SELECT COALESCE(sum(delta), 0) FROM coin_tx WHERE kind = 'admin') AS given_by_admins`,
   );

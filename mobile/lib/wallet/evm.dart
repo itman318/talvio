@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-import 'tron_api.dart' show WalletException;
+import 'tron_api.dart' show WalletException, UncertainSend;
 import 'tron_crypto.dart';
 
 /// One EVM network. Several public endpoints each: if one is down or busy the next one answers.
@@ -243,7 +243,8 @@ class EvmApi {
         last = e;
       }
     }
-    throw WalletException(last is WalletException ? last.message : 'Can’t reach ${chain.name}. Try again.');
+    if (last is WalletException) throw last;
+    throw _Unreachable('Can’t reach ${chain.name}. Try again.');
   }
 
   Future<dynamic> _call(String url, String method, List<Object?> params) async {
@@ -353,9 +354,23 @@ class EvmApi {
       to: TronCrypto.fromHex(p.txTo.substring(2)), value: p.value, data: p.data, priv: priv,
     );
     final hash = '0x${TronCrypto.hex(EvmCrypto.txHash(raw))}';
-    final r = await _rpc('eth_sendRawTransaction', ['0x${TronCrypto.hex(raw)}']);
-    if ('$r'.toLowerCase() != hash.toLowerCase()) throw WalletException('The network gave back a different transaction');
-    return hash;
+    WalletException why;
+    try {
+      final r = await _rpc('eth_sendRawTransaction', ['0x${TronCrypto.hex(raw)}']);
+      if ('$r'.toLowerCase() == hash.toLowerCase()) return hash;
+      why = WalletException('The network gave back a different transaction');
+    } on WalletException catch (e) {
+      why = e;
+    }
+    // Refused — or one node took it and its answer got lost ("already known" from the next one):
+    // the hash is known, so ask whether the network has the transfer before calling it a failure.
+    try {
+      if (await _rpc('eth_getTransactionByHash', [hash]) is Map) return hash;
+    } on WalletException {
+      throw UncertainSend(hash);
+    }
+    if (why is _Unreachable) throw UncertainSend(hash);
+    throw why;
   }
 
   static String _friendly(String m) {
@@ -365,6 +380,11 @@ class EvmApi {
     if (l.contains('nonce too low') || l.contains('already known')) return 'This transfer was already sent';
     return m.length > 140 ? '${m.substring(0, 140)}…' : m;
   }
+}
+
+/// No endpoint answered at all (as opposed to: the network refused the request).
+class _Unreachable extends WalletException {
+  _Unreachable(super.message);
 }
 
 class _RpcError implements Exception {

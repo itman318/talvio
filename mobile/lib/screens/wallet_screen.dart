@@ -1946,55 +1946,76 @@ class _SendScreenState extends State<_SendScreen> {
     final phrase = await w.readPhrase(context, 'Confirm sending ${Units.format(sendAmount, decimals: a.decimals)} ${a.symbol}');
     if (phrase == null || !mounted) return;
     setState(() => _busy = true);
-    try {
-      String id;
-      if (q.tron != null) {
-        final key = TronCrypto.privateKey(phrase);
-        try {
-          id = await w.api.broadcast(q.tron!, key);
-        } finally {
-          key.fillRange(0, key.length, 0); // wipe the key from memory
-        }
-      } else if (q.sol != null) {
-        final key = Sol.privateKey(phrase);
-        try {
-          id = await SolApi().send(q.sol!, key);
-        } finally {
-          key.fillRange(0, key.length, 0);
-        }
-        await SentLog(w.userId).add(WalletTx(
-          id: id, token: 'SOL', from: w.solAddress!, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: 'sol', decimals: Sol.decimals,
-        ));
-      } else if (q.utxo != null) {
-        final key = UtxoCrypto.privateKey(phrase, a.utxo!);
-        try {
-          id = await UtxoApi(a.utxo!).send(q.utxo!, key);
-        } finally {
-          key.fillRange(0, key.length, 0);
-        }
-        await SentLog(w.userId).add(WalletTx(
-          id: id, token: a.symbol, from: w.utxoAddr[a.network]!, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
-        ));
-      } else {
-        final key = EvmCrypto.privateKey(phrase);
-        try {
-          id = await EvmApi(a.evm!).send(q.evm!, key);
-        } finally {
-          key.fillRange(0, key.length, 0);
-        }
-        await SentLog(w.userId).add(WalletTx(
-          id: id, token: a.symbol, from: w.evmAddress!, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: a.network, decimals: a.decimals,
-        ));
-      }
+    final from = a.isTron ? w.address! : a.isSol ? w.solAddress! : (a.isUtxo ? w.utxoAddr[a.network]! : w.evmAddress!);
+    // After the network took the transfer NOTHING below may turn it into "failed": the money has moved.
+    Future<void> record(String id) async {
+      // 1) whoever is waiting for this payment (an order) hears about it first
       try {
         await widget.onSent?.call(id);
       } catch (_) {}
+      // 2) this phone's own list of what it sent
+      try {
+        await SentLog(w.userId).add(WalletTx(
+          id: id, token: a.isSol ? 'SOL' : a.symbol, from: from, to: to, amount: sendAmount, time: DateTime.now(), ok: true, network: a.network, decimals: a.isSol ? Sol.decimals : a.decimals,
+        ));
+      } catch (_) {}
+    }
+
+    try {
+      String id;
+      try {
+        if (q.tron != null) {
+          final key = TronCrypto.privateKey(phrase);
+          try {
+            id = await w.api.broadcast(q.tron!, key);
+          } finally {
+            key.fillRange(0, key.length, 0); // wipe the key from memory
+          }
+        } else if (q.sol != null) {
+          final key = Sol.privateKey(phrase);
+          try {
+            id = await SolApi().send(q.sol!, key);
+          } finally {
+            key.fillRange(0, key.length, 0);
+          }
+        } else if (q.utxo != null) {
+          final key = UtxoCrypto.privateKey(phrase, a.utxo!);
+          try {
+            id = await UtxoApi(a.utxo!).send(q.utxo!, key);
+          } finally {
+            key.fillRange(0, key.length, 0);
+          }
+        } else {
+          final key = EvmCrypto.privateKey(phrase);
+          try {
+            id = await EvmApi(a.evm!).send(q.evm!, key);
+          } finally {
+            key.fillRange(0, key.length, 0);
+          }
+        }
+      } on UncertainSend catch (e) {
+        // no answer from the network: the transfer may be on its way. It is kept (and reported to
+        // an order waiting for it), and the person is told NOT to simply send again.
+        await record(e.txId);
+        if (!mounted) return;
+        setState(() => _busy = false);
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.wifi_off_rounded, color: Color(0xFFE08A1E)),
+            title: const Text('Not sure it was sent'),
+            content: Text('The connection dropped at the last moment. Your ${a.symbol} may still have been sent.\n\n'
+                'Wait a minute, then look at the history of ${a.symbol} before you send again — otherwise you could pay twice.'),
+            actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+          ),
+        );
+        if (mounted && widget.locked) Navigator.pop(context); // a bill: the order already has the transfer and is checked by itself
+        return;
+      }
+      await record(id);
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       final url = a.isTron ? '${w.net.explorer}$id' : a.isSol ? '${Sol.explorer}/tx/$id' : (a.isUtxo ? a.utxo!.txUrl(id) : '${a.evm!.explorer}/tx/$id');
-      if (a.isTron) {
-        await SentLog(w.userId).add(WalletTx(id: id, token: a.symbol, from: w.address!, to: to, amount: amount, time: DateTime.now(), ok: true, network: 'tron', decimals: a.decimals));
-      }
       if (widget.forChat) {
         Navigator.pop(context, <String, dynamic>{
           'kind': 'sent', 'network': a.network, 'symbol': a.symbol, 'amount': '$sendAmount', 'decimals': a.decimals, 'to': to,
@@ -2016,7 +2037,7 @@ class _SendScreenState extends State<_SendScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
-        showInfo(context, e is WalletException ? e.message : 'Sending failed. Nothing was taken.');
+        showInfo(context, e is WalletException ? e.message : 'Sending didn’t finish. Look at the history before you try again.');
       }
     }
   }

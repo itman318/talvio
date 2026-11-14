@@ -105,6 +105,11 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
         if (from.toLowerCase() != '${a['address']}'.toLowerCase()) throw WalletException('This wallet is not the one whose key is set in Hushavia');
         final bal = await api.tokenBalance(_usdt.address, from);
         if (bal == BigInt.zero) continue;
+        // less than 0.50 USDT: moving it would cost about as much in fees as it is worth
+        if (bal < BigInt.from(10).pow(18) ~/ BigInt.two) {
+          _say('#$i: ${Units.format(bal, decimals: 18, maxFraction: 2)} USDT left there (too little to be worth the fee)');
+          continue;
+        }
         final p = await api.prepare(from: from, to: dest, amount: bal, token: _usdt);
         final gas = await api.balance(from);
         if (gas < p.fee) {
