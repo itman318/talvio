@@ -352,12 +352,16 @@ class ChatStore extends ChangeNotifier {
 
   void _upsertChat(Chat c) {
     if (c.peer != null) userCache[c.peer!.id] = c.peer!;
+    removedChats.remove(c.id); // back in (joined again, added again)
     if (_hidingChats.contains(c.id)) return; // being deleted (undo window)
     chats.removeWhere((x) => x.id == c.id);
     if (!c.isArchived && (c.lastMessage != null || c.historyCleared || c.isGroup || c.id == activeChatId)) chats.add(c);
     _sortChats();
     notifyListeners();
   }
+
+  /// Groups and channels I was taken out of during this session (an open chat shows it instead of failing on send).
+  final Set<int> removedChats = {};
 
   void _removeChat(int id) {
     chats.removeWhere((c) => c.id == id);
@@ -1828,6 +1832,8 @@ class ChatStore extends ChangeNotifier {
         if (members.containsKey(id)) loadMembers(id).catchError((_) => <GroupMember>[]);
         break;
       case 'chat:removed':
+        // removed by an admin / the group was deleted while I may be looking at it
+        if (!_hidingChats.contains(_int(d['chat_id']))) removedChats.add(_int(d['chat_id']));
         _removeChat(_int(d['chat_id']));
         break;
       case 'chat:cleared':

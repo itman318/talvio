@@ -3249,7 +3249,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
     }
-    if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
+    if (chat.isChannel && !chat.canPost && !chat.isSuspended && !_store.removedChats.contains(chat.id)) {
       // a subscriber can't write here: one wide button, like the message box it replaces
       return SafeArea(
         top: false,
@@ -3279,7 +3279,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     String? blockedText;
     Widget? blockedAction;
-    if (chat.isSuspended) {
+    if (chat.isMulti && _store.removedChats.contains(chat.id)) {
+      blockedText = 'You are no longer a member of this ${chat.isChannel ? 'channel' : 'group'}.';
+    } else if (chat.isSuspended) {
       blockedText = 'This group has been suspended by the moderators.';
     } else if (chat.peer?.deleted == true) {
       blockedText = 'This account was deleted.';

@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'global_search_screen.dart' show SimilarChannels;
 import 'coins_screen.dart' show CoinIcon, fmtCoins;
 import 'monetize_screen.dart';
@@ -234,12 +235,12 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               title: Text(m.isRestricted ? 'Muted — change or unmute' : 'Mute in this group'),
               onTap: () => Navigator.pop(ctx, 'restrict'),
             ),
-          if (chat.isOwner)
+          if (chat.isOwner && !m.user.isBot && !m.user.deleted)
             ListTile(leading: const Icon(Icons.key_outlined), title: const Text('Transfer ownership'), onTap: () => Navigator.pop(ctx, 'owner')),
           if (canRemove && m.role != 'owner')
             ListTile(
               leading: const Icon(Icons.person_remove, color: Colors.red),
-              title: const Text('Remove from group', style: TextStyle(color: Colors.red)),
+              title: Text(chat.isChannel ? 'Remove from channel' : 'Remove from group', style: const TextStyle(color: Colors.red)),
               onTap: () => Navigator.pop(ctx, 'remove'),
             ),
         ]),
@@ -880,7 +881,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           ]),
           if (chat.isAdmin) _adminCard(chat),
           SettingsGroup(
-            title: chat.isChannel && !chat.isAdmin ? 'Admins' : '${members.length} ${chat.isChannel ? 'shown' : 'members'}',
+            title: chat.isChannel && !chat.isAdmin
+                ? 'Admins'
+                : chat.isChannel
+                    ? '${NumberFormat.decimalPattern().format(chat.memberCount)} subscribers'
+                    : '${NumberFormat.decimalPattern().format(chat.memberCount > members.length ? chat.memberCount : members.length)} members',
             children: [
               if (chat.can('invite_users') && !chat.isSuspended)
                 SettingsTile(
@@ -950,7 +955,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               title: 'Leave $what',
               danger: true,
               onTap: () async {
-                if (!await confirm(context, 'Leave $what?', 'You will stop receiving messages from “${chat.title}”.', ok: 'Leave', danger: true)) return;
+                // the owner leaving hands the $what on: say to whom, so it isn't a surprise
+                final heir = chat.isOwner
+                    ? (members.where((m) => m.role == 'admin' && !m.user.isBot && !m.user.deleted).firstOrNull ??
+                        members.where((m) => m.role == 'member' && !m.user.isBot && !m.user.deleted).firstOrNull)
+                    : null;
+                final why = chat.isOwner
+                    ? (heir == null
+                        ? 'You are the only member: the $what will be deleted.'
+                        : 'You are the owner. ${heir.user.name} becomes the new owner. To choose someone else, use “Transfer ownership” on a member first.')
+                    : 'You will stop receiving messages from “${chat.title}”.';
+                if (!await confirm(context, 'Leave $what?', why, ok: 'Leave', danger: true)) return;
                 if (!context.mounted) return;
                 final store = _store;
                 final hidden = store.hideChat(chat.id) ?? chat;

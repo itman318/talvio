@@ -122,7 +122,8 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
             AND mm.message_id > GREATEST(cm.last_read_message_id, cm.cleared_before_id)) AS unread_mentions,
        (SELECT p.message_id FROM pinned_messages p JOIN messages pm ON pm.id = p.message_id AND pm.deleted_at IS NULL
           WHERE p.chat_id = c.id AND p.message_id > cm.cleared_before_id ORDER BY p.pinned_at DESC LIMIT 1) AS pinned_message_id,
-       (SELECT count(*) FROM pinned_messages p WHERE p.chat_id = c.id) AS pinned_count,
+       (SELECT count(*) FROM pinned_messages p JOIN messages pm ON pm.id = p.message_id AND pm.deleted_at IS NULL
+          WHERE p.chat_id = c.id AND p.message_id > cm.cleared_before_id) AS pinned_count,
        CASE WHEN cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM chat_join_requests jr WHERE jr.chat_id = c.id) ELSE 0 END AS pending_requests,
        c.member_count,
        -- counted up to 9,999: a chat nobody opened for months must not make the whole list slow
@@ -631,12 +632,12 @@ async function removeUserFromGroup(chatId, userId, { by = null, reason = 'left' 
     let newOwner = null;
     if (del.rows[0].role === 'owner') {
       const next = await c.query(
-        `SELECT user_id FROM chat_members WHERE chat_id = $1
-         ORDER BY (role = 'admin') DESC, joined_at ASC LIMIT 1`,
+        `SELECT m.user_id FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.chat_id = $1
+         ORDER BY (u.is_bot OR u.status <> 'active') ASC, (m.role = 'admin') DESC, m.joined_at ASC LIMIT 1`,
         [chatId],
       );
       newOwner = next.rows[0].user_id;
-      await c.query(`UPDATE chat_members SET role = 'owner' WHERE chat_id = $1 AND user_id = $2`, [chatId, newOwner]);
+      await c.query(`UPDATE chat_members SET role = 'owner', restricted_until = NULL, captcha_until = NULL WHERE chat_id = $1 AND user_id = $2`, [chatId, newOwner]);
     }
     return { removed: true, chatDeleted: false, newOwner, chatType };
   });
@@ -1028,11 +1029,18 @@ async function joinChat(userId, chat) {
     return { requested: true, chat_id: chat.id, title: chat.title };
   }
   if (!existing) {
-    if (chat.via_invite) await db.query('UPDATE chat_invites SET usage_count = usage_count + 1 WHERE code = $1', [chat.via_invite]);
     if (chat.type === 'group') {
       const n = await db.one('SELECT count(*) AS n FROM chat_members WHERE chat_id = $1', [chat.id]);
       const max = await settings.get('max_group_members');
       if (n.n >= max) throw badRequest('group_full', 'This group is full');
+    }
+    // a link with a usage limit: counted only for a real join, and never past its limit (two people at once)
+    if (chat.via_invite) {
+      const used = await db.one(
+        `UPDATE chat_invites SET usage_count = usage_count + 1 WHERE code = $1 AND ($2 OR usage_limit IS NULL OR usage_count < usage_limit) RETURNING code`,
+        [chat.via_invite, !!chat.admin_ok],
+      );
+      if (!used) throw notFound('invite_invalid', 'This invite link is invalid or expired');
     }
     await db.query(
       `INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
@@ -1136,7 +1144,14 @@ async function resolveJoinRequest(userId, chatIdRaw, targetIdRaw, approve) {
   if (!req) throw notFound('request_not_found', 'This join request no longer exists');
   if (approve) {
     const full = await db.one('SELECT * FROM chats WHERE id = $1', [chat.id]);
-    await joinChat(targetId, { ...full, join_approval: false, via_invite: req.invite_code || null, admin_ok: true });
+    try {
+      await joinChat(targetId, { ...full, join_approval: false, via_invite: req.invite_code || null, admin_ok: true });
+    } catch (e) {
+      // e.g. the group is full: the request stays, so it isn't lost
+      await db.query('INSERT INTO chat_join_requests (chat_id, user_id, invite_code) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [chat.id, targetId, req.invite_code || null]);
+      throw e;
+    }
+    await require('./notice.service').notify(targetId, 'group', `Welcome to ${chat.title}`, `An admin accepted your request to join “${chat.title}”.`, { chat_id: chat.id }).catch(() => {}); // eslint-disable-line global-require
   }
   await emitUpdated(chat.id);
   return { ok: true };
@@ -1146,11 +1161,15 @@ async function resolveJoinRequest(userId, chatIdRaw, targetIdRaw, approve) {
 async function transferOwnership(chatId, fromUserId, toUserIdRaw, { byAdmin = false } = {}) {
   const toUserId = v.id(toUserIdRaw, 'user_id');
   const outcome = await db.tx(async (c) => {
-    const target = await c.query('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, toUserId]);
+    const target = await c.query(
+      'SELECT m.role, u.is_bot, u.status FROM chat_members m JOIN users u ON u.id = m.user_id WHERE m.chat_id = $1 AND m.user_id = $2',
+      [chatId, toUserId],
+    );
     if (!target.rows[0]) throw notFound('member_not_found', 'This user is not a member');
     if (target.rows[0].role === 'owner') return { changed: false };
+    if (target.rows[0].is_bot || target.rows[0].status !== 'active') throw badRequest('invalid_input', 'Ownership can only go to an active person, not a bot');
     const old = await c.query(`UPDATE chat_members SET role = 'admin' WHERE chat_id = $1 AND role = 'owner' RETURNING user_id`, [chatId]);
-    await c.query(`UPDATE chat_members SET role = 'owner' WHERE chat_id = $1 AND user_id = $2`, [chatId, toUserId]);
+    await c.query(`UPDATE chat_members SET role = 'owner', restricted_until = NULL, captcha_until = NULL WHERE chat_id = $1 AND user_id = $2`, [chatId, toUserId]);
     return { changed: true, oldOwner: old.rows[0] ? old.rows[0].user_id : null };
   });
   if (outcome.changed) {
@@ -1256,7 +1275,7 @@ function publicSummary(c, memberCount, isMember) {
     avatar_url: userService.avatarUrl(c.avatar_media_id),
     member_count: memberCount,
     is_member: isMember,
-    join_approval: c.type === 'group' && !!c.join_approval,
+    join_approval: !!c.join_approval,
     sub_price: c.type === 'channel' && c.monetized ? c.sub_price || 0 : 0,
   };
 }
@@ -1342,6 +1361,8 @@ async function setMemberTag(actorId, chatIdRaw, targetIdRaw, tagRaw) {
   if (chat.type !== 'group') throw badRequest('invalid_input', 'Member tags are for groups');
   requireRight(chat, 'ban_users');
   const targetId = v.id(targetIdRaw, 'user_id');
+  const trow = await db.one('SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, targetId]);
+  if (trow && trow.role === 'owner' && chat.my_role !== 'owner') throw forbidden('not_allowed', 'Only the owner can change the owner’s tag');
   const tag = tagRaw === null || tagRaw === undefined || String(tagRaw).trim() === '' ? null : v.str(String(tagRaw).trim(), { field: 'tag', min: 1, max: 16 });
   const r = await db.one('UPDATE chat_members SET member_tag = $3 WHERE chat_id = $1 AND user_id = $2 RETURNING user_id', [chat.id, targetId, tag]);
   if (!r) throw notFound('member_not_found', 'This user is not in the group');

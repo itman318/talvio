@@ -1009,6 +1009,11 @@ async function forwardMessages(userId, body = {}) {
     }
     // the group's rules apply to forwarded messages too (links, banned words, media…)
     if (chat.type === 'group' && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
+      if (chat.slow_mode_sec > 0) {
+        const last = await db.one(`SELECT created_at FROM messages WHERE chat_id = $1 AND sender_id = $2 AND type <> 'system' ORDER BY id DESC LIMIT 1`, [chat.id, userId]);
+        const wait = last ? Math.ceil(chat.slow_mode_sec - (Date.now() - new Date(last.created_at).getTime()) / 1000) : 0;
+        if (wait > 0 || rows.length > 1) throw forbidden('slow_mode', wait > 0 ? `Slow mode is on. You can send another message in ${wait} s` : 'Slow mode is on: forward one message at a time', { retry_after: Math.max(wait, 0) });
+      }
       await guarded(userId, chat, async () => {
         if (chat.anti_forward) throw forbidden('no_forwards', 'Forwarded messages aren’t allowed in this group');
         for (const r of rows) await assertGroupRules(userId, chat, { type: r.type, text: r.text || '' });
@@ -1254,6 +1259,17 @@ async function editMessage(userId, messageIdRaw, body = {}) {
   const max = m.type === 'text' ? MAX_TEXT : MAX_CAPTION;
   if (text.length > max) throw badRequest('message_too_long', `At most ${max} characters`);
   if (text === m.text) return (await serializeRows(userId, [m]))[0];
+  // a group's rules (links, banned words, muted) apply to an edit as much as to a new message
+  if (chat.type === 'group' && !m.thread_id && !chatService.ADMIN_ROLES.includes(chat.my_role)) {
+    if (chat.my_restricted_until && new Date(chat.my_restricted_until) > new Date()) throw forbidden('restricted', 'An admin muted you in this group');
+    await guarded(userId, chat, async () => {
+      const perms = chat.member_perms || {};
+      if ((perms.links === false || chat.anti_links) && LINK_RE.test(text)) throw forbidden('no_links', 'Links aren’t allowed in this group');
+      const words = Array.isArray(chat.banned_words) ? chat.banned_words : [];
+      const low = text.toLowerCase();
+      if (words.some((w) => w && low.includes(String(w).toLowerCase()))) throw forbidden('banned_word', 'Your message contains a word that isn’t allowed in this group');
+    });
+  }
   const flags = await moderation.checkOutgoing(await db.one('SELECT * FROM users WHERE id = $1', [userId]), [text]);
 
   await db.query('INSERT INTO message_edits (message_id, text, edited_at) VALUES ($1, $2, COALESCE($3::timestamptz, $4::timestamptz))', [m.id, m.text, m.edited_at, m.created_at]);
@@ -1312,7 +1328,10 @@ async function deleteMessages(userId, chatIdRaw, body = {}) {
        WHERE id = ANY($1::bigint[])`,
       [found],
     );
+    // a deleted message is not pinned any more (the pinned bar and its count move on)
+    const unpinned = await db.many('DELETE FROM pinned_messages WHERE chat_id = $1 AND message_id = ANY($2::bigint[]) RETURNING message_id', [chat.id, found]);
     bus.emit('message:deleted', { chatId: chat.id, messageIds: found, userIds: await chatService.memberIds(chat.id) });
+    if (unpinned.length) await chatService.emitUpdated(chat.id);
   } else {
     await db.query(
       `INSERT INTO message_hidden (user_id, message_id) SELECT $1, x FROM unnest($2::bigint[]) AS x ON CONFLICT DO NOTHING`,
@@ -1573,6 +1592,7 @@ async function pinMessage(userId, chatIdRaw, messageIdRaw) {
     [v.id(messageIdRaw, 'message_id'), chat.id],
   );
   if (!m) throw notFound('message_not_found', 'Message not found');
+  await db.query('DELETE FROM pinned_messages p USING messages m WHERE p.chat_id = $1 AND m.id = p.message_id AND m.deleted_at IS NOT NULL', [chat.id]);
   const n = await db.one('SELECT count(*) AS n FROM pinned_messages WHERE chat_id = $1', [chat.id]);
   if (n.n >= MAX_PINS) throw badRequest('too_many_pins', `You can pin up to ${MAX_PINS} messages`);
   const r = await db.one(

@@ -192,20 +192,41 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
     }
   }
 
-  Future<void> _resolve(int userId, bool approve) async {
+  final Set<int> _busy = {}; // a second tap while the first is on its way does nothing
+
+  Future<void> _resolve(int userId, bool approve, {bool reload = true}) async {
+    if (!_busy.add(userId)) return;
+    setState(() {});
     try {
       await context.read<ChatStore>().resolveJoinRequest(widget.chat.id, userId, approve);
-      await _load();
+      // gone from the list at once
+      if (mounted) setState(() => _list?.removeWhere((r) => (r['user'] as Map)['id'] == userId));
     } catch (e) {
       if (mounted) showError(context, e);
+    } finally {
+      _busy.remove(userId);
+      if (reload) await _load();
     }
+  }
+
+  Future<void> _approveAll() async {
+    final ids = [for (final r in _list ?? const <Map<String, dynamic>>[]) ((r['user'] as Map)['id'] as num).toInt()];
+    if (ids.isEmpty) return;
+    if (!await confirm(context, 'Approve all ${ids.length}?', 'They all join “${widget.chat.title}”.', ok: 'Approve all')) return;
+    for (final id in ids) {
+      if (!mounted) return;
+      await _resolve(id, true, reload: false);
+    }
+    await _load();
   }
 
   @override
   Widget build(BuildContext context) {
     final list = _list;
     return Scaffold(
-      appBar: AppBar(title: const Text('Join requests')),
+      appBar: AppBar(title: const Text('Join requests'), actions: [
+        if ((list?.length ?? 0) > 1 && _busy.isEmpty) TextButton(onPressed: _approveAll, child: const Text('Approve all')),
+      ]),
       body: list == null
           ? const Center(child: CircularProgressIndicator())
           : list.isEmpty
@@ -218,8 +239,8 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
                       title: Text(u.name),
                       subtitle: Text(u.username != null ? '@${u.username}' : 'requested ${chatListTime(DateTime.parse(r['requested_at'] as String).toLocal())}'),
                       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(icon: const Icon(Icons.close, color: Colors.red), tooltip: 'Decline', onPressed: () => _resolve(u.id, false)),
-                        IconButton(icon: const Icon(Icons.check, color: Brand.accent), tooltip: 'Approve', onPressed: () => _resolve(u.id, true)),
+                        IconButton(icon: const Icon(Icons.close, color: Colors.red), tooltip: 'Decline', onPressed: _busy.contains(u.id) ? null : () => _resolve(u.id, false)),
+                        IconButton(icon: const Icon(Icons.check, color: Brand.accent), tooltip: 'Approve', onPressed: _busy.contains(u.id) ? null : () => _resolve(u.id, true)),
                       ]),
                     );
                   }).toList(),
