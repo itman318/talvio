@@ -275,7 +275,16 @@ Future<bool> sendGiftFlow(BuildContext context, int chatId, String peerName) asy
     return false;
   }
   try {
-    await api.post('/coins/gift', {'chat_id': chatId, 'gift_id': pick['id'], if (note.text.trim().isNotEmpty) 'note': note.text.trim()});
+    // one id for this gift: if the answer gets lost and it is sent again, the server does not charge twice
+    final giftId = 'gift-${DateTime.now().microsecondsSinceEpoch}-$chatId';
+    final giftBody = {'chat_id': chatId, 'gift_id': pick['id'], 'client_id': giftId, if (note.text.trim().isNotEmpty) 'note': note.text.trim()};
+    try {
+      await api.post('/coins/gift', giftBody);
+    } on ApiException catch (e) {
+      if (!e.isNetwork) rethrow;
+      await Future<void>.delayed(const Duration(seconds: 2));
+      await api.post('/coins/gift', giftBody); // same id: safe to repeat
+    }
     HapticFeedback.heavyImpact();
     return true;
   } catch (e) {

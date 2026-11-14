@@ -119,6 +119,12 @@ async function send(userId, body = {}) {
   const r = await db.tx(async (c) => {
     // both rows are locked in the same order every time, so two people gifting each other can't deadlock
     await c.query('SELECT id FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE', [userId, toId]);
+    // the same amount to the same person a moment ago: a repeated tap (or a retry after a lost answer), not a second gift
+    const twice = (await c.query(
+      `SELECT 1 FROM coin_tx WHERE user_id = $1 AND peer_id = $2 AND kind = 'gift_sent' AND delta = $3 AND created_at > now() - interval '10 seconds' LIMIT 1`,
+      [userId, toId, -amount],
+    )).rows[0];
+    if (twice) throw conflict('just_sent', 'You sent this a moment ago — check your coin history before sending again');
     return {
     mine: await change(c, userId, -amount, 'gift_sent', { peerId: toId, note }),
     theirs: await change(c, toId, amount, 'gift_received', { peerId: userId, note }),
