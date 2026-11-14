@@ -533,6 +533,7 @@
   function buildLayout() {
     searchInput = el('input', { class: 'search', type: 'search', placeholder: 'Search', oninput: onSearch });
     const menuBtn = el('button', { class: 'icon-btn', title: 'Menu', onclick: (e) => openMenu(e, [
+      ['🪙 Coins', openCoins],
       ['Enable notifications', askNotifications],
       ['Log out', () => logout()],
     ]) }, svgIcon(ICONS.menu));
@@ -993,11 +994,32 @@
       }
       case 'giveaway': {
         const g = (m.meta && m.meta.giveaway) || {};
+        const status = el('div', { class: 'muted', style: 'font-size:12px' }, 'Loading…');
+        const btn = el('button', { class: 'ga-btn', style: 'display:none' }, 'Join');
+        const show = (info) => {
+          if (info.status === 'done') {
+            const names = (info.winner_list || []).map((w) => w.name || (w.username ? `@${w.username}` : '')).filter(Boolean);
+            status.textContent = names.length ? `🏆 ${names.join(', ')}` : 'Finished — nobody joined';
+            btn.style.display = 'none';
+          } else {
+            const ends = info.ends_at ? new Date(info.ends_at) : null;
+            status.textContent = `${Number(info.entries || 0).toLocaleString()} joined${ends ? ` · ends ${listTime(ends.toISOString())} ${timeOf(ends.toISOString())}` : ''}`;
+            btn.style.display = info.mine ? 'none' : '';
+            btn.disabled = !!info.joined;
+            btn.textContent = info.joined ? 'You’re in ✓' : 'Join';
+          }
+        };
+        btn.onclick = async (e) => {
+          e.stopPropagation();
+          btn.disabled = true;
+          try { show(await api('POST', `/coins/giveaways/${g.id}/join`, {})); } catch (err) { btn.disabled = false; toast(err.message); }
+        };
+        if (g.id) api('GET', `/coins/giveaways/${g.id}`).then(show).catch(() => { status.textContent = 'Open the Hushavia app to join'; });
         return [el('div', { class: 'contact' },
           el('span', { class: 'ic' }, '🎉'),
           el('span', {},
             el('div', { style: 'font-weight:700' }, `Giveaway · ${Number(g.coins_each || 0).toLocaleString()} coins × ${g.winners || 1}`),
-            el('div', { class: 'muted', style: 'font-size:12px' }, 'Open the Hushavia app to join')))];
+            status, btn))];
       }
       case 'crypto': {
         const c = (m.meta && m.meta.crypto) || {};
@@ -1074,10 +1096,99 @@
     if (c.can_post !== false || c.type !== 'channel') items.push(['Reply', () => { S.reply = m; S.editing = null; renderComposer(); textarea.focus(); }]);
     if (m.text) items.push(['Copy text', () => navigator.clipboard.writeText(m.text).then(() => toast('Copied')).catch(() => {})]);
     if (mine && m.type === 'text' && !m.forwarded_from) items.push(['Edit', () => { S.editing = m; S.reply = null; renderComposer(); textarea.value = m.text; textarea.focus(); }]);
+    if (c.type === 'channel' && c.monetized && c.my_role !== 'owner' && !m.pending) items.push(['🪙 Tip coins', () => tipPost(c, m)]);
+    if (c.type === 'private' || (c.my_rights && c.my_rights.pin_messages)) {
+      items.push(['📌 Pin', () => api('POST', `/chats/${c.id}/pins`, { message_id: m.id }).then(() => toast('Pinned')).catch((err) => toast(err.message))]);
+    }
     items.push(['Delete for me', () => deleteMessages(c, [m.id], false), true]);
     if (mine || (c.type !== 'private' && ['owner', 'admin'].includes(c.my_role))) items.push(['Delete for everyone', () => deleteMessages(c, [m.id], true), true]);
     openMenu(e, items);
   }
+  // ------------------------------------------------------------------ coins (balance, send, Plus, tips)
+  function dialog(...children) {
+    const box = el('div', { class: 'dlg', onclick: (e) => e.stopPropagation() }, ...children);
+    const back = el('div', { class: 'dlg-back', onclick: () => back.remove() }, box);
+    document.body.append(back);
+    const close = () => back.remove();
+    const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+    return { box, close };
+  }
+  const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+  const KIND = {
+    deposit: 'USDT deposit', purchase: 'Bought', gift_sent: 'Gift to', gift_received: 'Gift from', plus: 'Hushavia Plus', admin: 'From Hushavia',
+    tip_sent: 'Tip to', tip_received: 'Tip from', sub_paid: 'Subscription', sub_income: 'Subscriber', giveaway: 'Giveaway', giveaway_win: 'Giveaway prize',
+    giveaway_refund: 'Giveaway refund', ad_budget: 'Ad budget', ad_refund: 'Ad refund', ad_income: 'Sponsored messages',
+  };
+
+  async function openCoins() {
+    let info;
+    try { info = await api('GET', '/coins'); } catch (err) { toast(err.message); return; }
+    const { box, close } = dialog();
+    const render = () => {
+      const hist = (info.history || []).map((h) => el('div', { class: 'row' },
+        el('span', {}, el('div', {}, `${KIND[h.kind] || h.kind}${h.peer ? ` ${h.peer.name}` : ''}`),
+          el('div', { class: 'muted', style: 'font-size:12px' }, `${h.note && !h.peer ? `${h.note} · ` : ''}${listTime(h.created_at)}`)),
+        el('span', { class: h.delta > 0 ? 'plus' : 'minus' }, `${h.delta > 0 ? '+' : ''}${fmt(h.delta)}`)));
+      const plus = (info.plus || []).map((p) => el('button', { onclick: () => buyPlus(p) }, `${p.name} · ${fmt(p.coins)} 🪙`));
+      box.replaceChildren(
+        el('h2', {}, 'Coins'),
+        el('div', { class: 'big' }, `🪙 ${fmt(info.balance)}`),
+        el('div', { class: 'muted', style: 'font-size:12.5px' }, info.rules || ''),
+        el('div', { class: 'actions', style: 'justify-content:flex-start' },
+          el('button', { class: 'btn', onclick: sendCoins }, 'Send coins'),
+          el('button', { class: 'btn ghost', onclick: close }, 'Close')),
+        plus.length ? el('div', {}, el('h3', { style: 'margin:14px 0 2px;font-size:15px' }, 'Hushavia Plus with coins'), el('div', { class: 'chips' }, ...plus)) : null,
+        el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:10px' }, 'To add coins, open Coins in the Hushavia phone app.'),
+        el('h3', { style: 'margin:14px 0 2px;font-size:15px' }, 'History'),
+        hist.length ? el('div', {}, ...hist) : el('div', { class: 'muted' }, 'Nothing yet'));
+    };
+    const reload = async () => { try { info = await api('GET', '/coins'); render(); } catch (_) { /* keep what is shown */ } };
+    async function buyPlus(p) {
+      if (!confirm(`Buy ${p.name} of Hushavia Plus for ${fmt(p.coins)} coins?`)) return;
+      try { await api('POST', '/coins/plus', { plan_id: p.plan_id }); toast('Hushavia Plus is active ⭐'); await reload(); } catch (err) { toast(err.message); }
+    }
+    async function sendCoins() {
+      const who = el('input', { placeholder: '@username' });
+      const amount = el('input', { placeholder: 'How many coins', type: 'number', min: '1' });
+      const note = el('input', { placeholder: 'Note (optional)', maxlength: '120' });
+      const go = el('button', { class: 'btn' }, 'Send');
+      box.replaceChildren(el('h2', {}, 'Send coins'), el('div', { class: 'muted', style: 'font-size:12.5px' }, `You have ${fmt(info.balance)} coins`), who, amount, note,
+        el('div', { class: 'actions' }, el('button', { class: 'btn ghost', onclick: render }, 'Back'), go));
+      go.onclick = async () => {
+        const n = parseInt(amount.value, 10);
+        const name = who.value.trim().replace(/^@/, '');
+        if (!name || !(n > 0)) { toast('Enter a username and an amount'); return; }
+        go.disabled = true;
+        try {
+          const found = await api('GET', `/users/search?q=${encodeURIComponent(name)}`);
+          const u = (Array.isArray(found) ? found : found.users || []).find((x) => String(x.username || '').toLowerCase() === name.toLowerCase());
+          if (!u) throw new Error(`No one with the username @${name}`);
+          if (!confirm(`Send ${fmt(n)} coins to ${u.first_name || '@' + name}? This can’t be undone.`)) { go.disabled = false; return; }
+          await api('POST', '/coins/send', { user_id: u.id, amount: n, ...(note.value.trim() ? { note: note.value.trim() } : {}) });
+          toast('Coins sent');
+          await reload();
+        } catch (err) { go.disabled = false; toast(err.message); }
+      };
+      who.focus();
+    }
+    render();
+  }
+
+  async function tipPost(c, m) {
+    let balance = 0;
+    try { balance = (await api('GET', '/coins')).balance; } catch (_) { /* shown as 0 */ }
+    const { box, close } = dialog();
+    const send = async (n) => {
+      try { await api('POST', '/coins/tip', { message_id: m.id, amount: n }); toast(`Tipped ${fmt(n)} coins 🪙`); close(); } catch (err) { toast(err.message); }
+    };
+    const own = el('input', { type: 'number', min: '1', placeholder: 'Other amount' });
+    box.replaceChildren(el('h2', {}, `Tip “${c.title}”`), el('div', { class: 'muted', style: 'font-size:12.5px' }, `You have ${fmt(balance)} coins. Most of the tip goes to the channel’s owner.`),
+      el('div', { class: 'chips' }, ...[10, 50, 100, 500].map((n) => el('button', { onclick: () => send(n) }, `${n} 🪙`))), own,
+      el('div', { class: 'actions' }, el('button', { class: 'btn ghost', onclick: close }, 'Cancel'),
+        el('button', { class: 'btn', onclick: () => { const n = parseInt(own.value, 10); if (n > 0) send(n); } }, 'Tip')));
+  }
+
   async function deleteMessages(c, ids, forEveryone) {
     try {
       await api('POST', `/chats/${c.id}/messages/delete`, { message_ids: ids, for_everyone: forEveryone });
