@@ -1,0 +1,52 @@
+# Installs the Windows setup on a fresh Windows machine and takes a picture of every step (ci-winshots branch).
+name: Windows installer screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Get the installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download desktop-latest -R ${{ github.repository }} -p hushavia-windows-setup.exe -D C:\shots-in
+      - name: Install step by step, with a screenshot each time
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force C:\shots | Out-Null
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("C:\shots\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          $wsh = New-Object -ComObject WScript.Shell
+          $p = Start-Process C:\shots-in\hushavia-windows-setup.exe -PassThru
+          Start-Sleep 6
+          Shot "1-tasks"
+          $wsh.AppActivate($p.Id) | Out-Null; Start-Sleep 1; $wsh.SendKeys("{ENTER}"); Start-Sleep 3
+          Shot "2-ready"
+          $wsh.AppActivate($p.Id) | Out-Null; Start-Sleep 1; $wsh.SendKeys("{ENTER}"); Start-Sleep 2
+          Shot "3-installing"
+          Start-Sleep 12
+          Shot "4-finish"
+          $wsh.AppActivate($p.Id) | Out-Null; Start-Sleep 1; $wsh.SendKeys("{ENTER}"); Start-Sleep 25
+          Shot "5-app"
+          Get-ChildItem C:\shots
+      - name: Save to ci-winshots branch
+        shell: bash
+        run: |
+          cd /c/shots
+          git init -q -b ci-winshots
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "screens"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-winshots
