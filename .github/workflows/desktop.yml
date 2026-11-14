@@ -140,7 +140,50 @@ jobs:
         run: |
           mkdir -p ../dist
           case "${{ matrix.platform }}" in
-            windows) (cd build/windows/x64/runner/Release && 7z a -tzip ../../../../../../dist/hushavia-windows.zip . >/dev/null) ;;
+            windows)
+              # the Visual C++ runtime next to the app, so it starts on a PC that never installed it
+              for d in msvcp140.dll vcruntime140.dll vcruntime140_1.dll; do cp "/c/Windows/System32/$d" build/windows/x64/runner/Release/ || true; done
+              (cd build/windows/x64/runner/Release && 7z a -tzip ../../../../../../dist/hushavia-windows.zip . >/dev/null)
+              # a normal Windows installer: Next → Install, Start menu + desktop icon, uninstall in Settings → Apps
+              ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+              [ -f "$ISCC" ] || { choco install innosetup -y --no-progress >/dev/null; }
+              cat > ../dist-setup.iss <<ISS
+          [Setup]
+          AppId={{6D4AFF00-4855-5348-4156-494131000001}
+          AppName=Hushavia
+          AppVersion=1.1.${{ github.run_number }}
+          AppPublisher=Hushavia
+          DefaultDirName={localappdata}\Programs\Hushavia
+          DisableDirPage=yes
+          DisableProgramGroupPage=yes
+          PrivilegesRequired=lowest
+          OutputDir=$(cygpath -w "$PWD/../dist")
+          OutputBaseFilename=hushavia-windows-setup
+          SetupIconFile=$(cygpath -w "$PWD/windows/runner/resources/app_icon.ico")
+          UninstallDisplayIcon={app}\Hushavia.exe
+          Compression=lzma2/max
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesInstallIn64BitMode=x64compatible
+          ArchitecturesAllowed=x64compatible
+          CloseApplications=yes
+
+          [Tasks]
+          Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Shortcuts:"
+
+          [Files]
+          Source: "$(cygpath -w "$PWD/build/windows/x64/runner/Release")\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{autoprograms}\Hushavia"; Filename: "{app}\Hushavia.exe"
+          Name: "{autodesktop}\Hushavia"; Filename: "{app}\Hushavia.exe"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\Hushavia.exe"; Description: "Open Hushavia"; Flags: nowait postinstall skipifsilent
+          ISS
+              sed -i 's/^          //' ../dist-setup.iss
+              "$ISCC" ../dist-setup.iss | tail -5
+              ;;
             linux) tar -C build/linux/x64/release -czf ../dist/hushavia-linux.tar.gz --transform 's/^bundle/hushavia/' bundle ;;
             macos) (cd build/macos/Build/Products/Release && ditto -c -k --keepParent Hushavia.app ../../../../../../dist/hushavia-macos.zip) ;;
           esac
@@ -164,7 +207,7 @@ jobs:
               fi
             else
               gh release create desktop-latest dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
-                --title "Hushavia Desktop (test build)" --notes "Windows: unzip and run Hushavia.exe. Linux: extract and run hushavia/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0
+                --title "Hushavia Desktop (test build)" --notes "Windows: run hushavia-windows-setup.exe (or unzip hushavia-windows.zip and run Hushavia.exe). Linux: extract and run hushavia/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0
             fi
             echo "retry $i"; sleep $((10 + i * 7))
           done
@@ -172,6 +215,7 @@ jobs:
 
       - name: Upload report
         if: always() && steps.want.outputs.go == '1'
+        continue-on-error: true # the artifact quota can be full: the apps are already published
         uses: actions/upload-artifact@v4
         with:
           name: report-${{ matrix.platform }}
