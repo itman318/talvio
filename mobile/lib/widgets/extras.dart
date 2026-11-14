@@ -42,9 +42,12 @@ final _mentionRe = RegExp(r'(@[A-Za-z][A-Za-z0-9_]{3,31}|@all\b)|(https?://\S+)|
 
 /// Message text: formatting, highlighted @mentions / #tags, tappable links, Tali emoji, spoilers.
 class MessageText extends StatefulWidget {
-  const MessageText(this.text, {super.key, this.style, this.onCommand});
+  const MessageText(this.text, {super.key, this.style, this.onCommand, this.trailing});
   final String text;
   final TextStyle? style;
+
+  /// Added after the last word (the bubble keeps room there for the time and ticks).
+  final InlineSpan? trailing;
 
   /// Bot commands (/start, /help@some_bot) become tappable and are sent again when tapped.
   final void Function(String command)? onCommand;
@@ -163,6 +166,7 @@ class _MessageTextState extends State<MessageText> {
       last = m.end;
     }
     if (last < text.length) spans.addAll(_linked(text.substring(last), base, accent));
+    if (widget.trailing != null) spans.add(widget.trailing!);
     return Text.rich(TextSpan(style: base, children: spans));
   }
 }

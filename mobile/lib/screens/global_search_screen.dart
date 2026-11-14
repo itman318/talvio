@@ -128,7 +128,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   static bool _isTag(String q) => RegExp(r'^#[\p{L}\p{N}_]{2,64}$', unicode: true).hasMatch(q);
 
   /// A hashtag result: my chat opens directly, a public channel I'm not in opens its preview.
-  Future<void> _openResultChat(Map<String, dynamic> chat) async {
+  Future<void> _openResultChat(Map<String, dynamic> chat, {int? messageId}) async {
     if (chat['is_member'] == false) {
       return _openPublic({
         'chat_id': chat['id'],
@@ -140,7 +140,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         'is_member': false,
       });
     }
-    return _openChat(Chat.fromJson(chat));
+    return _openChat(Chat.fromJson(chat), messageId: messageId);
   }
 
   void _setFilter(String f) {
@@ -150,13 +150,14 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   }
 
   // ------------------------------------------------------------------ opening results
-  Future<void> _openChat(Chat c) async {
+  /// [messageId]: a found message — the chat opens at it.
+  Future<void> _openChat(Chat c, {int? messageId}) async {
     _remember(_q.text);
     if (widget.chatId == c.id) {
-      Navigator.pop(context);
+      Navigator.pop(context, messageId); // searching inside that chat: go back to it, at the message
       return;
     }
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: c.id, initial: c)));
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: c.id, initial: c, jumpTo: messageId)));
   }
 
   Future<void> _openPublic(Map<String, dynamic> info) async {
@@ -352,7 +353,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       section('Groups', 'groups', groups.length, [for (final g in groups) _PublicTile(info: g, query: q, onTap: () => _openPublic(g))]),
       section('Bots', 'bots', bots.length, [for (final b in bots) _UserTile(user: b.$1, about: b.$2, users: b.$3, query: q, onTap: () => _openUser(b.$1))]),
       section(_isTag(q) ? 'Posts with $q' : 'Messages', 'messages', _messages.length, [
-        for (final r in _messages) _MessageTile(result: r, query: _isTag(q) ? q.substring(1) : q, onTap: () => _openResultChat(Map<String, dynamic>.from(r['chat'] as Map))),
+        for (final r in _messages) _MessageTile(result: r, query: _isTag(q) ? q.substring(1) : q, onTap: () => _openResultChat(Map<String, dynamic>.from(r['chat'] as Map), messageId: ((r['message'] as Map?)?['id'] as num?)?.toInt())),
       ]),
     ]);
   }

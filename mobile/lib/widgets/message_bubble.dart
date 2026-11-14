@@ -114,6 +114,8 @@ class MessageBubble extends StatelessWidget {
         return VoicePlayer(message: m, color: isMine ? MineInk.line(context) : accent, isMine: isMine, title: isMine ? 'You' : (m.sender?.name ?? chat.title));
       case 'video_note':
         return VideoNoteBubble(message: m, size: 200);
+      case 'sticker': // a sticker sent as a reply sits inside the bubble, under the quote
+        return StickerView(message: m, size: 120);
       case 'file':
         if (AudioFilePlayer.isAudio(m)) return AudioFilePlayer(message: m, color: isMine ? MineInk.line(context) : accent, isMine: isMine);
         return MessageFile(message: m, color: accent);
@@ -172,16 +174,18 @@ class MessageBubble extends StatelessWidget {
         : 0;
     if (((m.type == 'sticker' || m.type == 'video_note') && m.replyTo == null) || big > 0) {
       // stickers float without a bubble; a small time chip sits under them
-      return Align(
-        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-        child: GestureDetector(
+      return _withAvatar(
+        context,
+        reserveAvatar,
+        GestureDetector(
           onLongPress: onLongPress,
           onTap: onTap,
+          behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            padding: EdgeInsets.fromLTRB(reserveAvatar ? 2 : 10, 3, 10, 3),
             child: Column(crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               if (showSender && !isMine)
-                Text(m.sender?.name ?? '', style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(m.sender?.name ?? 'Deleted Account', style: TextStyle(color: colorForId(m.senderId ?? 0), fontWeight: FontWeight.w600, fontSize: 13)),
               if (big > 0)
                 BigEmoji(text: m.text.trim(), count: big, fresh: DateTime.now().difference(m.createdAt).inSeconds.abs() < 8)
               else if (m.type == 'video_note')
@@ -203,6 +207,18 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    // a plain text message: the time and ticks sit at the end of the last line (no extra row)
+    final inlineMeta = m.type == 'text' &&
+        hasText &&
+        !_asChannel &&
+        !commentMode &&
+        m.linkPreview == null &&
+        m.reactions.isEmpty &&
+        m.inlineKeyboard.isEmpty &&
+        !(m.sendState == SendState.failed && m.errorText != null) &&
+        !hasChecklist(m.text) &&
+        !isOnlyTali(m.text) &&
+        !_rtl.hasMatch(m.text);
     final children = <Widget>[
       if (_asChannel && !isMine)
         Padding(
@@ -262,7 +278,7 @@ class MessageBubble extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (m.replyTo!.media != null) ...[
+                if (m.replyTo!.media != null && !m.replyTo!.deleted && const ['image', 'video', 'gif', 'sticker', 'video_note'].contains(m.replyTo!.type)) ...[
                   ReplyThumb(media: m.replyTo!.media!, type: m.replyTo!.type, size: 36),
                   const SizedBox(width: 8),
                 ],
@@ -312,12 +328,28 @@ class MessageBubble extends StatelessWidget {
       if (hasText)
         if (m.type == 'text' && hasChecklist(m.text))
           ChecklistText(message: m, canTick: isMine && !m.isLocal, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor))
+        else if (inlineMeta)
+          Stack(children: [
+            MessageText(
+              m.text,
+              style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor),
+              onCommand: onCommand,
+              // an invisible copy of the time keeps its place free at the end of the text
+              trailing: WidgetSpan(
+                alignment: PlaceholderAlignment.bottom,
+                child: ExcludeSemantics(
+                  child: IgnorePointer(child: Opacity(opacity: 0, child: Padding(padding: const EdgeInsets.only(left: 10), child: _metaRow(context, meta, ghost: true)))),
+                ),
+              ),
+            ),
+            Positioned(right: 0, bottom: 1.5, child: _metaRow(context, meta)),
+          ])
         else
           MessageText(m.text, style: TextStyle(fontSize: 15.5, height: 1.35, color: textColor), onCommand: onCommand),
       if (m.linkPreview != null && m.type == 'text') LinkPreviewCard(data: m.linkPreview!, accent: accent),
       ReactionChips(message: m),
       if (m.inlineKeyboard.isNotEmpty) InlineKeyboard(message: m, botId: m.senderId, botName: m.sender?.name ?? chat.title),
-      if (!mediaOnly) const SizedBox(height: 2),
+      if (!mediaOnly && !inlineMeta) const SizedBox(height: 2),
       if (!mediaOnly && _asChannel)
         // channel post footer: who wrote it on the left; views, edited and time on the right
         Padding(
@@ -349,23 +381,7 @@ class MessageBubble extends StatelessWidget {
             if (m.isLocal) ...[const SizedBox(width: 3), _ticks(context)],
           ]),
         ),
-      if (!mediaOnly && !_asChannel)
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
-          // groups: how many members saw it (counted once each, never the sender)
-          // groups: how many members saw it; anywhere: a forwarded channel post shows the post's views
-          if ((chat.isGroup || m.forwardedFromName != null) && m.views > 0 && !m.isLocal) ...[ViewsBadge(count: m.views, color: meta, fontSize: 11), const SizedBox(width: 6)],
-          if (m.editedAt != null)
-            GestureDetector(
-              onTap: m.isLocal ? null : () => showEditHistory(context, m),
-              child: Text('edited · ', style: TextStyle(fontSize: 11, color: meta, decoration: TextDecoration.underline, decorationColor: meta)),
-            ),
-          Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11, color: meta)),
-          if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
-        ],
-      ),
+      if (!mediaOnly && !_asChannel && !inlineMeta) _metaRow(context, meta),
       if (m.sendState == SendState.failed && m.errorText != null)
         Text(m.errorText!, style: TextStyle(color: scheme.error, fontSize: 12)),
       if (_asChannel && onDiscuss != null && !m.isLocal)
@@ -451,7 +467,7 @@ class MessageBubble extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(bottom: lastInGroup ? 5 : 3, right: 6),
             child: Material(
-              color: dark ? Colors.white.withAlpha(22) : Colors.black.withAlpha(22),
+              color: dark ? Colors.white.withAlpha(26) : Colors.black.withAlpha(64),
               shape: const CircleBorder(),
               child: InkWell(
                 customBorder: const CircleBorder(),
@@ -463,10 +479,37 @@ class MessageBubble extends StatelessWidget {
         ]),
       );
     }
+    return _withAvatar(context, reserveAvatar, bubble);
+  }
+
+  static final _rtl = RegExp(r'[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]');
+
+  /// Sender signature · views · edited · time · ticks (not for channel posts: they have a wider footer).
+  Widget _metaRow(BuildContext context, Color meta, {bool ghost = false}) {
+    final m = message;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (m.authorSignature != null) Text('${m.authorSignature} · ', style: TextStyle(fontSize: 11, color: meta)),
+        // groups: how many members saw it; anywhere: a forwarded channel post shows the post's views
+        if ((chat.isGroup || m.forwardedFromName != null) && m.views > 0 && !m.isLocal) ...[ViewsBadge(count: m.views, color: meta, fontSize: 11), const SizedBox(width: 6)],
+        if (m.editedAt != null)
+          GestureDetector(
+            onTap: m.isLocal || ghost ? null : () => showEditHistory(context, m),
+            child: Text('edited · ', style: TextStyle(fontSize: 11, color: meta, fontStyle: FontStyle.italic)),
+          ),
+        Text(messageTime(m.createdAt), style: TextStyle(fontSize: 11, color: meta)),
+        if (isMine) ...[const SizedBox(width: 3), ghost ? _tickIcon(context) : _ticks(context)],
+      ],
+    );
+  }
+
+  /// Group chats keep a column on the left for the sender's photo (next to the last message of a stack).
+  Widget _withAvatar(BuildContext context, bool reserveAvatar, Widget bubble) {
+    final m = message;
     if (!reserveAvatar) {
       return Align(alignment: isMine ? Alignment.centerRight : Alignment.centerLeft, child: bubble);
     }
-    // group chats: a column for the sender's photo, shown next to the last message of each stack
     return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
       Padding(
         padding: EdgeInsets.fromLTRB(8, 0, 6, lastInGroup ? 3 : 1),

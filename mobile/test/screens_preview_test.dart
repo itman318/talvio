@@ -21,6 +21,9 @@ import 'package:chatapp/state/auth_state.dart';
 import 'package:chatapp/state/chat_store.dart';
 import 'package:chatapp/theme/brand.dart';
 import 'package:chatapp/widgets/coin_cards.dart';
+import 'package:chatapp/widgets/album_view.dart';
+import 'package:chatapp/widgets/extras.dart';
+import 'package:chatapp/widgets/message_bubble.dart';
 
 const _plans = [
   {'id': 1, 'name': '1 month', 'months': 1, 'price_text': r'$3.99', 'per_month_text': r'$3.99', 'price': 3.99, 'save_percent': 0, 'badge': null, 'usdt': 3.99},
@@ -197,6 +200,62 @@ void main() {
         );
     await show(cards(), 'chat-cards');
     await show(cards(), 'chat-cards-dark', dark: true);
+
+    // ---- chat bubbles: a private chat and a group, with pretend messages
+    final day = DateTime(2026, 11, 12, 10);
+    Message t(int id, int from, String text, {int min = 0, Map<String, dynamic>? reply, String? fwd, bool edited = false, List<Map<String, dynamic>>? reactions, String? album, String type = 'text', AppUser? sender}) => Message.fromJson({
+          'id': id, 'chat_id': 5, 'sender_id': from, 'type': type, 'text': text, 'album_id': album,
+          'created_at': day.add(Duration(minutes: min)).toIso8601String(),
+          if (edited) 'edited_at': day.add(Duration(minutes: min + 1)).toIso8601String(),
+          if (fwd != null) 'forwarded_from': {'name': fwd},
+          if (reactions != null) 'reactions': reactions,
+          if (sender != null) 'sender': {'id': sender.id, 'first_name': sender.firstName, 'last_name': sender.lastName},
+          if (reply != null) 'reply_to': reply,
+        });
+    Widget bubbles(Chat chat, List<Widget> rows) => Scaffold(
+          appBar: AppBar(title: Text(chat.title)),
+          body: Builder(builder: (c) => ColoredBox(color: ChatColors.of(c).background, child: ListView(padding: const EdgeInsets.symmetric(vertical: 10), children: rows))),
+        );
+    final priv = Chat.fromJson({'id': 5, 'type': 'private', 'title': 'Hina Khan', 'read_up_to': 6, 'delivered_up_to': 8, 'peer': {'id': 2, 'first_name': 'Hina', 'last_name': 'Khan'}});
+    MessageBubble b(Chat chat, Message m, {bool first = true, bool last = true, bool sender = false}) =>
+        MessageBubble(message: m, chat: chat, isMine: m.senderId == 1, showSender: sender, firstInGroup: first, lastInGroup: last, showAvatar: last && chat.isGroup && m.senderId != 1);
+    List<Widget> privRows() => [
+          DateChip(date: day),
+          b(priv, t(1, 2, 'Assalam o alaikum! Kya haal hai?')),
+          b(priv, t(2, 1, 'Walaikum salam 🙂', min: 1), last: false),
+          b(priv, t(3, 1, 'Sab theek. Kal ki meeting ka time confirm ho gaya hai, 11 baje office me milte hain — file bhi sath le aana.', min: 1, edited: true), first: false),
+          b(priv, t(4, 2, 'ok', min: 2), last: false),
+          b(priv, t(5, 2, 'Check this: https://hushavia.com/plan and **bold**, _italic_, `code`', min: 2), first: false),
+          b(priv, t(6, 1, 'Done ✅', min: 3, reply: {'id': 5, 'sender_id': 2, 'sender_name': 'Hina Khan', 'type': 'text', 'text': 'Check this: https://hushavia.com/plan'})),
+          b(priv, t(7, 2, 'یہ پیغام اردو میں ہے، وقت الگ سطر پر رہے گا', min: 4)),
+          b(priv, t(8, 1, 'Great news!', min: 5, reactions: [{'emoji': '❤️', 'count': 1}, {'emoji': '👍', 'count': 1}])),
+          b(priv, t(9, 2, 'Forwarded text with a longer line to see wrapping in the bubble', min: 6, fwd: 'Cricket News')),
+          b(priv, t(10, 1, '🎉', min: 7)),
+          const SystemBubble(text: 'Hina Khan pinned a message'),
+          AlbumBubble(chat: priv, isMine: true, items: [for (var i = 0; i < 3; i++) t(20 + i, 1, '', min: 8, album: 'a1', type: 'image')]),
+          AlbumBubble(chat: priv, isMine: false, items: [for (var i = 0; i < 5; i++) t(30 + i, 2, i == 0 ? 'Trip photos 🌄' : '', min: 9, album: 'a2', type: 'image')]),
+        ];
+    await show(Builder(builder: (c) => bubbles(priv, privRows())), 'chat-private');
+    await show(Builder(builder: (c) => bubbles(priv, privRows())), 'chat-private-dark', dark: true);
+    await show(Builder(builder: (c) => bubbles(priv, privRows())), 'chat-private-2', then: () async {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -700));
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+    final group = Chat.fromJson({'id': 5, 'type': 'group', 'title': 'Family', 'member_count': 6, 'read_up_to': 3});
+    final ali = AppUser.fromJson({'id': 3, 'first_name': 'Ali', 'last_name': 'Raza'});
+    final sara = AppUser.fromJson({'id': 4, 'first_name': 'Sara', 'last_name': ''});
+    List<Widget> groupRows() => [
+          DateChip(date: day),
+          b(group, t(1, 3, 'Aaj shaam ko sab aa rahe hain?', sender: ali), sender: true, last: false),
+          b(group, t(2, 3, 'Khana 8 baje', min: 1, sender: ali), first: false),
+          b(group, t(3, 1, 'Haan, main 7:30 tak pohanch jaunga', min: 2)),
+          b(group, t(4, 4, '👍', min: 3, sender: sara), sender: true),
+          b(group, t(5, 4, 'Main dessert le aaungi', min: 3, sender: sara, reply: {'id': 2, 'sender_id': 3, 'sender_name': 'Ali Raza', 'type': 'text', 'text': 'Khana 8 baje'})),
+          AlbumBubble(chat: group, isMine: false, senderName: 'Ali Raza', sender: ali, showAvatar: true, items: [for (var i = 0; i < 4; i++) t(40 + i, 3, '', min: 5, album: 'a3', type: 'image', sender: ali)]),
+          AlbumBubble(chat: group, isMine: true, items: [for (var i = 0; i < 2; i++) t(50 + i, 1, i == 0 ? 'Yeh dekho' : '', min: 6, album: 'a4', type: 'image')]),
+        ];
+    await show(Builder(builder: (c) => bubbles(group, groupRows())), 'chat-group');
+    await show(Builder(builder: (c) => bubbles(group, groupRows())), 'chat-group-dark', dark: true);
 
     Widget launcher(Future<void> Function(BuildContext) run) => Scaffold(body: Builder(builder: (c) => Center(child: TextButton(onPressed: () => run(c), child: const Text('open')))));
     Future<void> open() async {

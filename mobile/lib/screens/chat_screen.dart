@@ -78,7 +78,10 @@ import '../widgets/contact_card.dart';
 import '../widgets/emoji_status.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, required this.chatId, this.initial, this.quote});
+  const ChatScreen({super.key, required this.chatId, this.initial, this.quote, this.jumpTo});
+
+  /// Open the chat at this message (a search result, a pinned message).
+  final int? jumpTo;
 
   final int chatId;
   final Chat? initial;
@@ -103,15 +106,17 @@ class _ChatScreenState extends State<ChatScreen> {
   final _msgKeys = <Object, GlobalKey>{}; // by ChatStore.keyOf: stays the same from "sending" to "sent"
   GlobalKey? _keyForId(int id) {
     for (final m in _store.messagesOf(chatId)) {
-      if (m.id == id) return _msgKeys[_store.keyOf(m)];
+      if (m.id == id) return (m.albumId == null ? null : _msgKeys['album-${m.albumId}']) ?? _msgKeys[_store.keyOf(m)];
     }
     return null;
   }
   int? _flashId; // briefly highlighted after jumping to it
+  String? _flashAlbum;
+  String? _draftBeforeEdit; // what was typed before "Edit" replaced it
   bool _slashShown = false; // quick replies panel was showing
 
   /// Tap on a reply: scroll to the original message (loading older ones if needed) and light it up.
-  Future<void> _jumpToMessage(int id) async {
+  Future<void> _jumpToMessage(int id, {String missing = 'The original message is no longer available'}) async {
     var list = _store.messagesOf(chatId);
     var tries = 0;
     while (!list.any((x) => x.id == id) && _store.hasMore(chatId) && tries < 15) {
@@ -122,7 +127,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     final index = list.indexWhere((x) => x.id == id);
     if (index < 0) {
-      showInfo(context, 'The original message is no longer available');
+      showInfo(context, missing);
       return;
     }
     // the list is built lazily: move towards it until it is on screen, then centre it
@@ -138,10 +143,19 @@ class _ChatScreenState extends State<ChatScreen> {
     if (ctx == null || !ctx.mounted) return;
     await Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
     if (!mounted) return;
-    setState(() => _flashId = id);
+    final hit = list[index];
+    setState(() {
+      _flashId = id;
+      _flashAlbum = hit.albumId;
+    });
     HapticFeedback.selectionClick();
     Future<void>.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted && _flashId == id) setState(() => _flashId = null);
+      if (mounted && _flashId == id) {
+        setState(() {
+          _flashId = null;
+          _flashAlbum = null;
+        });
+      }
     });
   }
   String? _emojiOnly; // the message box holds exactly one emoji
@@ -429,40 +443,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Groups with rules: show them once when I first open the group (and again when they change).
-  Future<void> _showRulesOnce() async {
-    final chat = _store.chatById(chatId) ?? _chat;
-    if (chat == null || chat.rules.trim().isEmpty || chat.isAdmin) return;
-    final key = 'rules.seen.${chat.id}';
-    final sig = '${chat.rules.hashCode}';
-    try {
-      final p = await SharedPreferences.getInstance();
-      if (p.getString(key) == sig || !mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Center(child: AppMascot(pose: TaviPose.think, size: 96)),
-              Text('Rules of ${chat.title}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.45),
-                child: SingleChildScrollView(child: Text(chat.rules, style: const TextStyle(fontSize: 15, height: 1.45))),
-              ),
-              const SizedBox(height: 16),
-              AuroraButton(label: 'I agree', icon: Icons.check_rounded, onPressed: () => Navigator.pop(ctx)),
-            ]),
-          ),
-        ),
-      );
-      await p.setString(key, sig);
-    } catch (_) {}
-  }
-
   Future<void> _loadOnline() async {
     try {
       final r = await context.read<AppServices>().api.get('/chats/$chatId/online') as Map;
@@ -476,7 +456,6 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && ((_store.chatById(chatId) ?? _chat)?.isGroup ?? false)) {
         _loadOnline();
-        _showRulesOnce();
       }
     });
     _store = context.read<ChatStore>();
@@ -531,6 +510,12 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_chat!.isGroup) _store.loadMembers(chatId).catchError((_) => <GroupMember>[]);
       if (_chat!.isChannel && _chat!.isPublic && mounted) _loadAd();
       if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowRules());
+      final at = widget.jumpTo;
+      if (at != null && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _jumpToMessage(at, missing: 'That message is no longer in this chat');
+        });
+      }
     } catch (e) {
       _error = '$e';
     }
@@ -577,7 +562,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _inlineDebounce?.cancel();
     if (_guarded) ScreenGuard.release();
     if (_protectedOn) ScreenGuard.protectedOpen--;
-    final draft = _editing == null ? _text.text : '';
+    final draft = _editing == null ? _text.text : (_draftBeforeEdit ?? '');
     if (draft != (_prefs.draft(chatId) ?? '')) _store.syncDraft(chatId, draft);
     _prefs.setDraft(chatId, draft);
     _store.closeChat(chatId);
@@ -623,8 +608,8 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () async {
               try {
                 final r = await api.post('/ads/${ad['id']}/click') as Map;
-                final url = '${r['url'] ?? ad['url']}';
-                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                final uri = Uri.tryParse('${r['url'] ?? ad['url'] ?? ''}');
+                if (uri != null && uri.hasScheme) launchUrl(uri, mode: LaunchMode.externalApplication);
               } catch (_) {}
             },
             child: Text('${ad['button_text']}'),
@@ -655,12 +640,26 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
     if (_editing != null) {
       final m = _editing!;
-      setState(() => _editing = null);
-      _text.clear();
+      if (text == m.text.trim()) {
+        _endEdit(); // nothing changed
+        return;
+      }
+      final before = _draftBeforeEdit;
+      _endEdit();
       try {
         await _store.editMessage(m, text);
       } catch (e) {
-        if (mounted) showError(context, e);
+        if (!mounted) return;
+        showError(context, e);
+        // not saved: put the text back so nothing typed is lost
+        if (_editing == null && _text.text == (before ?? '')) {
+          setState(() {
+            _draftBeforeEdit = before;
+            _editing = m;
+            _replyTo = null;
+            _text.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+          });
+        }
       }
       return;
     }
@@ -671,13 +670,26 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok || !mounted) return;
     }
     final reply = _replyTo;
-    setState(() => _replyTo = null);
+    setState(() {
+      _replyTo = null;
+      _unreadMarkerId = null; // I answered: the "unread" line has done its job
+    });
     _text.clear();
     final fx = asDraft ? null : (effect ?? autoEffectFor(text));
     if (fx != null) playMessageEffect(context, fx);
     final quote = _quote;
     if (quote != null) setState(() => _quote = null);
     await _store.sendText(chatId, text, replyTo: reply, silent: silent, effect: effect, quote: quote, asDraft: asDraft);
+  }
+
+  /// Leaves "Edit message": what was typed before comes back into the box.
+  void _endEdit() {
+    final back = _draftBeforeEdit ?? '';
+    setState(() {
+      _editing = null;
+      _draftBeforeEdit = null;
+      _text.value = TextEditingValue(text: back, selection: TextSelection.collapsed(offset: back.length));
+    });
   }
 
   /// Long-press on send: send silently or schedule.
@@ -805,6 +817,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now.add(const Duration(minutes: 10))));
     if (time == null || !mounted) return;
     final at = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    if (!at.isAfter(DateTime.now().add(const Duration(seconds: 30)))) {
+      showInfo(context, 'Pick a time in the future');
+      return;
+    }
     try {
       await _store.scheduleText(chatId, text, at);
       _text.clear();
@@ -842,7 +858,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final noCaption = type == 'voice' || type == 'video_note';
     if (caption.isNotEmpty && !noCaption) _text.clear();
     final reply = _replyTo;
-    setState(() => _replyTo = null);
+    setState(() {
+      _replyTo = null;
+      _unreadMarkerId = null;
+    });
     await _store.sendMedia(
       chatId,
       path,
@@ -1495,10 +1514,13 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       case 'edit':
         setState(() {
+          if (_editing == null) _draftBeforeEdit = _text.text;
           _editing = m;
           _replyTo = null;
-          _text.text = m.text;
+          _emojiOpen = false;
+          _text.value = TextEditingValue(text: m.text, selection: TextSelection.collapsed(offset: m.text.length));
         });
+        _focus.requestFocus();
         break;
       case 'forward':
         Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])));
@@ -1548,12 +1570,19 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       case 'copy':
         final text = list.where((m) => m.text.isNotEmpty).map((m) => list.length > 1 && chat.isGroup ? '${m.sender?.name ?? ''}: ${m.text}' : m.text).join('\n\n');
+        if (text.isEmpty) {
+          if (mounted) showInfo(context, 'There is no text to copy');
+          break;
+        }
         await Clipboard.setData(ClipboardData(text: text));
         if (mounted) showInfo(context, list.length == 1 ? 'Copied' : '${list.length} messages copied');
         break;
       case 'forward':
-        final ids = list.where((m) => !m.viewOnce && m.type != 'poll' && m.type != 'call').map((m) => m.id).toList();
-        if (ids.isEmpty) return;
+        final ids = list.where((m) => !m.viewOnce && !const ['poll', 'call', 'gift', 'giveaway'].contains(m.type)).map((m) => m.id).toList();
+        if (ids.isEmpty) {
+          showInfo(context, 'These messages can’t be forwarded');
+          return;
+        }
         await Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: ids)));
         break;
       case 'delete':
@@ -1675,7 +1704,8 @@ class _ChatScreenState extends State<ChatScreen> {
           if (chat.peer != null) startCall(context, chat.peer!, video: true);
           break;
         case 'search':
-          Navigator.push(context, MaterialPageRoute(builder: (_) => GlobalSearchScreen(chatId: chat.id)));
+          final found = await Navigator.push<int>(context, MaterialPageRoute(builder: (_) => GlobalSearchScreen(chatId: chat.id)));
+          if (found != null && mounted) await _jumpToMessage(found, missing: 'That message is no longer in this chat');
           break;
         case 'voice_chat':
           await openVoiceChat(context, chat, start: chat.voiceChat == null);
@@ -2282,10 +2312,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _startReply(Message m) {
-    setState(() {
-      _replyTo = m;
-      _editing = null;
-    });
+    if (_editing != null) _endEdit();
+    setState(() => _replyTo = m);
     _focus.requestFocus();
   }
 
@@ -2398,102 +2426,118 @@ class _ChatScreenState extends State<ChatScreen> {
         if (m.albumId != null && i > 0 && messages[i - 1].albumId == m.albumId) {
           return const SizedBox.shrink(); // drawn as part of the album below
         }
-        final older0 = i + 1 < messages.length ? messages[i + 1] : null;
-        if (m.albumId != null && older0?.albumId == m.albumId) {
-          var j = i;
+        // several photos sent together are one row: `items` oldest first, `m` is the newest
+        var j = i;
+        if (m.albumId != null) {
           while (j + 1 < messages.length && messages[j + 1].albumId == m.albumId) {
             j++;
           }
-          final items = messages.sublist(i, j + 1).reversed.toList();
-          final mineA = chat.isChannel ? m.isLocal : m.senderId == store.myId;
-          return _Vanish(
-            key: ValueKey<Object>('album-${m.albumId}'),
-            on: items.any((x) => _vanishing.contains(x.id)),
-            fresh: store.isFresh(m),
-            child: AlbumBubble(
-            items: items,
-            isMine: mineA,
-            senderName: chat.isGroup && !mineA ? m.sender?.name : null,
-            onLongPress: () => _messageMenu(m, chat),
-          ));
         }
-        final older = older0;
+        final isAlbum = j > i;
+        final items = isAlbum ? messages.sublist(i, j + 1).reversed.toList() : const <Message>[];
+        final ids = isAlbum ? [for (final x in items) x.id] : [m.id];
+        final head = isAlbum ? items.first : m; // the oldest part: decides the day and the stack
+        final older = j + 1 < messages.length ? messages[j + 1] : null;
         final newDay = older == null ||
-            older.createdAt.year != m.createdAt.year ||
-            older.createdAt.month != m.createdAt.month ||
-            older.createdAt.day != m.createdAt.day;
+            older.createdAt.year != head.createdAt.year ||
+            older.createdAt.month != head.createdAt.month ||
+            older.createdAt.day != head.createdAt.day;
         final mine = chat.isChannel ? m.isLocal : m.senderId == store.myId;
         // stacks: same sender, same day, less than 5 minutes apart
         bool joined(Message? a, Message b) =>
             a != null &&
             !a.isSystem &&
+            !b.isSystem &&
             a.senderId == b.senderId &&
-            a.albumId == null &&
             a.createdAt.year == b.createdAt.year &&
             a.createdAt.month == b.createdAt.month &&
             a.createdAt.day == b.createdAt.day &&
             a.createdAt.difference(b.createdAt).inMinutes.abs() < 5;
         final newer = i > 0 ? messages[i - 1] : null;
-        final first = newDay || !joined(older, m);
-        final last = !joined(newer, m) ||
-            (newer != null && (newer.createdAt.year != m.createdAt.year || newer.createdAt.month != m.createdAt.month || newer.createdAt.day != m.createdAt.day));
+        final first = newDay || !joined(older, head);
+        final last = !joined(newer, m);
         final showSender = chat.isGroup && !mine && (older == null || older.senderId != m.senderId || older.isSystem || newDay);
         final selecting = _selected.isNotEmpty;
-        final picked = _selected.contains(m.id);
-        final rowKey = store.keyOf(m);
+        final picked = ids.every(_selected.contains);
+        final local = isAlbum ? items.any((x) => x.isLocal) : m.isLocal;
+        final Object rowKey = isAlbum ? 'album-${m.albumId}' : store.keyOf(m);
+        final flash = isAlbum ? _flashAlbum == m.albumId : _flashId == m.id;
+        void pick() {
+          HapticFeedback.mediumImpact();
+          FocusManager.instance.primaryFocus?.unfocus();
+          setState(() => _selected.addAll(ids));
+        }
+
         return _Vanish(
           key: ValueKey<Object>(rowKey),
-          on: _vanishing.contains(m.id),
+          on: ids.any(_vanishing.contains),
           fresh: store.isFresh(m),
           child: Column(
-          children: [
-            if (newDay) DateChip(date: m.createdAt),
-            if (m.id == _unreadMarkerId) _unreadDivider(),
-            if (m.isSystem)
-              SystemBubble(text: systemText(m, store))
-            else
-              _selectable(
-                selecting: selecting && !m.isLocal,
-                picked: picked,
-                onTap: () => setState(() => picked ? _selected.remove(m.id) : _selected.add(m.id)),
-                child: SwipeReply(
-                onReply: selecting || m.isLocal || !chat.canPost ? null : () => _startReply(m),
-                onDoubleTap: null, // one tap opens the menu right away (❤️ is the first reaction there)
-                child: Builder(builder: (bctx) => AnimatedContainer(
-                key: _msgKeys.putIfAbsent(rowKey, () => GlobalKey()),
-                duration: const Duration(milliseconds: 400),
-                color: _flashId == m.id ? Brand.primary.withValues(alpha: 0.16) : Colors.transparent,
-                child: MessageBubble(
-                onReplyTap: m.replyTo == null ? null : () => _jumpToMessage(m.replyTo!.id),
-                        onCommand: (chat.isBot || chat.isGroup) && chat.canPost ? (c) { HapticFeedback.selectionClick(); _store.sendText(chatId, c); } : null,
-                message: m,
-                chat: chat,
-                isMine: mine,
-                showSender: showSender,
-                firstInGroup: first,
-                lastInGroup: last,
-                showAvatar: last && chat.isGroup && !mine,
-                // a tap opens the message menu; a long press picks the message (Copy · Forward · Reply · Delete on top),
-                // and more messages can then be picked with a tap
-                onLongPress: m.isSystem || m.isLocal
-                    ? null
-                    : () {
-                        HapticFeedback.mediumImpact();
-                        FocusManager.instance.primaryFocus?.unfocus();
-                        setState(() => _selected.add(m.id));
-                      },
-                onTap: selecting ? null : () => _messageMenu(m, chat, bctx),
-                onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
-                onForward: chat.isChannel && !chat.noForwards && !selecting
-                    ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
-                    : null,
-              ))),
-              ),
-              ),
-            if (stranger && !mine && !m.isSystem && m.text.isNotEmpty)
-              if (ScamGuard.check(m.text) case final kind?) _scamNote(chat, kind),
-          ],
-        ));
+            children: [
+              if (newDay) DateChip(date: head.createdAt),
+              if (ids.contains(_unreadMarkerId)) _unreadDivider(),
+              if (m.isSystem)
+                SystemBubble(text: systemText(m, store))
+              else
+                _selectable(
+                  selecting: selecting && !local,
+                  picked: picked,
+                  onTap: () => setState(() => picked ? _selected.removeAll(ids) : _selected.addAll(ids)),
+                  child: SwipeReply(
+                    onReply: selecting || local || !chat.canPost ? null : () => _startReply(isAlbum ? items.first : m),
+                    onDoubleTap: null, // one tap opens the menu right away (❤️ is the first reaction there)
+                    child: Builder(
+                      builder: (bctx) => AnimatedContainer(
+                        key: _msgKeys.putIfAbsent(rowKey, () => GlobalKey()),
+                        duration: const Duration(milliseconds: 400),
+                        color: flash ? Brand.primary.withValues(alpha: 0.16) : Colors.transparent,
+                        child: isAlbum
+                            ? AlbumBubble(
+                                items: items,
+                                chat: chat,
+                                isMine: mine,
+                                senderName: showSender ? (m.sender?.name ?? 'Deleted Account') : null,
+                                sender: m.sender,
+                                firstInGroup: first,
+                                lastInGroup: last,
+                                showAvatar: last && chat.isGroup && !mine,
+                                // a long press picks the whole album; a tap beside the photos opens the menu of its caption
+                                onLongPress: local ? null : pick,
+                                onTap: selecting || local ? null : () => _messageMenu(items.firstWhere((x) => x.text.isNotEmpty, orElse: () => items.first), chat, bctx),
+                              )
+                            : MessageBubble(
+                                onReplyTap: m.replyTo == null ? null : () => _jumpToMessage(m.replyTo!.id),
+                                onCommand: (chat.isBot || chat.isGroup) && chat.canPost
+                                    ? (c) {
+                                        HapticFeedback.selectionClick();
+                                        _store.sendText(chatId, c);
+                                      }
+                                    : null,
+                                message: m,
+                                chat: chat,
+                                isMine: mine,
+                                showSender: showSender,
+                                firstInGroup: first,
+                                lastInGroup: last,
+                                showAvatar: last && chat.isGroup && !mine,
+                                // a tap opens the message menu; a long press picks the message (Copy · Forward · Reply · Delete on top),
+                                // and more messages can then be picked with a tap
+                                onLongPress: m.isLocal ? null : pick,
+                                onTap: selecting ? null : () => _messageMenu(m, chat, bctx),
+                                onDiscuss: chat.isChannel && chat.linkedChat != null ? () => _openChat(chat.linkedChat!.id) : null,
+                                onForward: chat.isChannel && !chat.noForwards && !selecting
+                                    ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => ForwardScreen(fromChatId: chatId, messageIds: [m.id])))
+                                    : null,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (stranger && !mine && !m.isSystem && !isAlbum && m.text.isNotEmpty)
+                if (ScamGuard.check(m.text) case final kind?) _scamNote(chat, kind),
+            ],
+          ),
+        );
       },
     );
   }
@@ -2579,7 +2623,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final code = await ChatPasscode.askNew(context);
       if (code == null) return;
       await ChatPasscode.set(chat.id, code);
-      if (mounted) showInfo(context, 'Passcode set — this chat now asks for it when opened');
+      if (!mounted) return;
+      showInfo(context, 'Passcode set — this chat now asks for it when opened');
       setState(() {});
       return;
     }
@@ -2737,7 +2782,8 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _showPins(chat),
+        // one pinned message: go straight to it; several: the list (each row jumps to its message)
+        onTap: () => chat.pinnedCount > 1 ? _showPins(chat) : _jumpToMessage(p.id, missing: 'The pinned message is too far back — open “Search messages” to find it'),
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 7, 4, 7),
           child: Row(children: [
@@ -2773,12 +2819,13 @@ class _ChatScreenState extends State<ChatScreen> {
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
+        showDragHandle: true,
         builder: (ctx) => SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
             child: ListView(shrinkWrap: true, children: [
               ListTile(
-                title: Text('${pins.length} pinned', style: const TextStyle(fontWeight: FontWeight.w600)),
+                title: Text('${pins.length} pinned message${pins.length == 1 ? '' : 's'}', style: const TextStyle(fontWeight: FontWeight.w600)),
                 trailing: (chat.type == 'private' || chat.can('pin_messages')) && pins.length > 1
                     ? TextButton(
                         onPressed: () async {
@@ -2791,8 +2838,13 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               ...pins.map((m) => ListTile(
                     leading: const Icon(Icons.push_pin_outlined),
-                    title: Text(m.preview, maxLines: 3, overflow: TextOverflow.ellipsis),
+                    title: Text(taliToPlain(m.preview), maxLines: 3, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${m.sender?.name ?? chat.title} · ${chatListTime(m.createdAt)}'),
+                    trailing: const Icon(Icons.north_east_rounded, size: 18, color: Brand.muted),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _jumpToMessage(m.id, missing: 'That message is too far back — open “Search messages” to find it');
+                    },
                   )),
             ]),
           ),
@@ -3121,11 +3173,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return SafeArea(
       top: false,
-      child: Container(
-        color: ChatColors.of(context).bar,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        child: GlassPanel(
+        radius: 24,
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${chat.title} is not in your contacts', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text('${chat.title} is not in your contacts', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
           const SizedBox(height: 2),
           const Text('Accept to reply and get notifications from this chat.', textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontSize: 13)),
           const SizedBox(height: 10),
@@ -3158,6 +3212,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ]),
         ]),
+        ),
       ),
     );
   }
@@ -3195,14 +3250,29 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     if (chat.isChannel && !chat.canPost && !chat.isSuspended) {
+      // a subscriber can't write here: one wide button, like the message box it replaces
       return SafeArea(
         top: false,
-        child: Container(
-          color: ChatColors.of(context).bar,
-          width: double.infinity,
-          child: TextButton(
-            onPressed: () => _chatMenu('mute', chat),
-            child: Text(chat.isMuted ? 'Unmute' : 'Mute', style: const TextStyle(fontSize: 16)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+          child: GlassPanel(
+            radius: 26,
+            ring: false,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(26),
+                onTap: () => _chatMenu('mute', chat),
+                child: SizedBox(
+                  height: 50,
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, size: 20, color: Brand.primary),
+                    const SizedBox(width: 8),
+                    Text(chat.isMuted ? 'Unmute' : 'Mute', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: Brand.primary)),
+                  ]),
+                ),
+              ),
+            ),
           ),
         ),
       );
@@ -3224,16 +3294,19 @@ class _ChatScreenState extends State<ChatScreen> {
     if (blockedText != null) {
       return SafeArea(
         top: false,
-        child: Container(
-          color: ChatColors.of(context).bar,
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(chat.peer?.blockedMe == true || chat.peer?.blocked == true ? Icons.block_rounded : Icons.info_outline_rounded, color: Brand.muted, size: 22),
-            const SizedBox(height: 6),
-            Text(blockedText, textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
-            if (blockedAction != null) blockedAction,
-          ]),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+          child: GlassPanel(
+            radius: 22,
+            ring: false,
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+            child: Row(children: [
+              Icon(chat.peer?.blockedMe == true || chat.peer?.blocked == true ? Icons.block_rounded : Icons.info_outline_rounded, color: Brand.muted, size: 22),
+              const SizedBox(width: 10),
+              Expanded(child: Text(blockedText, style: const TextStyle(color: Brand.muted, fontSize: 13.5, height: 1.3))),
+              if (blockedAction != null) blockedAction else const SizedBox(width: 6),
+            ]),
+          ),
         ),
       );
     }
@@ -3322,11 +3395,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           IconButton(
                             icon: const Icon(Icons.close_rounded, size: 20),
                             tooltip: 'Cancel',
-                            onPressed: () => setState(() {
-                              if (_editing != null) _text.clear();
-                              _editing = null;
-                              _replyTo = null;
-                            }),
+                            onPressed: () {
+                              if (_editing != null) {
+                                _endEdit();
+                              } else {
+                                setState(() => _replyTo = null);
+                              }
+                            },
                           ),
                         ]),
                       ),
