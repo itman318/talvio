@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/api_client.dart';
 import '../core/screen_guard.dart';
 import '../core/services.dart';
 import '../models/models.dart';
@@ -27,6 +28,7 @@ class ViewOnceBubble extends StatefulWidget {
 
 class _ViewOnceBubbleState extends State<ViewOnceBubble> {
   bool _busy = false;
+  DateTime? _retryUntil; // the download failed after opening: it may be tried again until then
 
   String get _what => switch (widget.message.type) { 'video' => 'Video', 'voice' => 'Voice message', _ => 'Photo' };
   IconData get _icon => switch (widget.message.type) { 'video' => Icons.videocam_rounded, 'voice' => Icons.mic_rounded, _ => Icons.photo_rounded };
@@ -38,14 +40,40 @@ class _ViewOnceBubbleState extends State<ViewOnceBubble> {
     setState(() => _busy = true);
     File? file;
     try {
-      await store.openOnce(m);
-      file = await services.media.get(m.media!);
+      try {
+        await store.openOnce(m);
+      } on ApiException catch (e) {
+        // a second try after a failed download: the server already counts it as opened
+        if (!(e.code == 'already_opened' && _retryUntil != null)) rethrow;
+      }
+      // the file can be fetched only for a short while after opening: don't give up on one bad moment
+      Object? last;
+      for (var attempt = 0; attempt < 3 && file == null; attempt++) {
+        try {
+          file = await services.media.get(m.media!);
+        } catch (e) {
+          last = e;
+          await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+        }
+      }
+      if (file == null) {
+        _retryUntil ??= DateTime.now().add(const Duration(seconds: 160));
+        throw last ?? Exception('download failed');
+      }
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted) {
+        final again = _retryUntil != null && DateTime.now().isBefore(_retryUntil!);
+        if (again) {
+          showInfo(context, 'Couldn’t load it — check your connection and tap again within 2 minutes');
+        } else {
+          showError(context, e);
+        }
+      }
       return;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+    _retryUntil = null;
     if (!mounted) return;
     await Navigator.of(context).push(PageRouteBuilder<void>(
       opaque: true,
@@ -65,10 +93,11 @@ class _ViewOnceBubbleState extends State<ViewOnceBubble> {
     final m = widget.message;
     final c = widget.color;
     final opened = widget.isMine ? m.openedBy.isNotEmpty : m.openedBy.contains(widget.myId);
-    final canOpen = !widget.isMine && !opened && !m.isLocal;
+    final retry = _retryUntil != null && DateTime.now().isBefore(_retryUntil!);
+    final canOpen = !widget.isMine && (!opened || retry) && !m.isLocal;
     final status = widget.isMine
         ? (m.isLocal ? 'Sending…' : (opened ? (m.openedBy.length > 1 ? 'Opened by ${m.openedBy.length}' : 'Opened') : 'Not opened yet'))
-        : (opened ? 'Opened' : 'Tap to view once');
+        : (retry ? 'Tap to try again' : (opened ? 'Opened' : 'Tap to view once'));
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: canOpen && !_busy ? _open : null,

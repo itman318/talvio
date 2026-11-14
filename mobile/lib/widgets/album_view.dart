@@ -65,7 +65,7 @@ class AlbumBubble extends StatelessWidget {
   Widget _cell(Message m, double w, double h) => SizedBox(
         width: w,
         height: h,
-        child: m.media == null && m.localFilePath == null
+        child: m.media == null
             ? const ColoredBox(color: Colors.black12)
             : FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge, child: MessageImage(message: m, maxWidth: math.max(w, h))),
       );
@@ -139,7 +139,6 @@ class AlbumBubble extends StatelessWidget {
       onLongPress: onLongPress,
       onTap: onTap,
       child: Container(
-        width: width + 6,
         margin: EdgeInsets.fromLTRB(reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
@@ -150,7 +149,10 @@ class AlbumBubble extends StatelessWidget {
               ? Border.all(color: const Color(0xFFD8CFFF), width: 0.8)
               : isMine ? null : Border.all(color: dark ? Colors.white.withAlpha(16) : const Color(0xFFE6E8F0), width: 0.8),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        // as wide as the photos: the caption wraps under them
+        child: SizedBox(
+          width: width,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           if (senderName != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(9, 4, 9, 5),
@@ -203,6 +205,7 @@ class AlbumBubble extends StatelessWidget {
               ),
             ),
         ]),
+        ),
       ),
     );
 

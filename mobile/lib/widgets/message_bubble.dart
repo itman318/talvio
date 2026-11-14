@@ -447,7 +447,10 @@ class MessageBubble extends StatelessWidget {
           ),
           child: Theme(
             data: isMine && !soft ? _inkTheme : Theme.of(context),
-            child: _asChannel
+            // everything inside (polls, contacts, files…) writes in the bubble's own ink unless it picks a colour
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: textColor),
+              child: _asChannel
                 // channel posts are full cards (like a feed), so the footer can spread across them
                 ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: children)
                 : Column(
@@ -455,6 +458,7 @@ class MessageBubble extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: children,
                   ),
+            ),
           ),
         ),
       );

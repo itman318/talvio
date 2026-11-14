@@ -252,6 +252,8 @@ void main() {
           b(group, t(4, 4, '👍', min: 3, sender: sara), sender: true),
           b(group, t(5, 4, 'Main dessert le aaungi', min: 3, sender: sara, reply: {'id': 2, 'sender_id': 3, 'sender_name': 'Ali Raza', 'type': 'text', 'text': 'Khana 8 baje'})),
           AlbumBubble(chat: group, isMine: false, senderName: 'Ali Raza', sender: ali, showAvatar: true, items: [for (var i = 0; i < 4; i++) t(40 + i, 3, '', min: 5, album: 'a3', type: 'image', sender: ali)]),
+          b(group, Message.fromJson({'id': 60, 'chat_id': 5, 'sender_id': 1, 'type': 'poll', 'created_at': day.add(const Duration(minutes: 4)).toIso8601String(),
+            'poll': {'id': 1, 'question': 'Kis din milna hai?', 'total_voters': 5, 'anonymous': false, 'my_votes': [0], 'options': [{'text': 'Saturday', 'votes': 3}, {'text': 'Sunday', 'votes': 2}]}})),
           AlbumBubble(chat: group, isMine: true, items: [for (var i = 0; i < 2; i++) t(50 + i, 1, i == 0 ? 'Yeh dekho' : '', min: 6, album: 'a4', type: 'image')]),
         ];
     await show(Builder(builder: (c) => bubbles(group, groupRows())), 'chat-group');

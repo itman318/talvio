@@ -65,6 +65,8 @@ class _PollViewState extends State<PollView> {
     final results = p.showResults;
     final total = p.options.fold<int>(0, (s, o) => s + o.votes);
     final kind = p.quiz ? 'Quiz' : (p.anonymous ? 'Anonymous poll' : 'Public poll');
+    // readable on any bubble: a softer shade of the bubble's own text colour
+    final muted = (DefaultTextStyle.of(context).style.color ?? Brand.muted).withValues(alpha: 0.62);
 
     return SizedBox(
       width: 250,
@@ -74,7 +76,7 @@ class _PollViewState extends State<PollView> {
           Text(p.question, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15.5)),
           const SizedBox(height: 2),
           Text(p.isClosed ? 'Final results · $kind' : (p.closeAt != null ? '$kind · ${_endsIn(p.closeAt!)}' : kind),
-              style: const TextStyle(fontSize: 12, color: Brand.muted)),
+              style: TextStyle(fontSize: 12, color: muted)),
           const SizedBox(height: 8),
           for (var i = 0; i < p.options.length; i++) _option(p, i, results, total, accent),
           if (p.multiple && !results && !p.isClosed)
@@ -93,12 +95,15 @@ class _PollViewState extends State<PollView> {
           const SizedBox(height: 4),
           Row(
             children: [
-              Text('${p.totalVoters} ${p.totalVoters == 1 ? 'vote' : 'votes'}', style: const TextStyle(fontSize: 12, color: Brand.muted)),
+              Text('${p.totalVoters} ${p.totalVoters == 1 ? 'vote' : 'votes'}', style: TextStyle(fontSize: 12, color: muted)),
               const Spacer(),
               if (p.voted && !p.quiz && !p.isClosed)
                 GestureDetector(
                   onTap: _busy ? null : () => _vote([]),
-                  child: Text('Retract vote', style: TextStyle(fontSize: 12, color: accent)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text('Retract vote', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: accent)),
+                  ),
                 ),
             ],
           ),
@@ -155,8 +160,8 @@ class _PollViewState extends State<PollView> {
             ]),
             const SizedBox(height: 3),
             ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(value: pct, minHeight: 5, color: barColor, backgroundColor: barColor.withAlpha(30)),
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(value: pct, minHeight: 6, color: barColor, backgroundColor: barColor.withAlpha(30)),
             ),
           ],
         ),
