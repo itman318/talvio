@@ -62,8 +62,10 @@ async function createTicket(userId, body = {}) {
   const mediaId = await ownImage(userId, body.media_id);
   const t = await db.tx(async (c) => {
     const r = await c.query(
-      'INSERT INTO support_tickets (user_id, subject, category, device) VALUES ($1, $2, $3, $4) RETURNING *',
-      [userId, subject, category, device],
+      // Hushavia Plus: priority support — the ticket starts as "high", so it is answered first
+      `INSERT INTO support_tickets (user_id, subject, category, device, priority)
+       VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN 'high' ELSE 'normal' END) RETURNING *`,
+      [userId, subject, category, device, await require('./payment.service').isPremium(userId)], // eslint-disable-line global-require
     );
     await c.query('INSERT INTO support_messages (ticket_id, from_user, text, media_id) VALUES ($1, TRUE, $2, $3)', [r.rows[0].id, text, mediaId]);
     return r.rows[0];

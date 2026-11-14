@@ -1450,3 +1450,6 @@ ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_che
 ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins', 'stripe'));
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS stripe_session VARCHAR(255);
 CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_stripe_idx ON payment_orders (stripe_session) WHERE stripe_session IS NOT NULL;
+
+-- ------------------------------------------------------------------ Plus: story stealth (a Plus member's view is not shown to the author)
+ALTER TABLE story_views ADD COLUMN IF NOT EXISTS stealth BOOLEAN NOT NULL DEFAULT FALSE;

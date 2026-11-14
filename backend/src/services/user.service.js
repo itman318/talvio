@@ -73,6 +73,8 @@ function allowedFor(rel, ownerId, key, setting) {
 function emojiStatus(u) {
   if (!u.emoji_status) return null;
   if (u.emoji_status_until && new Date(u.emoji_status_until) <= new Date()) return null;
+  // a Plus-only status goes away when Plus ends
+  if (PLUS_STATUS.includes(u.emoji_status) && !(u.premium_until && new Date(u.premium_until) > new Date())) return null;
   return { emoji: u.emoji_status, until: u.emoji_status_until ? new Date(u.emoji_status_until).toISOString() : null };
 }
 
@@ -691,7 +693,7 @@ async function deleteAccount(userId, { byAdmin = false } = {}) {
 
   const groups = await db.many(
     `SELECT cm.chat_id FROM chat_members cm JOIN chats c ON c.id = cm.chat_id
-     WHERE cm.user_id = $1 AND c.type = 'group'`,
+     WHERE cm.user_id = $1 AND c.type IN ('group', 'channel')`,
     [userId],
   );
   for (const g of groups) {
@@ -707,6 +709,10 @@ async function deleteAccount(userId, { byAdmin = false } = {}) {
     );
     await c.query('UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [userId]);
     await c.query('DELETE FROM contacts WHERE owner_id = $1 OR contact_id = $1', [userId]);
+    // their stories go with the account; paid channel months stop renewing
+    await c.query('UPDATE stories SET deleted_at = now() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+    await c.query('DELETE FROM channel_subs WHERE user_id = $1', [userId]);
+    await c.query(`UPDATE ad_campaigns SET status = 'paused' WHERE owner_id = $1 AND status = 'active'`, [userId]);
   });
   bus.emit('sessions:revoked', { userId, sessionIds: null, reason: 'account_deleted' });
   bus.emit('user:updated', { userId });

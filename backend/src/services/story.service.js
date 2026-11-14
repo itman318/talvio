@@ -146,20 +146,28 @@ async function view(userId, storyIdRaw, body = {}) {
   const s = await requireVisible(userId, storyIdRaw);
   if (s.user_id === userId) return { ok: true };
   const emoji = body.emoji ? v.str(String(body.emoji), { field: 'emoji', max: 16 }) : null;
+  // Plus: story stealth — the view is remembered for me (seen / unseen) but the author doesn't see it.
+  // A reaction is sent to the author on purpose, so it always shows.
+  const stealth = !emoji && (await require('./payment.service').isPremium(userId)); // eslint-disable-line global-require
   const r = await db.one(
-    `INSERT INTO story_views (story_id, viewer_id, emoji) VALUES ($1, $2, $3)
-     ON CONFLICT (story_id, viewer_id) DO UPDATE SET emoji = COALESCE(EXCLUDED.emoji, story_views.emoji)
-     RETURNING (xmax = 0) AS inserted`,
-    [s.id, userId, emoji],
+    `INSERT INTO story_views (story_id, viewer_id, emoji, stealth) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (story_id, viewer_id) DO UPDATE SET emoji = COALESCE(EXCLUDED.emoji, story_views.emoji),
+       stealth = story_views.stealth AND EXCLUDED.stealth
+     RETURNING (xmax = 0) AS inserted, stealth`,
+    [s.id, userId, emoji, stealth],
   );
-  if (r && r.inserted) await db.query('UPDATE stories SET views_count = views_count + 1 WHERE id = $1', [s.id]);
+  if (r && r.inserted && !r.stealth) await db.query('UPDATE stories SET views_count = views_count + 1 WHERE id = $1', [s.id]);
+  // a stealth view that became visible (they reacted): it counts now
+  if (r && !r.inserted && emoji && stealth === false) {
+    await db.query(`UPDATE stories SET views_count = (SELECT count(*) FROM story_views WHERE story_id = $1 AND NOT stealth) WHERE id = $1`, [s.id]);
+  }
   return { ok: true };
 }
 
 async function viewers(userId, storyIdRaw) {
   const s = await db.one('SELECT * FROM stories WHERE id = $1 AND user_id = $2', [v.id(storyIdRaw, 'story_id'), userId]);
   if (!s) throw notFound('story_not_found', 'Story not found');
-  const rows = await db.many('SELECT viewer_id, emoji, viewed_at FROM story_views WHERE story_id = $1 ORDER BY viewed_at DESC LIMIT 500', [s.id]);
+  const rows = await db.many('SELECT viewer_id, emoji, viewed_at FROM story_views WHERE story_id = $1 AND NOT stealth ORDER BY viewed_at DESC LIMIT 500', [s.id]);
   const users = await userService.getUsersMap(userId, rows.map((r) => r.viewer_id));
   return rows
     .filter((r) => users.has(r.viewer_id))

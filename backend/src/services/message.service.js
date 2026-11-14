@@ -1513,7 +1513,9 @@ async function schedule(userId, chat, body, internal = {}) {
   if (at.getTime() < Date.now() + 30 * 1000) throw badRequest('invalid_input', 'Pick a time at least 1 minute from now');
   if (at.getTime() > Date.now() + 365 * 24 * 3600 * 1000) throw badRequest('invalid_input', 'You can schedule up to a year ahead');
   const pending = await db.one(`SELECT count(*) AS n FROM scheduled_messages WHERE sender_id = $1 AND status = 'pending'`, [userId]);
-  if (pending.n >= 100) throw badRequest('too_many_scheduled', 'You can have at most 100 scheduled messages');
+  // Hushavia Plus: bigger schedules
+  const maxScheduled = (await require('./payment.service').isPremium(userId)) ? 500 : 100; // eslint-disable-line global-require
+  if (pending.n >= maxScheduled) throw badRequest('too_many_scheduled', `You can have at most ${maxScheduled} scheduled messages${maxScheduled === 100 ? ' — Hushavia Plus allows 500' : ''}`);
   const payload = {
     type: body.type || 'text',
     text: typeof body.text === 'string' ? body.text : '',

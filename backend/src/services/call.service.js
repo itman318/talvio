@@ -100,8 +100,8 @@ async function assertCanCall(caller, calleeId, video, { viaLink = false } = {}) 
   if (video) await settings.requireFeature('feature_video_calls', 'Video calls');
   moderation.assertNotRestricted(caller);
   if (calleeId === caller.id) throw badRequest('invalid_call', 'You can’t call yourself');
-  const callee = await db.one('SELECT id, status, privacy_calls FROM users WHERE id = $1', [calleeId]);
-  if (!callee || callee.status !== 'active') throw notFound('user_not_found', 'This user can’t be called');
+  const callee = await db.one('SELECT id, status, privacy_calls, is_bot FROM users WHERE id = $1', [calleeId]);
+  if (!callee || callee.status !== 'active' || callee.is_bot) throw notFound('user_not_found', 'This user can’t be called');
   if (await userService.isBlockedEither(caller.id, calleeId)) throw forbidden('blocked', 'You can’t call this user');
   if (viaLink) return callee; // the callee shared a call link: privacy allows it, blocks still apply
   const rel = await userService.relations(caller.id, [calleeId]);
