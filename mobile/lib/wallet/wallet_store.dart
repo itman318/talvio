@@ -246,7 +246,19 @@ class WalletStore extends ChangeNotifier {
   /// The phrase, after the owner check. Null when the check failed.
   Future<String?> readPhrase(BuildContext context, String reason) async {
     if (!await confirmOwner(context, reason)) return null;
-    return _secure.read(key: _phraseKey);
+    String? phrase;
+    try {
+      phrase = await _secure.read(key: _phraseKey);
+    } catch (_) {
+      phrase = null;
+    }
+    // say so instead of doing nothing: the button would otherwise seem dead
+    if (phrase == null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('This phone couldn’t open the wallet’s key right now. Restart the app and try again — your recovery phrase always brings the wallet back.'),
+      ));
+    }
+    return phrase;
   }
 
   static Future<bool> phoneIsLocked() async {
