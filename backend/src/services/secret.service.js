@@ -96,8 +96,8 @@ async function create(userId, sessionId, body = {}) {
   if (peerId === userId) throw badRequest('invalid_input', 'You can’t start a vault chat with yourself');
   const me = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
   moderation.assertNotRestricted(me);
-  const peer = await db.one('SELECT id, status FROM users WHERE id = $1', [peerId]);
-  if (!peer || peer.status !== 'active') throw notFound('user_not_found', 'User not found');
+  const peer = await db.one('SELECT id, status, is_bot FROM users WHERE id = $1', [peerId]);
+  if (!peer || peer.status !== 'active' || peer.is_bot) throw notFound('user_not_found', 'User not found');
   if (await userService.isBlockedEither(userId, peerId)) throw forbidden('blocked', 'You can’t start a vault chat with this user');
   rateLimit.enforce(`secret:new:${userId}`, 10, 60 * 60 * 1000, 'You started too many vault chats. Try again later.');
   const open = await db.one(
@@ -211,6 +211,8 @@ async function send(userId, sessionId, body = {}) {
   const { row, role } = await requireDevice(userId, sessionId, body.secret_chat_id);
   const me = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
   moderation.assertNotRestricted(me);
+  // blocked after the vault chat was opened: no more messages either way
+  if (await userService.isBlockedEither(userId, row.initiator_id === userId ? row.peer_id : row.initiator_id)) throw forbidden('blocked', 'You can’t send messages to this user');
   if (typeof body.ciphertext !== 'string' || body.ciphertext.length < 16 || body.ciphertext.length > MAX_CIPHERTEXT) {
     throw badRequest('invalid_ciphertext', 'Invalid encrypted message');
   }
