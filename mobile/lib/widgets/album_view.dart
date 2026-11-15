@@ -139,7 +139,7 @@ class AlbumBubble extends StatelessWidget {
       onLongPress: onLongPress,
       onTap: onTap,
       child: Container(
-        margin: EdgeInsets.fromLTRB(reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
+        margin: EdgeInsets.fromLTRB(reserveAvatar ? 0 : 8, firstInGroup ? 4 : 1, 8, lastInGroup ? 4 : 1),
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: isMine && (themed != null || !dark) ? null : (isMine ? colors.mine : colors.other),

@@ -78,11 +78,11 @@ List<_Item> _settingsItems(BuildContext context, AuthState auth, AppUser me, Str
           }
         }),
       if (auth.feature('coins'))
-      _Item(money, Icons.campaign_rounded, const Color(0xFFE5484D), 'Advertise', subtitle: 'Show your ad in channels, paid with coins', keywords: 'ads ad sponsored promote marketing', onTap: () => go(const AdsScreen())),
-      if (auth.feature('coins'))
       _Item(money, Icons.monetization_on_rounded, const Color(0xFFF5A623), 'Coins', subtitle: 'Your Hushavia Coins: buy, send to friends, pay for Plus', keywords: 'coin coins gift balance stars money', onTap: () => go(const CoinsScreen())),
       if (auth.feature('wallet'))
       _Item(money, Icons.account_balance_wallet_rounded, const Color(0xFF12B89C), 'Wallet', subtitle: 'USDT, ETH, BNB, TRX … — your keys stay on this phone', keywords: 'crypto usdt trx tron money send receive', onTap: () => go(const WalletScreen())),
+      if (auth.feature('coins'))
+      _Item(money, Icons.campaign_rounded, const Color(0xFFE5484D), 'Advertise', subtitle: 'Show your ad in channels, paid with coins', keywords: 'ads ad sponsored promote marketing', onTap: () => go(const AdsScreen())),
       _Item(notif, Icons.notifications_rounded, const Color(0xFFE5484D), 'Notifications', subtitle: 'Chats, groups, channels, sound, vibration', keywords: 'sound vibrate alert push preview', onTap: () => go(const NotificationsScreen())),
       _Item(priv, Icons.health_and_safety_rounded, const Color(0xFF12A150), 'Security checkup', subtitle: 'Your protection score and quick fixes', keywords: 'secure score', onTap: () => go(const SecurityCheckupScreen())),
       _Item(priv, Icons.visibility_rounded, Brand.green, 'Privacy', subtitle: 'Who can see, message, call and find you', keywords: 'last seen online phone', onTap: () => go(const PrivacyScreen())),

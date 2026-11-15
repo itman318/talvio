@@ -432,7 +432,7 @@ class MessageBubble extends StatelessWidget {
           constraints: _asChannel
               ? BoxConstraints.tightFor(width: math.min(MediaQuery.of(context).size.width * 0.84, 520))
               : BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (reserveAvatar ? 0.72 : 0.78)),
-          margin: EdgeInsets.fromLTRB(showAvatar || reserveAvatar ? 0 : 8, firstInGroup ? 3 : 1, 8, lastInGroup ? 3 : 1),
+          margin: EdgeInsets.fromLTRB(showAvatar || reserveAvatar ? 0 : 8, firstInGroup ? 4 : 1, 8, lastInGroup ? 4 : 1),
           padding: mediaOnly ? const EdgeInsets.all(3) : const EdgeInsets.fromLTRB(12, 8, 12, 7),
           decoration: BoxDecoration(
             color: isMine && (themed != null || !dark) ? null : bg,
