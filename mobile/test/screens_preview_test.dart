@@ -15,7 +15,11 @@ import 'package:chatapp/core/api_client.dart';
 import 'package:chatapp/core/services.dart';
 import 'package:chatapp/core/socket_service.dart';
 import 'package:chatapp/models/models.dart';
+import 'package:chatapp/core/accounts.dart';
+import 'package:chatapp/core/proxy.dart';
 import 'package:chatapp/screens/coins_screen.dart';
+import 'package:chatapp/screens/my_profile_screen.dart';
+import 'package:chatapp/screens/settings_screens.dart';
 import 'package:chatapp/screens/premium_screens.dart';
 import 'package:chatapp/state/auth_state.dart';
 import 'package:chatapp/state/chat_store.dart';
@@ -109,6 +113,21 @@ class _Auth extends ChangeNotifier implements AuthState {
   dynamic noSuchMethod(Invocation i) => null;
 }
 
+/// Logged in as a pretend person (profile and settings pages).
+class _AuthMe extends _Auth {
+  final _me = AppUser.fromJson({'id': 1, 'first_name': 'Muhammad', 'last_name': 'Shareef', 'username': 'shareef', 'phone': '+92 300 1234567', 'email': 'me@example.com', 'bio': 'Building Hushavia — a private messenger. Tea first, code later.'});
+  @override
+  AppUser? get me => _me;
+  @override
+  final accounts = AccountStore();
+  @override
+  int get maxAccounts => 3;
+  @override
+  List<StoredAccount> get otherAccounts => const [];
+  @override
+  bool get plusAvailable => true;
+}
+
 class _Chats extends ChangeNotifier implements ChatStore {
   @override
   int? get myId => 1;
@@ -153,14 +172,15 @@ void main() {
       });
     }
 
-    Future<void> show(Widget screen, String name, {bool dark = false, Future<void> Function()? then}) async {
+    Future<void> show(Widget screen, String name, {bool dark = false, bool me = false, Future<void> Function()? then}) async {
       final base = dark ? Brand.dark() : Brand.light();
       await tester.pumpWidget(RepaintBoundary(
         key: shot,
         child: MultiProvider(
           providers: [
             Provider<AppServices>.value(value: _Services()),
-            ChangeNotifierProvider<AuthState>.value(value: _Auth()),
+            ChangeNotifierProvider<AuthState>.value(value: me ? _AuthMe() : _Auth()),
+            ChangeNotifierProvider<ProxyManager>.value(value: ProxyManager.instance),
             ChangeNotifierProvider<ChatStore>.value(value: _Chats()),
           ],
           child: MaterialApp(
@@ -178,6 +198,14 @@ void main() {
       await save(name);
     }
 
+    await show(const MyProfileScreen(), 'profile', me: true);
+    await show(const MyProfileScreen(), 'profile-dark', me: true, dark: true);
+    await show(const SettingsScreen(), 'settings', me: true);
+    await show(const SettingsScreen(), 'settings-dark', me: true, dark: true);
+    await show(const SettingsScreen(), 'settings-2', me: true, then: () async {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+      await tester.pump(const Duration(milliseconds: 400));
+    });
     await show(const CoinsScreen(), 'coins');
     await show(const CoinsScreen(), 'coins-dark', dark: true);
     await show(const PremiumScreen(), 'plus');

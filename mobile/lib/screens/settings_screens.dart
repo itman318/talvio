@@ -61,27 +61,9 @@ class _Item {
   Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap, maxSubtitleLines: 1);
 }
 
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  final _search = TextEditingController();
-  String _q = '';
-  bool _searchOpen = false;
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  List<_Item> _items(BuildContext context, AuthState auth, AppUser me, String support) {
+List<_Item> _settingsItems(BuildContext context, AuthState auth, AppUser me, String support) {
     void go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-    const acc = 'Account', notif = 'Notifications', priv = 'Privacy & security', chats = 'Chats', data = 'Data & connection', extra = 'Extras', help = 'Help';
+    const acc = 'Account', money = 'Coins & wallet', notif = 'Notifications', priv = 'Privacy & security', chats = 'Chats', data = 'Data & connection', extra = 'Extras', help = 'Help';
     return [
       _Item(acc, Icons.person_rounded, Brand.sky, 'Edit profile', subtitle: 'Name, photo, username, bio, birthday', keywords: 'name photo avatar username bio', onTap: () => go(const EditProfileScreen())),
       _Item(acc, Icons.auto_awesome_rounded, Brand.rose, 'Story highlights', subtitle: 'Keep your best stories on your profile', keywords: 'stories', onTap: () => go(const MyHighlightsScreen())),
@@ -96,11 +78,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }
         }),
       if (auth.feature('coins'))
-      _Item(acc, Icons.campaign_rounded, const Color(0xFFE5484D), 'Advertise', subtitle: 'Show your ad in channels, paid with coins', keywords: 'ads ad sponsored promote marketing', onTap: () => go(const AdsScreen())),
+      _Item(money, Icons.campaign_rounded, const Color(0xFFE5484D), 'Advertise', subtitle: 'Show your ad in channels, paid with coins', keywords: 'ads ad sponsored promote marketing', onTap: () => go(const AdsScreen())),
       if (auth.feature('coins'))
-      _Item(acc, Icons.monetization_on_rounded, const Color(0xFFF5A623), 'Coins', subtitle: 'Your Hushavia Coins: buy, send to friends, pay for Plus', keywords: 'coin coins gift balance stars money', onTap: () => go(const CoinsScreen())),
+      _Item(money, Icons.monetization_on_rounded, const Color(0xFFF5A623), 'Coins', subtitle: 'Your Hushavia Coins: buy, send to friends, pay for Plus', keywords: 'coin coins gift balance stars money', onTap: () => go(const CoinsScreen())),
       if (auth.feature('wallet'))
-      _Item(acc, Icons.account_balance_wallet_rounded, const Color(0xFF12B89C), 'Wallet', subtitle: 'USDT, ETH, BNB, TRX … — your keys stay on this phone', keywords: 'crypto usdt trx tron money send receive', onTap: () => go(const WalletScreen())),
+      _Item(money, Icons.account_balance_wallet_rounded, const Color(0xFF12B89C), 'Wallet', subtitle: 'USDT, ETH, BNB, TRX … — your keys stay on this phone', keywords: 'crypto usdt trx tron money send receive', onTap: () => go(const WalletScreen())),
       _Item(notif, Icons.notifications_rounded, const Color(0xFFE5484D), 'Notifications', subtitle: 'Chats, groups, channels, sound, vibration', keywords: 'sound vibrate alert push preview', onTap: () => go(const NotificationsScreen())),
       _Item(priv, Icons.health_and_safety_rounded, const Color(0xFF12A150), 'Security checkup', subtitle: 'Your protection score and quick fixes', keywords: 'secure score', onTap: () => go(const SecurityCheckupScreen())),
       _Item(priv, Icons.visibility_rounded, Brand.green, 'Privacy', subtitle: 'Who can see, message, call and find you', keywords: 'last seen online phone', onTap: () => go(const PrivacyScreen())),
@@ -139,6 +121,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 
+
+/// How each section looks on the settings hub.
+const Map<String, (IconData, Color)> _sectionLook = {
+  'Account': (Icons.person_rounded, Brand.sky),
+  'Coins & wallet': (Icons.account_balance_wallet_rounded, Color(0xFFF5A623)),
+  'Notifications': (Icons.notifications_rounded, Color(0xFFE5484D)),
+  'Privacy & security': (Icons.lock_rounded, Brand.green),
+  'Chats': (Icons.chat_bubble_rounded, Brand.primary),
+  'Data & connection': (Icons.data_usage_rounded, Color(0xFF3C83DE)),
+  'Extras': (Icons.widgets_rounded, Color(0xFF13A07E)),
+  'Help': (Icons.help_rounded, Brand.amber),
+};
+
+/// One section of the settings, on its own short page.
+class _SectionScreen extends StatelessWidget {
+  const _SectionScreen({required this.section});
+  final String section;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthState>();
+    final me = auth.me;
+    if (me == null) return const Scaffold();
+    final items = _settingsItems(context, auth, me, '${auth.appConfig['support_username'] ?? ''}').where((i) => i.section == section);
+    return Scaffold(
+      appBar: AppBar(title: Text(section)),
+      body: ListView(padding: const EdgeInsets.only(top: 4, bottom: 24), children: [
+        SettingsGroup(children: [for (final i in items) i.tile()]),
+      ]),
+    );
+  }
+}
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _search = TextEditingController();
+  String _q = '';
+  bool _searchOpen = false;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
@@ -147,7 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final support = '${auth.appConfig['support_username'] ?? ''}';
     void go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
     final plus = auth.me?.isPremium == true;
-    final items = _items(context, auth, me, support);
+    final items = _settingsItems(context, auth, me, support);
     final q = _q.trim().toLowerCase();
 
     final searchField = Padding(
@@ -210,17 +243,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
 
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final sections = <String>[];
     for (final i in items) {
       if (!sections.contains(i.section)) sections.add(i.section);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings'), actions: [
-        IconButton(tooltip: 'Search settings', icon: const Icon(Icons.search_rounded), onPressed: () => setState(() => _searchOpen = true)),
-      ]),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
+          // search: looks like a field, opens the search page
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Material(
+              color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEEF0F6),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => setState(() => _searchOpen = true),
+                child: const SizedBox(
+                  height: 42,
+                  child: Row(children: [
+                    SizedBox(width: 12),
+                    Icon(Icons.search_rounded, size: 20, color: Brand.muted),
+                    SizedBox(width: 8),
+                    Text('Search settings', style: TextStyle(color: Brand.muted, fontSize: 15)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
           // me: one compact card (tap → edit profile), then four shortcuts
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
@@ -288,15 +341,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Material(
                       color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
                         onTap: () => go(page),
                         child: SizedBox(
-                          height: 62,
+                          height: 74,
                           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Icon(icon, color: color, size: 22),
-                            const SizedBox(height: 4),
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(color: color.withValues(alpha: dark ? 0.2 : 0.12), shape: BoxShape.circle),
+                              child: Icon(icon, color: color, size: 19),
+                            ),
+                            const SizedBox(height: 5),
                             Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                           ]),
                         ),
@@ -356,7 +417,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-          for (final sec in sections) SettingsGroup(title: sec, children: [for (final i in items.where((i) => i.section == sec)) i.tile()]),
+          // every section is one row here and a short page of its own: the hub stays one screen long
+          SettingsGroup(children: [
+            for (final sec in sections)
+              () {
+                final of = items.where((i) => i.section == sec).toList();
+                final look = _sectionLook[sec] ?? (of.first.icon, of.first.color);
+                return SettingsTile(
+                  icon: look.$1,
+                  color: look.$2,
+                  title: sec,
+                  subtitle: of.length == 1 ? of.first.subtitle : of.map((i) => i.title).join(', '),
+                  maxSubtitleLines: 1,
+                  onTap: of.length == 1 ? of.first.onTap : () => go(_SectionScreen(section: sec)),
+                );
+              }(),
+          ]),
           SettingsGroup(children: [
             SettingsTile(
               icon: Icons.logout_rounded,

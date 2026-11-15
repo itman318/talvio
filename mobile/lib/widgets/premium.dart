@@ -122,7 +122,7 @@ class SettingsGroup extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
       rows.add(children[i]);
-      if (i < children.length - 1) rows.add(Divider(height: 1, indent: 64, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)));
+      if (i < children.length - 1) rows.add(Divider(height: 1, thickness: 0.7, indent: 62, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
@@ -133,11 +133,12 @@ class SettingsGroup extends StatelessWidget {
             child: Text(title!.toUpperCase(),
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+        // a Material, so a tap shows its ripple on the card
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(children: rows),
@@ -177,14 +178,14 @@ class SettingsTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: subtitle == null ? 12 : 10),
         child: Row(children: [
           Container(
             width: 34,
             height: 34,
             // flat colour tile: cleaner (like iOS / Telegram settings) and cheaper to draw than a gradient
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), color: color),
-            child: Icon(icon, color: Colors.white, size: 18),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10.5), color: color),
+            child: Icon(icon, color: Colors.white, size: 18.5),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -199,7 +200,7 @@ class SettingsTile extends StatelessWidget {
           ),
           if (trailing != null) Padding(padding: const EdgeInsets.only(left: 8), child: Text(trailing!, style: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant))),
           if (trailingWidget != null) Padding(padding: const EdgeInsets.only(left: 8), child: trailingWidget!),
-          if (onTap != null && !danger && trailingWidget == null) Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant.withValues(alpha: 0.6)),
+          if (onTap != null && !danger && trailingWidget == null) Icon(Icons.chevron_right_rounded, size: 21, color: scheme.onSurfaceVariant.withValues(alpha: 0.45)),
         ]),
       ),
     );

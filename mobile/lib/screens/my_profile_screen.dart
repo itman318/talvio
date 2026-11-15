@@ -1,4 +1,10 @@
+import 'dart:async';
+
 import 'read_later_screen.dart';
+import '../core/services.dart';
+import '../core/socket_service.dart';
+import 'coins_screen.dart' show CoinsScreen, fmtCoins;
+import 'wallet_screen.dart' show WalletScreen;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -130,92 +136,256 @@ class MyProfileScreen extends StatelessWidget {
             ),
           ),
         ]),
+        _StatsStrip(me: me),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true),
         _completeCard(context, me, () => go(const EditProfileScreen())),
-        SettingsGroup(title: 'About me', children: [
-          SettingsTile(
-            icon: Icons.notes_rounded,
-            color: Brand.sky,
-            title: me.bio.isEmpty ? 'Add a bio' : me.bio,
-            subtitle: me.bio.isEmpty ? 'A few words about you' : 'Bio',
-            maxSubtitleLines: 1,
-            onTap: () => go(const EditProfileScreen()),
-          ),
-          if (me.username != null)
-            SettingsTile(
-              icon: Icons.alternate_email_rounded,
-              color: Brand.primary,
-              title: '@${me.username}',
-              subtitle: 'Username · tap to copy your link',
-              trailingWidget: IconButton(
-                tooltip: 'QR code',
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.qr_code_2_rounded, color: Brand.primary),
-                onPressed: () => go(const MyQrScreen()),
+        // about me: the bio as text, then one slim line per detail
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: _Card(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              InkWell(
+                onTap: () => go(const EditProfileScreen()),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('BIO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.9, color: Brand.muted)),
+                    const SizedBox(height: 4),
+                    Text(me.bio.isEmpty ? 'Add a few words about you' : me.bio,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, height: 1.35, color: me.bio.isEmpty ? Brand.primary : null, fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
+                  ]),
+                ),
               ),
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: link!));
-                if (context.mounted) showInfo(context, 'Profile link copied');
-              },
+              if (me.username != null)
+                _InfoRow(
+                  icon: Icons.alternate_email_rounded,
+                  color: Brand.primary,
+                  value: me.username!,
+                  label: 'Copy link',
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: link!));
+                    if (context.mounted) showInfo(context, 'Profile link copied');
+                  },
+                ),
+              if ((me.phone ?? '').isNotEmpty)
+                _InfoRow(icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
+              if ((me.email ?? '').isNotEmpty) _InfoRow(icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: 'Login only'),
+              _InfoRow(
+                icon: Icons.cake_rounded,
+                color: Brand.rose,
+                value: me.birthday?.label ?? 'Add your birthday',
+                label: me.birthday == null ? 'Add' : 'Birthday',
+                onTap: () => go(const EditProfileScreen()),
+              ),
+            ]),
+          ),
+        ),
+        // my things: four shortcuts instead of a long list
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+          child: Row(children: [
+            Expanded(
+              child: QuickTile(
+                icon: Icons.bookmark_rounded,
+                label: 'My Notes',
+                color: Brand.violet,
+                onTap: () async {
+                  try {
+                    final chat = await context.read<ChatStore>().openPrivateWith(me.id);
+                    if (context.mounted) go(ChatScreen(chatId: chat.id, initial: chat));
+                  } catch (e) {
+                    if (context.mounted) showError(context, e);
+                  }
+                },
+              ),
             ),
-          if ((me.phone ?? '').isNotEmpty)
-            SettingsTile(
-              icon: Icons.phone_rounded,
-              color: Brand.green,
-              title: me.phone!,
-              subtitle: 'Phone · only people you allow see it',
-              onTap: () => go(const PrivacyScreen()),
-            ),
-          if ((me.email ?? '').isNotEmpty) SettingsTile(icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), title: me.email!, subtitle: 'Email · for login, never shown'),
-          SettingsTile(
-            icon: Icons.cake_rounded,
-            color: Brand.rose,
-            title: me.birthday?.label ?? 'Add your birthday',
-            subtitle: 'Birthday',
-            onTap: () => go(const EditProfileScreen()),
-          ),
-        ]),
-        SettingsGroup(title: 'My things', children: [
-          SettingsTile(
-            icon: Icons.bookmark_rounded,
-            color: Brand.violet,
-            title: 'My Notes',
-            subtitle: 'Saved messages, links and files',
-            onTap: () async {
-              try {
-                final chat = await context.read<ChatStore>().openPrivateWith(me.id);
-                if (context.mounted) go(ChatScreen(chatId: chat.id, initial: chat));
-              } catch (e) {
-                if (context.mounted) showError(context, e);
-              }
-            },
-          ),
-          SettingsTile(icon: Icons.bookmarks_rounded, color: const Color(0xFF3C83DE), title: 'Read later', subtitle: 'Saved messages to come back to', onTap: () => go(const ReadLaterScreen())),
-          SettingsTile(icon: Icons.auto_awesome_rounded, color: Brand.amber, title: 'Story highlights', onTap: () => go(const MyHighlightsScreen())),
-          SettingsTile(
-            icon: Icons.emoji_emotions_rounded,
-            color: const Color(0xFF6D4AFF),
-            title: 'Emoji status',
-            subtitle: me.statusEmoji != null ? 'Now: ${me.statusEmoji}' : 'An emoji next to your name',
-            onTap: () => showEmojiStatusPicker(context),
-          ),
-          SettingsTile(
-            icon: Icons.star_rounded,
-            color: Brand.premium,
-            title: me.isPremium ? 'Hushavia Plus — active' : 'Hushavia Plus',
-            subtitle: me.isPremium
-                ? 'Thank you for your support'
-                : (context.read<AuthState>().plusAvailable ? 'Animated stickers, themes, no ads and more' : 'Coming soon · stickers, themes, no ads'),
-            onTap: () => go(const PremiumScreen()),
-          ),
-        ]),
+            const SizedBox(width: 8),
+            Expanded(child: QuickTile(icon: Icons.bookmarks_rounded, label: 'Read later', color: const Color(0xFF3C83DE), onTap: () => go(const ReadLaterScreen()))),
+            const SizedBox(width: 8),
+            Expanded(child: QuickTile(icon: Icons.auto_awesome_rounded, label: 'Highlights', color: Brand.amber, onTap: () => go(const MyHighlightsScreen()))),
+            const SizedBox(width: 8),
+            Expanded(child: QuickTile(icon: Icons.emoji_emotions_rounded, label: me.statusEmoji != null ? 'Status ${me.statusEmoji}' : 'Status', color: Brand.rose, onTap: () => showEmojiStatusPicker(context))),
+          ]),
+        ),
         SettingsGroup(children: [
-          SettingsTile(icon: Icons.settings_rounded, color: const Color(0xFF5E6B8C), title: 'Settings', subtitle: 'Privacy, notifications, devices, theme and more', onTap: () => go(const SettingsScreen())),
+          SettingsTile(icon: Icons.settings_rounded, color: const Color(0xFF5E6B8C), title: 'Settings', subtitle: 'Privacy, notifications, devices, theme and more', maxSubtitleLines: 1, onTap: () => go(const SettingsScreen())),
         ]),
         const SizedBox(height: 24),
         ]),
         if (me.birthday?.isToday == true) const Positioned.fill(child: BirthdayCelebration()),
       ]),
+    );
+  }
+}
+
+/// A soft rounded card (the same look as the settings groups).
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+/// One slim detail line: small coloured icon, the value, and what a tap does on the right.
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.icon, required this.color, required this.value, required this.label, this.onTap});
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Divider(height: 1, indent: 16, endIndent: 16, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)),
+      InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+          child: Row(children: [
+            Icon(icon, size: 19, color: color),
+            const SizedBox(width: 12),
+            Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: onTap == null ? Brand.muted : Brand.primary)),
+          ]),
+        ),
+      ),
+    ]);
+  }
+}
+
+/// Coins · Plus · Wallet at a glance, right under the name.
+class _StatsStrip extends StatefulWidget {
+  const _StatsStrip({required this.me});
+  final AppUser me;
+
+  @override
+  State<_StatsStrip> createState() => _StatsStripState();
+}
+
+class _StatsStripState extends State<_StatsStrip> {
+  static final Map<int, int> _lastCoins = {}; // shown at once on the next visit
+  late int? _coins = _lastCoins[widget.me.id];
+  StreamSubscription<SocketEvent>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthState>();
+    if (!auth.feature('coins')) return;
+    final services = context.read<AppServices>();
+    services.api.get('/coins').then((r) {
+      final b = ((r as Map)['balance'] as num?)?.toInt();
+      if (b != null) _set(b);
+    }).catchError((_) {});
+    _sub = services.socket.events.where((e) => e.name == 'coins:updated').listen((e) {
+      final b = (e.data['balance'] as num?)?.toInt();
+      if (b != null) _set(b);
+    });
+  }
+
+  void _set(int b) {
+    _lastCoins[widget.me.id] = b;
+    if (mounted) setState(() => _coins = b);
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthState>();
+    void go(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
+    final tiles = <Widget>[
+      if (auth.feature('coins'))
+        _Stat(icon: Icons.monetization_on_rounded, color: const Color(0xFFF5A623), value: _coins == null ? '—' : fmtCoins(_coins!), label: 'Coins', onTap: () => go(const CoinsScreen())),
+      if (auth.feature('premium'))
+        _Stat(
+          icon: Icons.workspace_premium_rounded,
+          color: Brand.premium,
+          value: widget.me.isPremium ? 'Active' : (auth.plusAvailable ? 'Get it' : 'Soon'),
+          label: 'Plus',
+          onTap: () => go(const PremiumScreen()),
+        ),
+      if (auth.feature('wallet'))
+        _Stat(icon: Icons.account_balance_wallet_rounded, color: const Color(0xFF12B89C), value: 'Open', label: 'Wallet', onTap: () => go(const WalletScreen())),
+    ];
+    if (tiles.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Row(children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(child: tiles[i]),
+        ],
+      ]),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.icon, required this.color, required this.value, required this.label, required this.onTap});
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(11, 11, 8, 11),
+          child: Row(children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(color: color.withValues(alpha: dark ? 0.2 : 0.13), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 19),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, letterSpacing: -0.2, fontFeatures: [FontFeature.tabularFigures()])),
+                ),
+                Text(label, maxLines: 1, style: const TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

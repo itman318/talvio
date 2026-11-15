@@ -328,42 +328,46 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
         ]),
       );
     }
-    final buttons = <Widget>[
-      _CallButton(icon: c.speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded, label: 'Speaker', active: c.speaker, onTap: c.toggleSpeaker),
-      if (c.video) _CallButton(icon: c.cameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded, label: 'Camera', active: !c.cameraOff, onTap: c.toggleCamera),
-      if (!c.video && c.phase == CallPhase.connected)
-        _CallButton(
-          icon: Icons.videocam_rounded,
-          label: 'Video',
-          onTap: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            final err = await c.upgradeToVideo();
-            if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
-          },
-        ),
-      if (c.video && !c.cameraOff && !c.sharingScreen) _CallButton(icon: Icons.cameraswitch_rounded, label: 'Flip', onTap: c.switchCamera),
+    Future<void> say(Future<String?> Function() run) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final err = await run();
+      if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
+    }
+
+    // the things used all the time sit in one row with the red button; the rest are small chips above it
+    final extras = <Widget>[
+      if (c.video && !c.cameraOff && !c.sharingScreen) _Chip(icon: Icons.cameraswitch_rounded, label: 'Flip camera', onTap: c.switchCamera),
       if (c.video && c.phase == CallPhase.connected)
-        _CallButton(
+        _Chip(
           icon: c.sharingScreen ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded,
-          label: c.sharingScreen ? 'Stop' : 'Share',
+          label: c.sharingScreen ? 'Stop sharing' : 'Share screen',
           active: c.sharingScreen,
-          onTap: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            final err = await c.toggleScreenShare();
-            if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
-          },
+          onTap: () => say(c.toggleScreenShare),
         ),
-      _CallButton(icon: c.muted ? Icons.mic_off_rounded : Icons.mic_rounded, label: c.muted ? 'Unmute' : 'Mute', active: c.muted, onTap: c.toggleMute),
     ];
-    return _Glass(
-      radius: 30,
-      padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: buttons),
-        const SizedBox(height: 18),
-        _CallButton(icon: Icons.call_end_rounded, label: 'End', color: const Color(0xFFF0384F), size: 68, onTap: c.hangup),
-      ]),
-    );
+    final buttons = <Widget>[
+      _CallButton(icon: c.muted ? Icons.mic_off_rounded : Icons.mic_rounded, label: c.muted ? 'Unmute' : 'Mute', active: c.muted, onTap: c.toggleMute),
+      if (c.video)
+        _CallButton(icon: c.cameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded, label: 'Camera', active: c.cameraOff, onTap: c.toggleCamera)
+      else
+        _CallButton(icon: Icons.videocam_rounded, label: 'Video', enabled: c.phase == CallPhase.connected, onTap: () => say(c.upgradeToVideo)),
+      _CallButton(icon: c.speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded, label: 'Speaker', active: c.speaker, onTap: c.toggleSpeaker),
+      _CallButton(icon: Icons.call_end_rounded, label: 'End', color: const Color(0xFFF0384F), onTap: c.hangup),
+    ];
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      if (extras.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            for (var i = 0; i < extras.length; i++) ...[if (i > 0) const SizedBox(width: 8), extras[i]],
+          ]),
+        ),
+      _Glass(
+        radius: 32,
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: buttons),
+      ),
+    ]);
   }
 }
 
@@ -451,6 +455,12 @@ class _NameAndStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final peer = c.peer;
     return Column(mainAxisSize: MainAxisSize.min, children: [
+      if (!small)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(c.video ? 'HUSHAVIA VIDEO CALL' : 'HUSHAVIA VOICE CALL',
+              style: const TextStyle(color: Colors.white54, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1.6)),
+        ),
       Text(
         peer?.name ?? '',
         maxLines: 1,
@@ -522,18 +532,46 @@ class _Glass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.09),
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          ),
-          child: child,
+    // no live blur: blurring moving video every frame costs more than anything else on this screen
+    return Material(
+      color: const Color(0xD9181C33),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+/// A small pill button above the main controls (flip camera, share screen).
+class _Chip extends StatelessWidget {
+  const _Chip({required this.icon, required this.label, required this.onTap, this.active = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? const Color(0xFF151A36) : Colors.white;
+    return Material(
+      color: active ? Colors.white : const Color(0xD9181C33),
+      shape: StadiumBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.10))),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 17, color: fg),
+            const SizedBox(width: 7),
+            Text(label, style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w600)),
+          ]),
         ),
       ),
     );
@@ -541,7 +579,8 @@ class _Glass extends StatelessWidget {
 }
 
 class _CallButton extends StatelessWidget {
-  const _CallButton({required this.icon, required this.label, required this.onTap, this.color, this.active = false, this.size = 56});
+  const _CallButton({required this.icon, required this.label, required this.onTap, this.color, this.active = false, this.size = 58, this.enabled = true});
+  final bool enabled; // shown dimmed until it can be used
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -553,6 +592,13 @@ class _CallButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = color ?? (active ? Colors.white : Colors.white.withValues(alpha: 0.14));
     final fg = color != null ? Colors.white : (active ? const Color(0xFF151A36) : Colors.white);
+    return Opacity(
+      opacity: enabled ? 1 : 0.38,
+      child: _body(bg, fg),
+    );
+  }
+
+  Widget _body(Color bg, Color fg) {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -568,16 +614,18 @@ class _CallButton extends StatelessWidget {
           shape: const CircleBorder(),
           child: InkWell(
             customBorder: const CircleBorder(),
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onTap();
-            },
+            onTap: !enabled
+                ? null
+                : () {
+                    HapticFeedback.selectionClick();
+                    onTap();
+                  },
             child: Icon(icon, color: fg, size: size * 0.44),
           ),
         ),
       ),
       const SizedBox(height: 7),
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+      SizedBox(width: size + 14, child: Text(label, maxLines: 1, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600))),
     ]);
   }
 }
