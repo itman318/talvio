@@ -429,6 +429,9 @@ function init(httpServer) {
         const action = TYPING_ACTIONS.includes(p && p.action) ? p.action : 'typing';
         if (!rateLimit.hit(`typing:${socket.id}:${chatId}:${action}`, 1, 2500).allowed) return;
         if (!(await isMember(chatId))) return;
+        // channels: nobody sees subscribers "typing" (only nothing would be posted) — and it would reach every subscriber
+        const ct = await db.one(`SELECT c.type, m.role FROM chats c JOIN chat_members m ON m.chat_id = c.id AND m.user_id = $2 WHERE c.id = $1`, [chatId, uid]);
+        if (!ct || ct.type === 'channel') return;
         // "Show when I'm typing" off: nobody sees it (cancel still goes out, so nothing gets stuck)
         if (action !== 'cancel') {
           const me = await db.one('SELECT show_typing FROM users WHERE id = $1', [uid]);

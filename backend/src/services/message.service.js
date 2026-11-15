@@ -1440,12 +1440,14 @@ async function vote(userId, messageIdRaw, optionsRaw) {
   const options = [...new Set(optionsRaw.map(Number))];
   if (options.some((o) => !Number.isInteger(o) || o < 0 || o >= n)) throw badRequest('invalid_input', 'Invalid option');
   if (!poll.multiple && options.length > 1) throw badRequest('invalid_input', 'Choose one option');
-  const already = await db.one('SELECT count(*) AS n FROM poll_votes WHERE poll_id = $1 AND user_id = $2', [poll.id, userId]);
-  if (poll.is_quiz) {
-    if (already.n > 0) throw forbidden('already_voted', 'You already answered this quiz');
-    if (options.length !== 1) throw badRequest('invalid_input', 'Choose one answer');
-  }
+  if (poll.is_quiz && options.length !== 1) throw badRequest('invalid_input', 'Choose one answer');
   await db.tx(async (c) => {
+    // one vote at a time per poll: two quick taps can't both count as the first answer of a quiz
+    await c.query('SELECT id FROM polls WHERE id = $1 FOR UPDATE', [poll.id]);
+    if (poll.is_quiz) {
+      const already = (await c.query('SELECT 1 FROM poll_votes WHERE poll_id = $1 AND user_id = $2 LIMIT 1', [poll.id, userId])).rows[0];
+      if (already) throw forbidden('already_voted', 'You already answered this quiz');
+    }
     await c.query('DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2', [poll.id, userId]);
     for (const o of options) {
       await c.query('INSERT INTO poll_votes (poll_id, user_id, option_idx) VALUES ($1, $2, $3)', [poll.id, userId, o]);
@@ -1571,6 +1573,10 @@ async function runDueScheduled(limit = 50) {
       sent += 1;
     } catch (err) {
       await db.query(`UPDATE scheduled_messages SET status = 'failed', error = $2 WHERE id = $1`, [s.id, String(err.message).slice(0, 300)]);
+      // say so — otherwise the person believes it went out
+      const where = await db.one('SELECT title, type FROM chats WHERE id = $1', [s.chat_id]).catch(() => null);
+      await require('./notice.service').notify(s.sender_id, 'message', 'A scheduled message was not sent', // eslint-disable-line global-require
+        `${where && where.type !== 'private' && where.title ? `In “${where.title}”: ` : ''}${String(err.message).slice(0, 200)}`, { chat_id: s.chat_id }).catch(() => {});
     }
   }
   return sent;
