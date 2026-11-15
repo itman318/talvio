@@ -12,6 +12,7 @@
     { id: 'users', label: 'Users', perm: 'users.view', icon: 'users', section: 'Moderation' },
     { id: 'reports', label: 'Reports', perm: 'reports.view', icon: 'flag', section: 'Moderation' },
     { id: 'appeals', label: 'Ban appeals', perm: 'users.view', icon: 'shield', section: 'Moderation' },
+    { id: 'suspicious', label: 'Fake accounts', perm: 'users.view', icon: 'shield', section: 'Moderation' },
     { id: 'groups', label: 'Groups & channels', perm: 'groups.view', icon: 'chat', section: 'Moderation' },
     { id: 'calls', label: 'Calls', perm: 'calls.view', icon: 'phone', section: 'Moderation' },
     { id: 'bots', label: 'Bots', perm: 'users.view', icon: 'bot', section: 'Moderation' },
@@ -1450,7 +1451,11 @@
     payment_intl_instructions: ['International payment instructions', 'For people outside Pakistan (Wise, Payoneer, PayPal, card link…). Empty = “coming soon”.'],
     feature_ads: ['Sponsored messages', 'Show ads from “Sponsored messages” in big public channels (never to Hushavia Plus users).'],
     ads_min_subscribers: ['Minimum channel size for ads', 'Channels with fewer subscribers never show ads.'],
-    monetize_min_subscribers: ['Monetization: minimum subscribers', 'A channel can turn on monetization (ad share, tips, paid subscription) only when it meets every requirement.'],
+    monetize_min_subscribers: ['Monetization: minimum active subscribers', 'Only real people count: accounts at least 7 days old that opened Hushavia in the last 30 days (bought / fake / sleeping accounts don’t). A monetized channel that falls far below this stops earning.'],
+    monetize_min_avg_views: ['Monetization: average views per post', 'Over the last 30 days. Fake subscribers don’t read posts, so this keeps them from paying off.'],
+    new_account_hours: ['New accounts: limited for … hours', 'Against fake-account farms. 0 = no limits.'],
+    new_account_max_joins: ['New accounts: groups/channels they can join a day', ''],
+    new_account_max_new_chats: ['New accounts: new chats with strangers a day', 'People in their contacts don’t count. New accounts also can’t add others to groups.'],
     monetize_min_days: ['Monetization: channel and owner at least … days old', ''],
     monetize_min_posts: ['Monetization: posts in the last 30 days', ''],
     monetize_require_2fa: ['Monetization: owner must have two-step verification', 'Protects creators’ earnings from account theft.'],
@@ -1465,11 +1470,12 @@
   const SETTING_SECTIONS = [
     ['General', ['registration_open', 'login_email_enabled', 'login_phone_enabled', 'maintenance_mode', 'maintenance_message', 'max_group_members', 'max_upload_mb', 'message_edit_window_hours', 'message_delete_window_hours', 'min_app_version', 'latest_app_version', 'support_username']],
     ['App updates', ['app_update_notes']],
-    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'feature_coins', 'stripe_enabled', 'coins_deposit_xpub', 'coins_deposit_min_usd', 'coins_creator_percent', 'monetize_min_subscribers', 'monetize_min_days', 'monetize_min_posts', 'monetize_require_2fa', 'max_accounts_per_device']],
+    ['Features', ['feature_channels', 'feature_stories', 'feature_polls', 'feature_voice_messages', 'feature_location', 'feature_live_location', 'feature_link_previews', 'feature_stickers', 'feature_gifs', 'gif_api_key', 'feature_disappearing', 'feature_secret_chats', 'feature_channel_comments', 'feature_topics', 'feature_web_login', 'feature_wallet', 'feature_coins', 'stripe_enabled', 'coins_deposit_xpub', 'coins_deposit_min_usd', 'coins_creator_percent', 'monetize_min_subscribers', 'monetize_min_avg_views', 'monetize_min_days', 'monetize_min_posts', 'monetize_require_2fa', 'max_accounts_per_device']],
     ['Bots', ['feature_bots', 'max_bots_per_user']],
     ['Hushavia Plus & payments', ['feature_premium', 'plus_sales_open', 'plus_usd_only', 'premium_upload_mb', 'payment_manual_enabled', 'payment_manual_instructions', 'payment_intl_instructions', 'crypto_pay_bsc_address', 'crypto_pay_tron_address']],
     ['Sponsored messages', ['feature_ads', 'ads_min_subscribers', 'ads_self_serve', 'ads_owner_percent', 'ads_min_cpm', 'ads_min_budget']],
     ['Calls', ['feature_calls', 'feature_video_calls', 'call_ring_timeout_sec', 'call_max_minutes', 'stun_urls', 'turn_urls']],
+    ['Fake accounts', ['new_account_hours', 'new_account_max_joins', 'new_account_max_new_chats']],
     ['Moderation & spam', ['banned_words', 'banned_words_action', 'new_account_link_hours', 'spam_duplicate_threshold', 'spam_restrict_minutes', 'auto_restrict_reports', 'blocked_phone_prefixes', 'reserved_usernames']],
     ['Security', ['require_admin_2fa', 'blocked_ips']],
   ];
@@ -2067,6 +2073,54 @@
   }
 
   // ------------------------------------------------------------------ coins
+  // ------------------------------------------------------------------ fake accounts
+  const suspState = { min: 4, picked: new Set() };
+  async function pageSuspicious() {
+    main.replaceChildren(head('Fake accounts'), el('div', { class: 'muted' }, 'Loading…'));
+    const data = await action(() => api('GET', `/suspicious?min_score=${suspState.min}`));
+    if (!data) return;
+    suspState.picked = new Set([...suspState.picked].filter((id) => data.users.some((x) => x.user.id === id)));
+    const banBtn = el('button', { class: 'btn danger' }, `Ban selected (${suspState.picked.size})`);
+    const refreshBtn = () => { banBtn.textContent = `Ban selected (${suspState.picked.size})`; banBtn.disabled = !suspState.picked.size || !can('users.ban'); };
+    refreshBtn();
+    banBtn.onclick = async () => {
+      const ids = [...suspState.picked];
+      const reason = el('textarea', {}, 'Fake or spam account');
+      await modal(`Ban ${ids.length} account${ids.length === 1 ? '' : 's'}?`, [
+        el('p', {}, 'They are logged out and can’t use Hushavia. You can unban anyone later from Users.'),
+        el('div', { class: 'field' }, el('label', {}, 'Reason (they see it)'), reason),
+      ], 'Ban', async () => {
+        const r = await action(() => api('POST', '/suspicious/ban', { user_ids: ids, reason: reason.value.trim() || 'Fake or spam account' }));
+        if (!r) return false;
+        toast(`${r.banned} banned`);
+        suspState.picked.clear();
+        pageSuspicious();
+        return true;
+      }, true);
+    };
+    const all = el('input', { type: 'checkbox', title: 'Select all' });
+    all.onchange = () => { data.users.forEach((x) => (all.checked ? suspState.picked.add(x.user.id) : suspState.picked.delete(x.user.id))); pageSuspicious(); };
+    const rows = data.users.map((x) => {
+      const box = el('input', { type: 'checkbox', checked: suspState.picked.has(x.user.id) ? true : null });
+      box.onchange = () => { box.checked ? suspState.picked.add(x.user.id) : suspState.picked.delete(x.user.id); refreshBtn(); };
+      return el('tr', {},
+        el('td', {}, box),
+        el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(x.user.id); } }, x.user.name),
+          el('div', { class: 'muted' }, [x.user.username ? `@${x.user.username}` : null, x.user.phone].filter(Boolean).join(' · '))),
+        el('td', { class: 'num' }, el('span', { class: `chip ${x.score >= 6 ? 'bad' : 'warn'}` }, x.score)),
+        el('td', {}, x.reasons.map((r) => el('div', {}, `• ${r}`))),
+        el('td', { class: 'muted' }, x.ip || '—'),
+        el('td', { class: 'muted' }, ago(x.created_at)));
+    });
+    const minSel = el('select', { onchange: (e) => { suspState.min = Number(e.target.value); pageSuspicious(); } },
+      [3, 4, 5, 6].map((n) => el('option', { value: n, selected: suspState.min === n ? true : null }, `Score ${n} or more${n === 4 ? ' (suggested)' : ''}`)));
+    main.replaceChildren(
+      head('Fake accounts', el('button', { class: 'btn', onclick: pageSuspicious }, 'Refresh'), banBtn),
+      el('p', { class: 'muted' }, 'Accounts made in the last 30 days with signs that fake-account farms share: many new accounts from one IP, joining lots of groups and channels at once, never writing, no photo, no contacts, not coming back. One sign alone is normal — many real people in Pakistan share one mobile IP. Look before you ban.'),
+      el('div', { class: 'toolbar' }, minSel, el('span', { class: 'muted' }, `${fmtNum(data.total)} found`)),
+      table([all, 'Account', 'Score', 'Why', 'Sign-up IP', 'Made'], rows, 'No suspicious accounts right now 🎉'));
+  }
+
   async function pageCoins() {
     main.replaceChildren(head('Coins'), el('div', { class: 'muted' }, 'Loading…'));
     const d = await action(() => api('GET', '/coin-packs'));
@@ -2226,6 +2280,7 @@
     settings: pageSettings,
     broadcast: pageBroadcast,
     appeals: pageAppeals,
+    suspicious: pageSuspicious,
     pages: pagePages,
     support: pageSupport,
     admins: pageAdmins,
