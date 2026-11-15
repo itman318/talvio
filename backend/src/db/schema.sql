@@ -776,9 +776,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_after TIMESTAMPTZ;
 
 -- ---------------------------------------------------------------- round video messages
-ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_type_check
-  CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact'));
+-- (messages_type_check: set once further down with every value — a shorter list here would reject rows already stored)
 
 -- ---------------------------------------------------------------- message requests (spam protection)
 ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS is_request BOOLEAN NOT NULL DEFAULT FALSE;
@@ -1244,9 +1242,7 @@ CREATE TABLE IF NOT EXISTS support_canned (
 );
 
 -- ------------------------------------------------------------------ wallet in chats
-ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_type_check
-  CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact', 'crypto'));
+-- (messages_type_check: set once further down with every value — a shorter list here would reject rows already stored)
 -- public wallet addresses a person CHOSE to share with the people they chat with (never keys)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_tron VARCHAR(40);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_evm VARCHAR(42);
@@ -1276,8 +1272,7 @@ BEGIN
 END $$;
 
 -- paying with USDT straight from the person's own wallet; the server only ever sees public data
-ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_check;
-ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto'));
+-- (payment_orders_provider_check: set once further down with every value — a shorter list here would reject rows already stored)
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_network VARCHAR(12);
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_to VARCHAR(64);
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_amount NUMERIC(40, 0);
@@ -1315,8 +1310,7 @@ CREATE TABLE IF NOT EXISTS coin_tx (
   created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS coin_tx_user_idx ON coin_tx (user_id, id DESC);
-ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_provider_check;
-ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_provider_check CHECK (provider IN ('jazzcash', 'easypaisa', 'manual', 'admin', 'crypto', 'coins'));
+-- (payment_orders_provider_check: set once further down with every value — a shorter list here would reject rows already stored)
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coins INTEGER;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coin_pack_id BIGINT REFERENCES coin_packs(id) ON DELETE SET NULL;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS crypto_submitted_at TIMESTAMPTZ;
@@ -1344,9 +1338,7 @@ ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
 ALTER TABLE messages ADD CONSTRAINT messages_type_check
   CHECK (type IN ('text', 'image', 'video', 'voice', 'video_note', 'file', 'system', 'poll', 'location', 'call', 'sticker', 'gif', 'contact', 'crypto', 'gift', 'giveaway'));
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS coin_tips INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
-ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
-  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'));
+-- (the list of coin kinds is set once, further down, with every kind — an older, shorter list here would reject rows already stored)
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS sub_price INTEGER NOT NULL DEFAULT 0 CHECK (sub_price >= 0);
 CREATE TABLE IF NOT EXISTS channel_subs (
   chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
@@ -1404,9 +1396,7 @@ CREATE TABLE IF NOT EXISTS coin_deposits (
 );
 CREATE INDEX IF NOT EXISTS coin_deposits_user_idx ON coin_deposits (user_id, id DESC);
 CREATE TABLE IF NOT EXISTS coin_deposit_state (id INTEGER PRIMARY KEY CHECK (id = 1), last_block BIGINT NOT NULL);
-ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
-ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
-  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund'));
+-- (the list of coin kinds is set once, further down, with every kind — an older, shorter list here would reject rows already stored)
 
 -- ------------------------------------------------------------------ self-service ads (paid with coins)
 ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS owner_id BIGINT REFERENCES users(id) ON DELETE SET NULL; -- the member who runs it (NULL = sold by the team)
