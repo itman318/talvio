@@ -96,6 +96,12 @@ const DEFINITIONS = {
   coins_deposit_min_usd: { type: 'integer', default: 1, min: 1, max: 1000 },
   coins_creator_percent: { type: 'integer', default: 90, min: 0, max: 100 },
   max_accounts_per_device: { type: 'integer', default: 3, min: 1, max: 10 },
+
+  // ---- against fake members
+  new_account_hours: { type: 'integer', default: 24, min: 0, max: 720 },
+  new_account_max_joins: { type: 'integer', default: 5, min: 1, max: 1000 },
+  new_account_max_new_chats: { type: 'integer', default: 10, min: 1, max: 1000 },
+  monetize_min_avg_views: { type: 'integer', default: 100, min: 0, max: 100000000 },
 };
 
 const FEATURE_KEYS = [

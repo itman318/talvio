@@ -532,7 +532,12 @@ test('coins at work: gifts in chats, tips on posts, paid channels, giveaways', a
   await rejects(mon.enable(H.id, chId), 'not_eligible');
   await rejects(mon.status(G.id, chId), 'forbidden');
   // meet the bar (smaller in this test), then turn it on
-  await settings.update({ monetize_min_subscribers: 2, monetize_min_days: 0, monetize_min_posts: 1, monetize_require_2fa: false });
+  await settings.update({ monetize_min_subscribers: 2, monetize_min_days: 0, monetize_min_posts: 1, monetize_require_2fa: false, monetize_min_avg_views: 1 });
+  // brand-new accounts that never opened the app are not "real" subscribers, and nobody has seen the post yet
+  const st1 = await mon.status(H.id, chId);
+  assert.deepEqual(st1.checks.filter((c) => !c.ok).map((c) => c.key).sort(), ['subscribers', 'views']);
+  await db.query(`UPDATE users SET created_at = now() - interval '10 days', last_seen_at = now() WHERE id = ANY($1::bigint[])`, [[G.id, H.id]]);
+  await messages.recordViews(G.id, chId, [post.id]);
   assert.equal((await mon.status(H.id, chId)).eligible, true);
   assert.equal((await mon.enable(H.id, chId)).monetized, true);
   await rejects(plus.tip(H.id, { message_id: post.id, amount: 10 }), 'invalid_input'); // her own channel
@@ -887,4 +892,35 @@ test('the database update runs again over real data (deposits, gifts, giveaways,
   assert.ok(kinds.includes('deposit') && kinds.includes('gift_sent'), `rows of the newer kinds exist: ${kinds}`);
   await db.query(fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'schema.sql'), 'utf8'));
   await db.query(fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'schema.sql'), 'utf8'));
+});
+
+test('fake members: new accounts are limited, suspicious accounts are listed for the admins', async () => {
+  const guard = require('../src/services/fakeguard.service');
+  guard.setEnforced(true);
+  try {
+    const N = await signup('+923251110001', 'Newbie', 'newbie_one');
+    const owner = await signup('+923251110002', 'Owner', 'owner_two');
+    await db.query(`UPDATE users SET created_at = now() - interval '30 days' WHERE id = $1`, [owner.id]);
+    // joins: 5 a day, then "wait"
+    const ids = [];
+    for (let i = 0; i < 6; i += 1) {
+      const c = await chats.createChannel(owner.id, { title: `C${i}`, username: `fakecheck_${i}` });
+      ids.push(c.id);
+    }
+    for (let i = 0; i < 5; i += 1) await chats.joinPublic(N.id, ids[i]);
+    await rejects(chats.joinPublic(N.id, ids[5]), 'new_account_limit');
+    // can't add people yet
+    await rejects(chats.createGroup(N.id, { title: 'Farm', member_ids: [owner.id] }), 'new_account_limit');
+    // an older account has none of these limits
+    await db.query(`UPDATE users SET created_at = now() - interval '2 days' WHERE id = $1`, [N.id]);
+    await chats.joinPublic(N.id, ids[5]);
+    // the admin list: an account that only joins, never writes, no photo, no contacts
+    await db.query(`UPDATE users SET created_at = now() - interval '1 day' WHERE id = $1`, [N.id]);
+    const list = await guard.suspicious({ min_score: 3 });
+    const me = list.users.find((u) => u.user.id === N.id);
+    assert.ok(me, 'listed');
+    assert.ok(me.reasons.some((r) => /never wrote/.test(r)));
+  } finally {
+    guard.setEnforced(false);
+  }
 });

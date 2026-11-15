@@ -282,6 +282,11 @@ async function getOrCreatePrivate(userId, peerIdRaw) {
     if (!peer || peer.status === 'deleted') throw notFound('user_not_found', 'User not found');
   }
   const key = `${Math.min(userId, peerId)}:${Math.max(userId, peerId)}`;
+  // brand-new accounts can't open dozens of chats with strangers (spam / fake-account farms)
+  if (peerId !== userId && !(await db.one('SELECT 1 AS x FROM chats WHERE private_key = $1', [key]))) {
+    const bot = await db.one('SELECT is_bot FROM users WHERE id = $1', [peerId]);
+    if (!(bot && bot.is_bot)) await require('./fakeguard.service').assertCanStartChat(userId, peerId); // eslint-disable-line global-require
+  }
   const chatId = await db.tx(async (c) => {
     let r = await c.query(
       `INSERT INTO chats (type, private_key, created_by, disappear_after_sec)
@@ -393,6 +398,7 @@ async function createGroup(ownerId, body) {
   const description = v.str(body.description, { field: 'description', max: 255 }) || '';
   const candidates = v.idList(body.member_ids || [], 'member_ids', 200).filter((id) => id !== ownerId);
   const { ok, skipped } = await filterAddable(ownerId, candidates);
+  await require('./fakeguard.service').assertCanAdd(ownerId, ok.length); // eslint-disable-line global-require
   const max = await settings.get('max_group_members');
   if (ok.length + 1 > max) throw badRequest('group_full', `A group can have at most ${max} members`);
 
@@ -587,6 +593,7 @@ async function addMembers(userId, chatIdRaw, userIdsRaw) {
   }
   const { ok, skipped: notAddable } = await filterAddable(userId, candidates);
   const skipped = [...notAddable, ...bannedSkipped];
+  await require('./fakeguard.service').assertCanAdd(userId, ok.length); // eslint-disable-line global-require
   for (const id of ok) if (banned.has(id)) await unbanRow(chat.id, id);
   const max = await settings.get('max_group_members');
   if (chat.type === 'group' && existing.size + ok.length > max) {
@@ -1013,6 +1020,8 @@ async function joinChat(userId, chat) {
       throw forbidden('banned_from_chat', `An admin removed you from this ${chat.type === 'channel' ? 'channel' : 'group'}`);
     }
   }
+  // brand-new accounts can join only a few groups / channels a day
+  if (!existing && !chat.admin_ok) await require('./fakeguard.service').assertCanJoin(userId); // eslint-disable-line global-require
   // a paid channel: the month is paid first (coinplus.subscribe), people an admin adds come in free
   if (!existing && chat.type === 'channel' && chat.sub_price > 0 && chat.monetized && !chat.paid_ok && !chat.admin_ok
       // someone who left and comes back inside a month they already paid for gets in

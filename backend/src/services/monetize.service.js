@@ -25,9 +25,14 @@ async function checks(chat) {
   );
   if (!row) return [];
   const days = (d) => Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+  // real people only: bought / fake / sleeping accounts don't count
+  const guard = require('./fakeguard.service'); // eslint-disable-line global-require
+  const real = await guard.realSubscribers(chat.id);
+  const views = await guard.averageViews(chat.id);
   const list = [
     { key: 'public', label: 'The channel is public (has a @username)', ok: !!row.is_public },
-    { key: 'subscribers', label: `At least ${s.monetize_min_subscribers.toLocaleString('en-US')} subscribers`, ok: row.member_count >= s.monetize_min_subscribers, have: row.member_count, need: s.monetize_min_subscribers },
+    { key: 'subscribers', label: `At least ${s.monetize_min_subscribers.toLocaleString('en-US')} active subscribers (real people who opened Hushavia in the last 30 days)`, ok: real >= s.monetize_min_subscribers, have: real, need: s.monetize_min_subscribers },
+    { key: 'views', label: `On average ${s.monetize_min_avg_views.toLocaleString('en-US')} views per post (last 30 days)`, ok: views >= s.monetize_min_avg_views, have: views, need: s.monetize_min_avg_views },
     { key: 'age', label: `The channel is at least ${s.monetize_min_days} days old`, ok: days(row.created_at) >= s.monetize_min_days, have: days(row.created_at), need: s.monetize_min_days },
     { key: 'posts', label: `At least ${s.monetize_min_posts} posts in the last 30 days`, ok: row.posts >= s.monetize_min_posts, have: row.posts, need: s.monetize_min_posts },
     { key: 'owner_age', label: `Your account is at least ${s.monetize_min_days} days old`, ok: days(row.owner_since) >= s.monetize_min_days, have: days(row.owner_since), need: s.monetize_min_days },

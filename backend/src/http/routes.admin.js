@@ -83,6 +83,19 @@ router.get('/dashboard', requireAdmin('dashboard'), h(async (req, res) => res.js
 // users
 router.get('/users', requireAdmin('users.view'), h(async (req, res) => res.json(await admin.listUsers(req.query))));
 router.get('/users/:id', requireAdmin('users.view'), h(async (req, res) => res.json(await admin.userDetail(req.params.id))));
+// accounts that look like a fake-account farm (score from several signs), banned together
+router.get('/suspicious', requireAdmin('users.view'), h(async (req, res) => res.json(await require('../services/fakeguard.service').suspicious(req.query))));
+router.post('/suspicious/ban', requireAdmin('users.ban'), h(async (req, res) => {
+  const ids = v.idList(req.body.user_ids, 'user_ids', 500);
+  let banned = 0;
+  for (const id of ids) {
+    try {
+      await admin.banUser(req.admin, id, { reason: String(req.body.reason || 'Fake or spam account') }, req.ip);
+      banned += 1;
+    } catch (_) { /* already gone */ }
+  }
+  res.json({ banned });
+}));
 router.post('/users/:id/ban', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.banUser(req.admin, req.params.id, req.body, req.ip))));
 router.post('/users/:id/unban', requireAdmin('users.ban'), h(async (req, res) => res.json(await admin.unbanUser(req.admin, req.params.id, req.ip))));
 router.post('/users/:id/password/disable', requireAdmin('users.logout'), h(async (req, res) => {
