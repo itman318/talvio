@@ -122,6 +122,17 @@ List<_Item> _settingsItems(BuildContext context, AuthState auth, AppUser me, Str
   }
 
 
+const Map<String, String> _sectionHint = {
+  'Account': 'Profile, highlights, call links, accounts',
+  'Coins & wallet': 'Balance, crypto wallet, ads',
+  'Notifications': 'Sounds, previews, vibration',
+  'Privacy & security': 'Last seen, passcode, devices, 2-step',
+  'Chats': 'Theme, wallpaper, stickers, folders',
+  'Data & connection': 'Downloads, backup, proxy',
+  'Extras': 'Business, prayer times, bots',
+  'Help': 'Support, FAQ, terms',
+};
+
 /// How each section looks on the settings hub.
 const Map<String, (IconData, Color)> _sectionLook = {
   'Account': (Icons.person_rounded, Brand.sky),
@@ -249,7 +260,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!sections.contains(i.section)) sections.add(i.section);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('Settings'), centerTitle: true, actions: [
+        IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded), onPressed: () => go(const MyQrScreen())),
+      ]),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -274,57 +287,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // me: one compact card (tap → edit profile), then four shortcuts
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-            child: Material(
-              color: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => go(const EditProfileScreen()),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
-                  child: Row(children: [
-                    Stack(clipBehavior: Clip.none, children: [
-                      Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 62),
-                      Positioned(
-                        right: -3,
-                        bottom: -3,
-                        child: Container(
-                          padding: const EdgeInsets.all(4.5),
-                          decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).colorScheme.surface, width: 2.5)),
-                          child: const Icon(Icons.photo_camera_rounded, size: 12, color: Colors.white),
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Row(children: [
-                          Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.3))),
-                          if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Brand.sky, size: 18)),
-                          if (me.statusEmoji != null)
-                            EmojiStatusBadge(me, size: 17)
-                          else if (plus)
-                            const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 18)),
-                        ]),
-                        const SizedBox(height: 3),
-                        Text(
-                          [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  ·  '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Brand.muted, fontSize: 13.5),
-                        ),
-                      ]),
+          // me: big photo in the middle, name and contact under it (tap → edit profile)
+          InkWell(
+            onTap: () => go(const EditProfileScreen()),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+              child: Column(children: [
+                Stack(clipBehavior: Clip.none, children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(shape: BoxShape.circle, gradient: plus ? Brand.plusGradient : null),
+                    child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 88)),
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(color: Brand.primary, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
+                      child: const Icon(Icons.photo_camera_rounded, size: 13, color: Colors.white),
                     ),
-                    IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded, color: Brand.primary), onPressed: () => go(const MyQrScreen())),
-                  ]),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4))),
+                  if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Brand.primary, size: 19)),
+                  if (me.statusEmoji != null) EmojiStatusBadge(me, size: 18)
+                  else if (plus) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 19)),
+                ]),
+                const SizedBox(height: 4),
+                Text(
+                  [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  ·  '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Brand.muted, fontSize: 14.5),
                 ),
-              ),
+              ]),
             ),
           ),
           Padding(
@@ -427,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: look.$1,
                   color: look.$2,
                   title: sec,
-                  subtitle: of.length == 1 ? of.first.subtitle : of.map((i) => i.title).join(', '),
+                  subtitle: _sectionHint[sec] ?? (of.length == 1 ? of.first.subtitle : of.map((i) => i.title).join(', ')),
                   maxSubtitleLines: 1,
                   onTap: of.length == 1 ? of.first.onTap : () => go(_SectionScreen(section: sec)),
                 );

@@ -116,10 +116,11 @@ class MyProfileScreen extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (me.username != null)
                 _InfoRow(
+                  caption: 'Username',
                   first: true,
                   icon: Icons.alternate_email_rounded,
                   color: Brand.primary,
-                  value: me.username!,
+                  value: '@${me.username!}',
                   label: 'Copy link',
                   onTap: () async {
                     await Clipboard.setData(ClipboardData(text: link!));
@@ -127,13 +128,14 @@ class MyProfileScreen extends StatelessWidget {
                   },
                 ),
               if ((me.phone ?? '').isNotEmpty)
-                _InfoRow(first: me.username == null, icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
-              if ((me.email ?? '').isNotEmpty) _InfoRow(icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: 'Login only'),
+                _InfoRow(caption: 'Mobile', first: me.username == null, icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
+              if ((me.email ?? '').isNotEmpty) _InfoRow(caption: 'Email · only for login', icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: ''),
               _InfoRow(
+                caption: 'Birthday',
                 icon: Icons.cake_rounded,
                 color: Brand.rose,
                 value: me.birthday?.label ?? 'Add your birthday',
-                label: me.birthday == null ? 'Add' : 'Birthday',
+                label: me.birthday == null ? 'Add' : 'Edit',
                 onTap: () => go(const EditProfileScreen()),
               ),
             ]),
@@ -199,8 +201,9 @@ class _Card extends StatelessWidget {
 
 /// One slim detail line: small coloured icon, the value, and what a tap does on the right.
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.color, required this.value, required this.label, this.onTap, this.first = false});
+  const _InfoRow({required this.caption, required this.icon, required this.color, required this.value, required this.label, this.onTap, this.first = false});
   final bool first;
+  final String caption;
   final IconData icon;
   final Color color;
   final String value;
@@ -219,9 +222,15 @@ class _InfoRow extends StatelessWidget {
           child: Row(children: [
             Icon(icon, size: 19, color: color),
             const SizedBox(width: 12),
-            Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 1),
+                Text(caption, style: const TextStyle(fontSize: 12.5, color: Brand.muted)),
+              ]),
+            ),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: onTap == null ? Brand.muted : Brand.primary)),
+            if (onTap != null) Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Brand.primary)),
           ]),
         ),
       ),
