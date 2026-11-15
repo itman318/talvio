@@ -137,8 +137,8 @@ class SettingsGroup extends StatelessWidget {
         Material(
           color: Theme.of(context).colorScheme.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+            borderRadius: BorderRadius.circular(18),
+            side: dark ? BorderSide(color: Colors.white.withValues(alpha: 0.05)) : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(children: rows),

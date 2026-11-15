@@ -141,15 +141,15 @@ class MyProfileScreen extends StatelessWidget {
             ]),
           ),
         ),
-        // my things: four shortcuts instead of a long list
+        // my things: one plain list
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-          child: Row(children: [
-            Expanded(
-              child: QuickTile(
-                icon: Icons.bookmark_rounded,
-                label: 'My Notes',
-                color: Brand.violet,
+          child: _Card(
+            child: Column(children: [
+              _Line(
+                first: true,
+                icon: Icons.bookmark_outline_rounded,
+                title: 'My Notes',
                 onTap: () async {
                   try {
                     final chat = await context.read<ChatStore>().openPrivateWith(me.id);
@@ -159,18 +159,12 @@ class MyProfileScreen extends StatelessWidget {
                   }
                 },
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: QuickTile(icon: Icons.bookmarks_rounded, label: 'Read later', color: const Color(0xFF3C83DE), onTap: () => go(const ReadLaterScreen()))),
-            const SizedBox(width: 8),
-            Expanded(child: QuickTile(icon: Icons.auto_awesome_rounded, label: 'Highlights', color: Brand.amber, onTap: () => go(const MyHighlightsScreen()))),
-            const SizedBox(width: 8),
-            Expanded(child: QuickTile(icon: Icons.emoji_emotions_rounded, label: me.statusEmoji != null ? 'Status ${me.statusEmoji}' : 'Status', color: Brand.rose, onTap: () => showEmojiStatusPicker(context))),
-          ]),
+              _Line(icon: Icons.watch_later_outlined, title: 'Read later', onTap: () => go(const ReadLaterScreen())),
+              _Line(icon: Icons.auto_awesome_outlined, title: 'Story highlights', onTap: () => go(const MyHighlightsScreen())),
+              _Line(icon: Icons.sentiment_satisfied_alt_outlined, title: 'Emoji status', trailing: me.statusEmoji, onTap: () => showEmojiStatusPicker(context)),
+            ]),
+          ),
         ),
-        SettingsGroup(children: [
-          SettingsTile(icon: Icons.settings_rounded, color: const Color(0xFF5E6B8C), title: 'Settings', subtitle: 'Privacy, notifications, devices, theme and more', maxSubtitleLines: 1, onTap: () => go(const SettingsScreen())),
-        ]),
         const SizedBox(height: 24),
         ]),
         if (me.birthday?.isToday == true) const Positioned.fill(child: BirthdayCelebration()),
@@ -190,8 +184,8 @@ class _Card extends StatelessWidget {
     return Material(
       color: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
+        borderRadius: BorderRadius.circular(18),
+        side: dark ? BorderSide(color: Colors.white.withValues(alpha: 0.05)) : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -214,14 +208,12 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      if (!first) Divider(height: 1, thickness: 0.7, indent: 47, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)),
+      if (!first) Divider(height: 1, thickness: 0.7, indent: 16, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)),
       InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(children: [
-            Icon(icon, size: 19, color: color),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
@@ -347,165 +339,132 @@ class _Stat extends StatelessWidget {
   }
 }
 
-/// The top of my profile: a calm cover, the photo on its edge, then name, username and bio —
-/// left-aligned like a business card, with the actions as slim buttons beside the photo.
+/// The top of my profile: no cover and no effects — title, photo beside the name, bio, two calm buttons.
 class _Header extends StatelessWidget {
   const _Header({required this.me, required this.top, required this.onEdit, required this.onQr, required this.onShare, required this.onSettings});
   final AppUser me;
   final double top;
   final VoidCallback onEdit, onQr, onShare, onSettings;
 
-  static const _avatar = 92.0;
-
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final bg = Theme.of(context).scaffoldBackgroundColor;
-    final coverH = top + 118;
     final url = me.avatarAbsolute;
 
-    Widget round(IconData icon, String tip, VoidCallback onTap) => Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Tooltip(
-            message: tip,
-            child: Material(
-              color: Theme.of(context).colorScheme.surface,
-              shape: CircleBorder(side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.10) : const Color(0xFFDFE3EE))),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(onTap: onTap, child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 19.5, color: Theme.of(context).colorScheme.onSurface))),
+    Widget button(String label, IconData icon, VoidCallback onTap, {bool main = false}) => Expanded(
+          child: Material(
+            color: main ? Brand.primary : scheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: SizedBox(
+                height: 46,
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(icon, size: 18, color: main ? Colors.white : scheme.onSurface),
+                  const SizedBox(width: 8),
+                  Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: main ? Colors.white : scheme.onSurface)),
+                ]),
+              ),
             ),
           ),
         );
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SizedBox(
-        height: coverH + _avatar / 2 + 4,
-        child: Stack(clipBehavior: Clip.none, children: [
-          // cover: brand ink to violet, with two soft lights (cheap to draw: no blur, no image)
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            height: coverH,
-            child: const RepaintBoundary(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1B1F3D), Color(0xFF3A2A9E), Color(0xFF6D4AFF)], stops: [0, 0.55, 1]),
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0.85, -0.9), radius: 1.1, colors: [Color(0x55FFFFFF), Color(0x00FFFFFF)])),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.9, 1.2), radius: 0.9, colors: [Color(0x4012B89C), Color(0x0012B89C)])),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            top: top + 14,
-            child: const Text('Profile', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
-          ),
-          Positioned(
-            right: 6,
-            top: top + 4,
-            child: IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined, color: Colors.white), onPressed: onSettings),
-          ),
-          // photo on the edge of the cover
-          Positioned(
-            left: 18,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: url == null ? onEdit : () => showPhotoViewer(context, url, tag: 'avatar-${me.id}'),
-              child: Stack(clipBehavior: Clip.none, children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: me.isPremium ? null : bg,
-                    gradient: me.isPremium ? Brand.plusGradient : null,
-                    borderRadius: BorderRadius.circular((_avatar + 8) * 0.34),
-                  ),
-                  child: Hero(tag: 'avatar-${me.id}', child: Avatar(id: me.id, name: me.name, url: url, size: _avatar)),
-                ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: GestureDetector(
-                    onTap: onEdit,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(color: Brand.primary, shape: BoxShape.circle, border: Border.all(color: bg, width: 3)),
-                      child: const Icon(Icons.photo_camera_rounded, size: 14, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-          ),
-          // actions beside the photo
-          Positioned(
-            right: 16,
-            bottom: 2,
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Material(
-                color: Brand.primary,
-                shape: const StadiumBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onEdit,
-                  child: const SizedBox(
-                    height: 40,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 18),
-                      child: Center(widthFactor: 1, child: Text('Edit profile', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700))),
-                    ),
-                  ),
-                ),
-              ),
-              round(Icons.qr_code_2_rounded, 'QR code', onQr),
-              round(Icons.ios_share_rounded, 'Share profile', onShare),
-            ]),
-          ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, top + 6, 20, 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(child: Text('Profile', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6))),
+          IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded), onPressed: onQr),
+          IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined), onPressed: onSettings),
         ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Flexible(
-              child: Text(me.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15)),
+        const SizedBox(height: 14),
+        Row(children: [
+          GestureDetector(
+            onTap: url == null ? onEdit : () => showPhotoViewer(context, url, tag: 'avatar-${me.id}'),
+            child: Container(
+              padding: EdgeInsets.all(me.isPremium ? 3 : 0),
+              decoration: BoxDecoration(gradient: me.isPremium ? Brand.plusGradient : null, borderRadius: BorderRadius.circular(32)),
+              child: Hero(tag: 'avatar-${me.id}', child: Avatar(id: me.id, name: me.name, url: url, size: 84)),
             ),
-            if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified_rounded, color: Brand.primary, size: 21)),
-            if (me.isPremium) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 20)),
-            if (me.statusEmoji != null)
-              GestureDetector(onTap: () => showEmojiStatusPicker(context), child: Padding(padding: const EdgeInsets.only(left: 6), child: EmojiStatusBadge(me, size: 20, padLeft: 0))),
-          ]),
-          const SizedBox(height: 4),
-          Row(children: [
-            Flexible(
-              child: GestureDetector(
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(me.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15)),
+                ),
+                if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Brand.primary, size: 20)),
+                if (me.statusEmoji != null)
+                  GestureDetector(onTap: () => showEmojiStatusPicker(context), child: Padding(padding: const EdgeInsets.only(left: 5), child: EmojiStatusBadge(me, size: 19, padLeft: 0)))
+                else if (me.isPremium)
+                  const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 19)),
+              ]),
+              const SizedBox(height: 5),
+              GestureDetector(
                 onTap: me.username == null ? onEdit : null,
                 child: Text(me.username != null ? '@${me.username}' : 'Add a username',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: me.username != null ? Brand.muted : Brand.primary)),
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: me.username != null ? Brand.muted : Brand.primary)),
               ),
-            ),
-            const SizedBox(width: 10),
-            Container(width: 7, height: 7, decoration: const BoxDecoration(color: Brand.accent, shape: BoxShape.circle)),
-            const SizedBox(width: 5),
-            const Text('online', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Brand.accent)),
-          ]),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: onEdit,
-            child: Text(me.bio.isEmpty ? 'Add a short bio' : me.bio,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 15, height: 1.4, color: me.bio.isEmpty ? Brand.primary : null, fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
+              const SizedBox(height: 3),
+              const Row(children: [
+                DecoratedBox(decoration: BoxDecoration(color: Brand.accent, shape: BoxShape.circle), child: SizedBox(width: 7, height: 7)),
+                SizedBox(width: 6),
+                Text('online', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Brand.accent)),
+              ]),
+            ]),
           ),
         ]),
+        const SizedBox(height: 14),
+        GestureDetector(
+          onTap: onEdit,
+          child: Text(me.bio.isEmpty ? 'Add a short bio' : me.bio,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 15, height: 1.4, color: me.bio.isEmpty ? Brand.primary : (dark ? Colors.white70 : const Color(0xFF3A405A)), fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          button('Edit profile', Icons.edit_outlined, onEdit, main: true),
+          const SizedBox(width: 10),
+          button('Share', Icons.ios_share_rounded, onShare),
+        ]),
+      ]),
+    );
+  }
+}
+
+/// A plain line of the "my things" list: thin icon, title, arrow.
+class _Line extends StatelessWidget {
+  const _Line({required this.icon, required this.title, required this.onTap, this.trailing, this.first = false});
+  final IconData icon;
+  final String title;
+  final String? trailing;
+  final VoidCallback onTap;
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      if (!first) Divider(height: 1, thickness: 0.7, indent: 52, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)),
+      InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(children: [
+            Icon(icon, size: 22, color: Brand.primary),
+            const SizedBox(width: 14),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600))),
+            if (trailing != null) Text(trailing!, style: const TextStyle(fontSize: 15)),
+            Icon(Icons.chevron_right_rounded, size: 21, color: scheme.onSurfaceVariant.withValues(alpha: 0.45)),
+          ]),
+        ),
       ),
     ]);
   }

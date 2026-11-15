@@ -327,47 +327,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ]),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 2, 12, 2),
-            child: Row(children: [
-              for (final (icon, label, color, page) in [
-                (Icons.lock_rounded, 'Privacy', Brand.green, const PrivacyScreen() as Widget),
-                (Icons.notifications_rounded, 'Alerts', const Color(0xFFE5484D), const NotificationsScreen() as Widget),
-                (Icons.palette_rounded, 'Theme', Brand.rose, const AppearanceScreen() as Widget),
-                (Icons.data_usage_rounded, 'Data', Brand.sky, const StorageScreen() as Widget),
-              ])
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Material(
-                      color: Theme.of(context).colorScheme.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => go(page),
-                        child: SizedBox(
-                          height: 74,
-                          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(color: color.withValues(alpha: dark ? 0.2 : 0.12), shape: BoxShape.circle),
-                              child: Icon(icon, color: color, size: 19),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                          ]),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ]),
-          ),
-          const SizedBox(height: 4),
           // other accounts on this phone: switch in one tap
           if (auth.otherAccounts.isNotEmpty)
             SettingsGroup(title: 'Accounts', children: [
@@ -383,40 +342,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   )),
             ]),
           if (auth.feature('premium'))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () => go(const PremiumScreen()),
-                  child: Ink(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(colors: [Color(0xFF7E62FF), Color(0xFF4E2FE0)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                    ),
-                    child: Row(children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(12)),
-                        child: const Icon(Icons.workspace_premium_rounded, color: Colors.white),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          const Text('Hushavia Plus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                          Text(plus ? 'Active — thank you for your support' : (context.read<AuthState>().plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon · bigger uploads, themes, no ads'),
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
-                        ]),
-                      ),
-                      Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.7)),
-                    ]),
-                  ),
-                ),
+            SettingsGroup(children: [
+              SettingsTile(
+                icon: Icons.workspace_premium_rounded,
+                color: Brand.premium,
+                title: 'Hushavia Plus',
+                subtitle: plus ? 'Active — thank you for your support' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
+                maxSubtitleLines: 1,
+                onTap: () => go(const PremiumScreen()),
               ),
-            ),
+            ]),
           // every section is one row here and a short page of its own: the hub stays one screen long
           SettingsGroup(children: [
             for (final sec in sections)
