@@ -439,17 +439,20 @@ class _Header extends StatelessWidget {
             right: 16,
             bottom: 2,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              FilledButton(
-                onPressed: onEdit,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Brand.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  shape: const StadiumBorder(),
-                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              Material(
+                color: Brand.primary,
+                shape: const StadiumBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onEdit,
+                  child: const SizedBox(
+                    height: 40,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 18),
+                      child: Center(widthFactor: 1, child: Text('Edit profile', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700))),
+                    ),
+                  ),
                 ),
-                child: const Text('Edit profile'),
               ),
               round(Icons.qr_code_2_rounded, 'QR code', onQr),
               round(Icons.ios_share_rounded, 'Share profile', onShare),
