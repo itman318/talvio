@@ -17,6 +17,7 @@ import '../utils/format.dart';
 import '../core/services.dart';
 import '../wallet/address_book.dart';
 import '../wallet/evm.dart';
+import '../wallet/evm_history.dart';
 import '../wallet/portfolio.dart';
 import '../wallet/tron_api.dart';
 import '../wallet/tron_crypto.dart';
@@ -596,8 +597,26 @@ class _WalletHomeState extends State<_WalletHome> {
       final ids = net.map((t) => t.id.toLowerCase()).toSet();
       final utxoList = [for (final l in await utxoTxs) ...l];
       ids.addAll(utxoList.map((t) => t.id.toLowerCase()));
-      final txs = [...net, ...utxoList, ...(await sent).where((t) => !ids.contains(t.id.toLowerCase()))]..sort((a, b) => b.time.compareTo(a.time));
+      final sentList = await sent;
+      final txs = [...net, ...utxoList, ...sentList.where((t) => !ids.contains(t.id.toLowerCase()))]..sort((a, b) => b.time.compareTo(a.time));
       if (!mounted) return;
+      // token transfers on the 0x networks, in and out (BNB Smart Chain and Ethereum always; others when a token is held).
+      // Read after the balances are on screen: the first look goes through many blocks.
+      () async {
+        final evmList = <WalletTx>[];
+        final hist = EvmHistory(w.userId);
+        await Future.wait([
+          for (final c in EvmChain.all)
+            () async {
+              final tokens = [for (final a in assets) if (a.evmToken != null && a.network == c.id && (c.id == 'bsc' || c.id == 'eth' || (a.balance ?? BigInt.zero) > BigInt.zero)) a.evmToken!];
+              if (tokens.isNotEmpty) evmList.addAll(await hist.load(c, w.evmAddress!, tokens));
+            }(),
+        ]);
+        if (!mounted || evmList.isEmpty) return;
+        final have = evmList.map((t) => t.id.toLowerCase()).toSet();
+        final all = [...txs.where((t) => !have.contains(t.id.toLowerCase())), ...evmList]..sort((a, b) => b.time.compareTo(a.time));
+        setState(() => _txs = all);
+      }();
       setState(() {
         _assets = assets;
         _txs = txs;
