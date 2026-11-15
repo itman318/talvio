@@ -12,7 +12,7 @@ const { forbidden } = require('../utils/errors');
 
 // ------------------------------------------------------------------ 1. new accounts
 // the automated tests make brand-new accounts all the time: there the limits are on only when a test asks
-let enforced = !process.env.NODE_TEST_CONTEXT;
+let enforced = !process.env.NODE_TEST_CONTEXT && process.env.NEW_ACCOUNT_LIMITS !== 'off';
 function setEnforced(on) {
   enforced = !!on;
 }

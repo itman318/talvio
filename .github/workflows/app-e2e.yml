@@ -51,6 +51,7 @@ jobs:
         env:
           DATABASE_URL: postgres://chat:chat@localhost:5432/chatapp
           OTP_DEV_MODE: 'true'
+          NEW_ACCOUNT_LIMITS: 'off'
           JWT_SECRET: e2e-user-secret-0123456789abcdef
           ADMIN_JWT_SECRET: e2e-admin-secret-0123456789abcdef
           OTP_SECRET: e2e-otp-secret-0123456789abcdef
