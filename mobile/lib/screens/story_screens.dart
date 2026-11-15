@@ -695,9 +695,10 @@ class StoryThumb extends StatelessWidget {
 
 /// Highlight circles on a profile. On my own profile there is a "New" circle and long-press to edit.
 class HighlightsRow extends StatefulWidget {
-  const HighlightsRow({super.key, required this.userId, this.mine = false});
+  const HighlightsRow({super.key, required this.userId, this.mine = false, this.hideEmpty = false});
   final int userId;
   final bool mine;
+  final bool hideEmpty; // my profile: no lone "New" circle (there is a Highlights shortcut)
 
   @override
   State<HighlightsRow> createState() => _HighlightsRowState();
@@ -798,7 +799,7 @@ class _HighlightsRowState extends State<HighlightsRow> {
   @override
   Widget build(BuildContext context) {
     final list = _list;
-    if (list == null || (list.isEmpty && !widget.mine)) return const SizedBox.shrink();
+    if (list == null || (list.isEmpty && (!widget.mine || widget.hideEmpty))) return const SizedBox.shrink();
     return SizedBox(
       height: 100,
       child: ListView(

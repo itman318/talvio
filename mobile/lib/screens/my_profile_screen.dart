@@ -15,6 +15,7 @@ import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../widgets/avatar.dart';
 import '../widgets/premium.dart';
 import '../widgets/celebration.dart';
 import 'chat_screen.dart';
@@ -90,76 +91,32 @@ class MyProfileScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(children: [
         ListView(padding: EdgeInsets.zero, children: [
-        Stack(children: [
-          ProfileHero(
-            id: me.id,
-            name: me.name,
-            avatarUrl: me.avatarAbsolute,
-            online: true,
-            glow: me.isPremium,
-            topPadding: top + 10,
-            status: me.username != null ? '@${me.username}' : 'Add a username so people can find you',
-            badges: [
-              if (me.isVerified) const Icon(Icons.verified_rounded, color: Brand.primary, size: 22),
-              GestureDetector(
-                onTap: () => showEmojiStatusPicker(context),
-                child: me.statusEmoji != null
-                    ? EmojiStatusBadge(me, size: 21, padLeft: 0)
-                    : Icon(me.isPremium ? Icons.star_rounded : Icons.add_reaction_outlined, color: me.isPremium ? Brand.premium : Colors.white70, size: 22),
-              ),
-            ],
-            onAvatarTap: () => go(const EditProfileScreen()),
-            actions: [
-              ProfileAction(icon: Icons.edit_rounded, label: 'Edit', highlight: true, onTap: () => go(const EditProfileScreen())),
-              ProfileAction(icon: Icons.qr_code_2_rounded, label: 'QR code', onTap: () => go(const MyQrScreen())),
-              ProfileAction(
-                icon: Icons.ios_share_rounded,
-                label: 'Share',
-                onTap: () async {
-                  if (link == null) {
-                    showInfo(context, 'Set a username first (Edit → Username)');
-                    return;
-                  }
-                  await Clipboard.setData(ClipboardData(text: link));
-                  if (context.mounted) showInfo(context, 'Profile link copied');
-                },
-              ),
-            ],
-          ),
-          Positioned(
-            right: 8,
-            top: top + 4,
-            child: IconButton(
-              tooltip: 'Settings',
-              icon: const Icon(Icons.settings_rounded, color: Colors.white),
-              onPressed: () => go(const SettingsScreen()),
-            ),
-          ),
-        ]),
+        _Header(
+          me: me,
+          top: top,
+          onEdit: () => go(const EditProfileScreen()),
+          onQr: () => go(const MyQrScreen()),
+          onSettings: () => go(const SettingsScreen()),
+          onShare: () async {
+            if (link == null) {
+              showInfo(context, 'Set a username first (Edit → Username)');
+              return;
+            }
+            await Clipboard.setData(ClipboardData(text: link));
+            if (context.mounted) showInfo(context, 'Profile link copied');
+          },
+        ),
         _StatsStrip(me: me),
-        HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true),
+        HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true, hideEmpty: true),
         _completeCard(context, me, () => go(const EditProfileScreen())),
-        // about me: the bio as text, then one slim line per detail
+        // contact details: one slim line each
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: _Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              InkWell(
-                onTap: () => go(const EditProfileScreen()),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('BIO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.9, color: Brand.muted)),
-                    const SizedBox(height: 4),
-                    Text(me.bio.isEmpty ? 'Add a few words about you' : me.bio,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 15, height: 1.35, color: me.bio.isEmpty ? Brand.primary : null, fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
-                  ]),
-                ),
-              ),
               if (me.username != null)
                 _InfoRow(
+                  first: true,
                   icon: Icons.alternate_email_rounded,
                   color: Brand.primary,
                   value: me.username!,
@@ -170,7 +127,7 @@ class MyProfileScreen extends StatelessWidget {
                   },
                 ),
               if ((me.phone ?? '').isNotEmpty)
-                _InfoRow(icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
+                _InfoRow(first: me.username == null, icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
               if ((me.email ?? '').isNotEmpty) _InfoRow(icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: 'Login only'),
               _InfoRow(
                 icon: Icons.cake_rounded,
@@ -242,7 +199,8 @@ class _Card extends StatelessWidget {
 
 /// One slim detail line: small coloured icon, the value, and what a tap does on the right.
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.color, required this.value, required this.label, this.onTap});
+  const _InfoRow({required this.icon, required this.color, required this.value, required this.label, this.onTap, this.first = false});
+  final bool first;
   final IconData icon;
   final Color color;
   final String value;
@@ -253,11 +211,11 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      Divider(height: 1, indent: 16, endIndent: 16, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)),
+      if (!first) Divider(height: 1, thickness: 0.7, indent: 47, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)),
       InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
           child: Row(children: [
             Icon(icon, size: 19, color: color),
             const SizedBox(width: 12),
@@ -331,14 +289,20 @@ class _StatsStripState extends State<_StatsStrip> {
         _Stat(icon: Icons.account_balance_wallet_rounded, color: const Color(0xFF12B89C), value: 'Open', label: 'Wallet', onTap: () => go(const WalletScreen())),
     ];
     if (tiles.isEmpty) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final line = dark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFEDEFF5);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-      child: Row(children: [
-        for (var i = 0; i < tiles.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(child: tiles[i]),
-        ],
-      ]),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+      child: _Card(
+        child: IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (var i = 0; i < tiles.length; i++) ...[
+              if (i > 0) VerticalDivider(width: 1, thickness: 1, indent: 14, endIndent: 14, color: line),
+              Expanded(child: tiles[i]),
+            ],
+          ]),
+        ),
+      ),
     );
   }
 }
@@ -353,39 +317,184 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE9ECF3)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(11, 11, 8, 11),
-          child: Row(children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: color.withValues(alpha: dark ? 0.2 : 0.13), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 19),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, letterSpacing: -0.2, fontFeatures: [FontFeature.tabularFigures()])),
-                ),
-                Text(label, maxLines: 1, style: const TextStyle(fontSize: 12, color: Brand.muted, fontWeight: FontWeight.w600)),
-              ]),
-            ),
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 13, 6, 12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3, fontFeatures: [FontFeature.tabularFigures()])),
+          ),
+          const SizedBox(height: 3),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 13.5, color: color),
+            const SizedBox(width: 4),
+            Text(label, maxLines: 1, style: const TextStyle(fontSize: 12.5, color: Brand.muted, fontWeight: FontWeight.w600)),
           ]),
-        ),
+        ]),
       ),
     );
+  }
+}
+
+/// The top of my profile: a calm cover, the photo on its edge, then name, username and bio —
+/// left-aligned like a business card, with the actions as slim buttons beside the photo.
+class _Header extends StatelessWidget {
+  const _Header({required this.me, required this.top, required this.onEdit, required this.onQr, required this.onShare, required this.onSettings});
+  final AppUser me;
+  final double top;
+  final VoidCallback onEdit, onQr, onShare, onSettings;
+
+  static const _avatar = 92.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final coverH = top + 118;
+    final url = me.avatarAbsolute;
+
+    Widget round(IconData icon, String tip, VoidCallback onTap) => Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Tooltip(
+            message: tip,
+            child: Material(
+              color: Theme.of(context).colorScheme.surface,
+              shape: CircleBorder(side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.10) : const Color(0xFFDFE3EE))),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(onTap: onTap, child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 19.5, color: Theme.of(context).colorScheme.onSurface))),
+            ),
+          ),
+        );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(
+        height: coverH + _avatar / 2 + 4,
+        child: Stack(clipBehavior: Clip.none, children: [
+          // cover: brand ink to violet, with two soft lights (cheap to draw: no blur, no image)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: coverH,
+            child: const RepaintBoundary(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1B1F3D), Color(0xFF3A2A9E), Color(0xFF6D4AFF)], stops: [0, 0.55, 1]),
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0.85, -0.9), radius: 1.1, colors: [Color(0x55FFFFFF), Color(0x00FFFFFF)])),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.9, 1.2), radius: 0.9, colors: [Color(0x4012B89C), Color(0x0012B89C)])),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 20,
+            top: top + 14,
+            child: const Text('Profile', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+          ),
+          Positioned(
+            right: 6,
+            top: top + 4,
+            child: IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined, color: Colors.white), onPressed: onSettings),
+          ),
+          // photo on the edge of the cover
+          Positioned(
+            left: 18,
+            bottom: 0,
+            child: GestureDetector(
+              onTap: url == null ? onEdit : () => showPhotoViewer(context, url, tag: 'avatar-${me.id}'),
+              child: Stack(clipBehavior: Clip.none, children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: me.isPremium ? null : bg,
+                    gradient: me.isPremium ? Brand.plusGradient : null,
+                    borderRadius: BorderRadius.circular((_avatar + 8) * 0.34),
+                  ),
+                  child: Hero(tag: 'avatar-${me.id}', child: Avatar(id: me.id, name: me.name, url: url, size: _avatar)),
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: GestureDetector(
+                    onTap: onEdit,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(color: Brand.primary, shape: BoxShape.circle, border: Border.all(color: bg, width: 3)),
+                      child: const Icon(Icons.photo_camera_rounded, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          // actions beside the photo
+          Positioned(
+            right: 16,
+            bottom: 2,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              FilledButton(
+                onPressed: onEdit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Brand.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  shape: const StadiumBorder(),
+                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                child: const Text('Edit profile'),
+              ),
+              round(Icons.qr_code_2_rounded, 'QR code', onQr),
+              round(Icons.ios_share_rounded, 'Share profile', onShare),
+            ]),
+          ),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Flexible(
+              child: Text(me.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15)),
+            ),
+            if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified_rounded, color: Brand.primary, size: 21)),
+            if (me.isPremium) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 20)),
+            if (me.statusEmoji != null)
+              GestureDetector(onTap: () => showEmojiStatusPicker(context), child: Padding(padding: const EdgeInsets.only(left: 6), child: EmojiStatusBadge(me, size: 20, padLeft: 0))),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Flexible(
+              child: GestureDetector(
+                onTap: me.username == null ? onEdit : null,
+                child: Text(me.username != null ? '@${me.username}' : 'Add a username',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: me.username != null ? Brand.muted : Brand.primary)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(width: 7, height: 7, decoration: const BoxDecoration(color: Brand.accent, shape: BoxShape.circle)),
+            const SizedBox(width: 5),
+            const Text('online', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Brand.accent)),
+          ]),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onEdit,
+            child: Text(me.bio.isEmpty ? 'Add a short bio' : me.bio,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 15, height: 1.4, color: me.bio.isEmpty ? Brand.primary : null, fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
+          ),
+        ]),
+      ),
+    ]);
   }
 }
