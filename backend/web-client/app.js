@@ -914,6 +914,7 @@
     return el('div', { class: 'album media' }, group.map((x) => (x.media && x.type === 'image' ? imageNode(x.media.url) : el('div', {}, ...mediaView(x)))));
   }
 
+  const gaCache = new Map(); // giveaway id → { at, info }
   function mediaView(m) {
     const md = m.media;
     if (m.view_once) {
@@ -1012,9 +1013,12 @@
         btn.onclick = async (e) => {
           e.stopPropagation();
           btn.disabled = true;
-          try { show(await api('POST', `/coins/giveaways/${g.id}/join`, {})); } catch (err) { btn.disabled = false; toast(err.message); }
+          try { const info = await api('POST', `/coins/giveaways/${g.id}/join`, {}); gaCache.set(g.id, { at: Date.now(), info }); show(info); } catch (err) { btn.disabled = false; toast(err.message); }
         };
-        if (g.id) api('GET', `/coins/giveaways/${g.id}`).then(show).catch(() => { status.textContent = 'Open the Hushavia app to join'; });
+        // the chat is redrawn often: ask the server at most every 30 s per giveaway
+        const hit = gaCache.get(g.id);
+        if (hit && Date.now() - hit.at < 30000) show(hit.info);
+        else if (g.id) api('GET', `/coins/giveaways/${g.id}`).then((info) => { gaCache.set(g.id, { at: Date.now(), info }); show(info); }).catch(() => { status.textContent = 'Open the Hushavia app to join'; });
         return [el('div', { class: 'contact' },
           el('span', { class: 'ic' }, '🎉'),
           el('span', {},

@@ -63,7 +63,7 @@ async function assertCanStartChat(userId, peerId) {
   if (known) return;
   const r = await db.one(
     `SELECT count(*)::int AS c FROM chat_members m JOIN chats c ON c.id = m.chat_id
-     WHERE m.user_id = $1 AND c.type = 'private' AND m.joined_at > now() - interval '24 hours'`,
+     WHERE m.user_id = $1 AND c.type = 'private' AND c.created_by = $1 AND m.joined_at > now() - interval '24 hours'`,
     [userId],
   );
   if (r.c >= n.s.new_account_max_new_chats) {
