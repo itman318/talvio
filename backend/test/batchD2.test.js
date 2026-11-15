@@ -880,3 +880,11 @@ test('card payments (Stripe): off by default, signed webhook only, amount checke
     await settings.update({ stripe_enabled: false });
   }
 });
+
+test('the database update runs again over real data (deposits, gifts, giveaways, card and coin orders)', async () => {
+  // every deploy re-runs schema.sql: an older, shorter list of allowed values must never reject rows already stored
+  const kinds = (await db.many('SELECT DISTINCT kind FROM coin_tx')).map((r) => r.kind);
+  assert.ok(kinds.includes('deposit') && kinds.includes('gift_sent'), `rows of the newer kinds exist: ${kinds}`);
+  await db.query(fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'schema.sql'), 'utf8'));
+  await db.query(fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'schema.sql'), 'utf8'));
+});
