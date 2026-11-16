@@ -163,7 +163,7 @@ class MainActivity : FlutterFragmentActivity() {
     // An incoming call (full-screen notification) may show over the lock screen; nothing else does.
     private fun isCallIntent(i: Intent?): Boolean {
         val p = i?.getStringExtra("payload") ?: return false
-        return p.contains("\"kind\":\"call\"")
+        return p.contains("kind") && p.contains("call_id") && !p.contains("call_missed")
     }
 
     private fun overLock(on: Boolean) {
