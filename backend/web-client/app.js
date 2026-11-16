@@ -533,6 +533,8 @@
   function buildLayout() {
     searchInput = el('input', { class: 'search', type: 'search', placeholder: 'Search', oninput: onSearch });
     const menuBtn = el('button', { class: 'icon-btn', title: 'Menu', onclick: (e) => openMenu(e, [
+      ['My profile', openProfile],
+      ['Settings', openSettings],
       ['🪙 Coins', openCoins],
       ['Enable notifications', askNotifications],
       ['Log out', () => logout()],
@@ -1124,6 +1126,113 @@
     tip_sent: 'Tip to', tip_received: 'Tip from', sub_paid: 'Subscription', sub_income: 'Subscriber', giveaway: 'Giveaway', giveaway_win: 'Giveaway prize',
     giveaway_refund: 'Giveaway refund', ad_budget: 'Ad budget', ad_refund: 'Ad refund', ad_income: 'Sponsored messages',
   };
+
+  // ------------------------------------------------------------------ my profile & settings (same calm look as the phone app)
+  function infoRow(value, caption, action, onAction) {
+    return el('div', { class: 'info' },
+      el('div', { class: 'info-text' }, el('div', { class: 'info-value' }, value), el('div', { class: 'info-cap' }, caption)),
+      action ? el('button', { class: 'link-btn', onclick: onAction }, action) : null);
+  }
+  function lineRow(label, onclick, right, danger) {
+    return el('button', { class: `line${danger ? ' danger' : ''}`, onclick }, el('span', {}, label), el('span', { class: 'line-right' }, right || '', danger ? '' : ' ›'));
+  }
+
+  async function openProfile() {
+    let me = auth.me;
+    try { me = await api('GET', '/me'); saveAuth({ user: me }); } catch (_) { /* show what we have */ }
+    const { box, close } = dialog();
+    box.classList.add('profile-dlg');
+    const link = me.username ? `${location.origin}/c/${me.username}` : null;
+    box.replaceChildren(
+      el('div', { class: 'p-head' },
+        avatar(me.id, userName(me), me.avatar_url || null, 84),
+        el('div', {},
+          el('div', { class: 'p-name' }, userName(me)),
+          el('div', { class: 'muted' }, me.username ? `@${me.username}` : 'No username yet'),
+          el('div', { class: 'p-online' }, '● online'))),
+      me.bio ? el('p', { class: 'p-bio' }, me.bio) : null,
+      el('div', { class: 'actions', style: 'justify-content:stretch' },
+        el('button', { class: 'btn grow', onclick: () => { close(); editProfile(); } }, 'Edit profile'),
+        link ? el('button', { class: 'btn soft grow', onclick: async () => { try { await navigator.clipboard.writeText(link); toast('Profile link copied'); } catch (_) { toast(link); } } }, 'Share') : null),
+      el('div', { class: 'card' },
+        me.username ? infoRow(`@${me.username}`, 'Username') : null,
+        me.phone ? infoRow(me.phone, 'Mobile') : null,
+        me.email ? infoRow(me.email, 'Email · only for login') : null),
+      el('div', { class: 'card' },
+        lineRow('🪙 Coins', () => { close(); openCoins(); }),
+        lineRow('Settings', () => { close(); openSettings(); })));
+  }
+
+  function editProfile() {
+    const me = auth.me || {};
+    const { box, close } = dialog();
+    const first = el('input', { value: me.first_name || '', placeholder: 'First name', maxlength: 64 });
+    const last = el('input', { value: me.last_name || '', placeholder: 'Last name (optional)', maxlength: 64 });
+    const user = el('input', { value: me.username || '', placeholder: 'username' });
+    const bio = el('textarea', { placeholder: 'A few words about you', maxlength: 300, rows: 3 }, me.bio || '');
+    const save = async () => {
+      try {
+        saveAuth({ user: await api('PATCH', '/me', { first_name: first.value.trim(), last_name: last.value.trim(), username: user.value.trim().replace(/^@/, '') || null, bio: bio.value.trim() }) });
+        close(); toast('Saved'); openProfile();
+      } catch (err) { toast(err.message); }
+    };
+    box.replaceChildren(el('h2', {}, 'Edit profile'),
+      el('label', { class: 'cap' }, 'Name'), first, last,
+      el('label', { class: 'cap' }, 'Username'), user,
+      el('label', { class: 'cap' }, 'Bio'), bio,
+      el('div', { class: 'actions' }, el('button', { class: 'btn ghost', onclick: close }, 'Cancel'), el('button', { class: 'btn', onclick: save }, 'Save')));
+  }
+
+  function openSettings() {
+    const me = auth.me || {};
+    const { box, close } = dialog();
+    box.classList.add('profile-dlg');
+    const theme = (() => { try { return localStorage.getItem('theme') || 'auto'; } catch (_) { return 'auto'; } })();
+    box.replaceChildren(
+      el('div', { class: 's-head' },
+        avatar(me.id, userName(me), me.avatar_url || null, 72),
+        el('div', { class: 'p-name', style: 'margin-top:8px' }, userName(me)),
+        el('div', { class: 'muted' }, [me.phone || me.email, me.username ? `@${me.username}` : ''].filter(Boolean).join(' · '))),
+      el('div', { class: 'card' },
+        lineRow('Edit profile', () => { close(); editProfile(); }),
+        lineRow('Devices', () => { close(); openDevices(); }),
+        lineRow('Notifications', () => askNotifications(), typeof Notification !== 'undefined' ? ({ granted: 'On', denied: 'Blocked' }[Notification.permission] || 'Off') : ''),
+        lineRow('Theme', () => {
+          const next = { auto: 'light', light: 'dark', dark: 'auto' }[theme];
+          try { localStorage.setItem('theme', next); } catch (_) { /* fine */ }
+          applyTheme(); close(); openSettings();
+        }, { auto: 'System', light: 'Light', dark: 'Dark' }[theme])),
+      el('div', { class: 'card' },
+        lineRow('🪙 Coins', () => { close(); openCoins(); })),
+      el('div', { class: 'card' },
+        lineRow('Log out', () => { close(); logout(); }, '', true)),
+      el('div', { class: 'muted', style: 'text-align:center;font-size:12px;margin-top:6px' }, 'Privacy, passkeys, wallet and more are in the Hushavia phone app.'));
+  }
+
+  async function openDevices() {
+    let list;
+    try { list = await api('GET', '/me/sessions'); } catch (err) { toast(err.message); return; }
+    const { box, close } = dialog();
+    const row = (s) => el('div', { class: 'info' },
+      el('div', { class: 'info-text' },
+        el('div', { class: 'info-value' }, `${s.device_name || s.platform || 'Device'}${s.current ? ' · this browser' : ''}`),
+        el('div', { class: 'info-cap' }, `${s.platform || ''} ${s.app_version || ''} · ${listTime(s.last_active_at || s.created_at)}`)),
+      s.current ? null : el('button', { class: 'link-btn danger', onclick: async () => {
+        try { await api('DELETE', `/me/sessions/${s.id}`); close(); openDevices(); } catch (err) { toast(err.message); }
+      } }, 'Log out'));
+    box.replaceChildren(el('h2', {}, 'Devices'),
+      el('div', { class: 'card' }, ...list.map(row)),
+      list.length > 1 ? el('div', { class: 'actions' }, el('button', { class: 'btn soft', onclick: async () => {
+        try { await api('POST', '/me/sessions/terminate-others'); close(); openDevices(); toast('Other devices logged out'); } catch (err) { toast(err.message); }
+      } }, 'Log out all other devices')) : null);
+  }
+
+  function applyTheme() {
+    let t = 'auto';
+    try { t = localStorage.getItem('theme') || 'auto'; } catch (_) { /* fine */ }
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  }
+  applyTheme();
 
   async function openCoins() {
     let info;
