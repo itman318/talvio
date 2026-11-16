@@ -88,6 +88,7 @@ router.post('/auth/password/reset', h(async (req, res) => res.json(await passwor
 
 // notification actions (the reply token in the push is the credential)
 router.post('/notify/reply', h(async (req, res) => res.json(await require('../services/notify.service').reply(req.body))));
+router.post('/notify/call-decline', h(async (req, res) => res.json(await require('../services/notify.service').declineCall(req.body))));
 router.post('/notify/read', h(async (req, res) => res.json(await require('../services/notify.service').read(req.body))));
 
 router.post('/auth/passkey/challenge', h(async (req, res) => res.json(await passkeyService.challenge(req.body, req.ip))));

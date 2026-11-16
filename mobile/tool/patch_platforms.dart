@@ -47,6 +47,7 @@ void _android() {
     'android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
     'android.permission.REQUEST_INSTALL_PACKAGES', // in-app updates
+    'android.permission.USE_FULL_SCREEN_INTENT', // incoming call over the lock screen
   ];
   for (final p in perms) {
     if (!xml.contains(p)) {
@@ -133,6 +134,8 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.util.Rational
 import android.os.Build
+import android.os.Bundle
+import android.view.WindowManager
 import android.os.PowerManager
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -155,6 +158,33 @@ class MainActivity : FlutterFragmentActivity() {
     private fun enterPip(): Boolean {
         if (Build.VERSION.SDK_INT < 26) return false
         return try { enterPictureInPictureMode(pipParams()!!) } catch (e: Exception) { false }
+    }
+
+    // An incoming call (full-screen notification) may show over the lock screen; nothing else does.
+    private fun isCallIntent(i: Intent?): Boolean {
+        val p = i?.getStringExtra("payload") ?: return false
+        return p.contains("\"kind\":\"call\"")
+    }
+
+    private fun overLock(on: Boolean) {
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(on)
+            setTurnScreenOn(on)
+        } else {
+            @Suppress("DEPRECATION")
+            val f = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            if (on) window.addFlags(f) else window.clearFlags(f)
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        if (isCallIntent(intent)) overLock(true)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        if (isCallIntent(intent)) overLock(true)
+        super.onNewIntent(intent)
     }
 
     override fun onUserLeaveHint() {
@@ -182,6 +212,10 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(true)
                 }
                 "pipEnter" -> result.success(enterPip())
+                "overLock" -> {
+                    overLock(call.argument<Boolean>("on") ?: false)
+                    result.success(true)
+                }
                 "batteryRestricted" -> {
                     if (Build.VERSION.SDK_INT < 23) {
                         result.success(false)

@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' show Color;
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'chat_passcode.dart';
@@ -21,6 +23,21 @@ class MessageNotifications {
 
   /// Set by the app (main isolate): open a chat when a notification is tapped.
   static void Function(int chatId)? onOpenChat;
+
+  /// Set by the app: a call notification was used — 'answer' / 'open' (call id), or 'callback' (caller id + video).
+  static void Function(String action, Map<String, dynamic> payload)? onCallAction;
+
+  /// Notification id of a call (800000+; chats stay below 600000).
+  static int callIdFor(int callId) => 800000 + callId % 100000;
+
+  /// The ringing ended (answered, declined, missed): remove the full-screen call notification.
+  static Future<void> cancelCall(int callId) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      await init();
+      await plugin.cancel(callIdFor(callId));
+    } catch (_) {}
+  }
 
   static const _channel = AndroidNotificationDetails(
     'messages',
@@ -62,6 +79,16 @@ class MessageNotifications {
   }
 
   static Future<void> _onResponse(NotificationResponse r) async {
+    final p0 = _payload(r.payload);
+    if (p0['kind'] == 'call' || p0['kind'] == 'call_missed') {
+      final a = r.actionId ?? '';
+      if (a == 'call_decline' || a == 'reply') {
+        await handleAction(r);
+        return;
+      }
+      onCallAction?.call(a.isEmpty ? (p0['kind'] == 'call' ? 'open' : 'open_missed') : a.replaceFirst('call_', ''), p0);
+      return;
+    }
     if (r.actionId == null || r.actionId!.isEmpty) {
       final p = _payload(r.payload);
       final id = int.tryParse('${p['chat_id']}');
@@ -93,6 +120,8 @@ class MessageNotifications {
 
   /// Draws a message notification from a data-only push.
   static Future<void> show(Map<String, dynamic> data) async {
+    if (data['type'] == 'call') return _showCall(data);
+    if (data['type'] == 'call_missed') return _showMissed(data);
     if (data['type'] != 'message' || data['title'] == null) return;
     await init();
     final chatId = int.tryParse('${data['chat_id']}') ?? 0;
@@ -142,6 +171,90 @@ class MessageNotifications {
     );
   }
 
+  /// Incoming call while the app is closed or in the background: rings like a phone call,
+  /// and opens full screen over the lock screen, with Answer / Decline.
+  static Future<void> _showCall(Map<String, dynamic> data) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    final callId = int.tryParse('${data['call_id']}');
+    if (callId == null) return;
+    await init();
+    final ringMs = ((int.tryParse('${data['ring_sec']}') ?? 45) * 1000).clamp(10000, 120000);
+    final video = '${data['video']}' == '1';
+    await plugin.show(
+      callIdFor(callId),
+      '${data['title'] ?? 'Hushavia'}',
+      '${data['body'] ?? (video ? 'Incoming video call' : 'Incoming voice call')}',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'calls_v1',
+          'Incoming calls',
+          channelDescription: 'Rings when someone calls you',
+          importance: Importance.max,
+          priority: Priority.max,
+          category: AndroidNotificationCategory.call,
+          fullScreenIntent: true,
+          ongoing: true,
+          autoCancel: false,
+          playSound: true,
+          sound: const UriAndroidNotificationSound('content://settings/system/ringtone'),
+          audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 900, 600, 900, 600, 900]),
+          additionalFlags: Int32List.fromList([4]), // keep ringing (FLAG_INSISTENT)
+          timeoutAfter: ringMs,
+          visibility: NotificationVisibility.public,
+          color: const Color(0xFF6D4AFF),
+          colorized: true,
+          actions: [
+            if (data['call_token'] != null)
+              const AndroidNotificationAction('call_decline', 'Decline', showsUserInterface: false, cancelNotification: true, titleColor: Color(0xFFE5484D)),
+            AndroidNotificationAction('call_answer', video ? 'Answer video' : 'Answer', showsUserInterface: true, cancelNotification: true, titleColor: const Color(0xFF22C55E)),
+          ],
+        ),
+      ),
+      payload: jsonEncode({'kind': 'call', 'call_id': callId, 'token': data['call_token'], 'video': video}),
+    );
+  }
+
+  /// Missed call: "Call back" and "Message" (type a reply right in the notification).
+  static Future<void> _showMissed(Map<String, dynamic> data) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    final callId = int.tryParse('${data['call_id']}') ?? 0;
+    await init();
+    await plugin.cancel(callIdFor(callId));
+    final chatId = int.tryParse('${data['chat_id']}');
+    final video = '${data['video']}' == '1';
+    await plugin.show(
+      callIdFor(callId),
+      '${data['title'] ?? 'Missed call'}',
+      '${data['body'] ?? 'Missed call'}',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'missed_calls',
+          'Missed calls',
+          channelDescription: 'Calls you didn’t answer',
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.missedCall,
+          actions: [
+            AndroidNotificationAction('call_callback', 'Call back', showsUserInterface: true, cancelNotification: true),
+            if (data['reply_token'] != null && chatId != null)
+              const AndroidNotificationAction('reply', 'Message',
+                  inputs: [AndroidNotificationActionInput(label: 'Message')], showsUserInterface: false, cancelNotification: true),
+          ],
+        ),
+      ),
+      payload: jsonEncode({
+        'kind': 'call_missed',
+        'call_id': callId,
+        'chat_id': chatId,
+        'caller_id': int.tryParse('${data['caller_id']}'),
+        'video': video,
+        'token': data['reply_token'],
+      }),
+    );
+  }
+
   /// Reply / Mark as read — works in the background, without the app's login session.
   static Future<void> handleAction(NotificationResponse r) async {
     final p = _payload(r.payload);
@@ -149,6 +262,21 @@ class MessageNotifications {
     final chatId = int.tryParse('${p['chat_id']}') ?? 0;
     if (token == null) return;
     try {
+      if (r.actionId == 'call_decline') {
+        await plugin.cancel(callIdFor(int.tryParse('${p['call_id']}') ?? 0));
+        await http.post(Uri.parse('${AppConfig.apiBase}/notify/call-decline'),
+            headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': token}));
+        return;
+      }
+      if (r.actionId == 'reply' && p['kind'] == 'call_missed') {
+        final text = (r.input ?? '').trim();
+        if (text.isEmpty) return;
+        await http.post(Uri.parse('${AppConfig.apiBase}/notify/reply'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': token, 'text': text, 'client_id': 'n${DateTime.now().microsecondsSinceEpoch}'}));
+        await plugin.cancel(callIdFor(int.tryParse('${p['call_id']}') ?? 0));
+        return;
+      }
       if (r.actionId == 'reply') {
         final text = (r.input ?? '').trim();
         if (text.isEmpty) return;

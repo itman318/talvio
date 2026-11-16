@@ -208,8 +208,14 @@ async function startCall(userId, sessionId, body = {}) {
     .sendToUsers(
       [calleeId],
       { title: name, body: (row.waiting ? 'Waiting · ' : '') + (video ? '📹 Incoming video call' : '📞 Incoming voice call') },
-      { type: 'call', call_id: call.id, chat_id: chat.id, video: video ? '1' : '0' },
-      { ttlSec: timeoutSec, tag: `call-${call.id}` },
+      { type: 'call', call_id: call.id, chat_id: chat.id, video: video ? '1' : '0', caller_id: caller.id, ring_sec: timeoutSec },
+      {
+        ttlSec: timeoutSec,
+        tag: `call-${call.id}`,
+        // Android draws it itself: a full-screen ringing call with Answer / Decline
+        dataOnlyAndroid: true,
+        perSession: (s) => ({ call_token: require('./notify.service').callToken(s.user_id, s.id, call.id) }), // eslint-disable-line global-require
+      },
     )
     .catch(() => {});
   const out = await serializeOne(call, userId);
@@ -313,8 +319,13 @@ async function afterFinish(row) {
       .sendToUsers(
         [row.callee_id],
         { title: caller ? userService.displayName(caller) : 'Missed call', body: row.video ? '📹 Missed video call' : '📞 Missed call' },
-        { type: 'call_missed', call_id: row.id, chat_id: row.chat_id || '' },
-        { tag: `call-${row.id}` },
+        { type: 'call_missed', call_id: row.id, chat_id: row.chat_id || '', caller_id: row.caller_id, video: row.video ? '1' : '0' },
+        {
+          tag: `call-${row.id}`,
+          // Android: "Call back" and "Message" buttons right on the notification
+          dataOnlyAndroid: true,
+          perSession: (s) => (row.chat_id ? { reply_token: require('./notify.service').replyToken(s.user_id, s.id, row.chat_id) } : {}), // eslint-disable-line global-require
+        },
       )
       .catch(() => {});
   }

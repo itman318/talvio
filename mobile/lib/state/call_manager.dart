@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../core/message_notifications.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -435,6 +437,18 @@ class CallManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// "Answer" was pressed on the call notification: pick up as soon as this call rings in the app.
+  int? _answerCallId;
+  DateTime? _answerAt;
+  void answerWhenRinging(int callId) {
+    _answerCallId = callId;
+    _answerAt = DateTime.now();
+    if (phase == CallPhase.incoming && call?.id == callId) {
+      _answerCallId = null;
+      accept();
+    }
+  }
+
   /// After the app is opened from a call notification (or comes back to the foreground).
   Future<void> checkActive() async {
     if (active) return;
@@ -557,9 +571,15 @@ class CallManager extends ChangeNotifier {
     }
     notifyListeners();
     _showScreen();
+    if (_answerCallId == c.id && _answerAt != null && DateTime.now().difference(_answerAt!) < const Duration(minutes: 2)) {
+      _answerCallId = null;
+      Future.microtask(accept);
+    }
   }
 
   void _stopRing() {
+    final ringingId = call?.id;
+    if (ringingId != null) MessageNotifications.cancelCall(ringingId);
     if (!_ringing) return;
     _ringing = false;
     _buzz?.cancel();

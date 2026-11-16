@@ -37,4 +37,12 @@ class Pip {
       return false;
     }
   }
+
+  /// After a call that was answered over the lock screen: the app no longer shows there.
+  static Future<void> leaveLockScreen() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _ch.invokeMethod('overLock', {'on': false});
+    } catch (_) {}
+  }
 }

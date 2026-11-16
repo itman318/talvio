@@ -18,6 +18,7 @@ import 'core/prefs.dart';
 import 'core/proxy.dart';
 import 'core/prayer_reminders.dart';
 import 'core/message_notifications.dart';
+import 'models/models.dart';
 import 'core/services.dart';
 import 'core/voice_playback.dart';
 import 'screens/more_screens.dart';
@@ -106,7 +107,12 @@ Future<void> _start() async {
   });
   // video calls go to a small floating window when you leave the app (Android)
   Pip.init();
-  calls.addListener(() => Pip.setAuto(calls.video && (calls.phase == CallPhase.connected || calls.phase == CallPhase.reconnecting)));
+  var wasInCall = false;
+  calls.addListener(() {
+    Pip.setAuto(calls.video && (calls.phase == CallPhase.connected || calls.phase == CallPhase.reconnecting));
+    if (wasInCall && !calls.active) Pip.leaveLockScreen(); // shown over the lock screen only for the call
+    wasInCall = calls.active;
+  });
   calls.onShowCallScreen = () {
     navigatorKey.currentState?.push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const CallScreen()));
   };
@@ -133,6 +139,41 @@ Future<void> _start() async {
     voice.stop();
     calls.endLocal();
     secrets.suspend();
+  };
+  // the call notification (app closed / in the background): Answer, open, or Call back from a missed call
+  MessageNotifications.onCallAction = (action, p) {
+    void run() async {
+      final callId = int.tryParse('${p['call_id']}');
+      if (action == 'answer' && callId != null) calls.answerWhenRinging(callId);
+      if (action == 'answer' || action == 'open') {
+        await calls.checkActive();
+        return;
+      }
+      final uid = int.tryParse('${p['caller_id']}');
+      final chatId = int.tryParse('${p['chat_id']}');
+      if (action == 'callback' && uid != null && !calls.active) {
+        try {
+          final u = AppUser.fromJson(Map<String, dynamic>.from(await services.api.get('/users/$uid') as Map));
+          await calls.start(u, video: p['video'] == true);
+        } catch (_) {
+          if (chatId != null) navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
+        }
+        return;
+      }
+      if (chatId != null) navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId)));
+    }
+
+    if (auth.status == AuthStatus.loggedIn) {
+      run();
+    } else {
+      void wait() {
+        if (auth.status == AuthStatus.loggedIn) {
+          auth.removeListener(wait);
+          run();
+        }
+      }
+      auth.addListener(wait);
+    }
   };
   services.push.onOpenCall = () {
     if (auth.status == AuthStatus.loggedIn) calls.checkActive();

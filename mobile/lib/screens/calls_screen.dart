@@ -11,6 +11,7 @@ import '../models/models.dart';
 import '../state/call_manager.dart';
 import '../utils/format.dart';
 import '../widgets/avatar.dart';
+import '../widgets/call_preview.dart';
 import '../theme/brand.dart';
 
 /// Starts a call after the usual checks (feature switch, already on a call).
@@ -19,6 +20,12 @@ Future<void> startCall(BuildContext context, AppUser user, {required bool video}
   if (calls.active) {
     showInfo(context, 'Finish your current call first');
     return;
+  }
+  if (video) {
+    // see yourself first (and switch to a voice call if you'd rather)
+    final choice = await showCallPreview(context, user);
+    if (choice == null || !context.mounted || calls.active) return;
+    video = choice == 'video';
   }
   await calls.start(user, video: video);
 }

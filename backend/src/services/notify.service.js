@@ -40,4 +40,19 @@ async function read(body = {}) {
   return { ok: true };
 }
 
-module.exports = { replyToken, reply, read };
+/** "Decline" on the incoming-call notification: works without opening the app. */
+function callToken(userId, sessionId, callId) {
+  return signJwt({ typ: 'nc', sub: userId, sid: sessionId, call: callId }, config.jwtSecret, 10 * 60);
+}
+
+async function declineCall(body = {}) {
+  const p = verifyJwt(String(body.token || ''), config.jwtSecret);
+  if (!p || p.typ !== 'nc') throw unauthorized('token_expired', 'Open the app');
+  const s = await db.one('SELECT id FROM sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()', [p.sid, p.sub]);
+  if (!s) throw unauthorized('session_revoked', 'Open the app');
+  rateLimit.enforce(`notify:${p.sub}`, 60, 60 * 1000);
+  await require('./call.service').declineCall(p.sub, p.call); // eslint-disable-line global-require
+  return { ok: true };
+}
+
+module.exports = { replyToken, reply, read, callToken, declineCall };
