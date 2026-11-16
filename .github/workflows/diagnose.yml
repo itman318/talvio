@@ -25,6 +25,7 @@ jobs:
           SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
           sshpass -e scp $SSH_OPTS .github/scripts/diagnose.js root@"$HOST":/root/diagnose.js
           echo "from GitHub (US): health $(curl -s -o /dev/null -w '%{time_total}s' "http://$HOST/health")" > diag.txt
+          echo "from GitHub: TURN tcp 3478 $(timeout 8 bash -c "</dev/tcp/$HOST/3478" 2>/dev/null && echo OPEN || echo CLOSED)" >> diag.txt
           sshpass -e ssh $SSH_OPTS root@"$HOST" 'bash -s' >> diag.txt 2>&1 <<'REMOTE'
           echo "--- server"
           uptime; free -m | head -2; df -h / | tail -1
@@ -72,6 +73,19 @@ jobs:
           echo "firebase pkg: $(cd /opt/hushavia/app && node -p "require('./node_modules/firebase-admin/package.json').version" 2>&1 | tail -1)"
           echo "sa file: $(ls -la /etc/hushavia/firebase.json 2>&1)"
           echo "push tokens: $(sudo -u postgres psql -d hushavia -tAc "SELECT count(*) FROM push_tokens" 2>&1)"
+          echo "--- calls (TURN)"
+          echo "coturn: $(systemctl is-active coturn)"
+          echo "listening 3478: udp=$(ss -ulnH | grep -c ':3478 ') tcp=$(ss -tlnH | grep -c ':3478 ')"
+          echo "env: TURN_SECRET set=$(grep -c '^TURN_SECRET=.\+' /etc/hushavia/hushavia.env) · TURN_URLS=$(grep '^TURN_URLS=' /etc/hushavia/hushavia.env | cut -d= -f2-)"
+          echo "firewall 3478: $(ufw status | grep -c 3478) rules · relay ports: $(ufw status | grep -cE '49152|min-port') rules"
+          grep -E '^(listening-port|min-port|max-port|external-ip|realm|use-auth-secret)' /etc/turnserver.conf | tr '\n' ' '; echo
+          S=$(grep '^TURN_SECRET=' /etc/hushavia/hushavia.env | cut -d= -f2-)
+          IP=$(curl -s --max-time 5 https://api.ipify.org || hostname -I | awk '{print $1}')
+          if command -v turnutils_uclient >/dev/null && [ -n "$S" ]; then
+            echo "relay test (udp): $(timeout 25 turnutils_uclient -W "$S" -u test -n 2 -m 1 -l 100 -e "$IP" "$IP" 2>&1 | grep -iE 'success|error|lost|fail|allocate' | tail -3 | tr '\n' ' ')"
+          fi
+          journalctl -u coturn --since '-2d' --no-pager 2>/dev/null | grep -iE 'error|session.*closed|usage' | tail -5 | cut -c1-200
+          echo "calls last 7d: $(sudo -u postgres psql -d hushavia -tAc "SELECT status||'='||count(*) FROM calls WHERE created_at > now() - interval '7 days' GROUP BY status" 2>&1 | tr '\n' ' ')"
           echo "--- security"
           echo "fail2ban: $(systemctl is-active fail2ban) · $(fail2ban-client status sshd 2>/dev/null | grep -E 'Currently banned|Total banned' | tr -s ' \t' ' ' | tr '\n' ' ')"
           echo "sandbox: $(systemctl show hushavia -p NoNewPrivileges -p ProtectSystem -p PrivateTmp | tr '\n' ' ')"
