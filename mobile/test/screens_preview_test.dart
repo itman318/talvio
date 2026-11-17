@@ -18,6 +18,8 @@ import 'package:chatapp/models/models.dart';
 import 'package:chatapp/core/accounts.dart';
 import 'package:chatapp/core/proxy.dart';
 import 'package:chatapp/screens/coins_screen.dart';
+import 'package:chatapp/core/prefs.dart';
+import 'package:chatapp/screens/home_screen.dart' show ChatTile;
 import 'package:chatapp/screens/my_profile_screen.dart';
 import 'package:chatapp/screens/settings_screens.dart';
 import 'package:chatapp/screens/premium_screens.dart';
@@ -181,6 +183,7 @@ void main() {
             Provider<AppServices>.value(value: _Services()),
             ChangeNotifierProvider<AuthState>.value(value: me ? _AuthMe() : _Auth()),
             ChangeNotifierProvider<ProxyManager>.value(value: ProxyManager.instance),
+            ChangeNotifierProvider<AppPrefs>.value(value: AppPrefs()),
             ChangeNotifierProvider<ChatStore>.value(value: _Chats()),
           ],
           child: MaterialApp(
@@ -206,6 +209,28 @@ void main() {
       await tester.drag(find.byType(ListView).first, const Offset(0, -600));
       await tester.pump(const Duration(milliseconds: 400));
     });
+    // ---- chat list rows
+    final now = DateTime.now();
+    Map<String, dynamic> lm(int id, int from, String text, {String type = 'text', int ago = 5, Map<String, dynamic>? sender}) => {
+          'id': id, 'chat_id': id, 'sender_id': from, 'type': type, 'text': text,
+          'created_at': now.subtract(Duration(minutes: ago)).toIso8601String(), if (sender != null) 'sender': sender,
+        };
+    final listChats = [
+      Chat.fromJson({'id': 11, 'type': 'private', 'title': 'Hina Khan', 'is_pinned': true, 'unread_count': 2, 'read_up_to': 0, 'peer': {'id': 2, 'first_name': 'Hina', 'last_name': 'Khan', 'online': true}, 'last_message': lm(101, 2, 'Kal meeting 11 baje confirm hai?', ago: 3)}),
+      Chat.fromJson({'id': 12, 'type': 'group', 'title': 'Family', 'member_count': 6, 'unread_count': 14, 'unread_mentions': 1, 'last_message': lm(102, 3, 'Khana 8 baje ready hoga', ago: 12, sender: {'id': 3, 'first_name': 'Ali', 'last_name': 'Raza'})}),
+      Chat.fromJson({'id': 13, 'type': 'private', 'title': 'Asad Ali', 'read_up_to': 103, 'delivered_up_to': 103, 'peer': {'id': 5, 'first_name': 'Asad', 'last_name': 'Ali'}, 'last_message': lm(103, 1, 'Theek hai, kal baat karte hain', ago: 40)}),
+      Chat.fromJson({'id': 14, 'type': 'channel', 'title': 'Cricket News', 'is_verified': true, 'is_muted': true, 'muted_until': '2099-01-01T00:00:00Z', 'unread_count': 37, 'last_message': lm(104, 9, 'Pakistan won by 6 wickets 🏏', type: 'image', ago: 90)}),
+      Chat.fromJson({'id': 15, 'type': 'private', 'title': 'Sara', 'peer': {'id': 4, 'first_name': 'Sara'}, 'last_message': lm(105, 4, '', type: 'voice', ago: 300)}),
+      Chat.fromJson({'id': 16, 'type': 'private', 'title': 'Bilal Ahmed', 'peer': {'id': 6, 'first_name': 'Bilal', 'last_name': 'Ahmed'}, 'last_message': lm(106, 6, 'Missed call', type: 'call', ago: 1500)}),
+      Chat.fromJson({'id': 17, 'type': 'group', 'title': 'Office Team', 'member_count': 24, 'last_message': lm(107, 7, 'Report bhej di hai, check kar lein', ago: 3000, sender: {'id': 7, 'first_name': 'Usman', 'last_name': ''})}),
+      Chat.fromJson({'id': 18, 'type': 'private', 'title': 'Saved Messages', 'is_saved_messages': true, 'peer': {'id': 1, 'first_name': 'Me'}, 'last_message': lm(108, 1, 'Passport scan', type: 'file', ago: 6000)}),
+    ];
+    Widget chatList() => Scaffold(
+          appBar: AppBar(title: const Text('Hushavia')),
+          body: ListView(children: [for (final c in listChats) ChatTile(chat: c)]),
+        );
+    await show(chatList(), 'chat-list', me: true);
+    await show(chatList(), 'chat-list-dark', me: true, dark: true);
     await show(const CoinsScreen(), 'coins');
     await show(const CoinsScreen(), 'coins-dark', dark: true);
     await show(const PremiumScreen(), 'plus');

@@ -30,6 +30,17 @@ class MessageNotifications {
   /// Notification id of a call (800000+; chats stay below 600000).
   static int callIdFor(int callId) => 800000 + callId % 100000;
 
+  /// Is the ringing call notification on screen right now?
+  static Future<bool> callShowing(int callId) async {
+    if (kIsWeb || !Platform.isAndroid) return false;
+    try {
+      final list = await plugin.getActiveNotifications();
+      return list.any((n) => n.id == callIdFor(callId));
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// The ringing ended (answered, declined, missed): remove the full-screen call notification.
   static Future<void> cancelCall(int callId) async {
     if (kIsWeb || !Platform.isAndroid) return;

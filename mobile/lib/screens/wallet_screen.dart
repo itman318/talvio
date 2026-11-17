@@ -2116,9 +2116,10 @@ class _SendScreenState extends State<_SendScreen> {
                               trailing: IconButton(
                                 icon: const Icon(Icons.delete_outline_rounded),
                                 onPressed: () async {
-                                  await AddressBook(context.read<WalletStore>().userId).remove(b.address);
+                                  final book = AddressBook(context.read<WalletStore>().userId);
+                                  await book.remove(b.address);
                                   if (ctx.mounted) Navigator.pop(ctx);
-                                  final nb = await AddressBook(context.read<WalletStore>().userId).load();
+                                  final nb = await book.load();
                                   if (mounted) setState(() => _book = nb);
                                 },
                               ),

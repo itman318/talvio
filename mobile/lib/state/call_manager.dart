@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding, AppLifecycleState;
 
 import '../core/message_notifications.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
@@ -562,18 +563,34 @@ class CallManager extends ChangeNotifier {
     _ringing = true;
     services.socket.emit('call:ringing', {'call_id': c.id}); // tell the caller this phone is ringing
     _ensureRenderers().catchError((_) {}); // ready before they tap Accept
-    final np = NotifPrefs.instance;
-    if (np.callRing) FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false).catchError((_) {});
-    if (np.callVibrate) {
-      _buzz?.cancel();
-      HapticFeedback.vibrate();
-      _buzz = Timer.periodic(const Duration(milliseconds: 1400), (_) => HapticFeedback.vibrate());
+    // In the background the call notification already rings and vibrates: don't ring twice.
+    final fg = WidgetsBinding.instance.lifecycleState == null || WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    if (fg) {
+      _ringSound();
+    } else {
+      Future.delayed(const Duration(milliseconds: 1500), () async {
+        if (!_ringing || call?.id != c.id) return;
+        if (!await MessageNotifications.callShowing(c.id) && _ringing && call?.id == c.id) _ringSound();
+      });
     }
     notifyListeners();
     _showScreen();
     if (_answerCallId == c.id && _answerAt != null && DateTime.now().difference(_answerAt!) < const Duration(minutes: 2)) {
       _answerCallId = null;
       Future.microtask(accept);
+    }
+  }
+
+  bool _soundOn = false;
+  void _ringSound() {
+    if (_soundOn) return;
+    _soundOn = true;
+    final np = NotifPrefs.instance;
+    if (np.callRing) FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false).catchError((_) {});
+    if (np.callVibrate) {
+      _buzz?.cancel();
+      HapticFeedback.vibrate();
+      _buzz = Timer.periodic(const Duration(milliseconds: 1400), (_) => HapticFeedback.vibrate());
     }
   }
 
@@ -584,6 +601,7 @@ class CallManager extends ChangeNotifier {
     _ringing = false;
     _buzz?.cancel();
     _buzz = null;
+    _soundOn = false;
     FlutterRingtonePlayer().stop().catchError((_) {});
   }
 

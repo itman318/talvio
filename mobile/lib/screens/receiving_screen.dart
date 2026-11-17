@@ -88,9 +88,10 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
       _log.clear();
     });
     final api = EvmApi(EvmChain.bsc);
+    final server = context.read<AppServices>().api;
     try {
       final xpub = await compute(_xpubOf, phrase);
-      final list = Map<String, dynamic>.from(await context.read<AppServices>().api.post('/coins/sweep-list', {'xpub': xpub}) as Map);
+      final list = Map<String, dynamic>.from(await server.post('/coins/sweep-list', {'xpub': xpub}) as Map);
       final addrs = [for (final a in list['addresses'] as List) Map<String, dynamic>.from(a as Map)];
       _say('${addrs.length} member address${addrs.length == 1 ? '' : 'es'} have received deposits');
       final seed = await compute(TronCrypto.seedOf, phrase);

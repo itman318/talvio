@@ -70,6 +70,32 @@ class ApiClient {
   bool _quiet = false;
   Timer? _refreshTimer;
 
+  /// When the access token runs out (read from the token itself).
+  DateTime? _expiresAt;
+
+  static DateTime? _expOf(String? jwt) {
+    try {
+      final parts = (jwt ?? '').split('.');
+      if (parts.length != 3) return null;
+      final p = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map;
+      final exp = (p['exp'] as num?)?.toInt();
+      return exp == null ? null : DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The phone slept past the token's end (timers don't run then): get a new one first,
+  /// instead of every request failing with 401 and retrying.
+  Future<void> _freshen() async {
+    final exp = _expiresAt;
+    if (refreshToken == null || exp == null || _quiet) return;
+    if (DateTime.now().isBefore(exp.subtract(const Duration(seconds: 20)))) return;
+    try {
+      await refreshTokens();
+    } catch (_) {} // the request itself will tell what's wrong
+  }
+
   /// Called when the server says this session is over (logout everywhere, ban, deletion).
   void Function(ApiException reason)? onSessionEnded;
 
@@ -82,6 +108,7 @@ class ApiClient {
   Future<void> loadTokens() async {
     accessToken = await _storage.read(key: 'access_token');
     refreshToken = await _storage.read(key: 'refresh_token');
+    _expiresAt = _expOf(accessToken);
     // the old offline demo is gone: forget its placeholder session
     if (refreshToken == 'demo-session') await clearTokens();
   }
@@ -89,6 +116,7 @@ class ApiClient {
   Future<void> setTokens(String access, String refresh, int expiresInSec) async {
     accessToken = access;
     refreshToken = refresh;
+    _expiresAt = _expOf(access) ?? DateTime.now().add(Duration(seconds: expiresInSec));
     await _storage.write(key: 'access_token', value: access);
     await _storage.write(key: 'refresh_token', value: refresh);
     _refreshTimer?.cancel();
@@ -99,6 +127,7 @@ class ApiClient {
 
   Future<void> clearTokens() async {
     _refreshTimer?.cancel();
+    _expiresAt = null;
     accessToken = null;
     refreshToken = null;
     await _storage.delete(key: 'access_token');
@@ -156,6 +185,7 @@ class ApiClient {
     bool auth = true,
     bool retry = true,
   }) async {
+    if (auth) await _freshen();
     final req = http.Request(method, uri(path, query));
     req.headers['Content-Type'] = 'application/json';
     req.headers['Accept'] = 'application/json';
