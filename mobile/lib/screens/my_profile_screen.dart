@@ -396,7 +396,7 @@ class _Header extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(8, top + 2, 8, 50),
               child: Column(children: [
                 Row(children: [
-                  IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded, color: Colors.white), onPressed: onQr),
+                  const SizedBox(width: 48),
                   const Expanded(child: Text('Profile', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700))),
                   IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined, color: Colors.white), onPressed: onSettings),
                 ]),
@@ -480,8 +480,6 @@ class _Header extends StatelessWidget {
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           clipBehavior: Clip.antiAlias,
-          elevation: 3,
-          shadowColor: Colors.black.withValues(alpha: 0.18),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
@@ -498,10 +496,9 @@ class _Header extends StatelessWidget {
 
 /// A plain line of the "my things" list: thin icon, title, arrow.
 class _Line extends StatelessWidget {
-  const _Line({required this.icon, required this.title, required this.onTap, this.trailing, this.first = false});
+  const _Line({required this.icon, required this.title, required this.onTap, this.first = false});
   final IconData icon;
   final String title;
-  final String? trailing;
   final VoidCallback onTap;
   final bool first;
 
@@ -519,7 +516,6 @@ class _Line extends StatelessWidget {
             Icon(icon, size: 22, color: Brand.primary),
             const SizedBox(width: 14),
             Expanded(child: Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600))),
-            if (trailing != null) Text(trailing!, style: const TextStyle(fontSize: 15)),
             Icon(Icons.chevron_right_rounded, size: 21, color: scheme.onSurfaceVariant.withValues(alpha: 0.45)),
           ]),
         ),
