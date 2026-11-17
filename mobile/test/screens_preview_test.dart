@@ -203,6 +203,8 @@ void main() {
 
     await show(const MyProfileScreen(), 'profile', me: true);
     await show(const MyProfileScreen(), 'profile-dark', me: true, dark: true);
+    await show(const EditProfileScreen(), 'edit-profile', me: true);
+    await show(const EditProfileScreen(), 'edit-profile-dark', me: true, dark: true);
     await show(const SettingsScreen(), 'settings', me: true);
     await show(const SettingsScreen(), 'settings-dark', me: true, dark: true);
     await show(const SettingsScreen(), 'settings-2', me: true, then: () async {

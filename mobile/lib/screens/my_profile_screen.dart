@@ -87,7 +87,7 @@ class MyProfileScreen extends StatelessWidget {
     if (me == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     void go(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
     final link = me.username == null ? null : '${AppConfig.serverUrl}/c/${me.username}';
-    final top = MediaQuery.of(context).padding.top;
+    final top = MediaQuery.viewPaddingOf(context).top; // the tab bar may have removed padding.top
     return Scaffold(
       body: Stack(children: [
         ListView(padding: EdgeInsets.zero, children: [

@@ -125,7 +125,7 @@ class SettingsGroup extends StatelessWidget {
       if (i < children.length - 1) rows.add(Divider(height: 1, thickness: 0.7, indent: 62, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEDEFF5)));
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (title != null)
           Padding(
@@ -190,7 +190,7 @@ class SettingsTile extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, letterSpacing: -0.1, color: danger ? const Color(0xFFE5484D) : scheme.onSurface)),
+              Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, letterSpacing: -0.1, color: danger ? const Color(0xFFE5484D) : scheme.onSurface)),
               if (subtitle != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 1),

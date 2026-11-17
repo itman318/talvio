@@ -352,22 +352,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => go(const PremiumScreen()),
               ),
             ]),
-          // every section is one row here and a short page of its own: the hub stays one screen long
-          SettingsGroup(children: [
-            for (final sec in sections)
-              () {
-                final of = items.where((i) => i.section == sec).toList();
-                final look = _sectionLook[sec] ?? (of.first.icon, of.first.color);
-                return SettingsTile(
-                  icon: look.$1,
-                  color: look.$2,
-                  title: sec,
-                  subtitle: _sectionHint[sec] ?? (of.length == 1 ? of.first.subtitle : of.map((i) => i.title).join(', ')),
-                  maxSubtitleLines: 1,
-                  onTap: of.length == 1 ? of.first.onTap : () => go(_SectionScreen(section: sec)),
-                );
-              }(),
-          ]),
+          // every section is one row here and a short page of its own; three small cards instead of one long list
+          for (final part in const [
+            ['Account', 'Coins & wallet'],
+            ['Notifications', 'Privacy & security', 'Chats', 'Data & connection'],
+            ['Extras', 'Help'],
+          ])
+            if (sections.any(part.contains))
+              SettingsGroup(children: [
+                for (final sec in sections.where(part.contains))
+                  () {
+                    final of = items.where((i) => i.section == sec).toList();
+                    final look = _sectionLook[sec] ?? (of.first.icon, of.first.color);
+                    return SettingsTile(
+                      icon: look.$1,
+                      color: look.$2,
+                      title: sec,
+                      subtitle: _sectionHint[sec] ?? (of.length == 1 ? of.first.subtitle : of.map((i) => i.title).join(', ')),
+                      maxSubtitleLines: 1,
+                      onTap: of.length == 1 ? of.first.onTap : () => go(_SectionScreen(section: sec)),
+                    );
+                  }(),
+              ]),
+          // sections not in the three cards above (if any are added later)
+          if (sections.any((x) => !const ['Account', 'Coins & wallet', 'Notifications', 'Privacy & security', 'Chats', 'Data & connection', 'Extras', 'Help'].contains(x)))
+            SettingsGroup(children: [
+              for (final sec in sections.where((x) => !const ['Account', 'Coins & wallet', 'Notifications', 'Privacy & security', 'Chats', 'Data & connection', 'Extras', 'Help'].contains(x)))
+                SettingsTile(icon: Icons.tune_rounded, color: Brand.muted, title: sec, onTap: () => go(_SectionScreen(section: sec))),
+            ]),
           SettingsGroup(children: [
             SettingsTile(
               icon: Icons.logout_rounded,
@@ -593,103 +605,145 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final me = context.watch<AuthState>().me!;
+    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final bg = Theme.of(context).scaffoldBackgroundColor;
-    Widget label(String t) => Padding(
-          padding: const EdgeInsets.fromLTRB(6, 14, 6, 6),
-          child: Text(t.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    final line = dark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFE8EAF1);
+
+    // plain fields inside a white card: no boxes, no floating labels, no counters
+    InputDecoration plain(String hint, {Widget? prefix}) => InputDecoration(
+          hintText: hint,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          filled: false,
+          isDense: true,
+          counterText: '',
+          prefixIcon: prefix,
+          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
         );
+    Widget card(List<Widget> rows) => Material(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: Column(children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) Divider(height: 1, thickness: 0.7, indent: 16, color: line),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: rows[i]),
+            ],
+          ]),
+        );
+    Widget note(String t, {Color? color}) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 7, 16, 18),
+          child: Text(t, style: TextStyle(fontSize: 13, height: 1.35, color: color ?? Brand.muted)),
+        );
+    const field = TextStyle(fontSize: 16.5, fontWeight: FontWeight.w500);
+
+    final userNote = _usernameStatus == null
+        ? 'People can find you by this name. 5–32 letters, digits or _.'
+        : _usernameStatus == 'available'
+            ? '✓ This username is available'
+            : _usernameStatus == 'taken'
+                ? 'This username is taken'
+                : '$_usernameStatus';
+    final userColor = _usernameStatus == null ? null : (_usernameStatus == 'available' ? Brand.accent : const Color(0xFFE5484D));
+    final bioLeft = 140 - _bio.text.characters.length;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit profile')),
+      appBar: AppBar(
+        title: const Text('Edit profile'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _busy
+                ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4)))
+                : TextButton(onPressed: _save, child: const Text('Save', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+          ),
+        ],
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 22),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(26), gradient: Brand.auroraSoft(dark)),
-            child: Column(children: [
-              GestureDetector(
-                onTap: _avatar,
-                child: Stack(clipBehavior: Clip.none, children: [
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-                      child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 100)),
-                    ),
+          // photo
+          Center(
+            child: GestureDetector(
+              onTap: _avatar,
+              child: Stack(clipBehavior: Clip.none, children: [
+                ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 104)),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(color: Brand.primary, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
+                    child: const Icon(Icons.photo_camera_rounded, size: 16, color: Colors.white),
                   ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(gradient: Brand.aurora, shape: BoxShape.circle, border: Border.all(color: bg, width: 3)),
-                      child: const Icon(Icons.photo_camera_rounded, size: 18, color: Colors.white),
-                    ),
-                  ),
+                ),
+              ]),
+            ),
+          ),
+          Center(child: TextButton(onPressed: _avatar, child: Text(me.avatarUrl == null ? 'Set a photo' : 'Change photo'))),
+          const SizedBox(height: 6),
+          // name
+          card([
+            TextField(controller: _first, maxLength: 64, style: field, textCapitalization: TextCapitalization.words, decoration: plain('First name')),
+            TextField(controller: _last, maxLength: 64, style: field, textCapitalization: TextCapitalization.words, decoration: plain('Last name (optional)')),
+          ]),
+          note('Your name is shown in chats, groups and calls.'),
+          // username
+          card([
+            TextField(
+              controller: _username,
+              maxLength: 32,
+              style: field,
+              autocorrect: false,
+              onChanged: _checkUsername,
+              decoration: plain('username',
+                  prefix: const Padding(padding: EdgeInsets.only(right: 2), child: Text('@', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w600, color: Brand.muted)))),
+            ),
+          ]),
+          note(userNote, color: userColor),
+          // bio
+          card([
+            TextField(
+              controller: _bio,
+              maxLength: 140,
+              minLines: 1,
+              maxLines: 4,
+              style: field.copyWith(fontWeight: FontWeight.w400),
+              onChanged: (_) => setState(() {}),
+              decoration: plain('Bio — a few words about you'),
+            ),
+          ]),
+          note(bioLeft <= 30 ? '$bioLeft characters left' : 'Anyone who opens your profile sees your bio.', color: bioLeft < 0 ? const Color(0xFFE5484D) : null),
+          // birthday
+          card([
+            InkWell(
+              onTap: _pickBirthday,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                child: Row(children: [
+                  const Expanded(child: Text('Birthday', style: field)),
+                  Text(_birthday?.label ?? 'Add', style: TextStyle(fontSize: 15.5, color: _birthday == null ? Brand.primary : Brand.muted, fontWeight: FontWeight.w600)),
+                  if (_birthday != null)
+                    IconButton(
+                      tooltip: 'Remove birthday',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close_rounded, size: 19, color: Brand.muted),
+                      onPressed: () => setState(() {
+                        _birthday = null;
+                        _bday.text = '';
+                        _birthdayChanged = true;
+                      }),
+                    )
+                  else
+                    const Icon(Icons.chevron_right_rounded, color: Brand.muted),
                 ]),
               ),
-              const SizedBox(height: 10),
-              TextButton(onPressed: _avatar, child: const Text('Change photo')),
-            ]),
-          ),
-          label('Your name'),
-          TextField(controller: _first, maxLength: 64, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'First name', prefixIcon: Icon(Icons.person_rounded))),
-          const SizedBox(height: 6),
-          TextField(controller: _last, maxLength: 64, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Last name (optional)', prefixIcon: Icon(Icons.badge_rounded))),
-          label('Username'),
-          TextField(
-            controller: _username,
-            maxLength: 32,
-            onChanged: _checkUsername,
-            decoration: InputDecoration(
-              labelText: 'Username',
-              prefixIcon: const Icon(Icons.alternate_email_rounded),
-              suffixIcon: _usernameStatus == 'available'
-                  ? const Icon(Icons.check_circle_rounded, color: Brand.accent)
-                  : (_usernameStatus == null ? null : const Icon(Icons.error_rounded, color: Colors.red)),
-              helperText: _usernameStatus == null
-                  ? 'People can find you by this name. 5–32 letters, digits or _'
-                  : _usernameStatus == 'available'
-                      ? 'Username is available'
-                      : _usernameStatus == 'taken'
-                          ? 'This username is taken'
-                          : _usernameStatus,
-              helperMaxLines: 2,
-              helperStyle: TextStyle(color: _usernameStatus == 'available' ? Brand.accent : (_usernameStatus == null ? null : Colors.red)),
             ),
-          ),
-          label('About'),
-          TextField(
-            controller: _bio,
-            maxLength: 140,
-            maxLines: 3,
-            minLines: 2,
-            decoration: const InputDecoration(labelText: 'Bio', hintText: 'A few words about you', alignLabelWithHint: true),
-          ),
-          label('Birthday'),
-          TextField(
-            controller: _bday,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, _DateDashes()],
-            onChanged: (v) => setState(() {
-              _birthdayChanged = true;
-              _birthday = v.trim().isEmpty ? null : Birthday.parse(v);
-            }),
-            decoration: InputDecoration(
-              labelText: 'Birthday',
-              hintText: 'DD-MM-YYYY',
-              prefixIcon: const Icon(Icons.cake_rounded),
-              suffixIcon: IconButton(tooltip: 'Pick from calendar', icon: const Icon(Icons.calendar_month_rounded), onPressed: _pickBirthday),
-              errorText: _bday.text.trim().isNotEmpty && _birthday == null ? 'Write it like 15-02-1991' : null,
-              helperText: 'Contacts see the day and month (change who in Privacy). The year stays private.',
-              helperMaxLines: 2,
-            ),
-          ),
-          const SizedBox(height: 18),
-          AuroraButton(label: 'Save', icon: Icons.check_rounded, busy: _busy, onPressed: _save),
+          ]),
+          note('Contacts see the day and month (choose who in Privacy). The year stays private.'),
         ],
       ),
     );
@@ -1680,17 +1734,3 @@ class _SecurityCheckupScreenState extends State<SecurityCheckupScreen> {
 }
 
 
-/// Types "15021991" as "15-02-1991".
-class _DateDashes extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final d = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final b = StringBuffer();
-    for (var i = 0; i < d.length && i < 8; i++) {
-      if (i == 2 || i == 4) b.write('-');
-      b.write(d[i]);
-    }
-    final t = b.toString();
-    return TextEditingValue(text: t, selection: TextSelection.collapsed(offset: t.length));
-  }
-}
