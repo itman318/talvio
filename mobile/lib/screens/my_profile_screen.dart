@@ -348,91 +348,83 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final url = me.avatarAbsolute;
 
-    Widget button(String label, IconData icon, VoidCallback onTap, {bool main = false}) => Expanded(
-          child: Material(
-            color: main ? Brand.primary : scheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onTap,
-              child: SizedBox(
-                height: 46,
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(icon, size: 18, color: main ? Colors.white : scheme.onSurface),
-                  const SizedBox(width: 8),
-                  Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: main ? Colors.white : scheme.onSurface)),
-                ]),
-              ),
-            ),
-          ),
-        );
-
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, top + 6, 20, 14),
+      padding: EdgeInsets.fromLTRB(16, top + 6, 16, 8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
+          const SizedBox(width: 4),
           const Expanded(child: Text('Profile', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6))),
           IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded), onPressed: onQr),
           IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined), onPressed: onSettings),
         ]),
-        const SizedBox(height: 14),
-        Row(children: [
-          GestureDetector(
-            onTap: url == null ? onEdit : () => showPhotoViewer(context, url, tag: 'avatar-${me.id}'),
-            child: Container(
-              padding: EdgeInsets.all(me.isPremium ? 3 : 0),
-              decoration: BoxDecoration(gradient: me.isPremium ? Brand.plusGradient : null, borderRadius: BorderRadius.circular(32)),
-              child: Hero(tag: 'avatar-${me.id}', child: Avatar(id: me.id, name: me.name, url: url, size: 84)),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Flexible(
-                  child: Text(me.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15)),
-                ),
-                if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Brand.primary, size: 20)),
-                if (me.statusEmoji != null)
-                  GestureDetector(onTap: () => showEmojiStatusPicker(context), child: Padding(padding: const EdgeInsets.only(left: 5), child: EmojiStatusBadge(me, size: 19, padLeft: 0)))
-                else if (me.isPremium)
-                  const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 19)),
-              ]),
-              const SizedBox(height: 5),
+        const SizedBox(height: 8),
+        BrandHeaderCard(
+          plus: me.isPremium,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
               GestureDetector(
-                onTap: me.username == null ? onEdit : null,
-                child: Text(me.username != null ? '@${me.username}' : 'Add a username',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: me.username != null ? Brand.muted : Brand.primary)),
+                onTap: url == null ? onEdit : () => showPhotoViewer(context, url, tag: 'avatar-${me.id}'),
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    gradient: me.isPremium ? Brand.plusGradient : null,
+                    color: me.isPremium ? null : Colors.white.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Hero(tag: 'avatar-${me.id}', child: Avatar(id: me.id, name: me.name, url: url, size: 78)),
+                ),
               ),
-              const SizedBox(height: 3),
-              const Row(children: [
-                DecoratedBox(decoration: BoxDecoration(color: Brand.accent, shape: BoxShape.circle), child: SizedBox(width: 7, height: 7)),
-                SizedBox(width: 6),
-                Text('online', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Brand.accent)),
-              ]),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Flexible(
+                      child: Text(me.name,
+                          maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -0.5, height: 1.15)),
+                    ),
+                    if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Colors.white, size: 19)),
+                    if (me.statusEmoji != null)
+                      GestureDetector(onTap: () => showEmojiStatusPicker(context), child: Padding(padding: const EdgeInsets.only(left: 5), child: EmojiStatusBadge(me, size: 19, padLeft: 0)))
+                    else if (me.isPremium)
+                      const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.workspace_premium_rounded, color: Color(0xFFE6C987), size: 19)),
+                  ]),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: me.username == null ? onEdit : null,
+                    child: Text(me.username != null ? '@${me.username}' : 'Add a username',
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.78))),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFF12B89C).withValues(alpha: 0.25), borderRadius: BorderRadius.circular(20)),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      DecoratedBox(decoration: BoxDecoration(color: Color(0xFF3FE0C0), shape: BoxShape.circle), child: SizedBox(width: 7, height: 7)),
+                      SizedBox(width: 5),
+                      Text('online', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFB8FFF0))),
+                    ]),
+                  ),
+                ]),
+              ),
             ]),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        GestureDetector(
-          onTap: onEdit,
-          child: Text(me.bio.isEmpty ? 'Add a short bio' : me.bio,
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 15, height: 1.4, color: me.bio.isEmpty ? Brand.primary : (dark ? Colors.white70 : const Color(0xFF3A405A)), fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: onEdit,
+              child: Text(me.bio.isEmpty ? '+ Add a short bio' : me.bio,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14.5, height: 1.4, color: Colors.white.withValues(alpha: me.bio.isEmpty ? 0.7 : 0.9), fontWeight: me.bio.isEmpty ? FontWeight.w600 : FontWeight.w400)),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: HeaderChip(icon: Icons.edit_rounded, label: 'Edit profile', solid: true, onTap: onEdit)),
+              const SizedBox(width: 8),
+              Expanded(child: HeaderChip(icon: Icons.ios_share_rounded, label: 'Share', onTap: onShare)),
+            ]),
+          ]),
         ),
-        const SizedBox(height: 16),
-        Row(children: [
-          button('Edit profile', Icons.edit_outlined, onEdit, main: true),
-          const SizedBox(width: 10),
-          button('Share', Icons.ios_share_rounded, onShare),
-        ]),
       ]),
     );
   }

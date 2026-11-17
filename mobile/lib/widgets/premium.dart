@@ -804,3 +804,78 @@ class _RenderMeasure extends RenderProxyBox {
     }
   }
 }
+
+/// Hushavia's signature card: deep ink → violet, with two soft lights. Used at the top of
+/// Profile, Settings and Edit profile. Cheap to draw (gradients only, no blur).
+class BrandHeaderCard extends StatelessWidget {
+  const BrandHeaderCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.plus = false});
+  final Widget child;
+  final EdgeInsets padding;
+  final bool plus; // Hushavia Plus: a warm gold light instead of mint
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E1B4B), Color(0xFF4A2FD8), Color(0xFF7C5CFF)],
+          stops: [0, 0.6, 1],
+        ),
+        boxShadow: [BoxShadow(color: const Color(0xFF4A2FD8).withValues(alpha: 0.28), blurRadius: 24, offset: const Offset(0, 10))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(children: [
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0.95, -1.1), radius: 1.0, colors: [Color(0x40FFFFFF), Color(0x00FFFFFF)])),
+          ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(-1.1, 1.2),
+                radius: 0.9,
+                colors: plus ? const [Color(0x55E6C987), Color(0x00E6C987)] : const [Color(0x4012B89C), Color(0x0012B89C)],
+              ),
+            ),
+          ),
+        ),
+        Padding(padding: padding, child: child),
+      ]),
+    );
+  }
+}
+
+/// A translucent white pill button for use on [BrandHeaderCard].
+class HeaderChip extends StatelessWidget {
+  const HeaderChip({super.key, required this.icon, required this.label, required this.onTap, this.solid = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool solid;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = solid ? const Color(0xFF3A22B8) : Colors.white;
+    return Material(
+      color: solid ? Colors.white : Colors.white.withValues(alpha: 0.14),
+      shape: StadiumBorder(side: BorderSide(color: Colors.white.withValues(alpha: solid ? 0 : 0.18))),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 17, color: fg),
+            const SizedBox(width: 7),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: fg, fontSize: 13.5, fontWeight: FontWeight.w700))),
+          ]),
+        ),
+      ),
+    );
+  }
+}

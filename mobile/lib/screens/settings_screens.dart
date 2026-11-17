@@ -260,9 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!sections.contains(i.section)) sections.add(i.section);
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings'), centerTitle: true, actions: [
-        IconButton(tooltip: 'QR code', icon: const Icon(Icons.qr_code_2_rounded), onPressed: () => go(const MyQrScreen())),
-      ]),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -287,43 +285,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // me: big photo in the middle, name and contact under it (tap → edit profile)
-          InkWell(
-            onTap: () => go(const EditProfileScreen()),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
-              child: Column(children: [
-                Stack(clipBehavior: Clip.none, children: [
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(shape: BoxShape.circle, gradient: plus ? Brand.plusGradient : null),
-                    child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 88)),
-                  ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
+          // me: the brand card — photo, name, contact, and quick buttons
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+            child: BrandHeaderCard(
+              plus: plus,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  GestureDetector(
+                    onTap: () => go(const EditProfileScreen()),
                     child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(color: Brand.primary, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
-                      child: const Icon(Icons.photo_camera_rounded, size: 13, color: Colors.white),
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: plus ? Brand.plusGradient : null, color: plus ? null : Colors.white.withValues(alpha: 0.25)),
+                      child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 64)),
                     ),
                   ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4))),
+                        if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Colors.white, size: 18)),
+                        if (me.statusEmoji != null) EmojiStatusBadge(me, size: 18)
+                        else if (plus) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Color(0xFFE6C987), size: 19)),
+                      ]),
+                      const SizedBox(height: 3),
+                      Text(
+                        [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  ·  '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13.5),
+                      ),
+                      if (plus) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(20)),
+                          child: const Text('PLUS', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                        ),
+                      ],
+                    ]),
+                  ),
                 ]),
-                const SizedBox(height: 12),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4))),
-                  if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Brand.primary, size: 19)),
-                  if (me.statusEmoji != null) EmojiStatusBadge(me, size: 18)
-                  else if (plus) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 19)),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(child: HeaderChip(icon: Icons.edit_rounded, label: 'Edit profile', solid: true, onTap: () => go(const EditProfileScreen()))),
+                  const SizedBox(width: 8),
+                  Expanded(child: HeaderChip(icon: Icons.qr_code_2_rounded, label: 'My QR', onTap: () => go(const MyQrScreen()))),
                 ]),
-                const SizedBox(height: 4),
-                Text(
-                  [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  ·  '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Brand.muted, fontSize: 14.5),
-                ),
               ]),
             ),
           ),
@@ -342,16 +351,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   )),
             ]),
           if (auth.feature('premium'))
-            SettingsGroup(children: [
-              SettingsTile(
-                icon: Icons.workspace_premium_rounded,
-                color: Brand.premium,
-                title: 'Hushavia Plus',
-                subtitle: plus ? 'Active — thank you for your support' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
-                maxSubtitleLines: 1,
-                onTap: () => go(const PremiumScreen()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Material(
+                borderRadius: BorderRadius.circular(18),
+                clipBehavior: Clip.antiAlias,
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => go(const PremiumScreen()),
+                  child: Ink(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: LinearGradient(colors: dark ? const [Color(0xFF2A2312), Color(0xFF1C1A24)] : const [Color(0xFFFFF6E0), Color(0xFFFFFBF2)]),
+                      border: Border.all(color: const Color(0xFFE6C987).withValues(alpha: dark ? 0.35 : 0.7)),
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(11)),
+                        child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Hushavia Plus', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                          Text(plus ? 'Active — thank you for your support' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
+                              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Brand.muted)),
+                        ]),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, color: Color(0xFFC9A45C)),
+                    ]),
+                  ),
+                ),
               ),
-            ]),
+            ),
           // every section is one row here and a short page of its own; three small cards instead of one long list
           for (final part in const [
             ['Account', 'Coins & wallet'],
@@ -620,15 +655,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           counterText: '',
           prefixIcon: prefix,
           prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+          contentPadding: const EdgeInsets.fromLTRB(0, 3, 0, 11),
         );
+    Widget labelled(IconData icon, Color color, String label, Widget field) => Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: color.withValues(alpha: dark ? 0.2 : 0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 9),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Brand.muted, letterSpacing: 0.3)),
+                field,
+              ]),
+            ),
+          ),
+        ]);
     Widget card(List<Widget> rows) => Material(
           color: scheme.surface,
           borderRadius: BorderRadius.circular(16),
           clipBehavior: Clip.antiAlias,
           child: Column(children: [
             for (var i = 0; i < rows.length; i++) ...[
-              if (i > 0) Divider(height: 1, thickness: 0.7, indent: 16, color: line),
+              if (i > 0) Divider(height: 1, thickness: 0.7, indent: 62, color: line),
               Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: rows[i]),
             ],
           ]),
@@ -664,56 +717,81 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
-          // photo
-          Center(
-            child: GestureDetector(
-              onTap: _avatar,
-              child: Stack(clipBehavior: Clip.none, children: [
-                ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 104)),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(color: Brand.primary, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3)),
-                    child: const Icon(Icons.photo_camera_rounded, size: 16, color: Colors.white),
-                  ),
+          // photo on the brand card
+          BrandHeaderCard(
+            plus: me.isPremium,
+            padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
+            child: Center(
+              child: Column(children: [
+                GestureDetector(
+                  onTap: _avatar,
+                  child: Stack(clipBehavior: Clip.none, children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.3)),
+                      child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 96)),
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)]),
+                        child: const Icon(Icons.photo_camera_rounded, size: 16, color: Brand.primary),
+                      ),
+                    ),
+                  ]),
                 ),
+                const SizedBox(height: 12),
+                HeaderChip(icon: Icons.add_a_photo_rounded, label: me.avatarUrl == null ? 'Set a photo' : 'Change photo', onTap: _avatar),
               ]),
             ),
           ),
-          Center(child: TextButton(onPressed: _avatar, child: Text(me.avatarUrl == null ? 'Set a photo' : 'Change photo'))),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16),
           // name
           card([
-            TextField(controller: _first, maxLength: 64, style: field, textCapitalization: TextCapitalization.words, decoration: plain('First name')),
-            TextField(controller: _last, maxLength: 64, style: field, textCapitalization: TextCapitalization.words, decoration: plain('Last name (optional)')),
+            labelled(Icons.person_rounded, Brand.primary, 'FIRST NAME', TextField(controller: _first, maxLength: 64, style: field, textCapitalization: TextCapitalization.words, decoration: plain('First name'))),
+            labelled(Icons.badge_rounded, Brand.sky, 'LAST NAME', TextField(controller: _last, maxLength: 64, style: field, textCapitalization: TextCapitalization.words, decoration: plain('Optional'))),
           ]),
           note('Your name is shown in chats, groups and calls.'),
           // username
           card([
-            TextField(
-              controller: _username,
-              maxLength: 32,
-              style: field,
-              autocorrect: false,
-              onChanged: _checkUsername,
-              decoration: plain('username',
-                  prefix: const Padding(padding: EdgeInsets.only(right: 2), child: Text('@', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w600, color: Brand.muted)))),
+            labelled(
+              Icons.alternate_email_rounded,
+              Brand.green,
+              'USERNAME',
+              TextField(
+                controller: _username,
+                maxLength: 32,
+                style: field,
+                autocorrect: false,
+                onChanged: _checkUsername,
+                decoration: plain('username').copyWith(
+                  suffixIcon: _usernameStatus == null
+                      ? null
+                      : Icon(_usernameStatus == 'available' ? Icons.check_circle_rounded : Icons.error_rounded,
+                          size: 20, color: _usernameStatus == 'available' ? Brand.accent : const Color(0xFFE5484D)),
+                ),
+              ),
             ),
           ]),
           note(userNote, color: userColor),
           // bio
           card([
-            TextField(
-              controller: _bio,
-              maxLength: 140,
-              minLines: 1,
-              maxLines: 4,
-              style: field.copyWith(fontWeight: FontWeight.w400),
-              onChanged: (_) => setState(() {}),
-              decoration: plain('Bio — a few words about you'),
+            labelled(
+              Icons.notes_rounded,
+              const Color(0xFFE07A2E),
+              'BIO',
+              TextField(
+                controller: _bio,
+                maxLength: 140,
+                minLines: 1,
+                maxLines: 4,
+                style: field.copyWith(fontWeight: FontWeight.w400),
+                onChanged: (_) => setState(() {}),
+                decoration: plain('A few words about you'),
+              ),
             ),
           ]),
           note(bioLeft <= 30 ? '$bioLeft characters left' : 'Anyone who opens your profile sees your bio.', color: bioLeft < 0 ? const Color(0xFFE5484D) : null),
@@ -722,10 +800,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             InkWell(
               onTap: _pickBirthday,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 15),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(children: [
-                  const Expanded(child: Text('Birthday', style: field)),
-                  Text(_birthday?.label ?? 'Add', style: TextStyle(fontSize: 15.5, color: _birthday == null ? Brand.primary : Brand.muted, fontWeight: FontWeight.w600)),
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(color: Brand.rose.withValues(alpha: dark ? 0.2 : 0.12), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.cake_rounded, size: 18, color: Brand.rose),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('BIRTHDAY', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Brand.muted, letterSpacing: 0.3)),
+                      const SizedBox(height: 3),
+                      Text(_birthday?.label ?? 'Add your birthday',
+                          style: field.copyWith(color: _birthday == null ? Brand.primary : null, fontWeight: _birthday == null ? FontWeight.w600 : FontWeight.w500)),
+                    ]),
+                  ),
                   if (_birthday != null)
                     IconButton(
                       tooltip: 'Remove birthday',
