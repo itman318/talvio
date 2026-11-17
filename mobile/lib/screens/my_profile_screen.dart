@@ -106,7 +106,6 @@ class MyProfileScreen extends StatelessWidget {
             if (context.mounted) showInfo(context, 'Profile link copied');
           },
         ),
-        _StatsStrip(me: me),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true, hideEmpty: true),
         _completeCard(context, me, () => go(const EditProfileScreen())),
         // contact details: one slim line each
@@ -219,8 +218,9 @@ class _InfoRow extends StatelessWidget {
 
 /// Coins · Plus · Wallet at a glance, right under the name.
 class _StatsStrip extends StatefulWidget {
-  const _StatsStrip({required this.me});
+  const _StatsStrip({required this.me, this.onCard = false});
   final AppUser me;
+  final bool onCard; // drawn on the dark ID card (white text, no card of its own)
 
   @override
   State<_StatsStrip> createState() => _StatsStripState();
@@ -264,9 +264,10 @@ class _StatsStripState extends State<_StatsStrip> {
     void go(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
     final tiles = <Widget>[
       if (auth.feature('coins'))
-        _Stat(icon: Icons.monetization_on_rounded, color: const Color(0xFFF5A623), value: _coins == null ? '—' : fmtCoins(_coins!), label: 'Coins', onTap: () => go(const CoinsScreen())),
+        _Stat(light: widget.onCard, icon: Icons.monetization_on_rounded, color: const Color(0xFFF5A623), value: _coins == null ? '—' : fmtCoins(_coins!), label: 'Coins', onTap: () => go(const CoinsScreen())),
       if (auth.feature('premium'))
         _Stat(
+          light: widget.onCard,
           icon: Icons.workspace_premium_rounded,
           color: Brand.premium,
           value: widget.me.isPremium ? 'Active' : (auth.plusAvailable ? 'Get it' : 'Soon'),
@@ -274,51 +275,49 @@ class _StatsStripState extends State<_StatsStrip> {
           onTap: () => go(const PremiumScreen()),
         ),
       if (auth.feature('wallet'))
-        _Stat(icon: Icons.account_balance_wallet_rounded, color: const Color(0xFF12B89C), value: 'Open', label: 'Wallet', onTap: () => go(const WalletScreen())),
+        _Stat(light: widget.onCard, icon: Icons.account_balance_wallet_rounded, color: const Color(0xFF12B89C), value: 'Open', label: 'Wallet', onTap: () => go(const WalletScreen())),
     ];
     if (tiles.isEmpty) return const SizedBox.shrink();
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final line = dark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFEDEFF5);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-      child: _Card(
-        child: IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            for (var i = 0; i < tiles.length; i++) ...[
-              if (i > 0) VerticalDivider(width: 1, thickness: 1, indent: 14, endIndent: 14, color: line),
-              Expanded(child: tiles[i]),
-            ],
-          ]),
-        ),
-      ),
+    final line = widget.onCard ? Colors.white.withValues(alpha: 0.09) : (dark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFEDEFF5));
+    final row = IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0) VerticalDivider(width: 1, thickness: 1, indent: 12, endIndent: 12, color: line),
+          Expanded(child: tiles[i]),
+        ],
+      ]),
     );
+    if (widget.onCard) return Material(color: Colors.transparent, child: row);
+    return Padding(padding: const EdgeInsets.fromLTRB(16, 2, 16, 4), child: _Card(child: row));
   }
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.color, required this.value, required this.label, required this.onTap});
+  const _Stat({this.light = false, required this.icon, required this.color, required this.value, required this.label, required this.onTap});
   final IconData icon;
   final Color color;
   final String value;
   final String label;
   final VoidCallback onTap;
+  final bool light;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 13, 6, 12),
+        padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3, fontFeatures: [FontFeature.tabularFigures()])),
+            child: Text(value, maxLines: 1, style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: light ? Colors.white : null, fontFeatures: const [FontFeature.tabularFigures()])),
           ),
           const SizedBox(height: 3),
           Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: 13.5, color: color),
             const SizedBox(width: 4),
-            Text(label, maxLines: 1, style: const TextStyle(fontSize: 12.5, color: Brand.muted, fontWeight: FontWeight.w600)),
+            Text(label, maxLines: 1, style: TextStyle(fontSize: 12.5, color: light ? Colors.white.withValues(alpha: 0.65) : Brand.muted, fontWeight: FontWeight.w600)),
           ]),
         ]),
       ),
@@ -349,6 +348,7 @@ class _Header extends StatelessWidget {
         const SizedBox(height: 8),
         BrandHeaderCard(
           plus: me.isPremium,
+          footer: _StatsStrip(me: me, onCard: true),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               GestureDetector(

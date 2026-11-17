@@ -181,11 +181,11 @@ class SettingsTile extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: 14, vertical: subtitle == null ? 12 : 10),
         child: Row(children: [
           Container(
-            width: 34,
-            height: 34,
-            // flat colour tile: cleaner (like iOS / Telegram settings) and cheaper to draw than a gradient
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10.5), color: color),
-            child: Icon(icon, color: Colors.white, size: 18.5),
+            width: 36,
+            height: 36,
+            // soft tinted tile with the coloured glyph: calmer than solid colour blocks, and cheap to draw
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(11), color: color.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.12)),
+            child: Icon(icon, color: color, size: 19),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -805,46 +805,69 @@ class _RenderMeasure extends RenderProxyBox {
   }
 }
 
-/// Hushavia's signature card: deep ink → violet, with two soft lights. Used at the top of
-/// Profile, Settings and Edit profile. Cheap to draw (gradients only, no blur).
+/// Hushavia's signature card — the "ID card": deep ink, a fine violet-to-mint line along the top,
+/// and a quiet glow in one corner. Used at the top of Profile, Settings and Edit profile.
+/// Cheap to draw (gradients only, no blur).
 class BrandHeaderCard extends StatelessWidget {
-  const BrandHeaderCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.plus = false});
+  const BrandHeaderCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.plus = false, this.footer});
   final Widget child;
   final EdgeInsets padding;
-  final bool plus; // Hushavia Plus: a warm gold light instead of mint
+  final bool plus; // Hushavia Plus: the line and glow turn gold
+  final Widget? footer; // a strip along the bottom, under a hairline
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(24),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1E1B4B), Color(0xFF4A2FD8), Color(0xFF7C5CFF)],
-          stops: [0, 0.6, 1],
+          colors: [Color(0xFF12152A), Color(0xFF1A1E3C), Color(0xFF29235F)],
+          stops: [0, 0.55, 1],
         ),
-        boxShadow: [BoxShadow(color: const Color(0xFF4A2FD8).withValues(alpha: 0.16), blurRadius: 20, offset: const Offset(0, 6))],
+        border: dark ? Border.all(color: Colors.white.withValues(alpha: 0.08)) : null,
+        boxShadow: dark ? null : [BoxShadow(color: const Color(0xFF151A2E).withValues(alpha: 0.14), blurRadius: 18, offset: const Offset(0, 6))],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(children: [
-        const Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0.95, -1.1), radius: 1.0, colors: [Color(0x40FFFFFF), Color(0x00FFFFFF)])),
-          ),
-        ),
+        // the glow: violet (gold for Plus) in the top right corner
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                center: const Alignment(-1.1, 1.2),
-                radius: 0.9,
-                colors: plus ? const [Color(0x55E6C987), Color(0x00E6C987)] : const [Color(0x4012B89C), Color(0x0012B89C)],
+                center: const Alignment(1.05, -1.15),
+                radius: 1.05,
+                colors: plus ? const [Color(0x66C9A45C), Color(0x00C9A45C)] : const [Color(0x807C5CFF), Color(0x007C5CFF)],
               ),
             ),
           ),
         ),
-        Padding(padding: padding, child: child),
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-1.2, 1.3), radius: 0.8, colors: [Color(0x3312B89C), Color(0x0012B89C)])),
+          ),
+        ),
+        // the signature line along the top edge
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 3,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: plus ? const [Color(0xFFE6C987), Color(0xFFC9A45C), Color(0xFF7C5CFF)] : const [Color(0xFF7C5CFF), Color(0xFF6D4AFF), Color(0xFF12B89C)]),
+            ),
+          ),
+        ),
+        Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(padding: padding, child: child),
+          if (footer != null) ...[
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.09)),
+            footer!,
+          ],
+        ]),
       ]),
     );
   }
@@ -860,9 +883,9 @@ class HeaderChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = solid ? const Color(0xFF3A22B8) : Colors.white;
+    final fg = solid ? const Color(0xFF151A2E) : Colors.white;
     return Material(
-      color: solid ? Colors.white : Colors.white.withValues(alpha: 0.14),
+      color: solid ? Colors.white : Colors.white.withValues(alpha: 0.10),
       shape: StadiumBorder(side: BorderSide(color: Colors.white.withValues(alpha: solid ? 0 : 0.18))),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
