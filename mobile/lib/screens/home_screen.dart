@@ -443,7 +443,7 @@ class ChatTile extends StatelessWidget {
       if (last.isSystem) {
         preview = systemText(last, store);
       } else {
-        prefix = mine && !chat.isChannel ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
+        prefix = mine && !chat.isChannel && !chat.isSavedMessages ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
         (kindIcon, preview) = previewParts(last);
         if (ChatPasscode.has(chat.id)) {
           // passcode chats don't show their messages in the list
@@ -592,9 +592,21 @@ class ChatTile extends StatelessWidget {
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat))),
       onLongPress: () => showChatActions(context, chat),
     );
-    if (!chat.isPinned) return tile;
-    // pinned chats sit on a faint tint so the top of the list reads as one block
-    return ColoredBox(color: dark ? Colors.white.withValues(alpha: 0.025) : Brand.ink.withValues(alpha: 0.025), child: tile);
+    // a hairline under each row, starting at the text (not under the photo): the list reads cleaner
+    final row = Stack(children: [
+      tile,
+      Positioned(
+        left: 74,
+        right: 0,
+        bottom: 0,
+        child: IgnorePointer(child: Container(height: 0.6, color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE6E9F1))),
+      ),
+    ]);
+    // pinned chats sit on a faint tint so the top of the list reads as one block (a Material, so taps still ripple)
+    return Material(
+      color: chat.isPinned ? (dark ? Colors.white.withValues(alpha: 0.03) : Brand.ink.withValues(alpha: 0.03)) : Colors.transparent,
+      child: row,
+    );
   }
 }
 
