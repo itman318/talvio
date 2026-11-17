@@ -824,7 +824,7 @@ class BrandHeaderCard extends StatelessWidget {
           colors: [Color(0xFF1E1B4B), Color(0xFF4A2FD8), Color(0xFF7C5CFF)],
           stops: [0, 0.6, 1],
         ),
-        boxShadow: [BoxShadow(color: const Color(0xFF4A2FD8).withValues(alpha: 0.28), blurRadius: 24, offset: const Offset(0, 10))],
+        boxShadow: [BoxShadow(color: const Color(0xFF4A2FD8).withValues(alpha: 0.16), blurRadius: 20, offset: const Offset(0, 6))],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(children: [

@@ -114,22 +114,9 @@ class MyProfileScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: _Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (me.username != null)
-                _InfoRow(
-                  caption: 'Username',
-                  first: true,
-                  icon: Icons.alternate_email_rounded,
-                  color: Brand.primary,
-                  value: '@${me.username!}',
-                  label: 'Copy link',
-                  onTap: () async {
-                    await Clipboard.setData(ClipboardData(text: link!));
-                    if (context.mounted) showInfo(context, 'Profile link copied');
-                  },
-                ),
               if ((me.phone ?? '').isNotEmpty)
-                _InfoRow(caption: 'Mobile', first: me.username == null, icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
-              if ((me.email ?? '').isNotEmpty) _InfoRow(caption: 'Email · only for login', icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: ''),
+                _InfoRow(caption: 'Mobile', first: true, icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
+              if ((me.email ?? '').isNotEmpty) _InfoRow(first: (me.phone ?? '').isEmpty, caption: 'Email · only for login', icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: ''),
               _InfoRow(
                 caption: 'Birthday',
                 icon: Icons.cake_rounded,
