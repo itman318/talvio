@@ -11,7 +11,7 @@ const userService = require('./user.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { randomToken, sha256, hmac, safeEqual, randomDigits, signJwt, verifyJwt } = require('../utils/crypto');
-const { AppError, badRequest, unauthorized, forbidden } = require('../utils/errors');
+const { badRequest, unauthorized, forbidden } = require('../utils/errors');
 
 const PLATFORMS = ['android', 'ios', 'web', 'desktop', 'windows', 'macos', 'linux', 'other'];
 
@@ -95,32 +95,13 @@ async function issueCode(target, kind, ip, opts = {}) {
     }
   }
 
-  // Dev mode on the live server (no SMS provider yet): the code is shown in the app only where that can't
-  // hand someone else's account over — never for email (real mail is sent), never when the code went to the
-  // owner's own device, and for an existing phone account that has an email, the code goes to that email.
-  const mailReady = config.mail.provider !== 'console';
-  let showCode = config.otp.devMode;
-  if (config.otp.devMode && config.isProd) {
-    if (kind === 'email' && mailReady) showCode = false;
-    else if (existing && delivery === 'app') showCode = false;
-    else if (existing && kind === 'phone' && existing.email && mailReady) {
-      const m = mail.codeEmail(code);
-      await mail.send(existing.email, m.subject, m.text, m.html);
-      delivery = 'email';
-      showCode = false;
-    } else if (existing && kind === 'phone') {
-      // no SMS provider yet, no device and no email to reach the owner: showing the code would let anyone in
-      await db.query('UPDATE otp_codes SET consumed_at = now() WHERE phone = $1 AND consumed_at IS NULL', [target]);
-      throw new AppError(503, 'sms_unavailable', 'SMS codes aren’t available yet. Log in on a device where you’re already logged in, or with your email.');
-    }
-  }
+  // OTP dev mode stays as it is until the domain and email are set up (owner's decision)
+  const showCode = config.otp.devMode;
   if (showCode) {
     // eslint-disable-next-line no-console
     console.log(`[OTP dev mode] ${target} → ${code}`);
   } else if (delivery === 'app') {
     // delivered in the app — no email / SMS needed
-  } else if (delivery === 'email' && kind === 'phone') {
-    // already sent to the account's email above
   } else if (kind === 'email') {
     const m = mail.codeEmail(code);
     await mail.send(target, m.subject, m.text, m.html);
@@ -133,7 +114,6 @@ async function issueCode(target, kind, ip, opts = {}) {
     delivery, // 'app' | 'email' | 'phone'
     expires_in: config.otp.ttlSec,
     ...(showCode ? { dev_code: code } : {}),
-    ...(delivery === 'email' && kind === 'phone' && existing && existing.email ? { email_hint: existing.email.replace(/^(.).*(@.*)$/, '$1***$2') } : {}),
   };
 }
 

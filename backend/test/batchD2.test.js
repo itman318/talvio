@@ -995,25 +995,3 @@ test('profile tags: admin sets warning tags with evidence, the card shows them, 
   assert.ok(!(await users.getUser(victim.id, crook.id)).tags.includes('spam'));
 });
 
-test('OTP dev mode on a live server never shows the code for someone else’s account', async () => {
-  const saved = { prod: config.isProd, dev: config.otp.devMode, mail: config.mail.provider, sms: config.sms.provider };
-  const owner = await signup('+923260000095', 'Owner'); // logged in on a device (signup made a session)
-  try {
-    config.isProd = true;
-    config.otp.devMode = true;
-    config.sms.provider = 'console';
-    config.mail.provider = 'console';
-    rateLimit.reset();
-    const r = await auth.requestOtp('+923260000095', '10.11.9.1');
-    assert.equal(r.delivery, 'app');
-    assert.equal(r.dev_code, undefined, 'the code went to the owner’s app — not shown to whoever typed the number');
-    rateLimit.reset();
-    await rejects(auth.requestOtp('+923260000095', '10.11.9.2', { fallback: true }), 'sms_unavailable');
-    assert.ok(owner.id);
-  } finally {
-    config.isProd = saved.prod;
-    config.otp.devMode = saved.dev;
-    config.mail.provider = saved.mail;
-    config.sms.provider = saved.sms;
-  }
-});
