@@ -173,6 +173,14 @@ router.get('/admins', requireAdmin('admins'), h(async (req, res) => res.json(awa
 router.post('/admins', requireAdmin('admins'), h(async (req, res) => res.json(await admin.createAdmin(req.admin, req.body, req.ip))));
 router.patch('/admins/:id', requireAdmin('admins'), h(async (req, res) => res.json(await admin.updateAdmin(req.admin, req.params.id, req.body, req.ip))));
 
+// the official @HushaviaNews channel
+router.get('/news', requireAdmin('broadcast'), h(async (req, res) => res.json(await require('../services/news.service').info())));
+router.post('/news', requireAdmin('broadcast'), h(async (req, res) => {
+  const r = await require('../services/news.service').post(req.body);
+  await require('../services/admin.service').log(req.admin.id, 'news.post', 'chat', r.chat_id, { text: String(req.body.text || '').slice(0, 120) }, req.ip);
+  res.json(r);
+}));
+
 // broadcast announcements (super admin)
 router.get('/announcements', requireAdmin('broadcast'), h(async (req, res) => res.json(await announcements.list(req.query))));
 router.post('/announcements', requireAdmin('broadcast'), h(async (req, res) => {

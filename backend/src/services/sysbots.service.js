@@ -63,6 +63,16 @@ const BOTS = {
       { command: 'prices', description: 'Main coins at a glance' },
     ],
   },
+  plus: {
+    username: 'HushaviaPlusBot',
+    name: 'Hushavia Plus',
+    bio: 'Hushavia Plus in one chat: your plan, what Plus gives, and buy or extend it with coins.',
+    about: 'Check your Plus, see what it gives and buy or extend it with coins — in two taps.',
+    commands: [
+      { command: 'start', description: 'My Plus and the plans' },
+      { command: 'perks', description: 'What Plus gives' },
+    ],
+  },
   buttons: {
     username: 'HushaviaButtonsBot',
     name: 'Button Maker',
@@ -323,6 +333,7 @@ async function onMessage(botId, senderId, chat, row) {
   if (key === 'spam') await spamMessage(senderId, chat.id, row);
   if (key === 'buttons') await require('./buttonbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
   if (key === 'wallet') await require('./walletbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
+  if (key === 'plus') await require('./plusbot.service').onMessage(senderId, chat.id, row); // eslint-disable-line global-require
   if (key === 'login') await say('login', chat.id, 'I only send login codes and security alerts. For help, write to @HushaviaSupportBot.');
   return true;
 }
@@ -338,6 +349,7 @@ async function onCallback(botId, userId, chatId, data) {
   }
   if (key === 'buttons') return require('./buttonbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
   if (key === 'wallet') return require('./walletbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
+  if (key === 'plus') return require('./plusbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
   if (key === 'spam' && data === 'appeal') {
     const user = await db.one('SELECT id, restricted_until, restrict_reason FROM users WHERE id = $1', [userId]);
     return spamAppeal(user, chatId, '');

@@ -1666,7 +1666,38 @@
         el('label', { class: 'check', for: 'b-push' }, push, 'Send a push notification'),
         el('div', { class: 'field' }, el('label', {}, 'Banner visible for'), hours),
         send),
-      el('h3', { style: 'font-size:15px' }, 'History'), history);
+      el('h3', { style: 'font-size:15px' }, 'History'), history,
+      newsCard());
+
+    // the official @HushaviaNews channel: every user is subscribed, posts arrive like any channel post
+    function newsCard() {
+      const text = el('textarea', { rows: 5, maxlength: 4000, placeholder: 'e.g. 🎉 New in Hushavia: business catalogs! Open a shop from Settings → Hushavia Business.' });
+      const silent = el('input', { type: 'checkbox', id: 'n-silent' });
+      const stats = el('div', { class: 'muted' }, 'Loading…');
+      const posts = el('div', {});
+      const load = async () => {
+        const d = await action(() => api('GET', '/news'));
+        if (!d) return;
+        stats.textContent = `@${d.username} · ${fmtNum(d.subscribers)} subscribers`;
+        posts.replaceChildren(...d.posts.map((p) => el('div', { class: 'bubble' }, el('small', {}, `${fmtDate(p.created_at)} · ${fmtNum(p.views_count || 0)} views`), p.text.slice(0, 300))));
+      };
+      const post = el('button', { class: 'btn primary', onclick: async () => {
+        if (text.value.trim().length < 2) return toast('Write the post first', true);
+        const ok = await modal('Publish to Hushavia News?', [el('p', {}, 'Every subscriber gets this post' + (silent.checked ? ' (without sound).' : ' with a notification.'))], 'Publish', async () => {
+          const r = await action(() => api('POST', '/news', { text: text.value.trim(), silent: silent.checked }), 'Published');
+          return !!r;
+        });
+        if (ok) { text.value = ''; load(); }
+        return undefined;
+      } }, 'Publish to Hushavia News');
+      load();
+      return el('div', { class: 'card', style: 'max-width:620px;margin-top:22px' },
+        el('h3', { style: 'font-size:15px;margin-top:0' }, '📣 Hushavia News channel'), stats,
+        el('div', { class: 'field', style: 'margin-top:10px' }, el('label', {}, 'Post'), text),
+        el('label', { class: 'check', for: 'n-silent' }, silent, 'Send without sound'),
+        post,
+        el('h4', { style: 'margin:16px 0 6px' }, 'Latest posts'), posts);
+    }
 
     async function loadHistory() {
       const data = await action(() => api('GET', '/announcements'));

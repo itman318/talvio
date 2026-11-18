@@ -262,7 +262,10 @@ async function loginWithTarget(target, kind, device, ip) {
     user = kind === 'email'
       ? await db.one('INSERT INTO users (email) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *', [target])
       : await db.one('INSERT INTO users (phone) VALUES ($1) ON CONFLICT (phone) DO NOTHING RETURNING *', [target]);
-    if (user) isNew = true;
+    if (user) {
+      isNew = true;
+      require('./news.service').subscribe(user.id).catch(() => null); // eslint-disable-line global-require
+    }
     else user = await findUserByTarget(target, kind);
   }
   user = await liftExpiredBan(user);
