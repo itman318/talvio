@@ -67,6 +67,7 @@ async function fields(userId, body, partial) {
 
 async function add(userId, body = {}) {
   await requirePlus(userId);
+  await require('./tags.service').assertNotBlocked(userId, 'sell'); // eslint-disable-line global-require
   const n = await db.one('SELECT count(*)::int AS n FROM catalog_items WHERE owner_id = $1 AND deleted_at IS NULL', [userId]);
   if (n.n >= MAX_ITEMS) throw forbidden('catalog_full', `A catalog can have up to ${MAX_ITEMS} products`);
   const f = await fields(userId, body, false);
@@ -111,8 +112,10 @@ async function buy(userId, idRaw, body = {}) {
   if (body.expected_coins !== undefined && Number(body.expected_coins) !== Number(item.price_coins)) {
     throw conflict('price_changed', `The price changed to ${Number(item.price_coins).toLocaleString('en-US')} coins — check it and try again`);
   }
-  const seller = await db.one(`SELECT id FROM users WHERE id = $1 AND status = 'active' AND NOT is_bot`, [sellerId]);
+  const seller = await db.one(`SELECT id, tags FROM users WHERE id = $1 AND status = 'active' AND NOT is_bot`, [sellerId]);
   if (!seller) throw notFound('user_not_found', 'This seller is no longer available');
+  if ((seller.tags || []).some((t) => ['scam', 'fake'].includes(t))) throw forbidden('seller_flagged', 'This seller is flagged after confirmed scam reports — buying is turned off');
+  await require('./tags.service').assertNotBlocked(userId, 'pay with coins'); // eslint-disable-line global-require
   const users = require('./user.service'); // eslint-disable-line global-require
   if (await users.isBlockedEither(userId, sellerId)) throw forbidden('blocked', 'You can’t buy from this seller');
   rateLimit.enforce(`catalog:buy:${userId}`, 20, 60 * 60 * 1000, 'Too many orders. Try again later.');

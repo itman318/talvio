@@ -52,6 +52,7 @@ import '../widgets/avatar.dart';
 import '../widgets/extras.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/report_dialog.dart';
+import '../widgets/profile_tags.dart';
 import 'calls_screen.dart';
 import 'home_screen.dart' show activityIcon;
 import 'premium_screens.dart';
@@ -2096,7 +2097,8 @@ class _ChatScreenState extends State<ChatScreen> {
             if (id != chatId) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)));
           }),
           if (chat.voiceChat != null && context.watch<VoiceChatManager>().chatId != chat.id) _voiceChatBar(chat),
-          if (_isStranger(chat)) _TrustBanner(userId: chat.peer!.id),
+          if (chat.type == 'private' && chat.peer != null && (_isStranger(chat) || chat.peer!.tags.any(const ['scam', 'fake', 'spam', 'harassment'].contains)))
+            _TrustBanner(userId: chat.peer!.id),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
           if (chat.isChannel && chat.isAdmin && chat.queueCount > 0)
             Material(
@@ -3637,10 +3639,14 @@ class _TrustBannerState extends State<_TrustBanner> {
   Widget build(BuildContext context) {
     final t = _t;
     if (t == null || _hidden) return const SizedBox.shrink();
-    final warn = t['warn'] == true;
+    final tags = [for (final x in (t['tags'] as List? ?? const [])) '$x'];
+    // a tag confirmed by Hushavia (scam, fake, spam, harassment) says more than the report count
+    final confirmed = TagLook.sorted(tags).where((x) => const ['scam', 'fake', 'spam', 'harassment'].contains(x)).toList();
+    final warn = t['warn'] == true || confirmed.isNotEmpty;
     final fresh = t['new_account'] == true;
     if (!warn && !fresh) return const SizedBox.shrink();
-    final color = warn ? const Color(0xFFE5484D) : const Color(0xFFE08A1E);
+    final strong = confirmed.any((x) => TagLook.all[x]!.strong);
+    final color = warn && (strong || t['warn'] == true) ? const Color(0xFFE5484D) : const Color(0xFFE08A1E);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(10, 6, 10, 0),
@@ -3651,11 +3657,13 @@ class _TrustBannerState extends State<_TrustBanner> {
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(warn ? 'Many people reported this account' : 'This account is new',
+            Text(confirmed.isNotEmpty ? TagLook.all[confirmed.first]!.label : (warn ? 'Many people reported this account' : 'This account is new'),
                 style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
             const SizedBox(height: 2),
             Text(
-              warn
+              confirmed.isNotEmpty
+                  ? TagLook.all[confirmed.first]!.about
+                  : warn
                   ? 'Several Hushavia users blocked or reported it in the last 30 days. Don’t send money, codes or personal details.'
                   : 'It was made less than a week ago and isn’t in your contacts. Be careful with requests for money or codes.',
               style: const TextStyle(fontSize: 13, height: 1.35),

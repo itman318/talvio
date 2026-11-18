@@ -105,6 +105,17 @@ router.post('/users/:id/password/disable', requireAdmin('users.logout'), h(async
   res.json({ ok: true });
 }));
 router.post('/users/:id/logout-all', requireAdmin('users.logout'), h(async (req, res) => res.json(await admin.logoutAll(req.admin, req.params.id, req.ip))));
+router.get('/users/:id/tags', requireAdmin('users.view'), h(async (req, res) => res.json(await require('../services/tags.service').history(req.params.id))));
+router.post('/users/:id/tags', requireAdmin('users.ban'), h(async (req, res) => {
+  const r = await require('../services/tags.service').add(req.admin.id, req.params.id, req.body);
+  await require('../services/admin.service').log(req.admin.id, 'user.tag', 'user', parseInt(req.params.id, 10), { tag: req.body.tag, reason: req.body.reason }, req.ip);
+  res.json(r);
+}));
+router.delete('/users/:id/tags/:tag', requireAdmin('users.ban'), h(async (req, res) => {
+  const r = await require('../services/tags.service').remove(req.admin.id, req.params.id, req.params.tag);
+  await require('../services/admin.service').log(req.admin.id, 'user.untag', 'user', parseInt(req.params.id, 10), { tag: req.params.tag }, req.ip);
+  res.json(r);
+}));
 router.post('/users/:id/verify', requireAdmin('users.verify'), h(async (req, res) => {
   res.json(await admin.setVerified(req.admin, req.params.id, req.body.verified, req.ip));
 }));

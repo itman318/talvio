@@ -57,6 +57,11 @@ async function assertCanAdd(userId, count) {
 
 /** Starting a private chat with someone who isn't in my contacts. */
 async function assertCanStartChat(userId, peerId) {
+  // a flagged (scam / fake) account can only write to people who have it in their contacts
+  if (await require('./tags.service').isFlagged(userId)) { // eslint-disable-line global-require
+    const ok = await db.one('SELECT 1 AS x FROM contacts WHERE owner_id = $2 AND contact_id = $1 LIMIT 1', [userId, peerId]);
+    if (!ok) throw forbidden('account_flagged', 'Your account is flagged after confirmed reports, so you can’t start new chats. You can appeal in Help & support.');
+  }
   const n = await newAccountAge(userId);
   if (!n) return;
   const known = await db.one('SELECT 1 AS x FROM contacts WHERE (owner_id = $1 AND contact_id = $2) OR (owner_id = $2 AND contact_id = $1) LIMIT 1', [userId, peerId]);

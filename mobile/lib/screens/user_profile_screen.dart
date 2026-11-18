@@ -21,6 +21,7 @@ import 'coins_screen.dart';
 import 'shared_media_screen.dart';
 import 'story_screens.dart' show HighlightsRow;
 import '../widgets/emoji_status.dart';
+import '../widgets/profile_tags.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key, required this.userId});
@@ -227,6 +228,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                     ]),
                   ),
+                if (!u.deleted && !u.isBot) _TagsRow(user: u),
                 if (!u.deleted) HighlightsRow(key: ValueKey('hl${u.id}'), userId: u.id, mine: u.id == myId),
                 // shown only when there is something to show (no empty "no info" card, no raw ID numbers)
                 if (u.phone != null || u.username != null || u.bio.isNotEmpty || u.birthday != null)
@@ -359,5 +361,35 @@ class _CatalogEntryState extends State<_CatalogEntry> {
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CatalogScreen(userId: widget.userId, name: widget.name))),
       ),
     ]);
+  }
+}
+
+
+/// Tags under the name: the ones on the profile card at once, plus the computed ones
+/// (many reports, trusted seller) as soon as the server answers.
+class _TagsRow extends StatefulWidget {
+  const _TagsRow({required this.user});
+  final AppUser user;
+
+  @override
+  State<_TagsRow> createState() => _TagsRowState();
+}
+
+class _TagsRowState extends State<_TagsRow> {
+  late List<String> _tags = widget.user.tags;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<AppServices>().api.get('/users/${widget.user.id}/trust').then((r) {
+      final t = (r as Map)['tags'];
+      if (t is List && mounted) setState(() => _tags = {..._tags, for (final x in t) '$x'}.toList());
+    }).catchError((_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (TagLook.sorted(_tags).isEmpty) return const SizedBox.shrink();
+    return Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: ProfileTags(_tags, center: true));
   }
 }

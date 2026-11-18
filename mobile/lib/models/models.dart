@@ -34,6 +34,7 @@ class AppUser {
   final bool hasPassword; // only for "me": two-step verification is on
   final String? emojiStatus; // the emoji next to their name
   final DateTime? emojiStatusUntil;
+  final List<String> tags; // profile tags: scam, fake, spam, harassment, verified_business, official, new_account…
 
   AppUser({
     required this.id,
@@ -62,6 +63,7 @@ class AppUser {
     this.hasPassword = false,
     this.emojiStatus,
     this.emojiStatusUntil,
+    this.tags = const [],
   });
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
@@ -91,6 +93,7 @@ class AppUser {
         hasPassword: j['has_password'] == true,
         emojiStatus: j['emoji_status'] is Map ? (j['emoji_status'] as Map)['emoji'] as String? : null,
         emojiStatusUntil: j['emoji_status'] is Map ? _date((j['emoji_status'] as Map)['until']) : null,
+        tags: j['tags'] is List ? [for (final t in j['tags'] as List) '$t'] : const [],
       );
 
   /// The emoji status, while it lasts.

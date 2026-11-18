@@ -74,6 +74,7 @@ const scheduler = setInterval(() => {
   require('./services/chat.service').sweepCaptcha().catch(() => {});
   if (secretSweepTick % 240 === 11) require('./services/support.service').sweep().catch(() => {});
   if (secretSweepTick % 240 === 13) require('./services/fakeguard.service').recheckMonetized().catch(() => {}); // hourly: real audience still there?
+  if (secretSweepTick % 240 === 29) require('./services/tags.service').sweep().catch(() => {}); // hourly: expired spam / harassment tags
   if (secretSweepTick === 1) secretService.sweep().catch((err) => console.error('secret sweep error', err)); // eslint-disable-line no-console
 }, 15000);
 scheduler.unref();

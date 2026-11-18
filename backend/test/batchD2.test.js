@@ -957,3 +957,40 @@ test('business catalog: Plus only, order with coins moves coins once, price chan
   await catalog.remove(seller.id, item.id);
   assert.equal((await catalog.list(buyer.id, seller.id)).items.length, 0);
 });
+
+
+test('profile tags: admin sets warning tags with evidence, the card shows them, scam accounts are held back', async () => {
+  const tags = require('../src/services/tags.service');
+  const catalog = require('../src/services/catalog.service');
+  const coins = require('../src/services/coin.service');
+  const crook = await signup('+923260000093', 'Crook');
+  const victim = await signup('+923260000094', 'Victim');
+  assert.ok((await users.getUser(victim.id, crook.id)).tags.includes('new_account'));
+  await rejects(tags.add(boss.id, crook.id, { tag: 'scam', reason: 'Took money, never delivered' }), 'invalid_input'); // no evidence
+  await rejects(tags.add(boss.id, crook.id, { tag: 'nonsense', reason: 'x', evidence: 'y' }), 'invalid_input');
+  await tags.add(boss.id, crook.id, { tag: 'scam', reason: 'Took money, never delivered', evidence: 'Reports #12, #14' });
+  const card = await users.getUser(victim.id, crook.id);
+  assert.ok(card.tags.includes('scam'));
+  const notice = await db.one(`SELECT title FROM notices WHERE user_id = $1 ORDER BY id DESC LIMIT 1`, [crook.id]);
+  assert.match(notice.title, /Scam reports confirmed/);
+
+  await rejects(chats.getOrCreatePrivate(crook.id, victim.id), 'account_flagged');
+  await db.tx((c) => coins.change(c, crook.id, 100, 'admin', {}));
+  await rejects(coins.send(crook.id, { user_id: victim.id, amount: 10 }), 'account_flagged');
+  await db.query(`UPDATE users SET premium_until = now() + interval '30 days' WHERE id = $1`, [crook.id]);
+  await rejects(catalog.add(crook.id, { title: 'Phone', price_coins: 10 }), 'account_flagged');
+
+  const h = await tags.history(crook.id);
+  assert.equal(h.items[0].evidence, 'Reports #12, #14');
+  assert.ok(h.items[0].active);
+  await tags.remove(boss.id, crook.id, 'scam');
+  assert.ok(!(await users.getUser(victim.id, crook.id)).tags.includes('scam'));
+  await chats.getOrCreatePrivate(crook.id, victim.id);
+
+  // spam ends by itself
+  await tags.add(boss.id, crook.id, { tag: 'spam', reason: 'Bulk links', evidence: 'Report #20', days: 1 });
+  assert.ok((await users.getUser(victim.id, crook.id)).tags.includes('spam'));
+  await db.query(`UPDATE user_tags SET expires_at = now() - interval '1 minute' WHERE user_id = $1 AND tag = 'spam'`, [crook.id]);
+  await tags.sweep();
+  assert.ok(!(await users.getUser(victim.id, crook.id)).tags.includes('spam'));
+});

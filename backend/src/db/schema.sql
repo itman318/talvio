@@ -1472,3 +1472,19 @@ CREATE TABLE IF NOT EXISTS catalog_orders (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS catalog_orders_buyer_idx ON catalog_orders (buyer_id, created_at DESC);
+
+-- ------------------------------------------------------------------ profile tags (scam, fake, spam … verified business)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+CREATE TABLE IF NOT EXISTS user_tags (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tag        VARCHAR(24)   NOT NULL,
+  reason     VARCHAR(500)  NOT NULL DEFAULT '',
+  evidence   VARCHAR(2000) NOT NULL DEFAULT '',
+  admin_id   BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ,
+  removed_at TIMESTAMPTZ,
+  removed_by BIGINT        REFERENCES admins(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS user_tags_user_idx ON user_tags (user_id, tag) WHERE removed_at IS NULL;

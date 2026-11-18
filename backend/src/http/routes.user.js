@@ -185,7 +185,15 @@ router.get('/users/:id/trust', h(async (req, res) => {
     [id],
   );
   const warn = r.blocks >= 5 || r.reports >= 3;
-  res.json({ warn, new_account: r.age_days !== null && r.age_days < 7, blocks: warn ? r.blocks : undefined, reports: warn ? r.reports : undefined });
+  const u = await db.one('SELECT tags FROM users WHERE id = $1', [id]);
+  const tags = [...((u && u.tags) || [])];
+  if (warn) tags.push('reported');
+  if (r.age_days !== null && r.age_days < 7) tags.push('new_account');
+  if (!warn) {
+    const s = await db.one('SELECT count(*)::int AS n FROM catalog_orders WHERE seller_id = $1', [id]);
+    if (s.n >= 10 && !tags.some((t) => ['scam', 'fake', 'spam'].includes(t))) tags.push('trusted_seller');
+  }
+  res.json({ warn, new_account: r.age_days !== null && r.age_days < 7, tags, blocks: warn ? r.blocks : undefined, reports: warn ? r.reports : undefined });
 }));
 router.get('/users/:id', h(async (req, res) => res.json(await userService.getUser(req.userId, parseIdParam(req.params.id)))));
 

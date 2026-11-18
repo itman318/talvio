@@ -129,6 +129,7 @@ function serialize(u, viewerId, rel) {
     is_bot: !!u.is_bot,
     is_premium: !!(u.premium_until && new Date(u.premium_until) > new Date()),
     emoji_status: emojiStatus(u),
+    tags: require('./tags.service').cardTags(u), // eslint-disable-line global-require
     avatar_url: can('avatar', u.privacy_avatar) ? avatarUrl(u.avatar_media_id) : null,
     phone: can('phone', u.privacy_phone) ? u.phone : null,
     birthday: bday ? { day: bday[2], month: bday[1], ...(self && bday[0] !== 1904 ? { year: bday[0] } : {}) } : null,

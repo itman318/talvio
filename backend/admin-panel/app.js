@@ -733,6 +733,44 @@
         d.sessions.length ? d.sessions.map((s) => el('div', { class: 'bubble' },
           el('small', {}, [s.platform || 'unknown', s.app_version ? `v${s.app_version}` : null, `IP ${s.ip || '—'}`].filter(Boolean).join(' · ')),
           `${s.device_name || 'Unknown device'} — last active ${ago(s.last_active_at)}`)) : el('div', { class: 'muted' }, 'No active devices')),
+      // profile tags: warning tags (scam, fake, spam, harassment) need a reason and evidence; the person is told and can appeal
+      el('section', {}, el('h4', {}, 'Profile tags'), (() => {
+        const box = el('div', {}, el('div', { class: 'muted' }, 'Loading…'));
+        api('GET', `/users/${id}/tags`).then((t) => {
+          const active = t.items.filter((x) => x.active);
+          const addBtn = can('users.ban') ? el('button', {
+            class: 'btn small',
+            onclick: () => {
+              const tag = el('select', {}, t.tags.map((x) => el('option', { value: x.id }, `${x.warning ? '⚠️ ' : '✅ '}${x.label}`)));
+              const reason = el('input', { placeholder: 'Reason the person and the team will see (e.g. took payment for 2 phones, never delivered)' });
+              const evidence = el('textarea', { rows: 3, placeholder: 'Evidence: report numbers, message ids, screenshots (required for warning tags)' });
+              const days = el('input', { type: 'number', min: 1, placeholder: 'Days (empty = default: spam/harassment 90, others until removed)' });
+              modal('Add a profile tag', [
+                el('div', { class: 'field' }, el('label', {}, 'Tag'), tag),
+                el('div', { class: 'field' }, el('label', {}, 'Reason'), reason),
+                el('div', { class: 'field' }, el('label', {}, 'Evidence'), evidence),
+                el('div', { class: 'field' }, el('label', {}, 'How long'), days),
+                el('div', { class: 'muted', style: 'font-size:12.5px' }, 'Scam and fake accounts also can’t sell, send coins or start chats with strangers. The person gets a notice and can appeal through support.'),
+              ], 'Add tag', async () => {
+                const r = await action(() => api('POST', `/users/${id}/tags`, { tag: tag.value, reason: reason.value.trim(), evidence: evidence.value.trim(), days: days.value ? Number(days.value) : null }), 'Tag added');
+                if (r) reload();
+                return !!r;
+              });
+            },
+          }, 'Add tag') : null;
+          box.replaceChildren(
+            active.length ? el('div', { class: 'btn-row' }, active.map((x) => el('span', { class: 'chip' }, x.label,
+              can('users.ban') ? el('a', { href: '#', style: 'margin-left:8px', onclick: async (e) => {
+                e.preventDefault();
+                if (await action(() => api('DELETE', `/users/${id}/tags/${x.tag}`), 'Tag removed')) reload();
+              } }, '✕') : null))) : el('div', { class: 'muted' }, 'No tags'),
+            addBtn,
+            t.items.length ? el('div', { style: 'margin-top:8px' }, t.items.slice(0, 10).map((x) => el('div', { class: 'bubble' },
+              el('small', {}, `${x.label} · ${fmtDate(x.at)} · ${x.by || 'admin'}${x.expires_at ? ` · until ${fmtDate(x.expires_at)}` : ''}${x.active ? '' : ` · removed${x.removed_by ? ` by ${x.removed_by}` : ''}`}`),
+              x.reason || '—', x.evidence ? el('div', { class: 'muted', style: 'white-space:pre-wrap' }, `Evidence: ${x.evidence}`) : null))) : null);
+        }).catch((e) => box.replaceChildren(el('div', { class: 'muted' }, e.message || 'Could not load tags')));
+        return box;
+      })()),
       el('section', {}, el('h4', {}, 'Moderator notes'),
         (() => {
           const input = el('textarea', { rows: 2, placeholder: 'Private note for the admin team…' });

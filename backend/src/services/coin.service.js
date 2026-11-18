@@ -114,6 +114,7 @@ async function send(userId, body = {}) {
   const to = await db.one(`SELECT id, first_name, is_bot FROM users WHERE id = $1 AND status = 'active'`, [toId]);
   if (!to || to.is_bot) throw notFound('user_not_found', 'This person can’t receive coins');
   if (await require('./user.service').isBlockedEither(userId, toId)) throw forbidden('blocked', 'You can’t send coins to this person'); // eslint-disable-line global-require
+  await require('./tags.service').assertNotBlocked(userId, 'send coins'); // eslint-disable-line global-require
   rateLimit.enforce(`coins:send:${userId}`, 30, 60 * 60 * 1000, 'Too many gifts. Try again later.');
   const me = await db.one('SELECT first_name FROM users WHERE id = $1', [userId]);
   const r = await db.tx(async (c) => {
