@@ -634,8 +634,18 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       return null;
     }
 
+    final cropping = _tool == _Tool.crop;
+    // The crop handles stick out of the picture: they live in a margin around it, inside the box that
+    // receives touches (a touch outside a widget's own box never reaches it).
+    final m = cropping ? pad / 2 : 0.0;
     return Center(
       child: SizedBox(
+        width: w + 2 * m,
+        height: h + 2 * m,
+        child: Stack(clipBehavior: Clip.none, children: [
+        Positioned(
+        left: m,
+        top: m,
         width: w,
         height: h,
         child: GestureDetector(
@@ -644,8 +654,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             final i = textAt(norm(d.localPosition));
             if (i != null && !_texts[i].emoji) _editText(i);
           },
-          onScaleStart: (d) {
-            if (_tool == _Tool.crop) return;
+          onScaleStart: cropping ? null : (d) {
             final p = norm(d.localFocalPoint);
             if (_tool == _Tool.draw && d.pointerCount == 1) {
               _remember();
@@ -667,8 +676,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
               _grabAngle = _texts[i].angle;
             }
           },
-          onScaleUpdate: (d) {
-            if (_tool == _Tool.crop) return;
+          onScaleUpdate: cropping ? null : (d) {
             final p = norm(d.localFocalPoint);
             if (_tool == _Tool.draw && _grab == null) {
               if (_brushKind == _Brush.eraser) {
@@ -690,7 +698,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
               _changed = true;
             });
           },
-          onScaleEnd: (_) => _grab = null,
+          onScaleEnd: cropping ? null : (_) => _grab = null,
           child: Stack(clipBehavior: Clip.none, children: [
             Positioned.fill(
               child: RepaintBoundary(
@@ -705,12 +713,14 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
             ),
             if (!_showOriginal)
               Positioned.fill(child: RepaintBoundary(child: IgnorePointer(child: CustomPaint(painter: _OverlayPainter(_strokes, _texts, _rev))))),
-            if (_tool == _Tool.crop)
-              Positioned.fill(child: _CropOverlay(rect: _crop, size: size, lock: _lock, onChanged: (r) => setState(() => _crop = r)))
-            else if (_crop != const Rect.fromLTRB(0, 0, 1, 1))
+            if (!cropping && _crop != const Rect.fromLTRB(0, 0, 1, 1))
               Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _ShadePainter(_crop)))),
           ]),
         ),
+        ),
+        if (cropping)
+          Positioned.fill(child: _CropOverlay(rect: _crop, size: size, margin: m, lock: _lock, onChanged: (r) => setState(() => _crop = r))),
+        ]),
       ),
     );
   }
@@ -1205,8 +1215,9 @@ class _ShadePainter extends CustomPainter {
 /// Crop box like Telegram: drag any corner or edge (big touch areas), drag inside to move,
 /// rule-of-thirds grid while cropping, optional fixed shape ([lock] = width/height in 0..1 space).
 class _CropOverlay extends StatelessWidget {
-  const _CropOverlay({required this.rect, required this.size, required this.onChanged, this.lock});
+  const _CropOverlay({required this.rect, required this.size, required this.onChanged, this.lock, this.margin = 0});
   final Rect rect;
+  final double margin; // room around the picture (this widget covers it too, so handles there can be grabbed)
   final Size size;
   final double? lock;
   final ValueChanged<Rect> onChanged;
@@ -1250,7 +1261,7 @@ class _CropOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = Rect.fromLTRB(rect.left * size.width, rect.top * size.height, rect.right * size.width, rect.bottom * size.height);
+    final r = Rect.fromLTRB(rect.left * size.width, rect.top * size.height, rect.right * size.width, rect.bottom * size.height).shift(Offset(margin, margin));
     Offset norm(Offset d) => Offset(d.dx / size.width, d.dy / size.height);
     const hit = 44.0;
     Widget zone(Rect area, {bool l = false, bool t = false, bool rr = false, bool b = false}) => Positioned.fromRect(
@@ -1261,7 +1272,7 @@ class _CropOverlay extends StatelessWidget {
           ),
         );
     return Stack(clipBehavior: Clip.none, children: [
-      Positioned.fill(child: CustomPaint(painter: _ShadePainter(rect))),
+      Positioned(left: margin, top: margin, width: size.width, height: size.height, child: IgnorePointer(child: CustomPaint(painter: _ShadePainter(rect)))),
       Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _CropFramePainter(r)))),
       // move: drag inside (kept inside the picture instead of stopping at the edge)
       Positioned.fromRect(

@@ -787,6 +787,16 @@ class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
             onChanged: (v) => _set({'hide_service': v}),
           ),
         ]),
+        SettingsGroup(title: 'Privacy of members', children: [
+          SettingsSwitchTile(
+            icon: Icons.visibility_off_rounded,
+            color: const Color(0xFF5E6B8C),
+            title: 'Hide members',
+            subtitle: 'Only admins see who is in the group — stops spammers collecting your members',
+            value: chat.hiddenMembers,
+            onChanged: (v) => _set({'hidden_members': v}),
+          ),
+        ]),
         SettingsGroup(title: 'Spam filter', children: [
           SettingsSwitchTile(
             icon: Icons.speed_rounded,

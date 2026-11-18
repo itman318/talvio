@@ -24,6 +24,8 @@ import 'qr_screens.dart';
 import 'settings_screens.dart';
 import 'story_screens.dart' show HighlightsRow, MyHighlightsScreen;
 import '../widgets/emoji_status.dart';
+import '../widgets/profile_tags.dart';
+import 'folder_support_screens.dart' show NewTicketScreen;
 
 /// "Finish your profile": shown until photo, username, bio and birthday are set.
 Widget _completeCard(BuildContext context, AppUser me, VoidCallback edit) {
@@ -107,6 +109,37 @@ class MyProfileScreen extends StatelessWidget {
           },
         ),
         HighlightsRow(key: ValueKey('hl${me.id}'), userId: me.id, mine: true, hideEmpty: true),
+        // a warning tag on my own profile: say so, and let me appeal
+        if (TagLook.sorted(me.tags).any((t) => TagLook.all[t]!.warning))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Material(
+              color: const Color(0xFFE5484D).withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Your profile shows a warning', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: Color(0xFFE5484D))),
+                  const SizedBox(height: 8),
+                  ProfileTags(me.tags.where((t) => TagLook.all[t]?.warning == true)),
+                  const SizedBox(height: 8),
+                  const Text('People who open your profile or chat with you see it. If you think it’s a mistake, tell us what happened.', style: TextStyle(fontSize: 13.5, height: 1.35)),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.gavel_rounded, size: 18),
+                      label: const Text('Appeal'),
+                      onPressed: () => go(NewTicketScreen(
+                        category: 'account',
+                        subject: 'Appeal: ${TagLook.sorted(me.tags).where((t) => TagLook.all[t]!.warning).map((t) => TagLook.all[t]!.label).join(', ')}',
+                        message: 'I think the tag on my profile is a mistake because… ',
+                      )),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
         _completeCard(context, me, () => go(const EditProfileScreen())),
         // contact details: one slim line each
         Padding(

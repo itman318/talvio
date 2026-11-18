@@ -1488,3 +1488,5 @@ CREATE TABLE IF NOT EXISTS user_tags (
   removed_by BIGINT        REFERENCES admins(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS user_tags_user_idx ON user_tags (user_id, tag) WHERE removed_at IS NULL;
+
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS hidden_members BOOLEAN NOT NULL DEFAULT FALSE;

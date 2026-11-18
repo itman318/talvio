@@ -373,16 +373,18 @@ class _SupportListScreenState extends State<SupportListScreen> {
 }
 
 class NewTicketScreen extends StatefulWidget {
-  const NewTicketScreen({super.key, this.category = 'other'});
+  const NewTicketScreen({super.key, this.category = 'other', this.subject, this.message});
   final String category;
+  final String? subject;
+  final String? message;
 
   @override
   State<NewTicketScreen> createState() => _NewTicketScreenState();
 }
 
 class _NewTicketScreenState extends State<NewTicketScreen> {
-  final _subject = TextEditingController();
-  final _message = TextEditingController();
+  late final _subject = TextEditingController(text: widget.subject ?? '');
+  late final _message = TextEditingController(text: widget.message ?? '');
   late String _category = widget.category;
   bool _busy = false;
   bool _device = true;

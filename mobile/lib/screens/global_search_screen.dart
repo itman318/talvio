@@ -10,6 +10,7 @@ import '../models/models.dart';
 import '../state/chat_store.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
+import '../widgets/profile_tags.dart';
 import '../widgets/avatar.dart';
 import '../widgets/mascot.dart';
 import 'channel_screens.dart' show PublicChatPreviewScreen;
@@ -505,7 +506,7 @@ class _UserTile extends StatelessWidget {
             ),
           ),
       ]),
-      title: Row(children: [Flexible(child: _Hl(user.name, query, style: _titleStyle)), _verified(user.isVerified), EmojiStatusBadge(user, size: 15), if (user.isPremium && user.statusEmoji == null) const Padding(padding: EdgeInsets.only(left: 3), child: Icon(Icons.star_rounded, size: 16, color: Brand.premium))]),
+      title: Row(children: [Flexible(child: _Hl(user.name, query, style: _titleStyle)), _verified(user.isVerified), TagMark(user.tags), EmojiStatusBadge(user, size: 15), if (user.isPremium && user.statusEmoji == null) const Padding(padding: EdgeInsets.only(left: 3), child: Icon(Icons.star_rounded, size: 16, color: Brand.premium))]),
       subtitle: Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: user.isBot ? const _Pill('Start') : null,
     );

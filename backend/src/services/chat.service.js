@@ -112,7 +112,7 @@ SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c
           (SELECT count(*) FROM voice_chat_participants vp WHERE vp.voice_chat_id = vc.id AND vp.left_at IS NULL))
           FROM voice_chats vc WHERE vc.chat_id = c.id AND vc.ended_at IS NULL LIMIT 1) AS voice_chat,
        c.join_captcha, c.anti_flood, c.anti_links, c.hide_service, c.banned_words, c.member_perms, cm.captcha_until AS my_captcha_until,
-       c.anti_forward, c.anti_mentions, c.raid_shield, c.guard_penalty,
+       c.anti_forward, c.anti_mentions, c.raid_shield, c.guard_penalty, c.hidden_members,
        (SELECT l.title FROM chats l WHERE l.id = c.linked_chat_id) AS linked_title,
        (SELECT ch.id FROM chats ch WHERE ch.linked_chat_id = c.id LIMIT 1) AS linked_channel_id,
        CASE WHEN c.type = 'channel' AND cm.role IN ('owner', 'admin') THEN (SELECT count(*) FROM post_queue q WHERE q.chat_id = c.id) ELSE 0 END AS queue_count,
@@ -205,6 +205,7 @@ async function serializeChats(userId, rows) {
       anti_forward: !!r.anti_forward,
       anti_mentions: !!r.anti_mentions,
       raid_shield: !!r.raid_shield,
+      hidden_members: !!r.hidden_members,
       guard_penalty: r.guard_penalty || 'none',
       banned_words: ADMIN_ROLES.includes(r.my_role) ? r.banned_words || [] : [],
       member_perms: { media: true, links: true, polls: true, stickers: true, voice: true, ...(r.member_perms || {}) },
@@ -485,7 +486,7 @@ async function updateGroup(userId, chatIdRaw, body) {
 
 const EXTRA_KEYS = ['welcome_text', 'rules', 'new_member_limits', 'protected_content', 'allowed_reactions', 'category', 'linked_chat_id',
   'join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'banned_words', 'member_perms',
-  'anti_forward', 'anti_mentions', 'raid_shield', 'guard_penalty'];
+  'anti_forward', 'anti_mentions', 'raid_shield', 'guard_penalty', 'hidden_members'];
 
 /** Welcome text, rules, member limits, protected content, reactions, category, discussion group. */
 async function updateExtras(userId, chat, body) {
@@ -509,7 +510,7 @@ async function updateExtras(userId, chat, body) {
     if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
     set('guard_penalty', v.oneOf(body.guard_penalty, ['none', 'mute', 'remove'], 'guard_penalty'));
   }
-  for (const k of ['join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'anti_forward', 'anti_mentions', 'raid_shield']) {
+  for (const k of ['join_captcha', 'anti_flood', 'anti_links', 'hide_service', 'anti_forward', 'anti_mentions', 'raid_shield', 'hidden_members']) {
     if (body[k] !== undefined) {
       if (chat.type !== 'group') throw badRequest('invalid_input', 'This is for groups');
       set(k, v.bool(body[k], k));
@@ -868,7 +869,9 @@ async function directory(userId, query = {}) {
 
 async function getMembers(userId, chatIdRaw) {
   const chat = await requireMember(chatIdRaw, userId);
-  const adminsOnly = chat.type === 'channel' && !ADMIN_ROLES.includes(chat.my_role);
+  // channels always, groups when "hide members" is on: ordinary members see only the admins
+  const hidden = chat.type === 'group' && (await db.one('SELECT hidden_members FROM chats WHERE id = $1', [chat.id])).hidden_members;
+  const adminsOnly = (chat.type === 'channel' || hidden) && !ADMIN_ROLES.includes(chat.my_role);
   const rows = await db.many(
     `SELECT user_id, role, joined_at, admin_rights, admin_title, member_tag, restricted_until, promoted_by FROM chat_members WHERE chat_id = $1 ${adminsOnly ? "AND role <> 'member'" : ''}
      ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, joined_at

@@ -15,6 +15,7 @@ import '../models/models.dart';
 import '../state/auth_state.dart';
 import '../state/chat_store.dart';
 import '../utils/format.dart';
+import '../widgets/profile_tags.dart';
 import '../widgets/avatar.dart';
 import '../widgets/report_dialog.dart';
 import 'channel_screens.dart';
@@ -397,7 +398,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             for (final m in members)
               ListTile(
                 leading: Avatar(id: m.user.id, name: m.user.name, url: m.user.avatarAbsolute, size: 42),
-                title: Text(m.user.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Row(children: [Flexible(child: Text(m.user.name, maxLines: 1, overflow: TextOverflow.ellipsis)), TagMark(m.user.tags)]),
                 subtitle: Text(lastSeenText(m.user), maxLines: 1),
                 onTap: () => Navigator.pop(ctx, m),
               ),

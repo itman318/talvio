@@ -765,6 +765,7 @@ class Chat {
   bool get joinCaptcha => extra['join_captcha'] == true;
   bool get antiFlood => extra['anti_flood'] == true;
   bool get antiLinks => extra['anti_links'] == true;
+  bool get hiddenMembers => extra['hidden_members'] == true;
   bool get hideService => extra['hide_service'] == true;
   bool get antiForward => extra['anti_forward'] == true;
   bool get antiMentions => extra['anti_mentions'] == true;

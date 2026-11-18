@@ -81,3 +81,21 @@ class ProfileTags extends StatelessWidget {
     );
   }
 }
+
+/// A small mark after a name in lists (search, members): the most important tag only.
+class TagMark extends StatelessWidget {
+  const TagMark(this.tags, {super.key, this.size = 16});
+  final Iterable<String> tags;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = TagLook.sorted(tags).where((t) => t != 'new_account').toList();
+    if (list.isEmpty) return const SizedBox.shrink();
+    final t = TagLook.all[list.first]!;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Tooltip(message: t.label, child: Icon(t.icon, size: size, color: t.color)),
+    );
+  }
+}
