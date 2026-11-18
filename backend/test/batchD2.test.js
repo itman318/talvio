@@ -1016,26 +1016,36 @@ test('official @HushaviaNews channel: new people follow it, admins publish, peop
   news.setAutoFollow(false);
 });
 
-test('@HushaviaVerifyBot: request with proof → admin approves → badge; decline needs a reason', async () => {
+test('@HushaviaVerifyBot: step-by-step form with review → admin approves → badge; decline needs a reason', async () => {
   const vb = require('../src/services/verifybot.service');
   const sysbots = require('../src/services/sysbots.service');
   const star = await signup('+923260000097', 'Star');
   const botId = await sysbots.ensureOne('verify');
   const chat = await chats.getOrCreatePrivate(star.id, botId);
+  const say = (text) => vb.onMessage(star.id, chat.id, { text });
   await vb.onCallback(star.id, chat.id, 'k:person');
-  await vb.onCallback(star.id, chat.id, 'send'); // nothing written yet
-  assert.equal((await vb.adminList({})).items.filter((r) => r.user.id === star.id).length, 0);
-  await vb.onMessage(star.id, chat.id, { text: 'I am Star, a singer from Lahore. Website: star.example.com' });
+  await say('Ab'); // too short: asked again
+  await say('Star Khan');
+  await say('Singer');
+  await say('Lahore, Pakistan');
+  await say('no link here'); // refused
+  await say('https://star.example.com');
+  await say('just text'); // a photo step: refused
   const doc = await fakeUpload(star.id);
   await vb.onMessage(star.id, chat.id, { type: 'image', media_id: doc.id, text: '' });
+  await vb.onCallback(star.id, chat.id, 'skip'); // optional selfie
+  await vb.onCallback(star.id, chat.id, 'e:1'); // edit "known for" from the review
+  await say('Singer and songwriter');
   await vb.onCallback(star.id, chat.id, 'send');
   const req = (await vb.adminList({})).items.find((r) => r.user.id === star.id);
   assert.ok(req);
-  assert.deepEqual(req.media_ids, [doc.id]);
+  assert.match(req.ref, /^VR-\d{6}$/);
+  assert.deepEqual(req.fields.map((f) => [f.label, f.value]), [['Full name', 'Star Khan'], ['Known for', 'Singer and songwriter'], ['City & country', 'Lahore, Pakistan'], ['Links', 'https://star.example.com']]);
+  assert.deepEqual(req.photos, [{ label: 'ID document', media_id: doc.id }]);
   await rejects(vb.adminDecide(boss, req.id, { approve: false }), 'invalid_input');
   await vb.adminDecide(boss, req.id, { approve: true, note: 'Checked' });
   assert.equal((await users.getUser(A.id, star.id)).is_verified, true);
   await rejects(vb.adminDecide(boss, req.id, { approve: true }), 'already_decided');
   const said = await db.one(`SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1`, [chat.id, botId]);
-  assert.match(said.text, /Approved/);
+  assert.match(said.text, /approved/);
 });

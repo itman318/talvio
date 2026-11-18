@@ -2154,8 +2154,15 @@
     const data = await action(() => api('GET', `/verify-requests?status=${verState.status}`));
     if (!data) return;
     const cards = data.items.map((r) => {
-      const pics = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:8px 0' });
-      for (const id of r.media_ids) mediaPreview({ admin_url: `/api/admin/media/${id}`, mime: 'image/jpeg', name: 'document' }).then((n) => pics.append(n));
+      const pics = el('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;margin:10px 0' });
+      for (const p of r.photos) {
+        const slot = el('div', {}, el('div', { class: 'muted', style: 'font-size:12px;margin-bottom:4px' }, p.label));
+        pics.append(slot);
+        mediaPreview({ admin_url: `/api/admin/media/${p.media_id}`, mime: 'image/jpeg', name: p.label }).then((n) => slot.append(n));
+      }
+      const info = r.fields
+        ? el('div', { class: 'kv', style: 'margin-top:10px' }, r.fields.map((f) => [el('div', {}, f.label), el('div', { style: 'white-space:pre-wrap' }, f.value)]))
+        : el('div', { style: 'white-space:pre-wrap;margin-top:8px' }, r.details);
       const note = el('input', { placeholder: 'Note to the person (required when declining)' });
       const decide = async (approve) => {
         const ok = await action(() => api('POST', `/verify-requests/${r.id}`, { approve, note: note.value.trim() }), approve ? 'Approved — badge given' : 'Declined');
@@ -2164,12 +2171,12 @@
       return el('div', { class: 'card', style: 'margin-bottom:12px' },
         el('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap' },
           el('div', {},
-            el('strong', {}, `${r.label}`), ' · ',
+            el('strong', {}, `${r.ref} · ${r.label}`), ' · ',
             el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(r.user.id); } }, r.user.name || 'User'),
             el('span', { class: 'muted' }, ` ${r.user.username ? `@${r.user.username}` : ''} · ${r.user.phone || ''} · since ${fmtDate(r.user.since)}`),
             r.chat ? el('div', {}, `Channel/group: ${r.chat.title} (@${r.chat.username}) · ${fmtNum(r.chat.members)} members`) : null),
           el('span', { class: 'muted' }, fmtDate(r.created_at))),
-        el('div', { style: 'white-space:pre-wrap;margin-top:8px' }, r.details),
+        info,
         pics,
         r.status === 'open'
           ? el('div', {}, el('div', { class: 'field' }, note),

@@ -1508,3 +1508,4 @@ CREATE TABLE IF NOT EXISTS verify_requests (
   created_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS verify_requests_status_idx ON verify_requests (status, id);
+ALTER TABLE verify_requests ADD COLUMN IF NOT EXISTS fields JSONB;
