@@ -78,14 +78,12 @@ Future<void> _start() async {
       NotifPrefs.instance.load(),
       BackgroundKeepAlive.load(),
       ChatPasscode.load(),
+      ProxyManager.instance.load().timeout(const Duration(seconds: 10)).catchError((_) {}),
     ]);
   } catch (e) {
     debugPrint('Prefs not loaded: $e');
   }
-  // proxy first, so even the first request goes through it
-  try {
-    await ProxyManager.instance.load().timeout(const Duration(seconds: 10));
-  } catch (_) {}
+  // proxy settings (read above, side by side with the rest): even the first request goes through it
   final services = AppServices();
   ProxyManager.instance.onChanged = () {
     services.api.resetConnections();
@@ -371,7 +369,8 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
-    final prefs = context.watch<AppPrefs>();
+    // only what the app shell uses: a draft or any other setting changing must not rebuild every screen
+    final (themeMode, textScale, lockEnabled) = context.select<AppPrefs, (ThemeMode, double, bool)>((p) => (p.themeMode, p.textScale, p.lockEnabled));
     if (_lastStatus != auth.status && auth.status == AuthStatus.loggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.read<CallManager>().checkActive();
@@ -419,11 +418,11 @@ class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: Brand.light(),
       darkTheme: Brand.dark(),
-      themeMode: prefs.themeMode,
+      themeMode: themeMode,
       builder: (context, child) {
         final mq = MediaQuery.of(context);
-        final scaled = MediaQuery(data: mq.copyWith(textScaler: TextScaler.linear(prefs.textScale)), child: child ?? const SizedBox());
-        final showLock = _locked && prefs.lockEnabled && auth.status == AuthStatus.loggedIn;
+        final scaled = MediaQuery(data: mq.copyWith(textScaler: TextScaler.linear(textScale)), child: child ?? const SizedBox());
+        final showLock = _locked && lockEnabled && auth.status == AuthStatus.loggedIn;
         final dark = Theme.of(context).brightness == Brightness.dark;
         // system buttons bar at the bottom: same colour as the app (never the splash pink)
         return AnnotatedRegion<SystemUiOverlayStyle>(
