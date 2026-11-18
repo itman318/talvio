@@ -121,8 +121,39 @@ class MessageNotifications {
   static int idFor(int chatId) => chatId % 600000;
 
   /// Removes a chat's notification (the chat was opened).
+  static String _histKey(int chatId) => 'notif_hist_$chatId';
+
+  /// Adds a message to this chat's notification history (last 8, same message only once).
+  static Future<List<Map<String, dynamic>>> _remember(int chatId, Map<String, dynamic> m) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.reload();
+      final list = <Map<String, dynamic>>[];
+      final raw = p.getString(_histKey(chatId));
+      if (raw != null) {
+        for (final x in jsonDecode(raw) as List) {
+          list.add(Map<String, dynamic>.from(x as Map));
+        }
+      }
+      // older than a day: start fresh
+      list.removeWhere((x) => DateTime.now().millisecondsSinceEpoch - ((x['at'] as num?)?.toInt() ?? 0) > 86400000);
+      if (m['id'] == '' || !list.any((x) => x['id'] == m['id'])) list.add(m);
+      while (list.length > 8) {
+        list.removeAt(0);
+      }
+      await p.setString(_histKey(chatId), jsonEncode(list));
+      return list;
+    } catch (_) {
+      return [m];
+    }
+  }
+
   static Future<void> clearChat(int chatId) async {
     if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.remove(_histKey(chatId));
+    } catch (_) {}
     try {
       await init();
       await plugin.cancel(idFor(chatId));
@@ -150,6 +181,28 @@ class MessageNotifications {
       sound = p.getBool('notif_sound') ?? true;
       vibrate = p.getBool('notif_vibrate') ?? true;
     } catch (_) {}
+    // keep the last few messages of this chat, so the notification shows a conversation (not only the newest line)
+    final group = '${data['group']}' == '1';
+    final sender = '${data['sender'] ?? data['title']}';
+    var text = '${data['body'] ?? ''}';
+    if (group && text.startsWith('$sender: ')) text = text.substring(sender.length + 2);
+    final history = await _remember(chatId, {
+      'id': '${data['message_id'] ?? ''}',
+      's': data['chat_title'] != null && !group ? '${data['title']}' : sender,
+      't': text,
+      'at': DateTime.now().millisecondsSinceEpoch,
+    });
+    final style = history.length <= 1 && !group
+        ? BigTextStyleInformation(text) as StyleInformation
+        : MessagingStyleInformation(
+            const Person(name: 'You'),
+            conversationTitle: group ? '${data['chat_title'] ?? data['title']}' : null,
+            groupConversation: group,
+            messages: [
+              for (final h in history)
+                Message('${h['t']}', DateTime.fromMillisecondsSinceEpoch((h['at'] as num).toInt()), Person(name: '${h['s']}', key: '${h['s']}')),
+            ],
+          );
     final channelId = sound && vibrate ? _channel.channelId : 'messages_${sound ? 's' : 'q'}${vibrate ? 'v' : 'n'}';
     final channelName = sound && vibrate ? _channel.channelName : (sound ? 'Messages (no vibration)' : (vibrate ? 'Messages (no sound)' : 'Messages (silent)'));
     await plugin.show(
@@ -167,7 +220,8 @@ class MessageNotifications {
           priority: _channel.priority,
           category: _channel.category,
           groupKey: 'hushavia.messages',
-          styleInformation: BigTextStyleInformation('${data['body'] ?? ''}'),
+          styleInformation: style,
+          number: history.length,
           actions: canReply
               ? const [
                   AndroidNotificationAction('reply', 'Reply',
@@ -295,10 +349,11 @@ class MessageNotifications {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'token': token, 'text': text, 'client_id': 'n${DateTime.now().microsecondsSinceEpoch}'}));
         await plugin.cancel(idFor(chatId));
+        await clearChat(chatId);
       } else if (r.actionId == 'read') {
         await http.post(Uri.parse('${AppConfig.apiBase}/notify/read'),
             headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': token, 'message_id': p['message_id']}));
-        await plugin.cancel(idFor(chatId));
+        await clearChat(chatId);
       }
     } catch (e) {
       debugPrint('notification action failed: $e');
