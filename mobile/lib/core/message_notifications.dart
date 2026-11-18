@@ -91,6 +91,14 @@ class MessageNotifications {
 
   static Future<void> _onResponse(NotificationResponse r) async {
     final p0 = _payload(r.payload);
+    if (p0['kind'] == 'login') {
+      if (r.actionId == 'login_revoke') {
+        await handleAction(r);
+      } else if (r.actionId == null || r.actionId!.isEmpty) {
+        onOpenDevices?.call();
+      }
+      return;
+    }
     if (p0['kind'] == 'call' || p0['kind'] == 'call_missed') {
       final a = r.actionId ?? '';
       if (a == 'call_decline' || a == 'reply') {
@@ -164,6 +172,7 @@ class MessageNotifications {
   static Future<void> show(Map<String, dynamic> data) async {
     if (data['type'] == 'call') return _showCall(data);
     if (data['type'] == 'call_missed') return _showMissed(data);
+    if (data['type'] == 'new_login') return _showLogin(data);
     if (data['type'] != 'message' || data['title'] == null) return;
     await init();
     final chatId = int.tryParse('${data['chat_id']}') ?? 0;
@@ -281,6 +290,40 @@ class MessageNotifications {
     );
   }
 
+  /// Opens Settings → Devices (set by the app).
+  static void Function()? onOpenDevices;
+
+  /// Someone logged in to my account: "Not me — log out" right here, or "It's me".
+  static Future<void> _showLogin(Map<String, dynamic> data) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await init();
+    final sid = int.tryParse('${data['session_id']}') ?? 0;
+    final where = [data['device'], data['place']].where((x) => x != null && '$x'.isNotEmpty).join(' · ');
+    await plugin.show(
+      850000 + sid % 100000,
+      '${data['title'] ?? 'New login to your account'}',
+      where.isEmpty ? '${data['body'] ?? ''}' : '$where. Was this you?',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'security',
+          'Security',
+          channelDescription: 'New logins to your account',
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.status,
+          color: const Color(0xFFE5484D),
+          styleInformation: BigTextStyleInformation(where.isEmpty ? '${data['body'] ?? ''}' : '$where just logged in to your Hushavia account. If it wasn’t you, log it out now and turn on two-step verification.'),
+          actions: [
+            if (data['login_token'] != null)
+              const AndroidNotificationAction('login_revoke', 'Not me — log out', showsUserInterface: false, cancelNotification: true, titleColor: Color(0xFFE5484D)),
+            const AndroidNotificationAction('login_ok', 'It’s me', showsUserInterface: false, cancelNotification: true),
+          ],
+        ),
+      ),
+      payload: jsonEncode({'kind': 'login', 'session_id': sid, 'token': data['login_token']}),
+    );
+  }
+
   /// Missed call: "Call back" and "Message" (type a reply right in the notification).
   static Future<void> _showMissed(Map<String, dynamic> data) async {
     if (kIsWeb || !Platform.isAndroid) return;
@@ -327,6 +370,11 @@ class MessageNotifications {
     final chatId = int.tryParse('${p['chat_id']}') ?? 0;
     if (token == null) return;
     try {
+      if (r.actionId == 'login_revoke') {
+        await http.post(Uri.parse('${AppConfig.apiBase}/notify/login-revoke'),
+            headers: {'Content-Type': 'application/json'}, body: jsonEncode({'token': token}));
+        return;
+      }
       if (r.actionId == 'call_decline') {
         await plugin.cancel(callIdFor(int.tryParse('${p['call_id']}') ?? 0));
         await http.post(Uri.parse('${AppConfig.apiBase}/notify/call-decline'),

@@ -2023,6 +2023,14 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: () => startCall(context, chat.peer!, video: false),
             ),
           ],
+          // groups: a group call (voice + up to 8 cameras) straight from the header
+          if (chat.isGroup && auth.feature('calls') && (chat.voiceChat != null || chat.can('manage_voice_chats')))
+            IconButton(
+              tooltip: chat.voiceChat != null ? 'Join group call' : 'Start group call',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(chat.voiceChat != null ? Icons.phone_in_talk_rounded : Icons.add_call, color: chat.voiceChat != null ? Brand.accent : null),
+              onPressed: () => _chatMenu('voice_chat', chat),
+            ),
           PopupMenuButton<String>(
             onSelected: (a) => _chatMenu(a, chat),
             itemBuilder: (_) => [
@@ -2030,7 +2038,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 _mi('video', Icons.videocam_outlined, 'Video call'),
               _mi('search', Icons.search_rounded, 'Search messages'),
               if (chat.isMulti && (chat.voiceChat != null || chat.can('manage_voice_chats')))
-                _mi('voice_chat', Icons.graphic_eq_rounded, chat.voiceChat != null ? 'Join voice chat' : 'Start voice chat'),
+                _mi('voice_chat', Icons.graphic_eq_rounded, chat.isGroup ? (chat.voiceChat != null ? 'Join group call' : 'Start group call') : (chat.voiceChat != null ? 'Join voice chat' : 'Start voice chat')),
               _mi('mute', chat.isMuted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, chat.isMuted ? 'Unmute' : 'Mute'),
               _mi('media', Icons.perm_media_outlined, 'Shared media'),
               _mi('theme', Icons.palette_outlined, 'Theme & wallpaper'),
@@ -2088,6 +2096,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (id != chatId) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id)));
           }),
           if (chat.voiceChat != null && context.watch<VoiceChatManager>().chatId != chat.id) _voiceChatBar(chat),
+          if (_isStranger(chat)) _TrustBanner(userId: chat.peer!.id),
           if (chat.pinnedMessage != null) _pinnedBar(chat),
           if (chat.isChannel && chat.isAdmin && chat.queueCount > 0)
             Material(
@@ -3594,4 +3603,72 @@ class _VanishState extends State<_Vanish> with SingleTickerProviderStateMixin {
           );
         },
       );
+}
+
+
+/// Top of a chat with a stranger: a red warning when many people blocked or reported this account,
+/// or a soft note when the account is brand new. Asked once per person per app start.
+class _TrustBanner extends StatefulWidget {
+  const _TrustBanner({required this.userId});
+  final int userId;
+
+  @override
+  State<_TrustBanner> createState() => _TrustBannerState();
+}
+
+class _TrustBannerState extends State<_TrustBanner> {
+  static final Map<int, Map<String, dynamic>> _cache = {};
+  late Map<String, dynamic>? _t = _cache[widget.userId];
+  bool _hidden = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_t == null) {
+      context.read<AppServices>().api.get('/users/${widget.userId}/trust').then((r) {
+        final m = Map<String, dynamic>.from(r as Map);
+        _cache[widget.userId] = m;
+        if (mounted) setState(() => _t = m);
+      }).catchError((_) {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _t;
+    if (t == null || _hidden) return const SizedBox.shrink();
+    final warn = t['warn'] == true;
+    final fresh = t['new_account'] == true;
+    if (!warn && !fresh) return const SizedBox.shrink();
+    final color = warn ? const Color(0xFFE5484D) : const Color(0xFFE08A1E);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withValues(alpha: 0.35))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(warn ? Icons.gpp_maybe_rounded : Icons.fiber_new_rounded, color: color, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(warn ? 'Many people reported this account' : 'This account is new',
+                style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
+            const SizedBox(height: 2),
+            Text(
+              warn
+                  ? 'Several Hushavia users blocked or reported it in the last 30 days. Don’t send money, codes or personal details.'
+                  : 'It was made less than a week ago and isn’t in your contacts. Be careful with requests for money or codes.',
+              style: const TextStyle(fontSize: 13, height: 1.35),
+            ),
+          ]),
+        ),
+        IconButton(
+          tooltip: 'Hide',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.close_rounded, size: 18),
+          onPressed: () => setState(() => _hidden = true),
+        ),
+      ]),
+    );
+  }
 }

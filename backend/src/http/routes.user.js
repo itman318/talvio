@@ -88,6 +88,7 @@ router.post('/auth/password/reset', h(async (req, res) => res.json(await passwor
 
 // notification actions (the reply token in the push is the credential)
 router.post('/notify/reply', h(async (req, res) => res.json(await require('../services/notify.service').reply(req.body))));
+router.post('/notify/login-revoke', h(async (req, res) => res.json(await require('../services/notify.service').revokeLogin(req.body))));
 router.post('/notify/call-decline', h(async (req, res) => res.json(await require('../services/notify.service').declineCall(req.body))));
 router.post('/notify/read', h(async (req, res) => res.json(await require('../services/notify.service').read(req.body))));
 
@@ -130,6 +131,12 @@ router.get('/me/privacy/exceptions', h(async (req, res) => res.json(await userSe
 router.put('/me/privacy/exceptions/:setting', h(async (req, res) => res.json(await userService.setPrivacyExceptions(req.userId, req.params.setting, req.body))));
 router.get('/me/birthdays', h(async (req, res) => res.json({ birthdays: await userService.upcomingBirthdays(req.userId) })));
 const business = require('../services/business.service');
+const catalog = require('../services/catalog.service');
+router.get('/users/:id/catalog', h(async (req, res) => res.json(await catalog.list(req.userId, req.params.id))));
+router.post('/me/catalog', h(async (req, res) => res.json(await catalog.add(req.userId, req.body))));
+router.put('/me/catalog/:id', h(async (req, res) => res.json(await catalog.update(req.userId, req.params.id, req.body))));
+router.delete('/me/catalog/:id', h(async (req, res) => res.json(await catalog.remove(req.userId, req.params.id))));
+router.post('/catalog/:id/buy', h(async (req, res) => res.json(await catalog.buy(req.userId, req.params.id))));
 router.get('/me/business', h(async (req, res) => res.json(await business.get(req.userId))));
 router.put('/me/business', h(async (req, res) => res.json(await business.set(req.userId, req.body))));
 router.get('/me/quick-replies', h(async (req, res) => res.json(await business.listReplies(req.userId))));
@@ -164,6 +171,22 @@ router.delete('/me', h(async (req, res) => {
 router.get('/users/search', h(async (req, res) => res.json(await userService.searchUsers(req.userId, req.query.q))));
 router.put('/me/wallet', h(async (req, res) => res.json(await require('../services/wallet.service').setMine(req.userId, req.body))));
 router.get('/users/:id/wallet', h(async (req, res) => res.json(await require('../services/wallet.service').getFor(req.userId, req.params.id))));
+// a stranger's trust signals: many different people blocked or reported this account lately
+router.get('/users/:id/trust', h(async (req, res) => {
+  const id = parseIdParam(req.params.id);
+  const db = require('../db'); // eslint-disable-line global-require
+  const r = await db.one(
+    `SELECT (SELECT count(*)::int FROM blocks WHERE blocked_id = $1 AND created_at > now() - interval '30 days') AS blocks,
+            (SELECT count(DISTINCT reporter_id)::int FROM reports
+               WHERE created_at > now() - interval '30 days' AND reporter_id IS NOT NULL
+                 AND ((target_type = 'user' AND target_id = $1)
+                   OR (target_type = 'message' AND target_id IN (SELECT id FROM messages WHERE sender_id = $1 AND created_at > now() - interval '30 days')))) AS reports,
+            (SELECT EXTRACT(EPOCH FROM (now() - created_at)) / 86400 FROM users WHERE id = $1)::int AS age_days`,
+    [id],
+  );
+  const warn = r.blocks >= 5 || r.reports >= 3;
+  res.json({ warn, new_account: r.age_days !== null && r.age_days < 7, blocks: warn ? r.blocks : undefined, reports: warn ? r.reports : undefined });
+}));
 router.get('/users/:id', h(async (req, res) => res.json(await userService.getUser(req.userId, parseIdParam(req.params.id)))));
 
 router.get('/contacts', h(async (req, res) => res.json(await userService.listContacts(req.userId))));

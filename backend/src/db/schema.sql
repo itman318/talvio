@@ -1431,7 +1431,8 @@ CREATE TABLE IF NOT EXISTS ad_owner_earnings (
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS ads_off BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
 ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
-  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income'));
+  'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income',
+  'shop_paid', 'shop_income'));
 
 -- ------------------------------------------------------------------ channel monetization, card payments
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS monetized BOOLEAN NOT NULL DEFAULT FALSE;
@@ -1443,3 +1444,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_stripe_idx ON payment_orders (s
 
 -- ------------------------------------------------------------------ Plus: story stealth (a Plus member's view is not shown to the author)
 ALTER TABLE story_views ADD COLUMN IF NOT EXISTS stealth BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ------------------------------------------------------------------ business catalog
+CREATE TABLE IF NOT EXISTS catalog_items (
+  id             BIGSERIAL PRIMARY KEY,
+  owner_id       BIGINT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title          VARCHAR(80)   NOT NULL,
+  description    VARCHAR(1000) NOT NULL DEFAULT '',
+  price_text     VARCHAR(40),
+  price_coins    INTEGER,
+  photo_media_id BIGINT        REFERENCES media(id) ON DELETE SET NULL,
+  sold_out       BOOLEAN       NOT NULL DEFAULT false,
+  sold           INTEGER       NOT NULL DEFAULT 0,
+  position       INTEGER       NOT NULL DEFAULT 0,
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  deleted_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS catalog_items_owner_idx ON catalog_items (owner_id) WHERE deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS catalog_orders (
+  id         BIGSERIAL PRIMARY KEY,
+  item_id    BIGINT      NOT NULL REFERENCES catalog_items(id) ON DELETE CASCADE,
+  buyer_id   BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  seller_id  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  coins      INTEGER     NOT NULL,
+  title      VARCHAR(80) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS catalog_orders_buyer_idx ON catalog_orders (buyer_id, created_at DESC);

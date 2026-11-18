@@ -5,6 +5,8 @@ import '../core/services.dart';
 import '../theme/brand.dart';
 import '../utils/format.dart';
 import '../widgets/premium.dart';
+import '../state/auth_state.dart';
+import 'catalog_screen.dart';
 
 /// Quick replies, cached for the composer ("/" in any chat shows them).
 class QuickReplies {
@@ -127,6 +129,18 @@ class _BusinessScreenState extends State<BusinessScreen> {
                   ),
                 ]),
               ),
+              SettingsGroup(title: 'Catalog', children: [
+                SettingsTile(
+                  icon: Icons.storefront_rounded,
+                  color: const Color(0xFF6D4AFF),
+                  title: 'My catalog',
+                  subtitle: 'Products with photos and prices — customers order in the chat or pay with coins',
+                  onTap: () {
+                    final me = context.read<AuthState>().me;
+                    if (me != null) Navigator.push(context, MaterialPageRoute(builder: (_) => CatalogScreen(userId: me.id, name: me.name)));
+                  },
+                ),
+              ]),
               SettingsGroup(title: 'Greeting message', children: [
                 SettingsSwitchTile(
                   icon: Icons.waving_hand_rounded,

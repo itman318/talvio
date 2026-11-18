@@ -212,8 +212,13 @@ async function alertNewLogin(userId, sessionId, d, ip = null) {
   await require('./push.service').sendToUsers(
     [userId],
     { title: 'New login to your account', body: `${device}${g.label ? ` in ${g.label}` : ''} just logged in. Not you? Open Hushavia to log it out.` },
-    { type: 'new_login', session_id: sessionId },
-    { tag: `login-${sessionId}` },
+    { type: 'new_login', session_id: sessionId, device, place: g.label || '' },
+    {
+      tag: `login-${sessionId}`,
+      // Android: "Not me — log it out" right on the notification (only on my other devices, never on the new one)
+      dataOnlyAndroid: true,
+      perSession: (s) => (Number(s.id) === Number(sessionId) ? {} : { login_token: require('./notify.service').loginToken(userId, s.id, sessionId) }), // eslint-disable-line global-require
+    },
   );
 }
 

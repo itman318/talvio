@@ -202,6 +202,10 @@ Future<void> _start() async {
     if (auth.status != AuthStatus.loggedIn) return;
     navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SessionsScreen()));
   };
+  MessageNotifications.onOpenDevices = () {
+    if (auth.status != AuthStatus.loggedIn) return;
+    navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SessionsScreen()));
+  };
   // blocked login attempt → explain and offer the activity list
   chats.onSecurityAlert = (a) {
     final ctx = navigatorKey.currentContext;

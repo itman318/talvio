@@ -55,4 +55,19 @@ async function declineCall(body = {}) {
   return { ok: true };
 }
 
-module.exports = { replyToken, reply, read, callToken, declineCall };
+/** "Not me — log it out" on the new-login notification. Signed for one of my existing devices. */
+function loginToken(userId, sessionId, newSessionId) {
+  return signJwt({ typ: 'nl', sub: userId, sid: sessionId, target: newSessionId }, config.jwtSecret, 24 * 3600);
+}
+
+async function revokeLogin(body = {}) {
+  const p = verifyJwt(String(body.token || ''), config.jwtSecret);
+  if (!p || p.typ !== 'nl' || Number(p.sid) === Number(p.target)) throw unauthorized('token_expired', 'Open the app');
+  const s = await db.one('SELECT id FROM sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > now()', [p.sid, p.sub]);
+  if (!s) throw unauthorized('session_revoked', 'Open the app');
+  rateLimit.enforce(`notify:${p.sub}`, 60, 60 * 1000);
+  await require('./user.service').revokeSession(p.sub, p.target).catch(() => null); // eslint-disable-line global-require
+  return { ok: true };
+}
+
+module.exports = { replyToken, reply, read, callToken, declineCall, loginToken, revokeLogin };

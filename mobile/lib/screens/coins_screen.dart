@@ -245,6 +245,8 @@ class _CoinsScreenState extends State<CoinsScreen> {
     'giveaway': ('Giveaway started', Icons.celebration_rounded, Brand.violet),
     'giveaway_win': ('Giveaway prize', Icons.emoji_events_rounded, Brand.amber),
     'giveaway_refund': ('Giveaway refund', Icons.undo_rounded, Brand.sky),
+    'shop_paid': ('Bought from', Icons.shopping_bag_rounded, Brand.rose),
+    'shop_income': ('Sold to', Icons.storefront_rounded, Brand.green),
   };
 
   /// "Sent to Hina", "Tip to Bilal", "Subscription · Hina Daily"

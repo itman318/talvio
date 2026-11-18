@@ -16,6 +16,7 @@ import 'secret_screens.dart';
 import 'chat_screen.dart';
 import '../theme/brand.dart';
 import '../widgets/premium.dart';
+import 'catalog_screen.dart';
 import 'coins_screen.dart';
 import 'shared_media_screen.dart';
 import 'story_screens.dart' show HighlightsRow;
@@ -262,6 +263,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       onTap: u.birthday!.isToday && other ? () => _message(u) : null,
                     ),
                 ]),
+                if (!u.deleted && !u.isBot) _CatalogEntry(userId: u.id, name: u.name),
                 if (chat != null)
                   SettingsGroup(children: [
                     SettingsTile(
@@ -315,5 +317,47 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               if (u.birthday?.isToday == true && !u.deleted) const Positioned.fill(child: BirthdayCelebration()),
             ]),
     );
+  }
+}
+
+
+/// "Catalog · 12 products" on a business profile (shown only when there are products).
+class _CatalogEntry extends StatefulWidget {
+  const _CatalogEntry({required this.userId, required this.name});
+  final int userId;
+  final String name;
+
+  @override
+  State<_CatalogEntry> createState() => _CatalogEntryState();
+}
+
+class _CatalogEntryState extends State<_CatalogEntry> {
+  static final Map<int, int> _count = {};
+  late int? _n = _count[widget.userId];
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<AppServices>().api.get('/users/${widget.userId}/catalog').then((r) {
+      final n = ((r as Map)['items'] as List).length;
+      _count[widget.userId] = n;
+      if (mounted) setState(() => _n = n);
+    }).catchError((_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final n = _n ?? 0;
+    if (n == 0) return const SizedBox.shrink();
+    return SettingsGroup(children: [
+      SettingsTile(
+        icon: Icons.storefront_rounded,
+        color: const Color(0xFF6D4AFF),
+        title: 'Catalog',
+        subtitle: '$n product${n == 1 ? '' : 's'} · order in the chat or pay with coins',
+        maxSubtitleLines: 1,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CatalogScreen(userId: widget.userId, name: widget.name))),
+      ),
+    ]);
   }
 }

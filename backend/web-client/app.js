@@ -1124,7 +1124,7 @@
   const KIND = {
     deposit: 'USDT deposit', purchase: 'Bought', gift_sent: 'Gift to', gift_received: 'Gift from', plus: 'Hushavia Plus', admin: 'From Hushavia',
     tip_sent: 'Tip to', tip_received: 'Tip from', sub_paid: 'Subscription', sub_income: 'Subscriber', giveaway: 'Giveaway', giveaway_win: 'Giveaway prize',
-    giveaway_refund: 'Giveaway refund', ad_budget: 'Ad budget', ad_refund: 'Ad refund', ad_income: 'Sponsored messages',
+    giveaway_refund: 'Giveaway refund', ad_budget: 'Ad budget', ad_refund: 'Ad refund', ad_income: 'Sponsored messages', shop_paid: 'Bought from', shop_income: 'Sold to',
   };
 
   // ------------------------------------------------------------------ my profile & settings (same calm look as the phone app)
