@@ -1003,9 +1003,11 @@ test('OTP dev mode on a live server never shows the code for someone else’s ac
     config.otp.devMode = true;
     config.sms.provider = 'console';
     config.mail.provider = 'console';
+    rateLimit.reset();
     const r = await auth.requestOtp('+923260000095', '10.11.9.1');
     assert.equal(r.delivery, 'app');
     assert.equal(r.dev_code, undefined, 'the code went to the owner’s app — not shown to whoever typed the number');
+    rateLimit.reset();
     await rejects(auth.requestOtp('+923260000095', '10.11.9.2', { fallback: true }), 'sms_unavailable');
     assert.ok(owner.id);
   } finally {
