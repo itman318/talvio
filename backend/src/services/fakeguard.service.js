@@ -39,7 +39,8 @@ async function assertCanJoin(userId) {
   if (!n) return;
   const r = await db.one(
     `SELECT count(*)::int AS c FROM chat_members m JOIN chats c ON c.id = m.chat_id
-     WHERE m.user_id = $1 AND c.type IN ('group', 'channel') AND m.joined_at > now() - interval '24 hours'`,
+     WHERE m.user_id = $1 AND c.type IN ('group', 'channel') AND m.joined_at > now() - interval '24 hours'
+       AND NOT EXISTS (SELECT 1 FROM users o WHERE o.id = c.created_by AND o.is_bot)`, // the official news channel doesn't count
     [userId],
   );
   if (r.c >= n.s.new_account_max_joins) {

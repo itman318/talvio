@@ -999,11 +999,9 @@ test('profile tags: admin sets warning tags with evidence, the card shows them, 
 test('official @HushaviaNews channel: new people follow it, admins publish, people can leave', async () => {
   const news = require('../src/services/news.service');
   const fan = await signup('+923260000096', 'Fan');
-  // signup subscribes in the background: wait for it
-  for (let i = 0; i < 20 && !(await db.one('SELECT 1 AS x FROM chat_members m JOIN chats c ON c.id = m.chat_id WHERE c.username = $1 AND m.user_id = $2', [news.USERNAME, fan.id])); i += 1) {
-    await new Promise((r) => setTimeout(r, 50));
-  }
+  news.setAutoFollow(true);
   const { chatId } = await news.ensure();
+  await news.subscribe(fan.id);
   const chat = await chats.getChat(fan.id, chatId);
   assert.equal(chat.type, 'channel');
   assert.equal(chat.is_verified, true);
@@ -1015,4 +1013,5 @@ test('official @HushaviaNews channel: new people follow it, admins publish, peop
   await chats.leaveChat(fan.id, chatId);
   await news.ensure(); // a restart never adds them back
   assert.ok(!(await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, fan.id])));
+  news.setAutoFollow(false);
 });

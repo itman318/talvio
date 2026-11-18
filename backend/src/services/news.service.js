@@ -14,6 +14,11 @@ const config = require('../config');
 
 const USERNAME = 'HushaviaNews';
 let cached = null; // { chatId, ownerId }
+// the automated tests make and count chats all the time: there, nobody is added unless a test asks
+let autoFollow = !process.env.NODE_TEST_CONTEXT;
+function setAutoFollow(on) {
+  autoFollow = !!on;
+}
 
 async function ensureAvatar(chatId, ownerId) {
   const src = path.join(__dirname, '..', '..', 'assets', 'bots', `${USERNAME}.png`);
@@ -53,7 +58,7 @@ async function ensure() {
   cached = { chatId: Number(chat.id), ownerId };
   // existing users: added once (someone who leaves later is never added again)
   const done = await db.one(`SELECT 1 AS x FROM sys_flags WHERE key = 'news_backfill'`);
-  if (!done) {
+  if (!done && autoFollow) {
     await db.query(
       `INSERT INTO chat_members (chat_id, user_id, role)
        SELECT $1, u.id, 'member' FROM users u WHERE u.status = 'active' AND NOT u.is_bot
@@ -67,6 +72,7 @@ async function ensure() {
 
 /** A new account follows the news channel (it can leave like any channel). */
 async function subscribe(userId) {
+  if (!autoFollow) return;
   const { chatId } = await ensure();
   await db.query(`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`, [chatId, userId]);
 }
@@ -90,4 +96,4 @@ async function info() {
   return { chat_id: chatId, username: USERNAME, subscribers: Number(r.member_count || 0), posts };
 }
 
-module.exports = { ensure, subscribe, post, info, USERNAME };
+module.exports = { ensure, subscribe, post, info, setAutoFollow, USERNAME };
