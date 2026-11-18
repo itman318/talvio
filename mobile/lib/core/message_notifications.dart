@@ -201,7 +201,7 @@ class MessageNotifications {
       't': text,
       'at': DateTime.now().millisecondsSinceEpoch,
     });
-    final style = history.length <= 1 && !group
+    final style = (history.length <= 1 && !group) || '${data['locked']}' == '1'
         ? BigTextStyleInformation(text) as StyleInformation
         : MessagingStyleInformation(
             const Person(name: 'You'),

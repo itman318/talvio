@@ -924,3 +924,36 @@ test('fake members: new accounts are limited, suspicious accounts are listed for
     guard.setEnforced(false);
   }
 });
+
+
+test('business catalog: Plus only, order with coins moves coins once, price change and sold out are refused', async () => {
+  const catalog = require('../src/services/catalog.service');
+  const coins = require('../src/services/coin.service');
+  const seller = await signup('+923260000091', 'Shop');
+  const buyer = await signup('+923260000092', 'Buyer');
+  await rejects(catalog.add(seller.id, { title: 'Shirt', price_coins: 50 }), 'premium_required');
+  await db.query(`UPDATE users SET premium_until = now() + interval '30 days' WHERE id = $1`, [seller.id]);
+  const photo = await fakeUpload(seller.id);
+  const item = await catalog.add(seller.id, { title: 'Shirt', description: 'Cotton', price_text: 'Rs 2,500', price_coins: 50, photo_media_id: photo.id });
+  assert.equal(item.price_coins, 50);
+  assert.match(item.photo_url, /\/public$/);
+  const seen = await catalog.list(buyer.id, seller.id);
+  assert.equal(seen.items.length, 1);
+  assert.equal(seen.mine, false);
+
+  await rejects(catalog.buy(buyer.id, item.id, { expected_coins: 50 }), 'not_enough_coins');
+  await db.tx((c) => coins.change(c, buyer.id, 120, 'admin', {}));
+  await rejects(catalog.buy(seller.id, item.id, {}), 'invalid_input');
+  await catalog.update(seller.id, item.id, { price_coins: 60 });
+  await rejects(catalog.buy(buyer.id, item.id, { expected_coins: 50 }), 'price_changed');
+  const r = await catalog.buy(buyer.id, item.id, { expected_coins: 60 });
+  assert.equal(r.balance, 60);
+  assert.equal((await db.one('SELECT coins FROM users WHERE id = $1', [seller.id])).coins, 60);
+  await rejects(catalog.buy(buyer.id, item.id, { expected_coins: 60 }), 'just_bought');
+  const msg = await db.one(`SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1`, [r.chat_id, buyer.id]);
+  assert.match(msg.text, /Order #\d+/);
+  await catalog.update(seller.id, item.id, { sold_out: true });
+  await rejects(catalog.buy(buyer.id, item.id, { expected_coins: 60 }), 'sold_out');
+  await catalog.remove(seller.id, item.id);
+  assert.equal((await catalog.list(buyer.id, seller.id)).items.length, 0);
+});

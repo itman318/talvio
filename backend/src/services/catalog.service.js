@@ -99,7 +99,7 @@ async function remove(userId, idRaw) {
 }
 
 /** Buy with coins: coins move buyer → seller, the order is written in their private chat. */
-async function buy(userId, idRaw) {
+async function buy(userId, idRaw, body = {}) {
   await require('./settings.service').requireFeature('feature_coins', 'Coins'); // eslint-disable-line global-require
   const item = await db.one('SELECT * FROM catalog_items WHERE id = $1 AND deleted_at IS NULL', [v.id(idRaw, 'item_id')]);
   if (!item) throw notFound('item_not_found', 'This product is no longer available');
@@ -107,6 +107,12 @@ async function buy(userId, idRaw) {
   if (sellerId === userId) throw badRequest('invalid_input', 'This is your own product');
   if (item.sold_out) throw conflict('sold_out', 'This product is sold out');
   if (!item.price_coins) throw badRequest('invalid_input', 'This product can’t be bought with coins — order it in the chat');
+  // the seller changed the price after the buyer opened the product: never charge a price they didn't see
+  if (body.expected_coins !== undefined && Number(body.expected_coins) !== Number(item.price_coins)) {
+    throw conflict('price_changed', `The price changed to ${Number(item.price_coins).toLocaleString('en-US')} coins — check it and try again`);
+  }
+  const seller = await db.one(`SELECT id FROM users WHERE id = $1 AND status = 'active' AND NOT is_bot`, [sellerId]);
+  if (!seller) throw notFound('user_not_found', 'This seller is no longer available');
   const users = require('./user.service'); // eslint-disable-line global-require
   if (await users.isBlockedEither(userId, sellerId)) throw forbidden('blocked', 'You can’t buy from this seller');
   rateLimit.enforce(`catalog:buy:${userId}`, 20, 60 * 60 * 1000, 'Too many orders. Try again later.');

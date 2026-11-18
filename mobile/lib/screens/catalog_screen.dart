@@ -255,7 +255,7 @@ class _ProductSheetState extends State<_ProductSheet> {
     final nav = Navigator.of(context);
     setState(() => _busy = true);
     try {
-      final r = Map<String, dynamic>.from(await api.post('/catalog/${it.id}/buy') as Map);
+      final r = Map<String, dynamic>.from(await api.post('/catalog/${it.id}/buy', {'expected_coins': it.priceCoins}) as Map);
       final chatId = (r['chat_id'] as num?)?.toInt();
       nav.pop(true);
       if (chatId != null) nav.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId, initial: store.chatById(chatId))));
