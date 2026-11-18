@@ -1492,3 +1492,19 @@ CREATE INDEX IF NOT EXISTS user_tags_user_idx ON user_tags (user_id, tag) WHERE 
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS hidden_members BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS sys_flags (key VARCHAR(64) PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now());
+
+-- ------------------------------------------------------------------ verification requests (@HushaviaVerifyBot)
+CREATE TABLE IF NOT EXISTS verify_requests (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind        VARCHAR(10)   NOT NULL CHECK (kind IN ('person', 'business', 'chat')),
+  chat_id     BIGINT        REFERENCES chats(id) ON DELETE SET NULL,
+  details     VARCHAR(4000) NOT NULL DEFAULT '',
+  media_ids   JSONB         NOT NULL DEFAULT '[]',
+  status      VARCHAR(10)   NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'approved', 'declined')),
+  admin_note  VARCHAR(500),
+  decided_by  BIGINT        REFERENCES admins(id) ON DELETE SET NULL,
+  decided_at  TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS verify_requests_status_idx ON verify_requests (status, id);

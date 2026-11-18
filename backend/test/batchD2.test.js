@@ -1015,3 +1015,27 @@ test('official @HushaviaNews channel: new people follow it, admins publish, peop
   assert.ok(!(await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, fan.id])));
   news.setAutoFollow(false);
 });
+
+test('@HushaviaVerifyBot: request with proof → admin approves → badge; decline needs a reason', async () => {
+  const vb = require('../src/services/verifybot.service');
+  const sysbots = require('../src/services/sysbots.service');
+  const star = await signup('+923260000097', 'Star');
+  const botId = await sysbots.ensureOne('verify');
+  const chat = await chats.getOrCreatePrivate(star.id, botId);
+  await vb.onCallback(star.id, chat.id, 'k:person');
+  await vb.onCallback(star.id, chat.id, 'send'); // nothing written yet
+  assert.equal((await vb.adminList({})).items.filter((r) => r.user.id === star.id).length, 0);
+  await vb.onMessage(star.id, chat.id, { text: 'I am Star, a singer from Lahore. Website: star.example.com' });
+  const doc = await fakeUpload(star.id);
+  await vb.onMessage(star.id, chat.id, { type: 'image', media_id: doc.id, text: '' });
+  await vb.onCallback(star.id, chat.id, 'send');
+  const req = (await vb.adminList({})).items.find((r) => r.user.id === star.id);
+  assert.ok(req);
+  assert.deepEqual(req.media_ids, [doc.id]);
+  await rejects(vb.adminDecide(boss, req.id, { approve: false }), 'invalid_input');
+  await vb.adminDecide(boss, req.id, { approve: true, note: 'Checked' });
+  assert.equal((await users.getUser(A.id, star.id)).is_verified, true);
+  await rejects(vb.adminDecide(boss, req.id, { approve: true }), 'already_decided');
+  const said = await db.one(`SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1`, [chat.id, botId]);
+  assert.match(said.text, /Approved/);
+});

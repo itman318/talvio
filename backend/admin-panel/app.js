@@ -13,6 +13,7 @@
     { id: 'reports', label: 'Reports', perm: 'reports.view', icon: 'flag', section: 'Moderation' },
     { id: 'appeals', label: 'Ban appeals', perm: 'users.view', icon: 'shield', section: 'Moderation' },
     { id: 'suspicious', label: 'Fake accounts', perm: 'users.view', icon: 'shield', section: 'Moderation' },
+    { id: 'verification', label: 'Verification', perm: 'users.verify', icon: 'shield', section: 'Moderation' },
     { id: 'groups', label: 'Groups & channels', perm: 'groups.view', icon: 'chat', section: 'Moderation' },
     { id: 'calls', label: 'Calls', perm: 'calls.view', icon: 'phone', section: 'Moderation' },
     { id: 'bots', label: 'Bots', perm: 'users.view', icon: 'bot', section: 'Moderation' },
@@ -2142,6 +2143,46 @@
   }
 
   // ------------------------------------------------------------------ coins
+  // ------------------------------------------------------------------ verification requests (@HushaviaVerifyBot)
+  const verState = { status: 'open' };
+  async function pageVerification() {
+    const tabs = el('div', { class: 'tabs' }, [['open', 'Waiting'], ['approved', 'Approved'], ['declined', 'Declined']].map(([v, l]) => el('button', {
+      class: verState.status === v ? 'active' : '',
+      onclick: () => { verState.status = v; pageVerification(); },
+    }, l)));
+    main.replaceChildren(head('Verification'), tabs, el('div', { class: 'muted' }, 'Loading…'));
+    const data = await action(() => api('GET', `/verify-requests?status=${verState.status}`));
+    if (!data) return;
+    const cards = data.items.map((r) => {
+      const pics = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:8px 0' });
+      for (const id of r.media_ids) mediaPreview({ admin_url: `/api/admin/media/${id}`, mime: 'image/jpeg', name: 'document' }).then((n) => pics.append(n));
+      const note = el('input', { placeholder: 'Note to the person (required when declining)' });
+      const decide = async (approve) => {
+        const ok = await action(() => api('POST', `/verify-requests/${r.id}`, { approve, note: note.value.trim() }), approve ? 'Approved — badge given' : 'Declined');
+        if (ok) pageVerification();
+      };
+      return el('div', { class: 'card', style: 'margin-bottom:12px' },
+        el('div', { style: 'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap' },
+          el('div', {},
+            el('strong', {}, `${r.label}`), ' · ',
+            el('a', { href: '#', onclick: (e) => { e.preventDefault(); openUser(r.user.id); } }, r.user.name || 'User'),
+            el('span', { class: 'muted' }, ` ${r.user.username ? `@${r.user.username}` : ''} · ${r.user.phone || ''} · since ${fmtDate(r.user.since)}`),
+            r.chat ? el('div', {}, `Channel/group: ${r.chat.title} (@${r.chat.username}) · ${fmtNum(r.chat.members)} members`) : null),
+          el('span', { class: 'muted' }, fmtDate(r.created_at))),
+        el('div', { style: 'white-space:pre-wrap;margin-top:8px' }, r.details),
+        pics,
+        r.status === 'open'
+          ? el('div', {}, el('div', { class: 'field' }, note),
+            el('div', { class: 'btn-row' },
+              el('button', { class: 'btn primary', onclick: () => decide(true) }, 'Approve & give badge'),
+              el('button', { class: 'btn danger', onclick: () => decide(false) }, 'Decline')))
+          : el('div', { class: 'muted' }, `${r.status} by ${r.by || 'admin'}${r.note ? ` — ${r.note}` : ''}`));
+    });
+    main.replaceChildren(head('Verification'), tabs,
+      el('div', { class: 'muted', style: 'margin:6px 0 12px' }, 'Requests sent to @HushaviaVerifyBot. Profile → blue verified badge · Business → “Verified business” tag · Channel/group → verified badge on the chat. The person is told the result in the bot chat.'),
+      cards.length ? el('div', {}, cards) : el('div', { class: 'muted' }, 'Nothing here'));
+  }
+
   // ------------------------------------------------------------------ fake accounts
   const suspState = { min: 4, picked: new Set() };
   async function pageSuspicious() {
@@ -2350,6 +2391,7 @@
     broadcast: pageBroadcast,
     appeals: pageAppeals,
     suspicious: pageSuspicious,
+    verification: pageVerification,
     pages: pagePages,
     support: pageSupport,
     admins: pageAdmins,
