@@ -798,7 +798,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   )
                 : null,
             badges: [if (chat.isVerified) const Icon(Icons.verified_rounded, color: Brand.sky, size: 22)],
-            status: '${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}${chat.username != null ? ' · public' : ''}',
+            status: chat.countHidden ? 'Official channel' : '${chat.memberCount} ${chat.isChannel ? 'subscribers' : 'members'}${chat.username != null ? ' · public' : ''}',
             actions: [
               ProfileAction(
                 icon: chat.isMuted ? Icons.notifications_off_rounded : Icons.notifications_rounded,

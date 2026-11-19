@@ -55,6 +55,12 @@ async function ensure() {
     if (!chat) chat = await db.one(`SELECT id FROM chats WHERE type = 'channel' AND lower(username) = lower($1)`, [USERNAME]);
   }
   await ensureAvatar(chat.id, ownerId).catch(() => null);
+  // the official channel shows "Official channel" instead of a subscriber count (once; the admin can show it again)
+  const hid = await db.one(`SELECT 1 AS x FROM sys_flags WHERE key = 'news_hide_count'`);
+  if (!hid) {
+    await db.query('UPDATE chats SET hide_count = TRUE WHERE id = $1', [chat.id]);
+    await db.query(`INSERT INTO sys_flags (key) VALUES ('news_hide_count') ON CONFLICT DO NOTHING`);
+  }
   cached = { chatId: Number(chat.id), ownerId };
   // existing users: added once (someone who leaves later is never added again)
   const done = await db.one(`SELECT 1 AS x FROM sys_flags WHERE key = 'news_backfill'`);
@@ -88,12 +94,21 @@ async function post(body = {}) {
 
 async function info() {
   const { chatId } = await ensure();
-  const r = await db.one('SELECT member_count FROM chats WHERE id = $1', [chatId]);
+  const r = await db.one('SELECT member_count, hide_count FROM chats WHERE id = $1', [chatId]);
   const posts = await db.many(
     `SELECT id, text, created_at, views_count FROM messages WHERE chat_id = $1 AND deleted_at IS NULL AND type = 'text' ORDER BY id DESC LIMIT 10`,
     [chatId],
   );
-  return { chat_id: chatId, username: USERNAME, subscribers: Number(r.member_count || 0), posts };
+  return { chat_id: chatId, username: USERNAME, subscribers: Number(r.member_count || 0), hide_count: !!r.hide_count, posts };
 }
 
-module.exports = { ensure, subscribe, post, info, setAutoFollow, USERNAME };
+/** Admin panel: show or hide the subscriber count of the official channel. */
+async function setHideCount(on) {
+  const { chatId } = await ensure();
+  await db.query('UPDATE chats SET hide_count = $2 WHERE id = $1', [chatId, !!on]);
+  const ids = (await db.many('SELECT user_id FROM chat_members WHERE chat_id = $1', [chatId])).map((x) => Number(x.user_id));
+  require('../bus').emit('chat:updated', { chatId, memberIds: ids }); // eslint-disable-line global-require
+  return { ok: true, hide_count: !!on };
+}
+
+module.exports = { ensure, subscribe, post, info, setHideCount, setAutoFollow, USERNAME };

@@ -144,7 +144,7 @@ class _UserSearchState extends State<UserSearch> {
                         Flexible(child: Text('${c['title']}', overflow: TextOverflow.ellipsis)),
                         if (c['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, size: 16, color: Brand.primary)),
                       ]),
-                      subtitle: Text('@${c['username']} · ${c['member_count']} ${c['type'] == 'channel' ? 'subscribers' : 'members'}'),
+                      subtitle: Text('@${c['username']} · ${c['count_hidden'] == true ? 'Official channel' : '${c['member_count']} ${c['type'] == 'channel' ? 'subscribers' : 'members'}'}'),
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PublicChatPreviewScreen(info: c))),
                     )),
                 if (_results.isNotEmpty)
@@ -261,7 +261,7 @@ Future<void> openInviteCode(BuildContext context, String code) async {
       if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
       return;
     }
-    final ok = await confirm(context, p['title'] as String, '${p['member_count']} members\n\n${p['description'] ?? ''}'.trim(), ok: p['join_approval'] == true ? 'Request to join' : 'Join group');
+    final ok = await confirm(context, p['title'] as String, '${p['count_hidden'] == true ? 'Official channel' : '${p['member_count']} members'}\n\n${p['description'] ?? ''}'.trim(), ok: p['join_approval'] == true ? 'Request to join' : 'Join group');
     if (!ok || !context.mounted) return;
     final chat = await store.joinByInvite(code);
     if (!context.mounted) return;

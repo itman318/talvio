@@ -650,7 +650,7 @@ class _ChannelDirectoryScreenState extends State<ChannelDirectoryScreen> {
                               ),
                           ]),
                           subtitle: Text(
-                            '${compactNumber((c['member_count'] as num?)?.toInt() ?? 0)} subscribers'
+                            '${c['count_hidden'] == true ? 'Official channel' : '${compactNumber((c['member_count'] as num?)?.toInt() ?? 0)} subscribers'}'
                             '${((c['new_this_week'] as num?)?.toInt() ?? 0) > 0 ? ' · +${c['new_this_week']} this week' : ''}'
                             '${'${c['description'] ?? ''}'.isEmpty ? '' : '\n${c['description']}'}',
                             maxLines: 2,

@@ -524,7 +524,7 @@ class _PublicChatPreviewScreenState extends State<PublicChatPreviewScreen> {
             if (i['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.verified, color: Brand.primary)),
           ]),
           Text(
-            '${i['username'] != null ? '@${i['username']} · ' : ''}${i['member_count']} ${isChannel ? 'subscribers' : 'members'}',
+            '${i['username'] != null ? '@${i['username']} · ' : ''}${i['count_hidden'] == true ? 'Official channel' : '${i['member_count']} ${isChannel ? 'subscribers' : 'members'}'}',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Brand.muted),
           ),

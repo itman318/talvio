@@ -606,6 +606,7 @@ class Chat {
   AppUser? peer;
   final bool isSavedMessages;
   int memberCount;
+  bool countHidden; // official channel: shows "Official channel" instead of a number
   String myRole;
   String? inviteCode;
   String? username;
@@ -655,6 +656,7 @@ class Chat {
     this.peer,
     this.isSavedMessages = false,
     this.memberCount = 0,
+    this.countHidden = false,
     this.myRole = 'member',
     this.inviteCode,
     this.username,
@@ -704,6 +706,7 @@ class Chat {
         peer: j['peer'] == null ? null : AppUser.fromJson(Map<String, dynamic>.from(j['peer'] as Map)),
         isSavedMessages: j['is_saved_messages'] == true,
         memberCount: _int(j['member_count'] ?? 0),
+        countHidden: j['count_hidden'] == true,
         myRole: (j['my_role'] ?? 'member') as String,
         inviteCode: j['invite_code'] as String?,
         username: j['username'] as String?,

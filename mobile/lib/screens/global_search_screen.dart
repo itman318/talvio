@@ -138,6 +138,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         'username': chat['username'],
         'avatar_url': chat['avatar_url'],
         'member_count': chat['member_count'],
+        'count_hidden': chat['count_hidden'],
         'is_member': false,
       });
     }
@@ -459,7 +460,8 @@ class _MyChatTile extends StatelessWidget {
     final kind = chat.isChannel ? 'Channel' : (chat.isGroup ? 'Group' : (chat.isBot ? 'Bot' : null));
     final sub = [
       if (kind != null) kind,
-      if (chat.isChannel || chat.isGroup) '${compactNumber(chat.memberCount)} ${chat.isChannel ? 'subscribers' : 'members'}',
+      if (chat.countHidden) 'Official'
+      else if (chat.isChannel || chat.isGroup) '${compactNumber(chat.memberCount)} ${chat.isChannel ? 'subscribers' : 'members'}',
       if (!chat.isChannel && !chat.isGroup && chat.peer?.username != null) '@${chat.peer!.username}',
     ].join(' · ');
     return ListTile(
@@ -529,7 +531,7 @@ class _PublicTile extends StatelessWidget {
       leading: Avatar(id: (info['chat_id'] as num).toInt(), name: '${info['title']}', url: url == null ? null : AppConfig.absolute(url), size: 46),
       title: Row(children: [Flexible(child: _Hl('${info['title']}', query, style: _titleStyle)), _verified(info['is_verified'] == true)]),
       subtitle: Text(
-        [if (info['username'] != null) '@${info['username']}', '${compactNumber(n)} ${isChannel ? 'subscribers' : 'members'}'].join(' · '),
+        [if (info['username'] != null) '@${info['username']}', info['count_hidden'] == true ? 'Official channel' : '${compactNumber(n)} ${isChannel ? 'subscribers' : 'members'}'].join(' · '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -603,7 +605,7 @@ class _ChannelCard extends StatelessWidget {
               Flexible(child: Text('${info['title']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
               _verified(info['is_verified'] == true),
             ]),
-            Text('${compactNumber(n)} subscribers', style: const TextStyle(fontSize: 11.5, color: Brand.muted)),
+            Text(info['count_hidden'] == true ? 'Official' : '${compactNumber(n)} subscribers', style: const TextStyle(fontSize: 11.5, color: Brand.muted)),
             const Spacer(),
             info['is_member'] == true
                 ? const Text('Joined', style: TextStyle(color: Brand.green, fontWeight: FontWeight.w700, fontSize: 12.5))

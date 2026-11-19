@@ -103,7 +103,7 @@ async function emitUpdated(chatId, extraUserIds = []) {
 }
 
 const CHAT_ROWS_SQL = `
-SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended,
+SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended, c.hide_count,
        c.created_by, c.created_at, c.last_message_at, c.username, c.is_public, c.signatures, c.is_verified,
        c.slow_mode_sec, c.sub_price, c.ads_off, c.monetized, c.join_approval, c.comments_enabled, c.is_forum, c.disappear_after_sec,
        c.welcome_text, c.rules, c.new_member_limits, c.protected_content, c.allowed_reactions, c.category, c.linked_chat_id,
@@ -185,6 +185,7 @@ async function serializeChats(userId, rows) {
       peer,
       is_saved_messages: isSaved,
       member_count: r.member_count,
+      count_hidden: !!r.hide_count && !ADMIN_ROLES.includes(r.my_role), // admins still see the real number
       my_role: r.my_role,
       invite_code: isMulti(r) && ADMIN_ROLES.includes(r.my_role) ? r.invite_code : null,
       username: isPrivate ? null : r.username,
@@ -1015,6 +1016,7 @@ async function invitePreview(userId, code) {
     description: chat.description,
     avatar_url: userService.avatarUrl(chat.avatar_media_id),
     member_count: n.n,
+    count_hidden: !!chat.hide_count,
     is_member: !!me,
   };
 }
@@ -1294,6 +1296,7 @@ function publicSummary(c, memberCount, isMember) {
     is_verified: c.is_verified,
     avatar_url: userService.avatarUrl(c.avatar_media_id),
     member_count: memberCount,
+    count_hidden: !!c.hide_count,
     is_member: isMember,
     join_approval: !!c.join_approval,
     sub_price: c.type === 'channel' && c.monetized ? c.sub_price || 0 : 0,

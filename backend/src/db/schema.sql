@@ -1547,3 +1547,6 @@ CREATE INDEX IF NOT EXISTS chat_boosts_chat_idx ON chat_boosts (chat_id, id DESC
 -- ------------------------------------------------------------------ music on stories
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS music_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL;
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS music_title VARCHAR(80);
+
+-- ------------------------------------------------------------------ hide a channel's subscriber count (official @HushaviaNews)
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS hide_count BOOLEAN NOT NULL DEFAULT FALSE;

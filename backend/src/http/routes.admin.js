@@ -179,6 +179,11 @@ router.post('/verify-requests/:id', requireAdmin('users.verify'), h(async (req, 
 
 // the official @HushaviaNews channel
 router.get('/news', requireAdmin('broadcast'), h(async (req, res) => res.json(await require('../services/news.service').info())));
+router.post('/news/hide-count', requireAdmin('broadcast'), h(async (req, res) => {
+  const r = await require('../services/news.service').setHideCount(req.body.hide === true);
+  await require('../services/admin.service').log(req.admin.id, 'news.hide_count', 'chat', null, { hide: r.hide_count }, req.ip);
+  res.json(r);
+}));
 router.post('/news', requireAdmin('broadcast'), h(async (req, res) => {
   const r = await require('../services/news.service').post(req.body);
   await require('../services/admin.service').log(req.admin.id, 'news.post', 'chat', r.chat_id, { text: String(req.body.text || '').slice(0, 120) }, req.ip);

@@ -1933,6 +1933,8 @@ class _ChatScreenState extends State<ChatScreen> {
       subtitle = 'bot';
     } else if (typing != null) {
       subtitle = typing;
+    } else if (chat.countHidden) {
+      subtitle = 'official channel';
     } else if (chat.isMulti) {
       final n = NumberFormat.decimalPattern().format(chat.memberCount);
       subtitle = chat.isChannel

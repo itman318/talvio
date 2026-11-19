@@ -1005,6 +1005,10 @@ test('official @HushaviaNews channel: new people follow it, admins publish, peop
   const chat = await chats.getChat(fan.id, chatId);
   assert.equal(chat.type, 'channel');
   assert.equal(chat.is_verified, true);
+  assert.equal(chat.count_hidden, true); // "Official channel" instead of a number
+  await news.setHideCount(false);
+  assert.equal((await chats.getChat(fan.id, chatId)).count_hidden, false);
+  await news.setHideCount(true);
   const r = await news.post({ text: 'Welcome to Hushavia News!' });
   assert.ok(r.message_id);
   const info = await news.info();

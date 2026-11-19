@@ -1674,12 +1674,17 @@
     function newsCard() {
       const text = el('textarea', { rows: 5, maxlength: 4000, placeholder: 'e.g. 🎉 New in Hushavia: business catalogs! Open a shop from Settings → Hushavia Business.' });
       const silent = el('input', { type: 'checkbox', id: 'n-silent' });
+      const hide = el('input', { type: 'checkbox', id: 'n-hide', onchange: async () => {
+        const r = await action(() => api('POST', '/news/hide-count', { hide: hide.checked }), hide.checked ? 'Count hidden — people see “Official channel”' : 'Subscriber count is shown');
+        if (!r) hide.checked = !hide.checked;
+      } });
       const stats = el('div', { class: 'muted' }, 'Loading…');
       const posts = el('div', {});
       const load = async () => {
         const d = await action(() => api('GET', '/news'));
         if (!d) return;
         stats.textContent = `@${d.username} · ${fmtNum(d.subscribers)} subscribers`;
+        hide.checked = !!d.hide_count;
         posts.replaceChildren(...d.posts.map((p) => el('div', { class: 'bubble' }, el('small', {}, `${fmtDate(p.created_at)} · ${fmtNum(p.views_count || 0)} views`), p.text.slice(0, 300))));
       };
       const post = el('button', { class: 'btn primary', onclick: async () => {
@@ -1694,6 +1699,7 @@
       load();
       return el('div', { class: 'card', style: 'max-width:620px;margin-top:22px' },
         el('h3', { style: 'font-size:15px;margin-top:0' }, '📣 Hushavia News channel'), stats,
+        el('label', { class: 'check', for: 'n-hide', style: 'margin-top:8px' }, hide, 'Hide the subscriber count in the app (people see “Official channel”)'),
         el('div', { class: 'field', style: 'margin-top:10px' }, el('label', {}, 'Post'), text),
         el('label', { class: 'check', for: 'n-silent' }, silent, 'Send without sound'),
         post,

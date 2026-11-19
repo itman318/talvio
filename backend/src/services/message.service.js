@@ -1741,7 +1741,7 @@ async function searchHashtag(userId, query = {}) {
     const my = mine.get(c.id);
     return [c.id, my
       ? { id: c.id, type: my.type, title: my.title, avatar_url: my.avatar_url, username: c.username || null, is_member: true }
-      : { id: c.id, type: c.type, title: c.title, avatar_url: chatService.publicSummary(c, Number(c.n), false).avatar_url, username: c.username, is_member: false, member_count: Number(c.n) }];
+      : { id: c.id, type: c.type, title: c.title, avatar_url: chatService.publicSummary(c, Number(c.n), false).avatar_url, username: c.username, is_member: false, member_count: Number(c.n), count_hidden: !!c.hide_count }];
   }));
   return {
     tag,
