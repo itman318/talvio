@@ -5,11 +5,11 @@
  * (Admin → Pages & FAQ). Format the app understands:
  *   "# Heading", "## Subheading", "• bullet" lines, "Q: …" followed by "A: …" (FAQ), blank line = new paragraph.
  */
-const UPDATED = '13 November 2026';
+const UPDATED = '19 November 2026';
 
 const privacy = `Last updated: ${UPDATED}
 
-This Privacy Policy explains what information Hushavia collects, why we collect it, how we protect it and the choices you have. It applies to the Hushavia app for Android, the Hushavia web app and our website (together, "Hushavia" or "the service"). By using Hushavia you agree to this policy.
+This Privacy Policy explains what information Hushavia collects, why we collect it, how we protect it and the choices you have. It applies to the Hushavia apps for Android, Windows, macOS and Linux, the Hushavia web app and our website (together, "Hushavia" or "the service"). By using Hushavia you agree to this policy.
 
 We built Hushavia to be useful without collecting more than it needs. We do not sell your personal data, and we never use the content of your messages to show you ads.
 
@@ -26,6 +26,8 @@ We built Hushavia to be useful without collecting more than it needs. We do not 
 • Vault chats (secret chats) are end-to-end encrypted. Only you and the other person hold the keys. Our servers pass on encrypted data they cannot read and delete it once it is delivered.
 • Photos, videos, voice messages and files you send are stored so the people in the chat can open them.
 • "View once" media can be opened one time by the recipient and is then no longer available to them.
+• When someone plays your voice message, video or audio file, we record that it was played so you see the "Listened" / "Watched" mark.
+• Stories, and any music you add to a story, can be seen and heard by the people your story is shared with until it expires (or as long as you keep it in your highlights).
 • Messages you delete "for everyone" are removed from our servers. Clearing a chat history removes it for you (or for both sides when you choose that option).
 
 ## Contacts (optional)
@@ -51,6 +53,14 @@ We keep your coin balance and a record of every change to it (deposits and packs
 • Your deposit address: when you open "Add coins", we create your own USDT address and remember that it is yours. We read the public blockchain to see the USDT that arrives at it, and keep each deposit's transaction ID, amount and time. Anyone can see the payments to an address on the blockchain.
 • Giveaways: if you join one, the channel's admins and members can see the winners' names when it ends.
 • Paid channels: the channel's owner receives your coins for the subscription; we keep when it started and ends.
+• Channel promotion: we keep which channel was promoted, by whom, for how many days and for how many coins.
+
+## Shops and orders
+• Products you add to your business catalog (photo, name, price, description) are public: anyone who opens your profile can see them.
+• When you order or buy a product, we keep the order (product, quantity, your note, price, status and its history) so both you and the seller can follow it. The order is also written in your chat with the seller.
+
+## Verification requests
+If you ask for a verified badge, we keep what you send in the form (for example your name, links, address, registration number and photos of documents or a selfie with your ID) together with a reference number and our decision. These documents are seen only by Hushavia's verification team, are never shown on your profile, and are used only to decide your request and keep a record of it. You can ask support to delete them after a decision.
 
 ## Support requests
 When you contact support we keep your messages, any screenshots you attach and, if you allow it, your phone model and app version.
@@ -77,6 +87,7 @@ Voice and video calls connect directly between devices when possible. When a dir
 • Public channels and groups can be seen by anyone, including their posts, member counts and public links.
 • When you send a message to a bot or use it in a group, that bot's owner receives what you send to it. Bots are made by other people, not by Hushavia, so only use bots you trust.
 • Group and channel admins can see what members post and can manage the group according to the rights they were given.
+• Warning tags: when our team confirms serious reports about an account (for example scams or a fake account), a warning tag may be shown on its profile so others can protect themselves. We keep the reason and the evidence with it. Tags can be appealed in Help & support.
 
 # 6. Sponsored messages
 Public channels with many subscribers may show clearly labelled sponsored messages. They are chosen by channel topic, not by your private messages, contacts or personal profile.
@@ -157,11 +168,19 @@ You agree not to use Hushavia to:
 # 5. Groups, channels and bots
 • Owners and admins are responsible for their groups and channels, for the rules they set and for the content they publish.
 • Admins may only use the tools Hushavia gives them for managing their communities, not to harass members.
+• Verified badges are given by Hushavia's team after checking a request in @HushaviaVerifyBot. To ask for one you need the requirements shown in the bot, including an active 12-month Hushavia Plus package; a channel or group also needs at least the number of members and age shown there. Paying for Plus does not guarantee a badge. We may remove a badge that was obtained with false information, or from an account that breaks these Terms.
+• Promoted channels: channel admins can pay coins to show a public channel first in Explore channels, marked "Promoted", for the days they choose. Promotion is shown in turns with other promoted channels and does not promise any number of subscribers. Coins spent on promotion are not refunded, and we may stop a promotion that breaks these Terms.
 • If you create a bot, you are responsible for what it does, for keeping its key secret, and for handling the messages it receives in line with the law and our Privacy Policy. You must tell users what data your bot collects.
+
+## Shops, catalogs and orders
+• Businesses with Hushavia Plus can list products in a catalog. Sellers are responsible for their products, prices, descriptions and delivery, and for following consumer and tax laws where they sell.
+• An order sent from a catalog is an agreement between the buyer and the seller. Hushavia is not the seller, does not hold the goods and does not guarantee delivery or quality. The order tracker (received, packed, shipped, delivered) shows what the seller marked.
+• When you buy with coins, the coins go to the seller at once. If the seller cancels the order, the coins go back to you automatically; otherwise disputes are between buyer and seller, and you can report a seller who does not deliver.
 
 # 6. Safety, reports and enforcement
 • You can report users, messages, groups, channels and bots from inside the app.
 • We review reports and may remove content, limit features, restrict sending messages, suspend groups or channels, or ban accounts that break these Terms — with or without notice, depending on how serious the case is.
+• After confirmed reports we may show a warning tag on an account (for example "Scam reports confirmed" or "Fake account"). Accounts tagged for scams or fakes cannot sell, receive coins or start new chats with strangers. Tags can be appealed in Help & support.
 • If your account is banned you can send an appeal from the app. We review appeals in good faith.
 • We may report illegal activity to the authorities and cooperate with lawful requests.
 
@@ -207,6 +226,7 @@ To the fullest extent allowed by law, Hushavia is not responsible or liable for 
 
 ## Crypto in chats
 You can send a crypto payment or a payment request as a card in a chat. The card is only a message: the payment itself happens on the blockchain between your wallet and the other person's address. Hushavia is not a party to payments between users and does not settle disputes about them. A card that shows "confirmed" means the app found that transaction on the network; it does not mean the other person will deliver what they promised.
+• Invoices: a business can send an invoice card (items and a total in USDT or another coin) that is paid straight to the seller's own wallet address. When it is paid from the chat it shows "Paid", and the app checks the transfer on the network before it says "confirmed". Hushavia does not hold the money, set prices or settle disputes about invoices.
 
 # 9. Hushavia Coins
 • Hushavia Coins are a digital balance for use only inside Hushavia. They are not money, not a cryptocurrency or token, not a deposit and not an investment, and they earn no interest.
@@ -219,7 +239,7 @@ You can send a crypto payment or a payment request as a card in a chat. The card
 • You can also get coins as a gift from another user, as a tip or subscription income, as a giveaway prize, or from Hushavia. Bonus coins are free extras and have no cash value.
 
 ## Using coins
-• You can pay for Hushavia Plus with coins, send gifts in private chats, tip channel posts, subscribe to paid channels and start giveaways.
+• You can pay for Hushavia Plus with coins, send gifts in private chats, tip channel posts, subscribe to paid channels, start giveaways, buy products from business catalogs and promote your channel.
 • Gifts and tips go to the other person or channel and cannot be taken back.
 • Tips and channel subscriptions: the channel's owner receives the share shown in the app (now 90%); the rest is Hushavia's fee.
 • Paid channels: the price is set by the channel's owner, not by Hushavia. A subscription lasts 30 days and renews from your balance; if your balance is too low, it ends and you leave the channel. Hushavia does not check or guarantee what a channel posts — choose channels you trust.
@@ -278,7 +298,7 @@ Q: Why didn't my login code arrive?
 A: Check that the number or email is correct, wait a minute and tap "Resend". For email, look in your Spam or Promotions folder. Never share your code with anyone — Hushavia staff will never ask for it.
 
 Q: Can I use Hushavia on more than one device?
-A: Yes. Your regular chats sync on all your devices. To log in on a computer, open the Hushavia web app and scan the QR code from Settings → Devices. You can see and log out any device there.
+A: Yes. Your regular chats sync on all your devices. Hushavia is available for Android, Windows, macOS, Linux and the web. To log in on a computer, open the app or the web app there and scan the QR code from Settings → Devices. You can see and log out any device there.
 
 Q: Can I have more than one account?
 A: Yes. Go to Settings → Add another account. You can switch between accounts in one tap.
@@ -306,6 +326,9 @@ A: Tap 📎 → Gallery and select up to 10 photos. You can look through them, e
 Q: What is Read later?
 A: Tap any message → Read later to save it. Find everything you saved in Settings → Read later, on all your devices.
 
+Q: How do I know someone listened to my voice message or watched my video?
+A: Under your voice message, video, round video or audio file you'll see "Listened" or "Watched" once the other person has played it.
+
 # Groups and channels
 
 Q: What is the difference between a group and a channel?
@@ -320,6 +343,38 @@ A: Open Manage → Group protection to turn on the human check for new members, 
 Q: How do I make my group or channel public?
 A: As the owner, open Manage → Public link and choose a @username. Anyone can then find and join it.
 
+Q: How do I promote my channel?
+A: In your public channel's info, tap Promote channel and choose 1, 3, 7, 14 or 30 days. It is paid once with coins, and your channel shows first in Explore channels with a "Promoted" label. More days are added on top if you promote again.
+
+Q: Can I hide the member list of my group?
+A: Yes. Open Manage → Group protection and turn on Hide members. Members then see only the admins.
+
+# Verification
+
+Q: How do I get a verified badge?
+A: Open @HushaviaVerifyBot and choose Profile, Business or Channel/group. The bot first checks that your account is ready, then asks a few short questions and documents. Our team reviews every request by hand, usually within 3 working days.
+
+Q: What do I need for verification?
+A: An active 12-month Hushavia Plus package, an account at least 30 days old, a profile photo, your full name, a @username, two-step verification turned on and no warning tags. A channel or group also needs a public link, at least 1,000 members and to be at least 60 days old, and you must be its owner. If a request is not approved, you can ask again after 30 days.
+
+Q: What are warning tags on a profile?
+A: Tags such as "Scam reports confirmed" or "Fake account" are added by our team after confirmed reports, to protect people. Be careful with accounts that have them. If your account has a tag you think is wrong, appeal it in Help & support.
+
+# Shops and orders
+
+Q: How do I sell with a catalog?
+A: With Hushavia Plus, open Settings → Hushavia Business → My catalog and add products with a photo, price and description. Customers open your catalog from your profile and order in the chat or pay with coins.
+
+Q: How do I follow my order?
+A: Open Profile → My orders. Each order shows its steps: received, packed, shipped and delivered. You also get a message in your chat with the seller at each step. You can cancel an order while it is still "received".
+
+Q: I'm a seller. How do I update an order?
+A: Open Settings → Hushavia Business → Customer orders, tap the order and mark it packed, shipped or delivered. If you cancel an order that was paid with coins, the coins go back to the customer automatically.
+
+Q: How do I send an invoice?
+A: In a chat, tap 📎 → Crypto → Send an invoice. Add what it's for, the items and the total. The customer taps "Pay invoice", and the card shows "Paid" when they pay, after the app checks the transfer on the network. The money goes straight to your own wallet.
+
+
 # Calls
 
 Q: Are calls free?
@@ -327,6 +382,11 @@ A: Yes. Voice and video calls use your internet connection (Wi-Fi or mobile data
 
 Q: What is a voice chat?
 A: A live audio room inside a group or channel that many people can join at once. Admins can start one from the chat menu.
+
+# Stories
+
+Q: Can I add music to my story?
+A: Yes. When you share a story, tap Add music and pick a song from your phone (up to 15 MB). It plays while people watch; viewers can tap the song name to mute it.
 
 # Wallet and coins
 
@@ -346,7 +406,7 @@ Q: I sent crypto to the wrong address. Can you get it back?
 A: No. Blockchain payments are final and Hushavia cannot reverse, freeze or refund them. Always check the address and the network before you confirm.
 
 Q: What are Hushavia Coins?
-A: A balance for use inside Hushavia (Settings → Coins). Use them for Hushavia Plus, gifts, tips, paid channels and giveaways. Coins are not crypto and cannot be withdrawn or turned back into money.
+A: A balance for use inside Hushavia (Settings → Coins). Use them for Hushavia Plus, gifts, tips, paid channels, giveaways, buying from catalogs and promoting channels. Coins are not crypto and cannot be withdrawn or turned back into money.
 
 Q: How do I add coins?
 A: Settings → Coins → "Add coins with USDT". You get your own address: send USDT on BNB Smart Chain (BEP-20) from any exchange or wallet — 1 USDT = 100 coins. They arrive about a minute after the network confirms the payment. Sending from an exchange needs no BNB; sending from your Hushavia Wallet needs a little BNB for the network fee.
@@ -428,10 +488,12 @@ Hushavia is a fast, secure messaging app made for everyday conversations and gro
 • Channels: broadcast to unlimited subscribers with views, comments, reactions and post approvals.
 • Calls: free voice and video calls, plus live voice chats in groups and channels.
 • Vault chats: end-to-end encrypted conversations only you and the other person can read.
-• Stories and highlights: share moments with the people you choose.
+• Stories and highlights: share moments with the people you choose — with music if you like.
 • Bots and BotForge: create bots, connect them with the Hushavia Bot API and reach people in chats and inline.
 • Wallet: your own crypto wallet for Bitcoin, Ethereum, BNB, TRON, Solana, USDT, USDC and more — the keys stay on your phone.
-• Coins: gifts for friends, tips for channels, paid channels and giveaways.
+• Coins: gifts for friends, tips for channels, paid channels, giveaways and channel promotion.
+• Shops: business catalogs, orders you can follow step by step and USDT invoices paid straight to the seller.
+• Verified badges for real people, businesses and channels, and warning tags that protect you from confirmed scammers.
 • Hushavia Plus: extra features, bigger uploads and no ads.
 • Our own animated mascot and sticker packs, made just for Hushavia.
 • Prayer times with Qibla, Suhoor and Iftar reminders.
@@ -440,7 +502,7 @@ Hushavia is a fast, secure messaging app made for everyday conversations and gro
 You decide who sees your phone number, photo and last seen. Your account is protected with two-step verification, passkeys, login alerts and app lock. We never sell your data and never read your chats to show ads.
 
 # Built for everyone
-Hushavia works well on any phone and any connection: it is light on data, supports proxies and keeps working on slow networks. It is available on Android and on the web.
+Hushavia works well on any phone and any connection: it is light on data, supports proxies and keeps working on slow networks. It is available on Android, Windows, macOS, Linux and the web.
 
 # Contact
 Questions, ideas or problems? We'd love to hear from you: Settings → Help & support.
