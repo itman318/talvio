@@ -56,6 +56,14 @@ jobs:
           [ -n "$V" ] && echo "newest video probe: $(ffprobe -v error -show_entries format=format_name,duration -of csv=p=0 "/var/lib/hushavia/uploads/$V" 2>&1 | head -c 200)"
           grep -n "uploadDir\|UPLOAD_DIR" /opt/hushavia/app/.env 2>/dev/null | sed 's/=.*/=…/' | head -2
           echo "app update: $(curl -s 'http://127.0.0.1:4000/api/app/update?build=1&abi=arm64-v8a' | head -c 300)"
+          echo "--- newest photos (size, thumb, preview file)"
+          sudo -u postgres psql -d hushavia -tAc "SELECT id||'|'||mime||'|'||size_bytes||'|'||coalesce(width,0)||'x'||coalesce(height,0)||'|thumb='||(thumb IS NOT NULL)||'|'||storage_path||'|'||to_char(created_at,'MM-DD HH24:MI') FROM media WHERE kind='image' ORDER BY id DESC LIMIT 6" 2>/dev/null | while IFS='|' read -r id mime size dim th sp at; do
+            f="/var/lib/hushavia/uploads/$sp"; pv=$(ls -1 "${f%.*}"* 2>/dev/null | grep -v "^$f$" | xargs -r stat -c '%n:%s' 2>/dev/null | sed 's#.*/##' | tr '\n' ' ')
+            echo "$id $mime $size $dim $th $at · previews: ${pv:-none}"
+          done
+          echo "--- photo downloads, last 2 hours (time, status, bytes, url, client)"
+          awk -v since="$(date -d '-2 hours' '+%d/%b/%Y:%H:%M')" '$4 > "["since' /var/log/nginx/access.log 2>/dev/null | grep -E 'GET /api/media/[0-9]+' | tail -25 | awk '{print $4, $9, $10, $7, $12, $13}'
+          echo "media requests last 2h: $(grep -cE 'GET /api/media/' /var/log/nginx/access.log 2>/dev/null) · not 200/206/304: $(grep -E 'GET /api/media/' /var/log/nginx/access.log | awk '$9!~/^(200|206|304)$/' | wc -l)"
           echo "--- recent upload / sticker requests (status, size)"
           grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
           echo "--- logout check"
