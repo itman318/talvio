@@ -84,6 +84,12 @@ dependencies:
   bip39: ^1.0.6
   pointycastle: ^3.9.1
 
+# path_provider_android 2.3.x switched to JNI and fails on some phones in release builds
+# ("ClassNotFoundException: android/content/Context") — then no folder for the image cache, so no
+# profile photos and photos never load. Stay on the last version before the switch.
+dependency_overrides:
+  path_provider_android: 2.2.23
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
