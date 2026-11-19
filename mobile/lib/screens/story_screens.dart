@@ -320,8 +320,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
       } else {
         _progress.duration = const Duration(seconds: 6);
       }
-      if (story.music != null) await _startMusic(story);
-      if (!mounted || story != _story) return;
+      if (story.music != null) unawaited(_startMusic(story)); // the story shows right away, the song joins when it's ready
       setState(() {
         _file = f;
         _loading = false;
@@ -350,7 +349,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
         return;
       }
       _music = p;
-      unawaited(p.play());
+      if (_progress.isAnimating) unawaited(p.play());
     } catch (_) {
       // no music is better than no story
     }

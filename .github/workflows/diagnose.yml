@@ -79,7 +79,7 @@ jobs:
           echo "coturn: $(systemctl is-active coturn)"
           echo "listening 3478: udp=$(ss -ulnH | grep -c ':3478 ') tcp=$(ss -tlnH | grep -c ':3478 ')"
           echo "env: TURN_SECRET set=$(grep -c '^TURN_SECRET=.\+' /etc/hushavia/hushavia.env) · TURN_URLS=$(grep '^TURN_URLS=' /etc/hushavia/hushavia.env | cut -d= -f2-)"
-          echo "firewall 3478: $(ufw status | grep -c 3478) rules · relay ports: $(ufw status | grep -cE '49152|min-port') rules"
+          echo "firewall 3478: $(ufw status | grep -c 3478) rules · relay ports: $(ufw status | grep -cE '49160') rules"
           grep -E '^(listening-port|min-port|max-port|external-ip|realm|use-auth-secret)' /etc/turnserver.conf | tr '\n' ' '; echo
           S=$(grep '^TURN_SECRET=' /etc/hushavia/hushavia.env | cut -d= -f2-)
           IP=$(curl -s --max-time 5 https://api.ipify.org || hostname -I | awk '{print $1}')
