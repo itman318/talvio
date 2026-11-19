@@ -18,7 +18,7 @@ void main() {
       if (f.evaluate().isNotEmpty) return;
     }
     // show what is on screen instead
-    final texts = find.byType(Text).evaluate().map((e) => (e.widget as Text).data ?? '').where((x) => x.isNotEmpty).take(40).join(' | ');
+    final texts = find.byType(Text).evaluate().map((e) => (e.widget as Text).data ?? (e.widget as Text).textSpan?.toPlainText() ?? '').where((x) => x.isNotEmpty).take(40).join(' | ');
     debugPrint('ON SCREEN: $texts');
     try {
       await binding.takeScreenshot('zz-fail');
@@ -82,7 +82,7 @@ void main() {
 
 
     await t.tap(find.text('Sana Ahmed'));
-    await pumpUntil(t, find.text('Hello! How is the app working for you?'), what: 'messages in chat');
+    await pumpUntil(t, find.textContaining('Hello! How is the app working for you?'), what: 'messages in chat');
     await snap(t, 'chat');
     try {
       await t.tap(find.text('Sana Ahmed').first); // header → their profile
@@ -102,12 +102,12 @@ void main() {
     await settle(t, 400);
     await snap(t, 'composer-typing');
     await t.tap(find.byTooltip('Send (hold to schedule)'));
-    await pumpUntil(t, find.text('Hello from the app ✅'), what: 'sent message');
+    await pumpUntil(t, find.textContaining('Hello from the app ✅'), what: 'sent message');
     await settle(t, 2500);
     await snap(t, 'chat-sent');
 
     // one tap on a message → reactions + compact action menu
-    await t.tap(find.text('Hello from the app ✅').last);
+    await t.tap(find.textContaining('Hello from the app ✅').last);
     await pumpUntil(t, find.text('Remind me'), what: 'message menu');
     await snap(t, 'message-menu');
     await t.tap(find.text('Reply'));
@@ -158,7 +158,7 @@ void main() {
     await settle(t, 1500);
     await snap(t, 'chats-dark');
     await t.tap(find.text('Sana Ahmed'));
-    await pumpUntil(t, find.text('Hello from the app ✅'), what: 'chat in dark mode');
+    await pumpUntil(t, find.textContaining('Hello from the app ✅'), what: 'chat in dark mode');
     await snap(t, 'chat-dark');
     await t.pageBack();
     await settle(t);
