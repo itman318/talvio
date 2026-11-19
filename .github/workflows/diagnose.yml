@@ -73,6 +73,8 @@ jobs:
           echo "firebase pkg: $(cd /opt/hushavia/app && node -p "require('./node_modules/firebase-admin/package.json').version" 2>&1 | tail -1)"
           echo "sa file: $(ls -la /etc/hushavia/firebase.json 2>&1)"
           echo "push tokens: $(sudo -u postgres psql -d hushavia -tAc "SELECT count(*) FROM push_tokens" 2>&1)"
+          echo "--- app crash reports (last 7 days, newest version first)"
+          sudo -u postgres psql -d hushavia -tAc "SELECT app_version||' · '||platform||' · x'||count||' · '||users_count||' users · '||to_char(last_seen,'MM-DD HH24:MI')||' · '||left(regexp_replace(message, '\s+', ' ', 'g'), 160)||' @ '||left(regexp_replace(split_part(stack, E'\n', 1)||' | '||split_part(stack, E'\n', 2)||' | '||split_part(stack, E'\n', 3), '\s+', ' ', 'g'), 260) FROM client_errors WHERE resolved_at IS NULL AND last_seen > now() - interval '7 days' ORDER BY app_version DESC, count DESC LIMIT 25" 2>&1
           echo "--- calls (TURN)"
           echo "coturn: $(systemctl is-active coturn)"
           echo "listening 3478: udp=$(ss -ulnH | grep -c ':3478 ') tcp=$(ss -tlnH | grep -c ':3478 ')"
