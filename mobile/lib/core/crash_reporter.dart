@@ -36,6 +36,8 @@ class CrashReporter {
   static Future<void> report(Object error, StackTrace? stack, {String? context}) async {
     try {
       final message = '${error.runtimeType}: $error'.split('\n').first;
+      // a picture that didn't download (bad signal) is not a crash: the app shows a placeholder and retries
+      if (message.contains('ClientException') || message.contains('SocketException') || message.contains('HttpException')) return;
       final st = (stack ?? StackTrace.current).toString();
       final key = '$message|${st.split('\n').take(3).join('|')}';
       if (!_sent.add(key) || _sent.length > 50) return;
