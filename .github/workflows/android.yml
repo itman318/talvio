@@ -113,7 +113,13 @@ jobs:
           sed -n '/buildTypes/,/^    }/p' android/app/build.gradle* || true
 
       - name: Get packages
-        run: flutter pub get
+        run: |
+          flutter pub get
+          # what this build really uses (no lockfile in the repo yet): kept in the report so a surprise
+          # package update can be traced, and which packages pull in Java bridges (jni)
+          mkdir -p ../ci-report
+          cp pubspec.lock ../ci-report/pubspec.lock || true
+          flutter pub deps --style=compact > ../ci-report/deps.txt 2>&1 || true
 
       - name: Analyze (errors only)
         id: analyze
