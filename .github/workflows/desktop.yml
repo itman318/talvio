@@ -79,6 +79,10 @@ jobs:
             python -m pip install -q pillow >/dev/null 2>&1 || true
             python -c "from PIL import Image; Image.open('branding/store/icon-512.png').save('windows/runner/resources/app_icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])" || echo "icon: kept the default"
           fi
+          if [ -f linux/CMakeLists.txt ]; then
+            # newer clang flags the JSON header bundled with flutter_secure_storage (not our code) — don't fail on it
+            sed -i 's/-Wall -Werror/-Wall -Werror -Wno-deprecated-literal-operator/' linux/CMakeLists.txt
+          fi
           if [ -f linux/runner/my_application.cc ]; then
             sed -i 's/"chatapp"/"Hushavia"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 760)/' linux/runner/my_application.cc
           fi
