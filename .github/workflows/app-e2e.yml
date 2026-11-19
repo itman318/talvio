@@ -71,6 +71,10 @@ jobs:
           flutter create . --org com.hushavia --project-name chatapp --platforms=android
           dart run tool/patch_platforms.dart
           rm -f test/widget_test.dart
+          # test build only: the older Skia renderer. Impeller's OpenGL path on the emulator's software
+          # graphics took the whole emulator offline at the first screenshot (real phones are not affected)
+          sed -i 's#</application>#    <meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />\n    </application>#' android/app/src/main/AndroidManifest.xml
+          grep -c EnableImpeller android/app/src/main/AndroidManifest.xml
           sed -i '/org.gradle.jvmargs/d' android/gradle.properties
           printf '%s\n' 'org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g' 'org.gradle.workers.max=2' 'kotlin.daemon.jvmargs=-Xmx1g' >> android/gradle.properties
           flutter pub get
