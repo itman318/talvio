@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Live voice chats in groups and channels (like Telegram's voice chats / group calls).
+ * Live voice chats in groups and channels.
  * Audio goes peer-to-peer between the participants (WebRTC mesh, TURN as fallback); the server keeps the
  * room state (who is in, muted, raised hand) and relays the WebRTC signalling.
  *

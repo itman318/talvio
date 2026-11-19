@@ -27,7 +27,7 @@ function isOnline(userId) {
   return connections.has(userId);
 }
 
-// What people SEE as "online": the app is on screen on at least one device (like Telegram).
+// What people SEE as "online": the app is on screen on at least one device.
 // A phone app sent to the background keeps its socket for a while, but the person isn't looking — so it
 // shows "last seen" a few seconds later, and pushes go out again ("isActive" false).
 const background = new Set(); // socket ids that said they're in the background

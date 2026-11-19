@@ -878,7 +878,7 @@ class _GroupProtectionScreenState extends State<GroupProtectionScreen> {
   }
 }
 
-/// What ordinary members may send (like Telegram's group permissions).
+/// What ordinary members may send.
 class MemberPermissionsScreen extends StatelessWidget {
   const MemberPermissionsScreen({super.key, required this.chatId});
   final int chatId;

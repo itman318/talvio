@@ -148,7 +148,7 @@ const HELP = [
 const API_HELP = [
   '📖 **For developers**',
   '',
-  '**Classic API** (works with Telegram-style bot libraries — just change the server address):',
+  '**Classic API** (works with common bot libraries such as aiogram and grammY — just change the server address):',
   `${config.publicUrl}/api/classic/bot<key>/<method>`,
   '',
   '**Hushavia Bot API v2:**',

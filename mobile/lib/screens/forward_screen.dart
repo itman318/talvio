@@ -102,7 +102,7 @@ class _ForwardScreenState extends State<ForwardScreen> {
       if (!mounted) return;
       final what = widget.messageIds.length == 1 ? 'Message' : '${widget.messageIds.length} messages';
       if (_selected.length == 1) {
-        // one chat: go there, like Telegram — back returns to where you forwarded from
+        // one chat: go there — back returns to where you forwarded from
         final id = _selected.first;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chatId: id, initial: store.chatById(id))));
         messenger

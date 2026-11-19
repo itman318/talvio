@@ -63,7 +63,7 @@ class ProxyServer {
   }
 }
 
-/// Like Telegram's proxy settings: a saved list, one active proxy, every connection goes through it
+/// Proxy settings: a saved list, one active proxy, every connection goes through it
 /// (API calls, the live socket, media and pictures) via a global HttpOverrides.
 class ProxyManager extends ChangeNotifier {
   ProxyManager._();

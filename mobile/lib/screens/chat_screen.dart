@@ -1623,7 +1623,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _delete(Message m, Chat chat, bool mine) => _deleteWithUndo(chat, [m]);
 
-  /// Telegram-style: ask once (with "Also delete for …" in private chats), the messages shrink away
+  /// Ask once (with "Also delete for …" in private chats), the messages shrink away
   /// at once, and an Undo bar counts down 5 s before the server is asked.
   Future<void> _deleteWithUndo(Chat chat, List<Message> list) async {
     if (list.isEmpty) return;

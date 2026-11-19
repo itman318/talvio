@@ -9,7 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import '../theme/brand.dart';
 
-/// Photo editor before sending (like Telegram's): crop & rotate, filters, adjustments,
+/// Photo editor before sending: crop & rotate, filters, adjustments,
 /// drawing (pen, marker, neon, eraser), text with styles, emoji, undo/redo and before/after.
 /// Returns the path of the edited JPEG (or the original path if nothing changed), or null when cancelled.
 class ImageEditorScreen extends StatefulWidget {
@@ -795,7 +795,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
           max: 1,
           value: cur,
           onChanged: (v) => setState(() {
-            // snap to 0 near the middle, like Telegram
+            // snap to 0 near the middle
             _adjust = _adjust.set(_adjustKey, signed && v.abs() < 0.03 ? 0 : v);
           }),
         ),
@@ -1212,7 +1212,7 @@ class _ShadePainter extends CustomPainter {
   bool shouldRepaint(covariant _ShadePainter old) => old.crop != crop;
 }
 
-/// Crop box like Telegram: drag any corner or edge (big touch areas), drag inside to move,
+/// Crop box: drag any corner or edge (big touch areas), drag inside to move,
 /// rule-of-thirds grid while cropping, optional fixed shape ([lock] = width/height in 0..1 space).
 class _CropOverlay extends StatelessWidget {
   const _CropOverlay({required this.rect, required this.size, required this.onChanged, this.lock, this.margin = 0});

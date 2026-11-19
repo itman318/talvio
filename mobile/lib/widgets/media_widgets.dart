@@ -76,7 +76,7 @@ class MessageImage extends StatefulWidget {
   State<MessageImage> createState() => _MessageImageState();
 }
 
-/// Telegram-style photo bubble: the tiny inline thumb shows blurred at once, the bubble-size
+/// photo bubble: the tiny inline thumb shows blurred at once, the bubble-size
 /// preview (a few dozen KB) fades in over it, and the full photo is fetched only when opened.
 class _MessageImageState extends State<MessageImage> {
   File? _shown;
@@ -473,7 +473,7 @@ class _VideoScreenState extends State<VideoScreen> {
   }
 
   /// On the phone already → plays the file. Otherwise streams it from the server (starts in a
-  /// second, like Telegram); if streaming fails, downloads it and plays the file.
+  /// second); if streaming fails, downloads it and plays the file.
   Future<void> _load() async {
     final msg = widget.message;
     final services = context.read<AppServices>();

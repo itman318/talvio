@@ -419,7 +419,7 @@ async function updatePrivacy(userId, body) {
       sets.push(`${col} = $${params.length}`);
     }
   }
-  // only two choices for these (like Telegram): everybody or my contacts
+  // only two choices for these: everybody or my contacts
   for (const [key, col] of [['messages', 'privacy_messages'], ['phone_search', 'privacy_phone_search']]) {
     if (body[key] !== undefined) {
       params.push(v.oneOf(body[key], ['everyone', 'contacts'], key));

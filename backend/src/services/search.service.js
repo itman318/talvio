@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * One search for everything (like Telegram's global search):
+ * One search for everything:
  *   my chats · people · bots · public groups · public channels  (+ messages via /search/messages)
  * With an empty query it returns "Discover": popular channels, groups and bots.
  */

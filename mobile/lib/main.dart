@@ -300,19 +300,19 @@ Future<void> _start() async {
         ChangeNotifierProvider<VoiceChatManager>.value(value: voiceChats),
         ChangeNotifierProvider<VoicePlayback>.value(value: voice),
       ],
-      child: const ChatApp(),
+      child: const HushaviaApp(),
     ),
   );
 }
 
-class ChatApp extends StatefulWidget {
-  const ChatApp({super.key});
+class HushaviaApp extends StatefulWidget {
+  const HushaviaApp({super.key});
 
   @override
-  State<ChatApp> createState() => _ChatAppState();
+  State<HushaviaApp> createState() => _HushaviaAppState();
 }
 
-class _ChatAppState extends State<ChatApp> with WidgetsBindingObserver {
+class _HushaviaAppState extends State<HushaviaApp> with WidgetsBindingObserver {
   late bool _locked;
   DateTime? _pausedAt;
 

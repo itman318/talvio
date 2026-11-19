@@ -15,7 +15,7 @@ Requirements: Node.js 20+, PostgreSQL 13+.
 cd backend
 cp .env.example .env            # edit DATABASE_URL and the secrets
 npm install
-createdb chatapp                # or create it in pgAdmin
+createdb hushavia                # or create it in pgAdmin
 npm run migrate                 # creates tables (safe to re-run on every deploy)
 npm run create-admin -- admin@example.com "ChangeThisPassword!" "Your Name"
 npm run dev                     # http://localhost:4000  → admin panel at /admin
@@ -47,11 +47,11 @@ Realtime chat needs a long-running Node process with WebSockets, so use a VPS
 ```bash
 # on the server
 sudo apt install -y nodejs npm postgresql nginx
-sudo -u postgres createuser -P chat && sudo -u postgres createdb -O chat chatapp
-cd /var/www/chatapp/backend && npm ci --omit=dev
+sudo -u postgres createuser -P chat && sudo -u postgres createdb -O chat hushavia
+cd /var/www/hushavia/backend && npm ci --omit=dev
 cp .env.example .env   # NODE_ENV=production, OTP_DEV_MODE=false, TRUST_PROXY=true, real secrets, SMS provider
 npm run migrate && npm run create-admin -- you@example.com "StrongPassword" "Name"
-sudo npm i -g pm2 && pm2 start src/server.js --name chatapp && pm2 save && pm2 startup
+sudo npm i -g pm2 && pm2 start src/server.js --name hushavia && pm2 save && pm2 startup
 ```
 
 Generate secrets with `openssl rand -hex 32`.

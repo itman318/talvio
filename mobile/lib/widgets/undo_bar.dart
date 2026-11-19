@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../theme/brand.dart';
 
-/// Telegram-style "Undo" bar: a ring counts down the seconds next to the message. The action
+/// "Undo" bar: a ring counts down the seconds next to the message. The action
 /// already happened on screen; [commit] runs (asks the server) only when the bar goes away
 /// without Undo. [undo] puts everything back instantly.
 void showUndoBar(

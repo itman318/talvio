@@ -315,7 +315,7 @@ class ChatStore extends ChangeNotifier {
 
   bool _prefetched = false;
 
-  /// Like Telegram: the few chats at the top (where new messages are) are loaded in the background,
+  /// The few chats at the top (where new messages are) are loaded in the background,
   /// so opening them shows the newest messages at once.
   Future<void> _prefetchTop(int gen) async {
     await Future<void>.delayed(const Duration(milliseconds: 800)); // let the screen settle first
@@ -387,7 +387,7 @@ class ChatStore extends ChangeNotifier {
     return list.where((m) => !(hide?.contains(m.id) ?? false) && (upTo == null || m.isLocal || m.id > upTo)).toList();
   }
 
-  // ------------------------------------------------------------------ undo window (Telegram-style)
+  // ------------------------------------------------------------------ undo window
   // Deleting messages, clearing a history or deleting a chat happens on screen at once; the server
   // is asked only when the 5-second "Undo" bar is gone, so Undo brings everything back instantly.
   final Map<int, Set<int>> _hidingMsgs = {};

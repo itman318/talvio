@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Photo helpers (Telegram-style fast photos):
+ * Photo helpers (fast photos):
  *  - thumb: a tiny (≤ 40 px) JPEG as base64, sent inside the message itself so a blurred
  *    picture shows the very moment the message appears — before any download;
  *  - preview: a ≤ 1280 px WebP next to the original, served for chat bubbles

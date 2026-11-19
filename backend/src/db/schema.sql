@@ -1,4 +1,4 @@
--- ChatApp Phase 1 schema (PostgreSQL 13+). Safe to run repeatedly.
+-- Hushavia database schema (PostgreSQL 13+). Safe to run repeatedly.
 
 -- ---------------------------------------------------------------- users
 CREATE TABLE IF NOT EXISTS users (

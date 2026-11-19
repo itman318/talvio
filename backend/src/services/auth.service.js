@@ -76,7 +76,7 @@ async function issueCode(target, kind, ip, opts = {}) {
     [target, otpHash(target, code), ip || null, config.otp.ttlSec],
   );
 
-  // Like Telegram: someone already logged in on another device gets the code inside the Hushavia app,
+  // Someone already logged in on another device gets the code inside the Hushavia app,
   // free and instant — email / SMS only when there is no such device or they ask for it.
   let delivery = kind;
   if (existing && !opts.fallback && !existing.is_bot) {

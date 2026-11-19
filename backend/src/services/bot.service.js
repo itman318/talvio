@@ -407,7 +407,7 @@ function parseReplyMarkup(raw) {
   if (m && m.remove_keyboard === true) return { remove_keyboard: true };
   if (m && Array.isArray(m.keyboard)) return parseReplyKeyboard(m);
   if (!m || !Array.isArray(m.inline_keyboard)) throw badRequest('invalid_markup', 'reply_markup needs inline_keyboard, keyboard or remove_keyboard');
-  // same limits as Telegram: up to 100 buttons, 8 in a row
+  // up to 100 buttons, 8 in a row
   const total = m.inline_keyboard.reduce((n, row) => n + (Array.isArray(row) ? row.length : 0), 0);
   if (total > 100) throw badRequest('invalid_markup', 'At most 100 buttons');
   const rows = m.inline_keyboard.filter((row) => !Array.isArray(row) || row.length > 0).map((row) => {
@@ -437,7 +437,7 @@ function parseReplyMarkup(raw) {
       }
       if (btn.web_app && btn.web_app.url) return { text, web_app: { url: parseHttpsUrl(btn.web_app.url, 'web_app.url') } };
       if (btn.copy_text && btn.copy_text.text !== undefined) {
-        // tap → the text goes to the clipboard (like Telegram's CopyTextButton)
+        // tap → the text goes to the clipboard
         return { text, copy_text: { text: v.str(String(btn.copy_text.text), { field: 'copy_text', min: 1, max: 256 }) } };
       }
       throw badRequest('invalid_markup', 'Each button needs callback_data, url, web_app or copy_text');
@@ -446,7 +446,7 @@ function parseReplyMarkup(raw) {
   return { inline_keyboard: rows };
 }
 
-/** Reply keyboard: big text buttons that replace the phone keyboard (like Telegram's ReplyKeyboardMarkup). */
+/** Reply keyboard: big text buttons that replace the phone keyboard. */
 function parseReplyKeyboard(m) {
   const rowsIn = m.keyboard.filter((row) => !Array.isArray(row) || row.length > 0);
   if (rowsIn.length === 0 || rowsIn.length > 100) throw badRequest('invalid_markup', 'A keyboard needs 1–100 rows');

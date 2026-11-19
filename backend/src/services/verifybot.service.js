@@ -44,7 +44,7 @@ const STEPS = {
   chat: [
     { key: 'username', label: 'Channel / group', q: 'Send the @username of the public channel or group you own (e.g. @MyChannel).', min: 5, max: 40, chat: true },
     { key: 'about', label: 'About', q: 'What is it about, and who runs it? (e.g. news from Lahore by City Media)', min: 10, max: 300 },
-    { key: 'links', label: 'Same channel elsewhere', q: 'Links to the same channel or brand on other platforms (Telegram, YouTube, Facebook, website).', min: 5, max: 600, link: true },
+    { key: 'links', label: 'Same channel elsewhere', q: 'Links to the same channel or brand on other platforms (YouTube, Facebook, Instagram, website).', min: 5, max: 600, link: true },
     { key: 'proof_photo', label: 'Proof', q: 'Optional: a screenshot that shows you own the channel on another platform (e.g. its admin page).', type: 'photo', optional: true },
   ],
 };

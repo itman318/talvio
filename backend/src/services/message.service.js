@@ -1692,7 +1692,7 @@ async function searchMessages(userId, query = {}) {
 }
 
 /**
- * #hashtag search: my chats and every public channel (like Telegram's "Public posts").
+ * #hashtag search: my chats and every public channel.
  * scope: 'all' (default) | 'mine' | 'channels'.
  */
 async function searchHashtag(userId, query = {}) {
