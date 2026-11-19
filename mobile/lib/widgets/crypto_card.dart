@@ -36,8 +36,22 @@ class _CryptoCardState extends State<CryptoCard> {
   @override
   void initState() {
     super.initState();
-    if (c['kind'] == 'sent') _verify();
+    if (c['kind'] == 'sent' || _paidTx != null) _verify();
     _loadMine();
+  }
+
+  /// a request / invoice that was paid from this chat (the server links the reply that paid it)
+  String? get _paidTx => c['kind'] == 'request' && (c['paid_tx'] ?? '').toString().isNotEmpty ? '${c['paid_tx']}' : null;
+  Map<String, dynamic>? get _inv => c['invoice'] is Map ? Map<String, dynamic>.from(c['invoice'] as Map) : null;
+
+  @override
+  void didUpdateWidget(covariant CryptoCard old) {
+    super.didUpdateWidget(old);
+    final was = (old.message.meta?['crypto'] as Map?)?['paid_tx'];
+    if (was == null && _paidTx != null) {
+      _check = CardCheck.checking;
+      _verify();
+    }
   }
 
   Future<void> _loadMine() async {
@@ -52,7 +66,7 @@ class _CryptoCardState extends State<CryptoCard> {
 
   Future<void> _verify() async {
     if (widget.message.isLocal) return;
-    final r = await CryptoVerify.check(c);
+    final r = await CryptoVerify.check(_paidTx != null ? {...c, 'tx': _paidTx} : c);
     if (!mounted) return;
     setState(() => _check = r);
     if (r == CardCheck.pending) {
@@ -79,7 +93,7 @@ class _CryptoCardState extends State<CryptoCard> {
   }
 
   String? get _explorer {
-    final tx = c['tx'];
+    final tx = c['tx'] ?? _paidTx;
     if (tx == null) return null;
     if ('${c['network']}' == 'tron') return 'https://tronscan.org/#/transaction/$tx';
     final u = UtxoChain.byId('${c['network']}');
@@ -99,10 +113,14 @@ class _CryptoCardState extends State<CryptoCard> {
   @override
   Widget build(BuildContext context) {
     final sent = c['kind'] == 'sent';
+    final inv = _inv;
+    final paid = _paidTx != null;
     final onDark = widget.isMine && !softMineOf(context); // my bubbles are dark, unless a light chat theme is on
     final fg = onDark ? Colors.white : Theme.of(context).colorScheme.onSurface;
     final sub = onDark ? Colors.white70 : Brand.muted;
     final (icon, label, color) = switch (_check) {
+      CardCheck.confirmed when paid => (Icons.verified_rounded, 'Paid · confirmed on the network', const Color(0xFF12B89C)),
+      CardCheck.pending when paid => (Icons.schedule_rounded, 'Paid · waiting for the network…', const Color(0xFFE0A43A)),
       CardCheck.confirmed => (Icons.verified_rounded, 'Confirmed on the network', const Color(0xFF12B89C)),
       CardCheck.pending => (Icons.schedule_rounded, 'Waiting for the network…', const Color(0xFFE0A43A)),
       CardCheck.failed => (Icons.cancel_rounded, 'This transfer failed', const Color(0xFFE5484D)),
@@ -120,17 +138,43 @@ class _CryptoCardState extends State<CryptoCard> {
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: sent ? const [Color(0xFF3FD8C0), Color(0xFF12B89C)] : const [Color(0xFF9A82FF), Color(0xFF6D4AFF)]),
             ),
-            child: Icon(sent ? Icons.north_east_rounded : Icons.request_page_rounded, color: Colors.white, size: 18),
+            child: Icon(sent ? Icons.north_east_rounded : (inv != null ? Icons.receipt_long_rounded : Icons.request_page_rounded), color: Colors.white, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              sent ? (_toMe ? 'Sent to you' : (widget.isMine ? 'You sent' : 'Sent')) : (widget.isMine ? 'You asked for' : 'Payment request'),
+              sent
+                  ? (_toMe ? 'Sent to you' : (widget.isMine ? 'You sent' : 'Sent'))
+                  : inv != null
+                  ? 'Invoice${inv['number'] != null ? ' · ${inv['number']}' : ''}'
+                  : (widget.isMine ? 'You asked for' : 'Payment request'),
               style: TextStyle(color: sub, fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
+          if (paid)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: const Color(0xFF12B89C).withValues(alpha: .16), borderRadius: BorderRadius.circular(20)),
+              child: const Text('PAID', style: TextStyle(color: Color(0xFF12B89C), fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: .6)),
+            ),
         ]),
-        const SizedBox(height: 8),
+        if (inv != null) ...[
+          const SizedBox(height: 10),
+          Text('${inv['title'] ?? ''}', style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w700)),
+          for (final l in (inv['lines'] as List? ?? const []))
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('•  ', style: TextStyle(color: sub)),
+                Expanded(child: Text('$l', style: TextStyle(color: fg.withValues(alpha: .85), fontSize: 13.5))),
+              ]),
+            ),
+          const SizedBox(height: 8),
+          Divider(height: 1, color: sub.withValues(alpha: .3)),
+          const SizedBox(height: 6),
+          Text('Total', style: TextStyle(color: sub, fontSize: 12)),
+        ] else
+          const SizedBox(height: 8),
         Text('$_amount ${c['symbol']}', style: TextStyle(color: fg, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
         Text('on $_network · to ${_short('${c['to']}')}', style: TextStyle(color: sub, fontSize: 12.5)),
         if ((c['note'] ?? '').toString().isNotEmpty) ...[
@@ -138,7 +182,7 @@ class _CryptoCardState extends State<CryptoCard> {
           Text('${c['note']}', style: TextStyle(color: fg, fontSize: 14.5)),
         ],
         const SizedBox(height: 10),
-        if (sent)
+        if (sent || paid)
           InkWell(
             onTap: _explorer == null ? null : () => launchUrl(Uri.parse(_explorer!), mode: LaunchMode.externalApplication),
             child: Row(children: [
@@ -149,7 +193,7 @@ class _CryptoCardState extends State<CryptoCard> {
             ]),
           )
         else if (widget.isMine)
-          Text('Waiting for payment', style: TextStyle(color: sub, fontSize: 12.5, fontStyle: FontStyle.italic))
+          Text(inv != null ? 'Not paid yet' : 'Waiting for payment', style: TextStyle(color: sub, fontSize: 12.5, fontStyle: FontStyle.italic))
         else
           SizedBox(
             width: double.infinity,
@@ -157,7 +201,7 @@ class _CryptoCardState extends State<CryptoCard> {
               style: FilledButton.styleFrom(backgroundColor: Brand.primary, minimumSize: const Size.fromHeight(42)),
               onPressed: _pay,
               icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-              label: Text('Pay $_amount ${c['symbol']}'),
+              label: Text(inv != null ? 'Pay invoice' : 'Pay $_amount ${c['symbol']}'),
             ),
           ),
       ]),
@@ -173,6 +217,7 @@ String cryptoLabel(Map<String, dynamic>? meta) {
   if (c is! Map) return '💸 Crypto';
   final u = BigInt.tryParse('${c['amount']}') ?? BigInt.zero;
   final amt = Units.format(u, decimals: (c['decimals'] as num?)?.toInt() ?? 6, maxFraction: 6);
+  if (c['kind'] == 'request' && c['invoice'] is Map) return '🧾 Invoice: $amt ${c['symbol']}${c['paid_tx'] != null ? ' · paid' : ''}';
   return c['kind'] == 'request' ? '💸 Request: $amt ${c['symbol']}' : '💸 Sent $amt ${c['symbol']}';
 }
 

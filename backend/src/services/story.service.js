@@ -47,7 +47,9 @@ function serialize(s, media, { owner = false, users = null } = {}) {
     created_at: new Date(s.created_at).toISOString(),
     expires_at: new Date(s.expires_at).toISOString(),
     viewed: !!s.viewed,
-    music: s.music_media_id ? { url: `/api/media/${s.music_media_id}`, title: s.music_title || 'Music' } : null,
+    music: s.music_media_id
+      ? { id: Number(s.music_media_id), kind: 'file', mime: 'audio/mpeg', size: 0, name: s.music_title || 'Music', url: `/api/media/${s.music_media_id}`, title: s.music_title || 'Music' }
+      : null,
     ...(owner ? { views_count: s.views_count } : {}),
   };
 }

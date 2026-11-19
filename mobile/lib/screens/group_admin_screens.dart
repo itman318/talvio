@@ -641,6 +641,13 @@ class _ChannelDirectoryScreenState extends State<ChannelDirectoryScreen> {
                           title: Row(children: [
                             Flexible(child: Text('${c['title']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
                             if (c['is_verified'] == true) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified_rounded, size: 16, color: Brand.sky)),
+                            if (c['promoted'] == true)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(color: Brand.violet.withValues(alpha: .14), borderRadius: BorderRadius.circular(6)),
+                                child: const Text('Promoted', style: TextStyle(color: Brand.violet, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                              ),
                           ]),
                           subtitle: Text(
                             '${compactNumber((c['member_count'] as num?)?.toInt() ?? 0)} subscribers'

@@ -520,6 +520,7 @@ class Message {
       case 'crypto':
         final c = meta?['crypto'] as Map?;
         if (c == null) return '💸 Crypto';
+        if (c['kind'] == 'request' && c['invoice'] is Map) return '🧾 Invoice · ${c['symbol']}${c['paid_tx'] != null ? ' · paid' : ''}';
         return c['kind'] == 'request' ? '💸 Payment request · ${c['symbol']}' : '💸 Sent ${c['symbol']}';
       case 'call':
         final c = callMeta ?? const {};
@@ -907,6 +908,8 @@ class StoryItem {
   bool viewed;
   final int viewsCount;
   final List<AppUser> mentions; // people tagged in this story
+  final MediaInfo? music; // a song played while the story is shown
+  final String? musicTitle;
 
   StoryItem({
     required this.id,
@@ -918,6 +921,8 @@ class StoryItem {
     required this.viewed,
     required this.viewsCount,
     this.mentions = const [],
+    this.music,
+    this.musicTitle,
   });
 
   factory StoryItem.fromJson(Map<String, dynamic> j) => StoryItem(
@@ -930,6 +935,8 @@ class StoryItem {
         viewed: j['viewed'] == true,
         viewsCount: _int(j['views_count'] ?? 0),
         mentions: [for (final u in (j['mentions'] as List? ?? const [])) AppUser.fromJson(Map<String, dynamic>.from(u as Map))],
+        music: j['music'] is Map ? MediaInfo.fromJson(Map<String, dynamic>.from(j['music'] as Map)) : null,
+        musicTitle: j['music'] is Map ? (j['music'] as Map)['title'] as String? : null,
       );
 }
 

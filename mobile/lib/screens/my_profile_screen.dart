@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'read_later_screen.dart';
+import 'orders_screen.dart';
 import '../core/services.dart';
 import '../core/socket_service.dart';
 import 'coins_screen.dart' show CoinsScreen, fmtCoins;
@@ -179,6 +180,7 @@ class MyProfileScreen extends StatelessWidget {
                 },
               ),
               _Line(icon: Icons.watch_later_outlined, title: 'Read later', onTap: () => go(const ReadLaterScreen())),
+              _Line(icon: Icons.receipt_long_outlined, title: 'My orders', onTap: () => go(const OrdersScreen())),
               _Line(icon: Icons.auto_awesome_outlined, title: 'Story highlights', onTap: () => go(const MyHighlightsScreen())),
             ]),
           ),

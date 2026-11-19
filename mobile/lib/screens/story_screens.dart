@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
@@ -130,6 +132,7 @@ Future<void> addStory(BuildContext context) async {
   final caption = TextEditingController();
   String privacy = 'contacts';
   var tagged = <AppUser>[];
+  PlatformFile? music;
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -161,6 +164,25 @@ Future<void> addStory(BuildContext context) async {
               if (picked != null) setState(() => tagged = picked.take(10).toList());
             },
           ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.music_note_rounded),
+            title: Text(music == null ? 'Add music' : music!.name.replaceAll(RegExp(r'\.[a-zA-Z0-9]{2,4}$'), ''),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(music == null ? 'A song from your phone plays with the story' : 'Plays while people watch',
+                style: const TextStyle(fontSize: 12)),
+            trailing: music == null ? null : IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => setState(() => music = null)),
+            onTap: () async {
+              final r = await FilePicker.platform.pickFiles(type: FileType.audio);
+              final f = r?.files.single;
+              if (f == null || f.path == null) return;
+              if (f.size > 15 * 1024 * 1024) {
+                if (ctx.mounted) showInfo(ctx, 'Pick a song under 15 MB');
+                return;
+              }
+              setState(() => music = f);
+            },
+          ),
           const Text('Disappears after 24 hours', style: TextStyle(fontSize: 12, color: Brand.muted)),
         ])),
         actions: [
@@ -180,6 +202,8 @@ Future<void> addStory(BuildContext context) async {
           privacy: privacy,
           mime: lookupMimeType(x.path),
           mentions: tagged.map((u) => u.id).toList(),
+          musicPath: music?.path,
+          musicTitle: music?.name.replaceAll(RegExp(r'\.[a-zA-Z0-9]{2,4}$'), ''),
         );
     if (context.mounted) showInfo(context, 'Story shared');
   } catch (e) {
@@ -211,6 +235,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
   late final AnimationController _progress;
   File? _file;
   VideoPlayerController? _video;
+  AudioPlayer? _music; // the story's song
+  bool _muted = false;
   bool _loading = true;
   final _reply = TextEditingController();
   final _replyFocus = FocusNode();
@@ -254,6 +280,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
   void dispose() {
     _progress.dispose();
     _video?.dispose();
+    _music?.dispose();
     _reply.dispose();
     _replyFocus.dispose();
     _store.refreshStoryRings();
@@ -266,6 +293,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
     final old = _video;
     _video = null;
     old?.dispose();
+    final oldMusic = _music;
+    _music = null;
+    oldMusic?.dispose();
     setState(() {
       _loading = true;
       _file = null;
@@ -290,6 +320,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
       } else {
         _progress.duration = const Duration(seconds: 6);
       }
+      if (story.music != null) await _startMusic(story);
+      if (!mounted || story != _story) return;
       setState(() {
         _file = f;
         _loading = false;
@@ -302,6 +334,31 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
         _next();
       }
     }
+  }
+
+  /// download the song (cached like other media) and loop it; a story with sound of its own plays the song softer
+  Future<void> _startMusic(StoryItem story) async {
+    try {
+      final file = await context.read<AppServices>().media.get(story.music!);
+      if (!mounted || story != _story) return;
+      final p = AudioPlayer();
+      await p.setFilePath(file.path);
+      await p.setLoopMode(LoopMode.one);
+      await p.setVolume(_muted ? 0 : (_video != null ? 0.5 : 1));
+      if (!mounted || story != _story) {
+        await p.dispose();
+        return;
+      }
+      _music = p;
+      unawaited(p.play());
+    } catch (_) {
+      // no music is better than no story
+    }
+  }
+
+  void _toggleMute() {
+    setState(() => _muted = !_muted);
+    _music?.setVolume(_muted ? 0 : (_video != null ? 0.5 : 1));
   }
 
   void _next() {
@@ -366,6 +423,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
   Future<void> _addToHighlight() async {
     _progress.stop();
     _video?.pause();
+    _music?.pause();
     final story = _story;
     try {
       final list = await _store.highlightsOf(_store.myId!);
@@ -406,6 +464,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
       if (mounted) {
         _progress.forward();
         _video?.play();
+        _music?.play();
       }
     }
   }
@@ -473,10 +532,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
               onLongPressStart: (_) {
                 _progress.stop();
                 _video?.pause();
+                _music?.pause();
               },
               onLongPressEnd: (_) {
                 _progress.forward();
                 _video?.play();
+                _music?.play();
               },
               onVerticalDragEnd: (d) {
                 if ((d.primaryVelocity ?? 0) > 300) Navigator.pop(context);
@@ -542,6 +603,32 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
                 gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black87, Colors.transparent]),
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (story.music != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: Colors.white.withValues(alpha: .16),
+                      shape: const StadiumBorder(),
+                      child: InkWell(
+                        customBorder: const StadiumBorder(),
+                        onTap: _toggleMute,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.music_note_rounded, color: Colors.white, size: 16),
+                            const SizedBox(width: 6),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 200),
+                              child: Text(story.musicTitle ?? 'Music',
+                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(_muted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: Colors.white, size: 16),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
                 if (story.caption.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),

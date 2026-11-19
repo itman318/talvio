@@ -1003,6 +1003,12 @@ class _ChatScreenState extends State<ChatScreen> {
               subtitle: const Text('They pay with one tap'),
               onTap: () => Navigator.pop(ctx, 'request'),
             ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long_rounded),
+              title: const Text('Send an invoice'),
+              subtitle: const Text('A bill with items — it shows Paid once they pay'),
+              onTap: () => Navigator.pop(ctx, 'invoice'),
+            ),
           ]),
         ),
       );
@@ -1010,7 +1016,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final chat = _store.chatById(chatId);
       final card = what == 'send'
           ? await walletSendForChat(context, peerUserId: chat?.isMulti == false ? chat?.peer?.id : null, peerName: chat?.isMulti == false ? chat?.peer?.firstName : null)
-          : await walletRequestForChat(context);
+          : await walletRequestForChat(context, invoice: what == 'invoice');
       if (card == null) return;
       try {
         await _store.sendSpecial(chatId, 'crypto', {'crypto': card}, meta: {'crypto': card});

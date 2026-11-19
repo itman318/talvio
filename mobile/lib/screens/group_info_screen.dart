@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 import 'global_search_screen.dart' show SimilarChannels;
 import 'coins_screen.dart' show CoinIcon, fmtCoins;
+import 'channel_boost.dart';
 import 'monetize_screen.dart';
 import '../core/services.dart';
 import 'package:flutter/material.dart';
@@ -582,6 +583,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               subtitle: chat.welcomeText.isEmpty ? 'Greet new members automatically' : chat.welcomeText,
               maxSubtitleLines: 1,
               onTap: () => editChatText(context, chat, field: 'welcome_text', title: 'Welcome message', hint: 'Glad to have you! Please read the rules.', max: 500, current: chat.welcomeText),
+            ),
+          if (chat.isChannel && chat.username != null && auth.feature('coins'))
+            SettingsTile(
+              icon: Icons.rocket_launch_rounded,
+              color: const Color(0xFF6D4AFF),
+              title: 'Promote channel',
+              subtitle: 'Show it first in Explore channels, paid with coins',
+              onTap: () => showChannelBoost(context, chat),
             ),
           if (chat.isChannel && chat.username != null)
             SettingsTile(

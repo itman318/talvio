@@ -2744,7 +2744,9 @@ Future<Map<String, dynamic>?> walletSendForChat(BuildContext context,
 }
 
 /// "Ask for crypto" from a chat: pick a coin and an amount; returns the request card (kind: request) or null.
-Future<Map<String, dynamic>?> walletRequestForChat(BuildContext context) async {
+/// [invoice]: a business bill — a title, its lines (one per row) and the amount; the card gets its own number
+/// and turns "Paid" when the customer pays it from the chat.
+Future<Map<String, dynamic>?> walletRequestForChat(BuildContext context, {bool invoice = false}) async {
   final auth = context.read<AuthState>();
   if (!auth.feature('wallet')) {
     showInfo(context, 'The wallet is switched off for now');
@@ -2759,35 +2761,55 @@ Future<Map<String, dynamic>?> walletRequestForChat(BuildContext context) async {
     return null;
   }
   final assets = Portfolio.build(tron: w.net, custom: w.customTokens);
-  final a = await _pickAsset(context, assets, title: 'Ask for which coin?');
+  final a = await _pickAsset(context, assets, title: invoice ? 'Invoice in which coin?' : 'Ask for which coin?');
   if (a == null || !context.mounted) return null;
   final ctl = TextEditingController();
   final note = TextEditingController();
+  final title = TextEditingController();
+  final lines = TextEditingController();
   final amount = await showDialog<BigInt>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) {
         final u = Units.parse(ctl.text, decimals: a.decimals);
+        final ready = u != null && u > BigInt.zero && (!invoice || title.text.trim().isNotEmpty);
         return AlertDialog(
-          title: Text('Ask for ${a.symbol}'),
+          title: Text(invoice ? 'New invoice' : 'Ask for ${a.symbol}'),
+          scrollable: true,
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('on ${a.networkName}', style: const TextStyle(color: Brand.muted)),
+            Text('${a.symbol} on ${a.networkName} · paid to your own wallet', style: const TextStyle(color: Brand.muted, fontSize: 12.5)),
             const SizedBox(height: 10),
+            if (invoice) ...[
+              TextField(
+                controller: title,
+                autofocus: true,
+                maxLength: 80,
+                onChanged: (_) => set(() {}),
+                decoration: const InputDecoration(labelText: 'Invoice for', hintText: 'e.g. Website design'),
+              ),
+              TextField(
+                controller: lines,
+                minLines: 2,
+                maxLines: 6,
+                decoration: const InputDecoration(labelText: 'Items (one per line, optional)', hintText: 'Logo\nLanding page'),
+              ),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: ctl,
-              autofocus: true,
+              autofocus: !invoice,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
               onChanged: (_) => set(() {}),
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-              decoration: InputDecoration(suffixText: a.symbol, hintText: '0'),
+              decoration: InputDecoration(suffixText: a.symbol, hintText: '0', labelText: invoice ? 'Total' : null),
             ),
             const SizedBox(height: 8),
-            TextField(controller: note, maxLength: 140, decoration: const InputDecoration(hintText: 'What for? (optional)')),
+            TextField(controller: note, maxLength: 140, decoration: InputDecoration(hintText: invoice ? 'Note for the customer (optional)' : 'What for? (optional)')),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(onPressed: u == null || u <= BigInt.zero ? null : () => Navigator.pop(ctx, u), child: const Text('Send request')),
+            FilledButton(onPressed: !ready ? null : () => Navigator.pop(ctx, u), child: Text(invoice ? 'Send invoice' : 'Send request')),
           ],
         );
       },
@@ -2799,5 +2821,10 @@ Future<Map<String, dynamic>?> walletRequestForChat(BuildContext context) async {
     'to': w.addressFor(a.network)!,
     if (a.contract != null) 'contract': a.contract,
     if (note.text.trim().isNotEmpty) 'note': note.text.trim(),
+    if (invoice)
+      'invoice': {
+        'title': title.text.trim(),
+        'lines': lines.text.split('\n').map((x) => x.trim()).where((x) => x.isNotEmpty).take(20).toList(),
+      },
   };
 }

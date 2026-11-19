@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:mime/mime.dart';
 
 import '../core/api_client.dart';
 import '../core/live_location.dart';
@@ -1494,9 +1495,18 @@ class ChatStore extends ChangeNotifier {
   }
 
   /// type: image | video. privacy: contacts | everyone
-  Future<void> postStory(String path, {required String type, String caption = '', String privacy = 'contacts', String? mime, List<int> mentions = const []}) async {
+  Future<void> postStory(String path,
+      {required String type, String caption = '', String privacy = 'contacts', String? mime, List<int> mentions = const [], String? musicPath, String? musicTitle}) async {
     final m = await api.upload(path, kind: type, mime: mime);
-    await api.post('/stories', {'media_id': m['id'], 'caption': caption, 'privacy': privacy, if (mentions.isNotEmpty) 'mentions': mentions});
+    final music = musicPath == null ? null : await api.upload(musicPath, kind: 'file', mime: lookupMimeType(musicPath) ?? 'audio/mpeg');
+    await api.post('/stories', {
+      'media_id': m['id'],
+      'caption': caption,
+      'privacy': privacy,
+      if (mentions.isNotEmpty) 'mentions': mentions,
+      if (music != null) 'music_media_id': music['id'],
+      if (music != null && musicTitle != null) 'music_title': musicTitle,
+    });
     await loadStories();
   }
 

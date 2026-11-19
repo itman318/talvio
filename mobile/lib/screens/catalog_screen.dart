@@ -12,6 +12,7 @@ import '../theme/brand.dart';
 import '../utils/format.dart';
 import 'chat_screen.dart';
 import 'coins_screen.dart' show fmtCoins;
+import 'orders_screen.dart';
 
 /// One product of a business catalog.
 class CatalogItem {
@@ -88,7 +89,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Widget build(BuildContext context) {
     final items = _items;
     return Scaffold(
-      appBar: AppBar(title: Text(_mine ? 'My catalog' : widget.name)),
+      appBar: AppBar(title: Text(_mine ? 'My catalog' : widget.name), actions: [
+        IconButton(
+          tooltip: _mine ? 'Customer orders' : 'My orders',
+          icon: const Icon(Icons.receipt_long_rounded),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrdersScreen(seller: _mine))),
+        ),
+      ]),
       floatingActionButton: _mine
           ? FloatingActionButton.extended(onPressed: () => _edit(), icon: const Icon(Icons.add_rounded), label: const Text('Add product'))
           : null,
@@ -229,14 +236,17 @@ class _ProductSheetState extends State<_ProductSheet> {
 
   Future<void> _order() async {
     final it = widget.item;
+    final details = await _askOrder(context, it);
+    if (details == null || !mounted) return;
+    final api = context.read<AppServices>().api;
     final store = context.read<ChatStore>();
     final nav = Navigator.of(context);
     setState(() => _busy = true);
     try {
-      final chat = await store.openPrivateWith(it.ownerId);
-      await store.sendText(chat.id, '🛍️ I’d like to order: ${it.title}${it.price == 'Ask for price' ? '' : ' (${it.price})'}');
+      final r = Map<String, dynamic>.from(await api.post('/catalog/${it.id}/order', details) as Map);
+      final chatId = (r['chat_id'] as num?)?.toInt();
       nav.pop();
-      nav.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chat.id, initial: chat)));
+      if (chatId != null) nav.push(MaterialPageRoute(builder: (_) => ChatScreen(chatId: chatId, initial: store.chatById(chatId))));
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -244,10 +254,48 @@ class _ProductSheetState extends State<_ProductSheet> {
     }
   }
 
+  /// how many, and a note for the seller (size, colour, address…)
+  static Future<Map<String, dynamic>?> _askOrder(BuildContext context, CatalogItem it) {
+    var qty = 1;
+    final note = TextEditingController();
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text('Order “${it.title}”'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(it.price, style: const TextStyle(fontWeight: FontWeight.w800, color: Brand.primary)),
+            const SizedBox(height: 12),
+            Row(children: [
+              const Text('Quantity', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              IconButton.filledTonal(onPressed: qty > 1 ? () => set(() => qty--) : null, icon: const Icon(Icons.remove_rounded, size: 18)),
+              SizedBox(width: 34, child: Text('$qty', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+              IconButton.filledTonal(onPressed: qty < 99 ? () => set(() => qty++) : null, icon: const Icon(Icons.add_rounded, size: 18)),
+            ]),
+            const SizedBox(height: 8),
+            TextField(
+              controller: note,
+              maxLength: 300,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(hintText: 'Note for the seller — size, colour, address (optional)'),
+            ),
+            const Text('The order is sent in your chat. You can follow it in Orders.', style: TextStyle(color: Brand.muted, fontSize: 12.5)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, {'qty': qty, 'note': note.text.trim()}), child: const Text('Send order')),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _buy() async {
     final it = widget.item;
     final ok = await confirm(context, 'Buy “${it.title}”?',
-        '${fmtCoins(it.priceCoins!)} coins go to ${widget.seller} now. Your order is sent to them in the chat. Coins can’t be taken back automatically — agree on delivery with the seller first.',
+        '${fmtCoins(it.priceCoins!)} coins go to ${widget.seller} now. Your order is sent to them in the chat and you can follow it in Orders. If the seller cancels it, your coins come back.',
         ok: 'Pay ${fmtCoins(it.priceCoins!)} 🪙');
     if (!ok || !mounted) return;
     final api = context.read<AppServices>().api;

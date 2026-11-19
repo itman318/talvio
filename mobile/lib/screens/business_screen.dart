@@ -7,6 +7,7 @@ import '../utils/format.dart';
 import '../widgets/premium.dart';
 import '../state/auth_state.dart';
 import 'catalog_screen.dart';
+import 'orders_screen.dart';
 
 /// Quick replies, cached for the composer ("/" in any chat shows them).
 class QuickReplies {
@@ -139,6 +140,13 @@ class _BusinessScreenState extends State<BusinessScreen> {
                     final me = context.read<AuthState>().me;
                     if (me != null) Navigator.push(context, MaterialPageRoute(builder: (_) => CatalogScreen(userId: me.id, name: me.name)));
                   },
+                ),
+                SettingsTile(
+                  icon: Icons.receipt_long_rounded,
+                  color: Brand.green,
+                  title: 'Customer orders',
+                  subtitle: 'Mark orders packed, shipped and delivered — customers see each step',
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen(seller: true))),
                 ),
               ]),
               SettingsGroup(title: 'Greeting message', children: [

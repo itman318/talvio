@@ -126,7 +126,7 @@ async function buy(userId, idRaw, body = {}) {
     await c.query('SELECT id FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE', [userId, sellerId]);
     // a double tap: the same product a moment ago
     const twice = (await c.query(
-      `SELECT 1 FROM catalog_orders WHERE buyer_id = $1 AND item_id = $2 AND created_at > now() - interval '10 seconds' LIMIT 1`,
+      `SELECT 1 FROM catalog_orders WHERE buyer_id = $1 AND item_id = $2 AND paid_with = 'coins' AND created_at > now() - interval '10 seconds' LIMIT 1`,
       [userId, item.id],
     )).rows[0];
     if (twice) throw conflict('just_bought', 'You bought this a moment ago — check your coin history first');
