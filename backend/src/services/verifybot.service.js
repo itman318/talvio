@@ -192,7 +192,7 @@ async function requirements(userId, chatId, kind, messageId) {
     'Before you start, your account needs:',
     '',
     ...e.checks.map((c) => (c.ok ? `✅ ${c.label}` : `❌ ${c.label}\n      ↳ ${c.fix}`)),
-    ...(kind === 'chat' ? ['', `📣 The channel or group: public @link, you are the owner, at least ${Number(minMembers).toLocaleString('en-US')} members and ${await require('./settings.service').get('verify_min_account_days')} days old.`] : []), // eslint-disable-line global-require
+    ...(kind === 'chat' ? ['', `📣 The channel or group: public @link, you are the owner, at least ${Number(minMembers).toLocaleString('en-US')} members and ${await require('./settings.service').get('verify_min_chat_days')} days old.`] : []), // eslint-disable-line global-require
     '',
     'Fix the ❌ items, then press **Check again**.',
   ];
@@ -291,7 +291,7 @@ async function answer(userId, chatId, row, d) {
       );
       if (!c) return nope('I couldn’t find a public channel or group with that @username that you own. Check it and try again.');
       const settings = require('./settings.service'); // eslint-disable-line global-require
-      const [minMembers, minDays] = [Number(await settings.get('verify_min_members')), Number(await settings.get('verify_min_account_days'))];
+      const [minMembers, minDays] = [Number(await settings.get('verify_min_members')), Number(await settings.get('verify_min_chat_days'))];
       const info = await db.one(
         `SELECT (SELECT count(*)::int FROM chat_members WHERE chat_id = c.id) AS n, c.created_at, c.is_verified, c.is_suspended FROM chats c WHERE c.id = $1`,
         [c.id],
