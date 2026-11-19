@@ -104,6 +104,11 @@ const DEFINITIONS = {
   monetize_min_avg_views: { type: 'integer', default: 100, min: 0, max: 100000000 },
   boost_coins_per_day: { type: 'integer', default: 100, min: 1, max: 1000000 },
   boost_max_promoted: { type: 'integer', default: 6, min: 0, max: 60 },
+  // verified badge: who may ask for one (@HushaviaVerifyBot)
+  verify_plus_months: { type: 'integer', default: 12, min: 0, max: 60 },
+  verify_min_account_days: { type: 'integer', default: 30, min: 0, max: 3650 },
+  verify_min_members: { type: 'integer', default: 500, min: 0, max: 100000000 },
+  verify_retry_days: { type: 'integer', default: 30, min: 0, max: 365 },
 };
 
 const FEATURE_KEYS = [

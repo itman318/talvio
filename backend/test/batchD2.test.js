@@ -1023,6 +1023,18 @@ test('@HushaviaVerifyBot: step-by-step form with review → admin approves → b
   const botId = await sysbots.ensureOne('verify');
   const chat = await chats.getOrCreatePrivate(star.id, botId);
   const say = (text) => vb.onMessage(star.id, chat.id, { text });
+  // not eligible yet: the bot lists what is missing and the form doesn't start
+  await vb.onCallback(star.id, chat.id, 'k:person');
+  const gate = await db.one(`SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1`, [chat.id, botId]);
+  assert.match(gate.text, /❌ Hushavia Plus — 12-month package/);
+  assert.equal((await vb.eligibility(star.id)).ok, false);
+  // a monthly plan is not enough; the yearly one is
+  await db.query(`UPDATE users SET created_at = now() - interval '60 days', last_name = 'Khan', username = 'star_khan_pk', avatar_media_id = $2, password_hash = 'x', premium_until = now() + interval '1 month' WHERE id = $1`, [star.id, (await fakeUpload(star.id)).id]);
+  await db.query(`INSERT INTO payment_orders (user_id, months, amount_pkr, provider, status, txn_ref, paid_at) VALUES ($1, 1, 0, 'admin', 'paid', 'VT1', now())`, [star.id]);
+  assert.equal((await vb.eligibility(star.id)).ok, false);
+  await db.query(`INSERT INTO payment_orders (user_id, months, amount_pkr, provider, status, txn_ref, paid_at) VALUES ($1, 12, 0, 'admin', 'paid', 'VT12', now())`, [star.id]);
+  await db.query(`UPDATE users SET premium_until = now() + interval '12 months' WHERE id = $1`, [star.id]);
+  assert.equal((await vb.eligibility(star.id)).ok, true);
   await vb.onCallback(star.id, chat.id, 'k:person');
   await say('ignored before Start'); // the intro screen: nothing is recorded yet
   await vb.onCallback(star.id, chat.id, 'go');

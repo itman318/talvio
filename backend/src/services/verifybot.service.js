@@ -149,15 +149,63 @@ async function myRequests(userId, chatId, messageId) {
   return show(chatId, messageId, ['📄 **My requests**', DIV, parts.join('\n\n')].join('\n'), [[btn('⬅️ Back', 'home')]]);
 }
 
+/**
+ * Who may ask for a badge. Everything is checked before the form starts, so nobody fills it in for nothing:
+ * a yearly Hushavia Plus (12-month package, bought within the last year and still active), an account that
+ * isn't brand new, a complete profile (photo, full name, @username), two-step verification on, no warning
+ * tags, and no "not approved" answer in the last few weeks. Channels and groups are checked at their step.
+ */
+async function eligibility(userId) {
+  const settings = require('./settings.service'); // eslint-disable-line global-require
+  const [months, days, retry] = await Promise.all([settings.get('verify_plus_months'), settings.get('verify_min_account_days'), settings.get('verify_retry_days')]);
+  const u = await db.one(
+    `SELECT u.created_at, u.first_name, u.last_name, u.username, u.avatar_media_id, u.tags, (u.password_hash IS NOT NULL) AS two_step,
+            (u.premium_until IS NOT NULL AND u.premium_until > now()) AS plus,
+            EXISTS (SELECT 1 FROM payment_orders o WHERE o.user_id = u.id AND o.status = 'paid' AND o.months >= $2
+                    AND COALESCE(o.paid_at, o.created_at) > now() - make_interval(months => GREATEST($2, 1))) AS yearly,
+            (SELECT max(decided_at) FROM verify_requests r WHERE r.user_id = u.id AND r.status = 'declined') AS declined_at
+     FROM users u WHERE u.id = $1`,
+    [userId, Number(months)],
+  );
+  const ageDays = Math.floor((Date.now() - new Date(u.created_at).getTime()) / 86400000);
+  const warn = (u.tags || []).filter((t) => ['scam', 'fake', 'spam', 'harassment'].includes(t));
+  const waitUntil = u.declined_at ? new Date(new Date(u.declined_at).getTime() + Number(retry) * 86400000) : null;
+  const checks = [
+    { ok: Number(months) === 0 || (u.plus && u.yearly), label: `Hushavia Plus — ${months}-month package`, fix: `Get the ${months}-month plan in @HushaviaPlusBot` },
+    { ok: ageDays >= Number(days), label: `Account at least ${days} days old`, fix: `Yours is ${ageDays} day${ageDays === 1 ? '' : 's'} old — come back on ${when(new Date(new Date(u.created_at).getTime() + Number(days) * 86400000))}` },
+    { ok: !!u.avatar_media_id, label: 'Profile photo', fix: 'Add a clear photo in Edit profile' },
+    { ok: u.first_name.trim().length >= 2 && u.last_name.trim().length >= 2, label: 'Full name (first and last)', fix: 'Add your last name in Edit profile' },
+    { ok: !!u.username, label: 'A @username', fix: 'Choose one in Edit profile' },
+    { ok: !!u.two_step, label: 'Two-step verification on', fix: 'Settings → Privacy & security → Two-step verification' },
+    { ok: !warn.length, label: 'No warning tags on the account', fix: 'Appeal the tag in Help & support first' },
+    { ok: !waitUntil || waitUntil <= new Date(), label: `No declined request in the last ${retry} days`, fix: waitUntil ? `You can ask again on ${when(waitUntil)}` : '' },
+  ];
+  return { ok: checks.every((c) => c.ok), checks };
+}
+
+async function requirements(userId, chatId, kind, messageId) {
+  const e = await eligibility(userId);
+  const minMembers = await require('./settings.service').get('verify_min_members'); // eslint-disable-line global-require
+  const lines = [
+    `${KINDS[kind].icon} **${KINDS[kind].label}**`,
+    DIV,
+    'Before you start, your account needs:',
+    '',
+    ...e.checks.map((c) => (c.ok ? `✅ ${c.label}` : `❌ ${c.label}\n      ↳ ${c.fix}`)),
+    ...(kind === 'chat' ? ['', `📣 The channel or group: public @link, you are the owner, at least ${Number(minMembers).toLocaleString('en-US')} members and ${await require('./settings.service').get('verify_min_account_days')} days old.`] : []), // eslint-disable-line global-require
+    '',
+    'Fix the ❌ items, then press **Check again**.',
+  ];
+  const buttons = [[btn('🔄 Check again', `k:${kind}`)]];
+  if (!e.checks[0].ok) buttons.push([btn('⭐ Get Hushavia Plus', 'plus')]);
+  buttons.push([btn('⬅️ Back', 'home')]);
+  return show(chatId, messageId, lines.join('\n'), buttons);
+}
+
 async function start(userId, chatId, kind, messageId) {
   const open = await db.one(`SELECT id, code FROM verify_requests WHERE user_id = $1 AND status = 'open' LIMIT 1`, [userId]);
   if (open) return show(chatId, messageId, `⏳ Request **${ref(open)}** is still in review. Please wait for the answer before sending a new one.`, [[btn('📄 My requests', 'status')]]);
-  if (kind === 'business') {
-    const plus = await require('./payment.service').isPremium(userId); // eslint-disable-line global-require
-    if (!plus) {
-      return show(chatId, messageId, '🏪 **Business verification**\n' + DIV + '\nBusiness verification comes with Hushavia Business (part of Hushavia Plus).\n\nGet Plus from @HushaviaPlusBot, then come back here.', [[btn('⬅️ Back', 'home')]]);
-    }
-  }
+  if (!(await eligibility(userId)).ok) return requirements(userId, chatId, kind, messageId);
   const steps = STEPS[kind];
   const need = steps.filter((st) => !st.optional).map((st) => `•  ${st.label}`);
   const opt = steps.filter((st) => st.optional).map((st) => `•  ${st.label}`);
@@ -242,6 +290,16 @@ async function answer(userId, chatId, row, d) {
         [m[1], userId],
       );
       if (!c) return nope('I couldn’t find a public channel or group with that @username that you own. Check it and try again.');
+      const settings = require('./settings.service'); // eslint-disable-line global-require
+      const [minMembers, minDays] = [Number(await settings.get('verify_min_members')), Number(await settings.get('verify_min_account_days'))];
+      const info = await db.one(
+        `SELECT (SELECT count(*)::int FROM chat_members WHERE chat_id = c.id) AS n, c.created_at, c.is_verified, c.is_suspended FROM chats c WHERE c.id = $1`,
+        [c.id],
+      );
+      if (info.is_verified) return nope(`${c.title} is already verified.`);
+      if (info.is_suspended) return nope(`${c.title} is suspended, so it can’t be verified.`);
+      if (info.n < minMembers) return nope(`${c.title} has ${info.n.toLocaleString('en-US')} members — verification needs at least ${minMembers.toLocaleString('en-US')}.`);
+      if (Date.now() - new Date(info.created_at).getTime() < minDays * 86400000) return nope(`${c.title} must be at least ${minDays} days old to be verified.`);
       d.chatId = Number(c.id);
       d.answers[st.key] = `@${m[1]} — ${c.title}`;
     } else {
@@ -315,6 +373,9 @@ async function onCallback(userId, chatId, data, messageId = null) {
   if (s === 'help') return help(chatId, messageId);
   if (s === 'status') return myRequests(userId, chatId, messageId);
   if (s.startsWith('k:') && KINDS[s.slice(2)]) return start(userId, chatId, s.slice(2), messageId);
+  if (s === 'plus') {
+    return show(chatId, messageId, '⭐ **Hushavia Plus**\n' + DIV + '\nOpen @HushaviaPlusBot and pick the **12-month** plan. When it’s active, come back here and press Check again.', [[btn('🔄 Check again', 'home')]]);
+  }
   if (s === 'cancel') {
     await dropDraft(userId);
     return show(chatId, messageId, 'Cancelled — nothing was sent.', [[btn('🛡️ Start again', 'home')]]);
@@ -408,4 +469,4 @@ async function sysChat(userId) {
   return { chat: c.id };
 }
 
-module.exports = { onMessage, onCallback, adminList, adminDecide, KINDS };
+module.exports = { eligibility, onMessage, onCallback, adminList, adminDecide, KINDS };
