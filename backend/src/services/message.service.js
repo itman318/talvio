@@ -174,7 +174,9 @@ async function serializeRows(viewerId, rows) {
     if (b.role === 'admin') return { kind: 'admin', text: b.admin_title || 'admin' };
     return b.member_tag ? { kind: 'tag', text: b.member_tag } : null;
   };
-  const voiceIds = rows.filter((r) => r.type === 'voice' || r.type === 'video_note').map((r) => r.id);
+  // voice, round video, video and audio files: the sender sees when they were played
+  const PLAYABLE = ['voice', 'video_note', 'video', 'file'];
+  const voiceIds = rows.filter((r) => PLAYABLE.includes(r.type)).map((r) => r.id);
   const playRows = voiceIds.length
     ? await db.many('SELECT message_id, count(*)::int AS n FROM message_plays WHERE message_id = ANY($1::bigint[]) GROUP BY message_id', [voiceIds])
     : [];
@@ -221,7 +223,7 @@ async function serializeRows(viewerId, rows) {
       views: m.forward_source_id && fwdViews.has(m.forward_source_id)
         ? fwdViews.get(m.forward_source_id)
         : ((chatMap.get(m.chat_id) || {}).type === 'private' ? 0 : m.views_count || 0), // no view counts in private chats
-      played: m.type === 'voice' || m.type === 'video_note' ? (playMap.get(m.id) || 0) > 0 : undefined,
+      played: PLAYABLE.includes(m.type) ? (playMap.get(m.id) || 0) > 0 : undefined,
       silent: !!m.silent,
       mentions: mentionRows.filter((x) => x.message_id === m.id).map((x) => x.user_id),
       meta: m.meta || null,
@@ -1085,7 +1087,7 @@ async function messageInfo(userId, messageIdRaw) {
       }
     }
   }
-  const plays = m.type === 'voice' || m.type === 'video_note'
+  const plays = ['voice', 'video_note', 'video', 'file'].includes(m.type)
     ? await db.many('SELECT user_id, played_at FROM message_plays WHERE message_id = $1 ORDER BY played_at', [m.id])
     : [];
   const users = await userService.getUsersMap(userId, [...rows.map((r) => r.user_id), ...plays.map((p) => p.user_id)]);
@@ -1186,10 +1188,10 @@ async function listBookmarks(userId) {
   };
 }
 
-/** Someone listened to a voice message / watched a round video: the sender's mic turns blue. */
+/** Someone listened to a voice message or audio file, or watched a (round) video: the sender sees it. */
 async function markPlayed(userId, messageIdRaw) {
   const { m, chat } = await getVisibleMessage(userId, messageIdRaw);
-  if (!['voice', 'video_note'].includes(m.type) || m.sender_id === userId || !m.sender_id) return { ok: true };
+  if (!['voice', 'video_note', 'video', 'file'].includes(m.type) || m.sender_id === userId || !m.sender_id) return { ok: true };
   // private chats follow the read-receipts setting of both people
   if (chat.type === 'private' && !(await receiptsOn([userId, m.sender_id]))) return { ok: true };
   const r = await db.one(

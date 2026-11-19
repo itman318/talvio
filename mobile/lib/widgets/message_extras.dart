@@ -93,7 +93,7 @@ Future<void> showMessageInfo(BuildContext context, Message m) async {
             const Text('Message info', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text('Sent ${fmt.format(m.createdAt)}', style: const TextStyle(color: Brand.muted)),
-            if (played.isNotEmpty) section(m.type == 'video_note' ? 'Watched' : 'Listened', Icons.mic_rounded, const Color(0xFF12A150), played),
+            if (played.isNotEmpty) section(m.type == 'video_note' || m.type == 'video' ? 'Watched' : 'Listened', m.type == 'video_note' || m.type == 'video' ? Icons.visibility_rounded : Icons.headphones_rounded, const Color(0xFF12A150), played),
             if (read.isNotEmpty) section('Read', Icons.done_all_rounded, Brand.accent, read),
             if (delivered.isNotEmpty) section('Delivered', Icons.done_all_rounded, Brand.muted, delivered),
             if (waiting.isNotEmpty) section('Not delivered yet', Icons.done_rounded, Brand.faint, waiting),

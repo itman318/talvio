@@ -109,11 +109,11 @@ class MessageBubble extends StatelessWidget {
       case 'image':
         return ClipRRect(borderRadius: BorderRadius.circular(10), child: MessageImage(message: m));
       case 'video':
-        return MessageVideo(message: m);
+        return MessageVideo(message: m, isMine: isMine);
       case 'voice':
         return VoicePlayer(message: m, color: isMine ? MineInk.line(context) : accent, isMine: isMine, title: isMine ? 'You' : (m.sender?.name ?? chat.title));
       case 'video_note':
-        return VideoNoteBubble(message: m, size: 200);
+        return VideoNoteBubble(message: m, size: 200, isMine: isMine);
       case 'sticker': // a sticker sent as a reply sits inside the bubble, under the quote
         return StickerView(message: m, size: 120);
       case 'file':
@@ -194,7 +194,7 @@ class MessageBubble extends StatelessWidget {
               if (big > 0)
                 BigEmoji(text: m.text.trim(), count: big, fresh: DateTime.now().difference(m.createdAt).inSeconds.abs() < 8)
               else if (m.type == 'video_note')
-                VideoNoteBubble(message: m)
+                VideoNoteBubble(message: m, isMine: isMine)
               else
                 StickerView(message: m),
               Container(

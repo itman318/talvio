@@ -18,6 +18,7 @@ import '../core/screen_guard.dart';
 import '../core/services.dart';
 import '../core/voice_playback.dart';
 import '../models/models.dart';
+import '../state/chat_store.dart';
 import '../utils/format.dart';
 
 /// Resolves a message's media to a local file (local upload path, cache, or download).
@@ -323,8 +324,9 @@ class _FullImageScreenState extends State<FullImageScreen> {
 }
 
 class MessageVideo extends StatefulWidget {
-  const MessageVideo({super.key, required this.message});
+  const MessageVideo({super.key, required this.message, this.isMine = false});
   final Message message;
+  final bool isMine;
 
   @override
   State<MessageVideo> createState() => _MessageVideoState();
@@ -405,6 +407,8 @@ class _MessageVideoState extends State<MessageVideo> {
             ),
             if (_downloading)
               const Positioned(right: 10, top: 10, child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70))),
+            if (widget.isMine && !message.isLocal)
+              Positioned(right: 8, bottom: 6, child: PlayedMark(played: message.played, video: true, onDark: true)),
             Positioned(
               left: 8,
               bottom: 6,
@@ -444,6 +448,12 @@ class _VideoScreenState extends State<VideoScreen> {
   void initState() {
     super.initState();
     _load();
+    // someone else's video opened: the sender sees "Watched"
+    final m = widget.message;
+    if (!m.isLocal && m.senderId != null && m.senderId != context.read<ChatStore>().myId && !PlayedVoices.played(m.id)) {
+      PlayedVoices.mark(m.id);
+      context.read<AppServices>().api.post('/messages/${m.id}/played').catchError((_) => null);
+    }
   }
 
   /// On the phone already → plays the file. Otherwise streams it from the server (starts in a
@@ -710,10 +720,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
                   ],
                   if (widget.isMine && !local) ...[
                     const SizedBox(width: 6),
-                    Tooltip(
-                      message: widget.message.played ? 'Listened' : 'Not listened yet',
-                      child: Icon(Icons.mic_rounded, size: 14, color: widget.message.played ? const Color(0xFF7DF3DB) : c.withValues(alpha: 0.45)),
-                    ),
+                    PlayedMark(played: widget.message.played, video: false, color: c),
                   ],
                   if (mine && vp.earpiece) ...[
                     const SizedBox(width: 6),
@@ -815,12 +822,18 @@ class AudioFilePlayer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  mine && pos > Duration.zero
-                      ? '${duration(pos.inSeconds)} / ${duration(lenMs ~/ 1000)}'
-                      : '${md.duration != null ? '${duration(md.duration!)} · ' : ''}${fileSize(md.size)}',
-                  style: TextStyle(fontSize: 11.5, color: isMine ? MineInk.muted(context) : Brand.muted, fontFeatures: const [FontFeature.tabularFigures()]),
-                ),
+                Row(children: [
+                  Flexible(
+                    child: Text(
+                      mine && pos > Duration.zero
+                          ? '${duration(pos.inSeconds)} / ${duration(lenMs ~/ 1000)}'
+                          : '${md.duration != null ? '${duration(md.duration!)} · ' : ''}${fileSize(md.size)}',
+                      maxLines: 1,
+                      style: TextStyle(fontSize: 11.5, color: isMine ? MineInk.muted(context) : Brand.muted, fontFeatures: const [FontFeature.tabularFigures()]),
+                    ),
+                  ),
+                  if (isMine && !message.isLocal) ...[const SizedBox(width: 6), PlayedMark(played: message.played, video: false, color: MineInk.muted(context))],
+                ]),
               ]),
             ),
           ]);
@@ -953,6 +966,39 @@ class _MessageFileState extends State<MessageFile> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// "Listened" / "Watched" on my own voice, audio and video messages (the other side played it).
+class PlayedMark extends StatelessWidget {
+  const PlayedMark({super.key, required this.played, required this.video, this.onDark = false, this.color});
+  final bool played;
+  final bool video; // eye (watched) instead of headphones (listened)
+  final bool onDark; // drawn over a picture: white text on a dark pill
+  final Color? color; // text colour inside a bubble
+
+  @override
+  Widget build(BuildContext context) {
+    const teal = Color(0xFF12B89C);
+    final label = played ? (video ? 'Watched' : 'Listened') : (video ? 'Not watched' : 'Not played');
+    final icon = video ? (played ? Icons.visibility_rounded : Icons.visibility_outlined) : (played ? Icons.headphones_rounded : Icons.headset_off_rounded);
+    final fg = onDark ? Colors.white : (played ? (color == null ? teal : const Color(0xFF7DF3DB)) : (color ?? Brand.muted).withValues(alpha: 0.75));
+    return Tooltip(
+      message: played ? (video ? 'They watched it' : 'They listened to it') : (video ? 'Not watched yet' : 'Not listened to yet'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+        decoration: BoxDecoration(
+          color: onDark ? Colors.black.withValues(alpha: 0.5) : (played ? teal.withValues(alpha: color == null ? 0.14 : 0.22) : Colors.transparent),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: onDark && played ? const Color(0xFF7DF3DB) : fg),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
+        ]),
       ),
     );
   }

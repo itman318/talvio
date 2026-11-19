@@ -17,8 +17,9 @@ import 'media_widgets.dart';
 
 /// A round video message in the chat: plays muted on tap-less preview, tap → plays with sound.
 class VideoNoteBubble extends StatefulWidget {
-  const VideoNoteBubble({super.key, required this.message, this.size = 220});
+  const VideoNoteBubble({super.key, required this.message, this.size = 220, this.isMine = false});
   final Message message;
+  final bool isMine;
   final double size;
 
   @override
@@ -119,6 +120,8 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble> {
                   ? const Padding(padding: EdgeInsets.all(15), child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                   : Icon(_failed ? Icons.error_outline : Icons.play_arrow_rounded, color: Colors.white, size: 34),
             ),
+          if (widget.isMine && !widget.message.isLocal && (!ready || !c.value.isPlaying))
+            Positioned(top: s * 0.08, child: PlayedMark(played: widget.message.played, video: true, onDark: true)),
           if (secs != null && (!ready || !c.value.isPlaying))
             Positioned(
               bottom: s * 0.1,
