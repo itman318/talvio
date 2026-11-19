@@ -47,6 +47,7 @@ function serialize(s, media, { owner = false, users = null } = {}) {
     created_at: new Date(s.created_at).toISOString(),
     expires_at: new Date(s.expires_at).toISOString(),
     viewed: !!s.viewed,
+    music: s.music_media_id ? { url: `/api/media/${s.music_media_id}`, title: s.music_title || 'Music' } : null,
     ...(owner ? { views_count: s.views_count } : {}),
   };
 }
@@ -60,10 +61,18 @@ async function create(userId, body = {}) {
   const caption = v.str(body.caption, { field: 'caption', max: 500 }) || '';
   const privacy = v.oneOf(body.privacy || 'contacts', ['everyone', 'contacts'], 'privacy');
   const wanted = v.idList(body.mentions || [], 'mentions', 10).filter((id) => id !== userId);
+  // music: an audio file the poster uploaded, played while the story is shown
+  let music = null;
+  if (body.music_media_id) {
+    music = await db.one(`SELECT * FROM media WHERE id = $1 AND uploader_id = $2`, [v.id(body.music_media_id, 'music_media_id'), userId]);
+    if (!music || !(String(music.mime || '').startsWith('audio/') || /\.(mp3|m4a|aac|ogg|opus|wav)$/i.test(String(music.original_name || '')))) throw badRequest('invalid_media', 'Music must be an audio file');
+    if (music.size_bytes > 15 * 1024 * 1024) throw badRequest('invalid_media', 'Music can be up to 15 MB');
+  }
+  const musicTitle = music ? v.str(body.music_title, { field: 'music_title', max: 80 }) || String(music.original_name || 'Music').replace(/\.[a-z0-9]{2,4}$/i, '').slice(0, 80) : null;
   let s = await db.one(
-    `INSERT INTO stories (user_id, media_id, caption, privacy, expires_at)
-     VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5)) RETURNING *`,
-    [userId, media.id, caption, privacy, STORY_HOURS],
+    `INSERT INTO stories (user_id, media_id, caption, privacy, expires_at, music_media_id, music_title)
+     VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5), $6, $7) RETURNING *`,
+    [userId, media.id, caption, privacy, STORY_HOURS, music ? music.id : null, musicTitle],
   );
   if (wanted.length) s = await mentionPeople(userId, s, wanted);
   return serialize(s, media, { owner: true, users: await mentionUsers(userId, [s]) });

@@ -858,12 +858,20 @@ async function directory(userId, query = {}) {
             (SELECT count(*) FROM chat_members x WHERE x.chat_id = c.id AND x.joined_at > now() - interval '7 days') AS n7,
             EXISTS (SELECT 1 FROM chat_members me WHERE me.chat_id = c.id AND me.user_id = $1) AS me
      FROM chats c WHERE ${where.join(' AND ')}
-     ORDER BY ${query.category === 'trending' ? 'n7 DESC, n DESC' : 'c.is_verified DESC, n DESC'} LIMIT 60`,
+     ORDER BY ${q ? '' : 'COALESCE(c.promoted_until > now(), FALSE) DESC, '}${query.category === 'trending' ? 'n7 DESC, n DESC' : 'c.is_verified DESC, n DESC'} LIMIT 60`,
     params,
   );
+  const now = Date.now();
+  // promoted channels (paid with coins) go first, a few at a time — they take turns, newest boost not always on top
+  const maxPromoted = Number(await require('./settings.service').get('boost_max_promoted')) || 0; // eslint-disable-line global-require
+  const isPromoted = (c) => !q && c.promoted_until && new Date(c.promoted_until).getTime() > now;
+  const promoted = rows.filter(isPromoted).sort(() => Math.random() - 0.5).slice(0, maxPromoted);
+  const rest = rows.filter((c) => !promoted.includes(c));
   return {
     categories: CATEGORIES,
-    channels: rows.map((c) => ({ ...publicSummary(c, Number(c.n), c.me), id: c.id, category: c.category || null, new_this_week: Number(c.n7) })),
+    channels: [...promoted, ...rest].map((c) => ({
+      ...publicSummary(c, Number(c.n), c.me), id: c.id, category: c.category || null, new_this_week: Number(c.n7), promoted: promoted.includes(c),
+    })),
   };
 }
 

@@ -1074,3 +1074,94 @@ test('@HushaviaPlusBot: status, perks, buying Plus with coins in two taps', asyn
   assert.match((await last()).text, /active until/);
   assert.ok((await users.getMe(fan.id)).is_premium);
 });
+
+test('order tracker: order in chat, seller moves it forward, buyer can cancel early, coin orders are refunded', async () => {
+  const catalog = require('../src/services/catalog.service');
+  const coins = require('../src/services/coin.service');
+  const seller = await signup('+923270000001', 'Seller');
+  const buyer = await signup('+923270000002', 'Client');
+  await db.query(`UPDATE users SET premium_until = now() + interval '30 days' WHERE id = $1`, [seller.id]);
+  const item = await catalog.add(seller.id, { title: 'Shoes', price_text: 'Rs 4,000', price_coins: 40 });
+
+  const o = await catalog.order(buyer.id, item.id, { qty: 2, note: 'Size 42' });
+  const msg = await db.one(`SELECT text FROM messages WHERE chat_id = $1 ORDER BY id DESC LIMIT 1`, [o.chat_id]);
+  assert.match(msg.text, /Order #\d+/);
+  assert.match(msg.text, /× 2/);
+  const mine = await catalog.orders(seller.id, { role: 'seller' });
+  assert.equal(mine.orders[0].status, 'received');
+  assert.equal(mine.orders[0].qty, 2);
+  assert.equal((await catalog.orders(buyer.id, {})).orders.length, 1);
+
+  await rejects(catalog.setStatus(buyer.id, o.order_id, { status: 'shipped' }), 'not_allowed');
+  await catalog.setStatus(seller.id, o.order_id, { status: 'packed' });
+  await rejects(catalog.setStatus(seller.id, o.order_id, { status: 'packed' }), 'invalid_status');
+  await rejects(catalog.setStatus(buyer.id, o.order_id, { status: 'cancelled' }), 'not_allowed'); // too late for the buyer
+  await catalog.setStatus(seller.id, o.order_id, { status: 'shipped' });
+  const done = await catalog.setStatus(seller.id, o.order_id, { status: 'delivered' });
+  assert.equal(done.order.status, 'delivered');
+  assert.equal(done.order.history.length, 4);
+  await rejects(catalog.setStatus(seller.id, o.order_id, { status: 'cancelled' }), 'order_closed');
+  const stranger = await signup('+923270000003', 'Stranger');
+  await rejects(catalog.setStatus(stranger.id, o.order_id, { status: 'cancelled' }), 'order_not_found');
+
+  // paid with coins, then the seller cancels: the coins go back
+  await db.tx((c) => coins.change(c, buyer.id, 40, 'admin', {}));
+  const paid = await catalog.buy(buyer.id, item.id, { expected_coins: 40 });
+  assert.equal(paid.balance, 0);
+  await catalog.setStatus(seller.id, paid.order_id, { status: 'cancelled' });
+  assert.equal((await db.one('SELECT coins FROM users WHERE id = $1', [buyer.id])).coins, 40);
+  assert.equal((await db.one('SELECT coins FROM users WHERE id = $1', [seller.id])).coins, 0);
+});
+
+test('channel promotion: admins pay coins per day, days add up, promoted channels go first in the directory', async () => {
+  const boosts = require('../src/services/boost.service');
+  const coins = require('../src/services/coin.service');
+  const owner = await signup('+923270000011', 'Promo');
+  const other = await signup('+923270000012', 'Reader');
+  const ch = await chats.createChannel(owner.id, { title: 'Promo Deals', username: 'promo_deals_pk', is_public: true });
+  const chId = ch.id || ch.chat.id;
+  const info = await boosts.info(owner.id, chId);
+  assert.equal(info.options[0].coins, info.per_day);
+  await rejects(boosts.boost(other.id, chId, { days: 1 }), 'chat_not_found');
+  await rejects(boosts.boost(owner.id, chId, { days: 1, expected_coins: info.per_day }), 'not_enough_coins');
+  await db.tx((c) => coins.change(c, owner.id, info.per_day * 4, 'admin', {}));
+  await rejects(boosts.boost(owner.id, chId, { days: 2 }), 'invalid_input');
+  await rejects(boosts.boost(owner.id, chId, { days: 3, expected_coins: 1 }), 'price_changed');
+  const r = await boosts.boost(owner.id, chId, { days: 3, expected_coins: info.per_day * 3 });
+  assert.equal(r.balance, info.per_day);
+  const until1 = new Date(r.promoted_until).getTime();
+  assert.ok(until1 > Date.now() + 2.9 * 86400000);
+  await rejects(boosts.boost(owner.id, chId, { days: 1 }), 'just_boosted');
+  await db.query(`UPDATE chat_boosts SET created_at = now() - interval '1 minute' WHERE chat_id = $1`, [chId]);
+  const r2 = await boosts.boost(owner.id, chId, { days: 1 });
+  assert.ok(Math.abs(new Date(r2.promoted_until).getTime() - until1 - 86400000) < 5000); // added on top
+  const dir = await chats.directory(other.id, {});
+  assert.equal(dir.channels[0].id, chId);
+  assert.equal(dir.channels[0].promoted, true);
+});
+
+test('USDT invoice: a sent card that replies to an invoice marks it paid (only with the same amount and address)', async () => {
+  const messages = require('../src/services/message.service');
+  const shop = await signup('+923270000021', 'InvShop');
+  const client = await signup('+923270000022', 'InvClient');
+  const pc = await chats.getOrCreatePrivate(shop.id, client.id);
+  const chatId = pc.id || pc.chat.id;
+  const to = `0x${'ab'.repeat(20)}`;
+  const contract = '0x55d398326f99059ff775485246999027b3197955';
+  const inv = await messages.sendMessage(shop.id, chatId, {
+    type: 'crypto',
+    crypto: { kind: 'request', network: 'bsc', symbol: 'USDT', amount: '25000000000000000000', decimals: 18, to, contract, invoice: { title: 'Website design', lines: ['Logo', 'Landing page'] } },
+  });
+  assert.match(inv.meta.crypto.invoice.number, /^INV-/);
+  const sent = (amount, reply) => messages.sendMessage(client.id, chatId, {
+    type: 'crypto', reply_to_id: reply,
+    crypto: { kind: 'sent', network: 'bsc', symbol: 'USDT', amount, decimals: 18, to, contract, tx: `0x${crypto.randomBytes(32).toString('hex')}` },
+  });
+  await sent('1000000000000000000', inv.id); // wrong amount: not linked
+  let row = await db.one('SELECT meta FROM messages WHERE id = $1', [inv.id]);
+  assert.equal(row.meta.crypto.paid_tx, undefined);
+  const ok = await sent('25000000000000000000', inv.id);
+  row = await db.one('SELECT meta FROM messages WHERE id = $1', [inv.id]);
+  assert.equal(row.meta.crypto.paid_tx, ok.meta.crypto.tx);
+  assert.equal(row.meta.crypto.paid_by, client.id);
+});

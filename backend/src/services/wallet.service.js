@@ -146,7 +146,19 @@ async function cardMeta(body = {}) {
     if (!ok) throw badRequest('invalid_tx', 'Invalid transaction id');
   }
   const note = c.note ? v.str(String(c.note), { field: 'note', max: 140 }) : null;
-  return { crypto: { kind, network, symbol, amount, decimals, to, contract, tx, note } };
+  const out = { kind, network, symbol, amount, decimals, to, contract, tx, note };
+  // an invoice: a payment request with a title, its own number and optional lines (a business bill)
+  if (kind === 'request' && c.invoice && typeof c.invoice === 'object') {
+    const iv = c.invoice;
+    const title = v.str(String(iv.title || ''), { field: 'invoice title', min: 1, max: 80 });
+    const lines = Array.isArray(iv.lines)
+      ? iv.lines.slice(0, 20).map((l) => v.str(String(l || ''), { field: 'invoice line', max: 80 })).filter(Boolean)
+      : [];
+    const due = iv.due && /^\d{4}-\d{2}-\d{2}$/.test(String(iv.due)) ? String(iv.due) : null;
+    const number = `INV-${Date.now().toString(36).toUpperCase().slice(-6)}${Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase().padStart(2, '0')}`;
+    out.invoice = { title, lines, due, number };
+  }
+  return { crypto: out };
 }
 
 function previewText(meta) {
@@ -156,7 +168,25 @@ function previewText(meta) {
   const base = 10n ** BigInt(c.decimals);
   const frac = (units % base).toString().padStart(c.decimals, '0').slice(0, 6).replace(/0+$/, '');
   const amt = `${units / base}${frac ? `.${frac}` : ''}`;
+  if (c.kind === 'request' && c.invoice) return `🧾 Invoice: ${amt} ${c.symbol}${c.paid_tx ? ' · paid' : ''}`;
   return c.kind === 'request' ? `💸 Request: ${amt} ${c.symbol}` : `💸 Sent ${amt} ${c.symbol}`;
 }
 
-module.exports = { setMine, getFor, cardMeta, previewText, isTron, isEvm, isUtxoAddress, isSol, NETWORKS };
+/**
+ * A "sent" card that replies to a payment request / invoice in the same chat marks that request as paid
+ * (with the transfer id). The apps still check the transfer on the network before they say Confirmed.
+ */
+async function linkPayment(chatId, senderId, replyToId, meta) {
+  const c = meta && meta.crypto;
+  if (!replyToId || !c || c.kind !== 'sent') return null;
+  const req = await db.one(`SELECT * FROM messages WHERE id = $1 AND chat_id = $2 AND type = 'crypto' AND deleted_at IS NULL`, [replyToId, chatId]);
+  const r = req && req.meta && req.meta.crypto;
+  if (!r || r.kind !== 'request' || r.paid_tx) return null;
+  if (Number(req.sender_id) === Number(senderId)) return null; // you don't pay your own bill
+  if (r.network !== c.network || String(r.to).toLowerCase() !== String(c.to).toLowerCase() || r.amount !== c.amount) return null;
+  if (String(r.contract || '').toLowerCase() !== String(c.contract || '').toLowerCase()) return null;
+  const meta2 = { ...req.meta, crypto: { ...r, paid_tx: c.tx, paid_by: Number(senderId), paid_at: new Date().toISOString() } };
+  return db.one(`UPDATE messages SET meta = $2 WHERE id = $1 AND NOT (meta->'crypto' ? 'paid_tx') RETURNING *`, [req.id, JSON.stringify(meta2)]);
+}
+
+module.exports = { setMine, getFor, cardMeta, previewText, linkPayment, isTron, isEvm, isUtxoAddress, isSol, NETWORKS };

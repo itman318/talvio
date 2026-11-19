@@ -188,8 +188,8 @@ async function getAccessible(userId, mediaIdRaw) {
              SELECT 1 FROM message_once_views ov WHERE ov.message_id = msg.id AND ov.user_id = $2 AND ov.opened_at > now() - interval '3 minutes'
            ))
        )
-       OR EXISTS (SELECT 1 FROM stories s WHERE s.media_id = m.id AND ${storyVisible})
-       OR EXISTS (SELECT 1 FROM stories s JOIN story_highlight_items hi ON hi.story_id = s.id WHERE s.media_id = m.id AND ${highlightVisible})
+       OR EXISTS (SELECT 1 FROM stories s WHERE (s.media_id = m.id OR s.music_media_id = m.id) AND ${storyVisible})
+       OR EXISTS (SELECT 1 FROM stories s JOIN story_highlight_items hi ON hi.story_id = s.id WHERE (s.media_id = m.id OR s.music_media_id = m.id) AND ${highlightVisible})
        OR EXISTS (
          SELECT 1 FROM secret_messages sm JOIN secret_chats sc ON sc.id = sm.secret_chat_id
          WHERE sm.media_id = m.id AND sc.status = 'active' AND (sc.initiator_id = $2 OR sc.peer_id = $2)

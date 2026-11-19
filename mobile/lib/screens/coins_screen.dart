@@ -247,13 +247,15 @@ class _CoinsScreenState extends State<CoinsScreen> {
     'giveaway_refund': ('Giveaway refund', Icons.undo_rounded, Brand.sky),
     'shop_paid': ('Bought from', Icons.shopping_bag_rounded, Brand.rose),
     'shop_income': ('Sold to', Icons.storefront_rounded, Brand.green),
+    'shop_refund': ('Order refund', Icons.undo_rounded, Brand.sky),
+    'boost': ('Channel promotion', Icons.rocket_launch_rounded, Brand.violet),
   };
 
   /// "Sent to Hina", "Tip to Bilal", "Subscription · Hina Daily"
   String _title(Map h, String label) {
     final peer = h['peer'] as Map?;
     final kind = '${h['kind']}';
-    if (kind.startsWith('sub_') || kind.startsWith('giveaway')) return label;
+    if (kind.startsWith('sub_') || kind.startsWith('giveaway') || kind == 'boost') return label;
     return peer != null ? '$label ${peer['name']}' : label;
   }
 

@@ -102,6 +102,8 @@ const DEFINITIONS = {
   new_account_max_joins: { type: 'integer', default: 5, min: 1, max: 1000 },
   new_account_max_new_chats: { type: 'integer', default: 10, min: 1, max: 1000 },
   monetize_min_avg_views: { type: 'integer', default: 100, min: 0, max: 100000000 },
+  boost_coins_per_day: { type: 'integer', default: 100, min: 1, max: 1000000 },
+  boost_max_promoted: { type: 'integer', default: 6, min: 0, max: 60 },
 };
 
 const FEATURE_KEYS = [

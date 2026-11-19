@@ -663,6 +663,14 @@ async function insertMessage({
   const [message] = await serializeRows(BROADCAST_VIEWER, [row]);
   const memberIds = await chatService.memberIds(chatId);
   bus.emit('message:new', { chatId, message, memberIds, senderId });
+  if (type === 'crypto' && replyToId) {
+    // paying an invoice / request: the request card turns into "Paid"
+    const paid = await require('./wallet.service').linkPayment(chatId, senderId, replyToId, meta).catch(() => null); // eslint-disable-line global-require
+    if (paid) {
+      const [updated] = await serializeRows(BROADCAST_VIEWER, [paid]);
+      bus.emit('message:edited', { chatId, message: updated, memberIds });
+    }
+  }
   if (text && /https?:\/\//i.test(text) && type !== 'system') {
     // fetch the link preview in the background, then tell everyone the message changed
     setImmediate(() => require('./link.service').enrichMessage(row.id, text, async () => {

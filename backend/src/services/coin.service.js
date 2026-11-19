@@ -17,7 +17,7 @@ const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { badRequest, forbidden, notFound, conflict } = require('../utils/errors');
 
-const KINDS = ['deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin', 'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income', 'shop_paid', 'shop_income'];
+const KINDS = ['deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin', 'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income', 'shop_paid', 'shop_income', 'shop_refund', 'boost'];
 const MAX_SEND = 100000;
 
 const iso = (d) => (d ? new Date(d).toISOString() : null);

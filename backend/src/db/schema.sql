@@ -1432,7 +1432,7 @@ ALTER TABLE chats ADD COLUMN IF NOT EXISTS ads_off BOOLEAN NOT NULL DEFAULT FALS
 ALTER TABLE coin_tx DROP CONSTRAINT IF EXISTS coin_tx_kind_check;
 ALTER TABLE coin_tx ADD CONSTRAINT coin_tx_kind_check CHECK (kind IN ('deposit', 'purchase', 'gift_sent', 'gift_received', 'plus', 'admin',
   'tip_sent', 'tip_received', 'sub_paid', 'sub_income', 'giveaway', 'giveaway_win', 'giveaway_refund', 'ad_budget', 'ad_refund', 'ad_income',
-  'shop_paid', 'shop_income'));
+  'shop_paid', 'shop_income', 'shop_refund', 'boost'));
 
 -- ------------------------------------------------------------------ channel monetization, card payments
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS monetized BOOLEAN NOT NULL DEFAULT FALSE;
@@ -1517,3 +1517,33 @@ CREATE TABLE IF NOT EXISTS verify_drafts (
   data       JSONB       NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ------------------------------------------------------------------ catalog order tracker
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS status VARCHAR(12) NOT NULL DEFAULT 'received';
+ALTER TABLE catalog_orders DROP CONSTRAINT IF EXISTS catalog_orders_status_check;
+ALTER TABLE catalog_orders ADD CONSTRAINT catalog_orders_status_check CHECK (status IN ('received', 'packed', 'shipped', 'delivered', 'cancelled'));
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS paid_with VARCHAR(8) NOT NULL DEFAULT 'coins';
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS price_text VARCHAR(40);
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS qty INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS note VARCHAR(300) NOT NULL DEFAULT '';
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS chat_id BIGINT REFERENCES chats(id) ON DELETE SET NULL;
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS history JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE catalog_orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS catalog_orders_seller_idx ON catalog_orders (seller_id, created_at DESC);
+
+-- ------------------------------------------------------------------ channel promotion (paid with coins)
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS promoted_until TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS chat_boosts (
+  id         BIGSERIAL PRIMARY KEY,
+  chat_id    BIGINT      NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id    BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+  days       INTEGER     NOT NULL,
+  coins      INTEGER     NOT NULL,
+  ends_at    TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_boosts_chat_idx ON chat_boosts (chat_id, id DESC);
+
+-- ------------------------------------------------------------------ music on stories
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS music_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS music_title VARCHAR(80);
