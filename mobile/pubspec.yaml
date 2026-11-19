@@ -86,9 +86,11 @@ dependencies:
 
 # path_provider_android 2.3.x switched to JNI and fails on some phones in release builds
 # ("ClassNotFoundException: android/content/Context") — then no folder for the image cache, so no
-# profile photos and photos never load. Stay on the last version before the switch.
+# profile photos and photos never load. Stay on the last versions before the switch
+# (shared_preferences_android moved to JNI in 2.5.0 the same way).
 dependency_overrides:
   path_provider_android: 2.2.23
+  shared_preferences_android: 2.4.28
 
 dev_dependencies:
   flutter_test:
