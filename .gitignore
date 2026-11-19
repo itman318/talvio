@@ -7,6 +7,5 @@ mobile/ios/
 mobile/build/
 mobile/.dart_tool/
 mobile/.flutter-plugins*
-mobile/pubspec.lock
 *.zip
 .DS_Store
