@@ -64,6 +64,11 @@ jobs:
           echo "--- photo downloads, last 2 hours (time, status, bytes, url, client)"
           awk -v since="$(date -d '-2 hours' '+%d/%b/%Y:%H:%M')" '$4 > "["since' /var/log/nginx/access.log 2>/dev/null | grep -E 'GET /api/media/[0-9]+' | tail -25 | awk '{print $4, $9, $10, $7, $12, $13}'
           echo "media requests last 2h: $(grep -cE 'GET /api/media/' /var/log/nginx/access.log 2>/dev/null) · not 200/206/304: $(grep -E 'GET /api/media/' /var/log/nginx/access.log | awk '$9!~/^(200|206|304)$/' | wc -l)"
+          echo "--- newest voice messages (media id, mime, bytes, on disk) and their downloads"
+          sudo -u postgres psql -d hushavia -tAc "SELECT m.id||'|'||md.mime||'|'||md.size_bytes||'|'||md.storage_path||'|'||md.original_name||'|'||to_char(m.created_at,'MM-DD HH24:MI') FROM messages m JOIN media md ON md.id=m.media_id WHERE m.type='voice' ORDER BY m.id DESC LIMIT 6" 2>/dev/null | while IFS='|' read -r mid mime size sp name at; do
+            f="/var/lib/hushavia/uploads/$sp"; mid2=$(sudo -u postgres psql -d hushavia -tAc "SELECT media_id FROM messages WHERE id=$mid")
+            echo "msg $mid media $mid2 $mime $size $name $at · disk: $(stat -c %s "$f" 2>/dev/null || echo MISSING) · $(file -b "$f" 2>/dev/null | cut -c1-40) · gets: $(grep -E "GET /api/media/$mid2[ ?]" /var/log/nginx/access.log 2>/dev/null | awk '{print $9"/"$10}' | tail -4 | tr '\n' ' ')"
+          done
           echo "--- recent upload / sticker requests (status, size)"
           grep -hE "POST /api/(media|stickers)" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -15 | awk '{print $4, $6, $7, $9, $10}'
           echo "--- logout check"
