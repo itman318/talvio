@@ -1052,3 +1052,25 @@ test('@HushaviaVerifyBot: step-by-step form with review → admin approves → b
   assert.match(said.text, /Verification approved/);
   assert.match(said.text, new RegExp(req.ref));
 });
+
+test('@HushaviaPlusBot: status, perks, buying Plus with coins in two taps', async () => {
+  const pb = require('../src/services/plusbot.service');
+  const sysbots = require('../src/services/sysbots.service');
+  const coins = require('../src/services/coin.service');
+  const fan = await signup('+923260000098', 'PlusFan');
+  const botId = await sysbots.ensureOne('plus');
+  const chat = await chats.getOrCreatePrivate(fan.id, botId);
+  const last = async () => (await db.one('SELECT text, reply_markup FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1', [chat.id, botId]));
+  await pb.onMessage(fan.id, chat.id, { text: '/start' });
+  await pb.onCallback(fan.id, chat.id, 'perks');
+  assert.match((await last()).text, /Hushavia Plus gives you/);
+  await settings.update({ plus_sales_open: true, feature_premium: true });
+  const plan = await db.one('SELECT * FROM premium_plans WHERE is_active ORDER BY months LIMIT 1');
+  const price = coins.plusPrice(plan);
+  await db.tx((c) => coins.change(c, fan.id, price, 'admin', {}));
+  await pb.onCallback(fan.id, chat.id, `pick:${plan.id}`);
+  assert.match((await last()).text, /Pay/);
+  await pb.onCallback(fan.id, chat.id, `buy:${plan.id}`);
+  assert.match((await last()).text, /active until/);
+  assert.ok((await users.getMe(fan.id)).is_premium);
+});

@@ -765,6 +765,7 @@ module.exports = {
   FREE_FOLDERS,
   PREMIUM_FOLDERS,
   isPremium,
+  perks,
   isPremiumRow,
   limitsFor,
   providers,
