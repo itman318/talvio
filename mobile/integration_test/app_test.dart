@@ -76,28 +76,10 @@ void main() {
     await pumpUntil(t, find.text('Sana Ahmed'), seconds: 40, what: 'chat list with seeded chat');
     await snap(t, 'chats');
 
-    // Settings and my profile (visual check); a missing piece here never stops the chat checks below
-    try {
-      await t.tap(find.text('Settings').last);
-      await settle(t, 1500);
-      if (find.text('Not now').evaluate().isNotEmpty) {
-        await t.tap(find.text('Not now'));
-        await settle(t, 600);
-      }
-      await snap(t, 'settings');
-      await t.drag(find.byType(Scrollable).first, const Offset(0, -700));
-      await settle(t, 800);
-      await snap(t, 'settings-more');
-      await t.drag(find.byType(Scrollable).first, const Offset(0, 1400));
-      await settle(t, 600);
-      await t.tap(find.text('Profile').last); // the Profile tab
-      await settle(t, 1500);
-      await snap(t, 'my-profile');
-    } catch (e) {
-      debugPrint('settings shots skipped: $e');
-    }
-    await t.tap(find.text('Chats').last);
-    await settle(t, 800);
+    // Settings and profile screens are checked as pictures by the preview test (test/screens_preview_test.dart).
+    // Here they were skipped on purpose: their glow and shadow effects use up the CI emulator's software
+    // graphics and the emulator went offline right after them, taking the whole run down.
+
 
     await t.tap(find.text('Sana Ahmed'));
     await pumpUntil(t, find.text('Hello! How is the app working for you?'), what: 'messages in chat');
