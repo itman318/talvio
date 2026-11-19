@@ -84,11 +84,18 @@ class _MessageImageState extends State<MessageImage> {
   bool _loading = false;
   bool _failed = false;
   bool _tapToLoad = false;
+  final _progress = ValueNotifier<double>(0);
 
   @override
   void initState() {
     super.initState();
     _decide();
+  }
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    super.dispose();
   }
 
   @override
@@ -145,7 +152,9 @@ class _MessageImageState extends State<MessageImage> {
     });
     try {
       final media = context.read<AppServices>().media;
-      final f = await media.preview(m);
+      final f = await media.preview(m, onProgress: (x) {
+        if (mounted && (x - _progress.value).abs() > 0.02) _progress.value = x;
+      });
       final full = await media.cached(m);
       if (!mounted) return;
       setState(() {
@@ -222,13 +231,20 @@ class _MessageImageState extends State<MessageImage> {
             ),
           )
         else
-          const Center(
+          Center(
             child: SizedBox(
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
-                child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  // real progress once bytes arrive (a spinning ring before that)
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _progress,
+                    builder: (_, v, __) => CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white, value: v > 0 ? v : null),
+                  ),
+                ),
               ),
             ),
           ),

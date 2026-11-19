@@ -269,22 +269,49 @@ class ApiClient {
   }
 
   /// Downloads a protected file (e.g. /api/media/12) to [target].
-  Future<File> download(String apiUrl, File target, {bool retry = true}) async {
-    final req = http.Request('GET', Uri.parse(AppConfig.absolute(apiUrl)));
-    req.headers.addAll(authHeaders);
-    final streamed = await _http.send(req).timeout(const Duration(minutes: 10));
-    if (streamed.statusCode == 401 && retry && refreshToken != null) {
-      await streamed.stream.drain<void>();
-      await refreshTokens();
-      return download(apiUrl, target, retry: false);
-    }
-    if (streamed.statusCode != 200) {
-      await streamed.stream.drain<void>();
-      throw ApiException(streamed.statusCode, 'download_failed', 'Could not download the file');
-    }
+  /// Downloads into [target]. Mobile data often drops a connection without closing it: if no bytes
+  /// arrive for 20 s the download is dropped and tried again once on a fresh connection, instead of
+  /// spinning for minutes. [onProgress] gets 0…1 while bytes come in (when the size is known).
+  Future<File> download(String apiUrl, File target, {bool retry = true, void Function(double)? onProgress}) async {
+    await _freshen();
     final tmp = File('${target.path}.part');
-    final sink = tmp.openWrite();
-    await streamed.stream.pipe(sink);
-    return tmp.rename(target.path);
+    try {
+      final req = http.Request('GET', Uri.parse(AppConfig.absolute(apiUrl)));
+      req.headers.addAll(authHeaders);
+      final streamed = await _http.send(req).timeout(const Duration(seconds: 30));
+      if (streamed.statusCode == 401 && retry && refreshToken != null) {
+        await streamed.stream.drain<void>();
+        await refreshTokens();
+        return download(apiUrl, target, retry: false, onProgress: onProgress);
+      }
+      if (streamed.statusCode != 200) {
+        await streamed.stream.drain<void>();
+        throw ApiException(streamed.statusCode, 'download_failed', 'Could not download the file');
+      }
+      final total = streamed.contentLength ?? 0;
+      var got = 0;
+      final sink = tmp.openWrite();
+      try {
+        await for (final chunk in streamed.stream.timeout(const Duration(seconds: 20))) {
+          sink.add(chunk);
+          got += chunk.length;
+          if (onProgress != null && total > 0) onProgress((got / total).clamp(0.0, 1.0));
+        }
+      } finally {
+        await sink.close();
+      }
+      if (total > 0 && got < total) throw const SocketException('Download cut off');
+      return tmp.rename(target.path);
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      try {
+        if (tmp.existsSync()) tmp.deleteSync();
+      } catch (_) {}
+      if (!retry) rethrow;
+      _resetConnections(); // the old connection may be dead: next try opens a new one
+      return download(apiUrl, target, retry: false, onProgress: onProgress);
+    }
   }
+
 }

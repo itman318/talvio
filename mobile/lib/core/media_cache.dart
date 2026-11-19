@@ -60,14 +60,14 @@ class MediaCache {
   Future<File?> best(MediaInfo m) async => await cached(m) ?? await cachedPreview(m);
 
   /// Bubble-size photo (a few dozen KB): the full photo when it is already here, else the preview.
-  Future<File> preview(MediaInfo m) async {
+  Future<File> preview(MediaInfo m, {void Function(double)? onProgress}) async {
     if (!m.hasPreview) return get(m);
     final full = await cached(m);
     if (full != null) return full;
     return _previewInflight[m.id] ??= () async {
       final target = _previewFile(await _cacheDir(), m);
       if (await target.exists()) return target;
-      return api.download(m.previewUrl, target);
+      return api.download(m.previewUrl, target, onProgress: onProgress);
     }()
         .whenComplete(() {
       _previewInflight.remove(m.id);
