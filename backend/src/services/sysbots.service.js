@@ -349,7 +349,7 @@ async function onMessage(botId, senderId, chat, row) {
   return true;
 }
 
-async function onCallback(botId, userId, chatId, data) {
+async function onCallback(botId, userId, chatId, data, messageId = null) {
   const key = which(botId);
   if (key === 'support') {
     if (data === 'status') return supportStatus(userId, chatId);
@@ -361,7 +361,7 @@ async function onCallback(botId, userId, chatId, data) {
   if (key === 'buttons') return require('./buttonbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
   if (key === 'wallet') return require('./walletbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
   if (key === 'plus') return require('./plusbot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
-  if (key === 'verify') return require('./verifybot.service').onCallback(userId, chatId, data); // eslint-disable-line global-require
+  if (key === 'verify') return require('./verifybot.service').onCallback(userId, chatId, data, messageId); // eslint-disable-line global-require
   if (key === 'spam' && data === 'appeal') {
     const user = await db.one('SELECT id, restricted_until, restrict_reason FROM users WHERE id = $1', [userId]);
     return spamAppeal(user, chatId, '');

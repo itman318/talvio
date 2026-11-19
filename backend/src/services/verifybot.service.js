@@ -49,57 +49,135 @@ const STEPS = {
   ],
 };
 
-// in memory while someone fills in the form: userId → { kind, i (step), answers: {}, editing: bool }
-const drafts = new Map();
-const ref = (id) => `VR-${String(id).padStart(6, '0')}`;
+// ------------------------------------------------------------------ drafts (kept in the database: a server restart loses nothing)
+async function getDraft(userId) {
+  const r = await db.one('SELECT data FROM verify_drafts WHERE user_id = $1', [userId]);
+  return r ? r.data : null;
+}
+async function saveDraft(userId, d) {
+  await db.query(
+    `INSERT INTO verify_drafts (user_id, data, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+    [userId, JSON.stringify(d)],
+  );
+}
+async function dropDraft(userId) {
+  await db.query('DELETE FROM verify_drafts WHERE user_id = $1', [userId]);
+}
 
-async function home(userId, chatId) {
-  const open = await db.one(`SELECT id, kind, created_at FROM verify_requests WHERE user_id = $1 AND status = 'open' ORDER BY id DESC LIMIT 1`, [userId]);
+/** A reference people can quote: HV-7KQ3-M9TD (random, not a running number). */
+function newCode() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = require('crypto').randomBytes(8); // eslint-disable-line global-require
+  const c = [...bytes].map((x) => A[x % A.length]).join('');
+  return `HV-${c.slice(0, 4)}-${c.slice(4)}`;
+}
+const ref = (r) => r.code || `HV-${String(r.id)}`;
+
+// ------------------------------------------------------------------ messages: one panel that changes in place
+async function show(chatId, messageId, text, buttons) {
+  if (messageId) {
+    const m = await db.one('SELECT id, sender_id FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [messageId, chatId]);
+    const botId = await sys().ensureOne('verify');
+    if (m && Number(m.sender_id) === botId) {
+      await db.query('UPDATE messages SET text = $2, reply_markup = $3, edited_at = now() WHERE id = $1', [
+        m.id, text, buttons ? JSON.stringify({ inline_keyboard: buttons }) : null,
+      ]);
+      const messages = require('./message.service'); // eslint-disable-line global-require
+      const map = await messages.serializeByIds(0, [Number(m.id)]);
+      const memberIds = await require('./chat.service').memberIds(chatId); // eslint-disable-line global-require
+      require('../bus').emit('message:edited', { chatId, message: map.get(Number(m.id)), memberIds }); // eslint-disable-line global-require
+      return m;
+    }
+  }
+  return sys().say('verify', chatId, text, buttons);
+}
+
+/** The question that was just answered: buttons go, a ✓ line stays (a tidy record of the form). */
+async function closeQuestion(chatId, d, line) {
+  if (!d.qid) return;
+  await show(chatId, d.qid, line, null).catch(() => null);
+  d.qid = null;
+}
+
+const bar = (i, n) => `${'▰'.repeat(i)}${'▱'.repeat(Math.max(0, n - i))}`;
+const DIV = '━━━━━━━━━━━━━━━━';
+
+// ------------------------------------------------------------------ screens
+async function home(userId, chatId, messageId = null) {
+  const open = await db.one(`SELECT id, code, kind, created_at FROM verify_requests WHERE user_id = $1 AND status = 'open' ORDER BY id DESC LIMIT 1`, [userId]);
   const lines = [
     '🛡️ **Hushavia Verification**',
-    '',
-    'A verified badge tells people an account is really who it says it is. Our team checks every request by hand.',
+    DIV,
+    'A verified badge tells people an account is really who it says it is. Every request is checked by a person on the Hushavia team.',
     '',
   ];
   if (open) {
-    lines.push(`⏳ Request ${ref(open.id)} (${KINDS[open.kind].label}) is being checked. We’ll message you here with the answer.`);
-    return sys().say('verify', chatId, lines.join('\n'), [[btn('📄 My requests', 'status')]]);
+    lines.push('⏳ **Request in review**', `Reference: ${ref(open)}`, `Type: ${KINDS[open.kind].label}`, `Sent: ${when(open.created_at)}`, '', 'We’ll message you here with the answer.');
+    return show(chatId, messageId, lines.join('\n'), [[btn('📄 My requests', 'status')]]);
   }
-  lines.push('What would you like to verify?', '', ...Object.values(KINDS).map((k) => `${k.icon} **${k.label}** — ${k.intro}`));
-  return sys().say('verify', chatId, lines.join('\n'), [
-    [btn('✅ My profile', 'k:person')],
-    [btn('🏪 My business', 'k:business')],
-    [btn('📣 My channel or group', 'k:chat')],
-    [btn('📄 My requests', 'status')],
+  lines.push('**What would you like to verify?**', '');
+  for (const k of Object.values(KINDS)) lines.push(`${k.icon} **${k.label}**`, `     ${k.intro}`);
+  return show(chatId, messageId, lines.join('\n'), [
+    [btn('✅ Profile', 'k:person'), btn('🏪 Business', 'k:business')],
+    [btn('📣 Channel or group', 'k:chat')],
+    [btn('📄 My requests', 'status'), btn('❓ How it works', 'help')],
   ]);
 }
 
-async function myRequests(userId, chatId) {
-  const rows = await db.many('SELECT id, kind, status, admin_note, created_at FROM verify_requests WHERE user_id = $1 ORDER BY id DESC LIMIT 5', [userId]);
-  if (!rows.length) return sys().say('verify', chatId, 'You haven’t sent a request yet.', [[btn('⬅️ Back', 'home')]]);
-  const icon = { open: '⏳ Being checked', approved: '✅ Approved', declined: '❌ Declined' };
-  const text = ['📄 Your requests', '', ...rows.map((r) => `${ref(r.id)} · ${KINDS[r.kind].label}\n${icon[r.status]}${r.admin_note ? ` — ${r.admin_note}` : ''}`)].join('\n\n');
-  return sys().say('verify', chatId, text, [[btn('⬅️ Back', 'home')]]);
+async function help(chatId, messageId) {
+  const text = [
+    '❓ **How verification works**',
+    DIV,
+    '1️⃣  Choose what to verify',
+    '2️⃣  Answer a few short questions and add photos of documents',
+    '3️⃣  Check everything and send',
+    '4️⃣  Our team reviews it — usually within 3 working days',
+    '5️⃣  You get the answer here; approved accounts get the badge at once',
+    '',
+    '🔒 **Your documents** are seen only by Hushavia’s verification team and are never shown on your profile.',
+    '⚠️ Hushavia never asks for passwords, login codes or payment for verification.',
+  ].join('\n');
+  return show(chatId, messageId, text, [[btn('⬅️ Back', 'home')]]);
 }
 
-async function start(userId, chatId, kind) {
-  const open = await db.one(`SELECT id FROM verify_requests WHERE user_id = $1 AND status = 'open' LIMIT 1`, [userId]);
-  if (open) return sys().say('verify', chatId, `⏳ Request ${ref(open.id)} is still being checked. Please wait for the answer.`);
+async function myRequests(userId, chatId, messageId) {
+  const rows = await db.many('SELECT id, code, kind, status, admin_note, created_at FROM verify_requests WHERE user_id = $1 ORDER BY id DESC LIMIT 5', [userId]);
+  if (!rows.length) return show(chatId, messageId, '📄 **My requests**\n' + DIV + '\nYou haven’t sent a request yet.', [[btn('⬅️ Back', 'home')]]);
+  const icon = { open: '⏳ In review', approved: '✅ Approved', declined: '❌ Not approved' };
+  const parts = rows.map((r) => [`**${ref(r)}** · ${KINDS[r.kind].label}`, `${icon[r.status]} · ${when(r.created_at)}`, r.admin_note ? `💬 ${r.admin_note}` : null].filter(Boolean).join('\n'));
+  return show(chatId, messageId, ['📄 **My requests**', DIV, parts.join('\n\n')].join('\n'), [[btn('⬅️ Back', 'home')]]);
+}
+
+async function start(userId, chatId, kind, messageId) {
+  const open = await db.one(`SELECT id, code FROM verify_requests WHERE user_id = $1 AND status = 'open' LIMIT 1`, [userId]);
+  if (open) return show(chatId, messageId, `⏳ Request **${ref(open)}** is still in review. Please wait for the answer before sending a new one.`, [[btn('📄 My requests', 'status')]]);
   if (kind === 'business') {
     const plus = await require('./payment.service').isPremium(userId); // eslint-disable-line global-require
-    if (!plus) return sys().say('verify', chatId, '🏪 Business verification comes with Hushavia Business (Hushavia Plus). Get Plus from @HushaviaPlusBot, then come back here.', [[btn('⬅️ Back', 'home')]]);
+    if (!plus) {
+      return show(chatId, messageId, '🏪 **Business verification**\n' + DIV + '\nBusiness verification comes with Hushavia Business (part of Hushavia Plus).\n\nGet Plus from @HushaviaPlusBot, then come back here.', [[btn('⬅️ Back', 'home')]]);
+    }
   }
-  drafts.set(userId, { kind, i: 0, answers: {}, editing: false });
   const steps = STEPS[kind];
-  await sys().say('verify', chatId,
-    `${KINDS[kind].icon} **${KINDS[kind].label}**\n\nI’ll ask ${steps.length} short questions. You can go back, skip the optional ones, and check everything before you send.`);
-  return ask(userId, chatId);
+  const need = steps.filter((st) => !st.optional).map((st) => `•  ${st.label}`);
+  const opt = steps.filter((st) => st.optional).map((st) => `•  ${st.label}`);
+  const text = [
+    `${KINDS[kind].icon} **${KINDS[kind].label}**`,
+    DIV,
+    `${steps.length} short steps · about 3 minutes`,
+    '',
+    '**You’ll need:**', ...need,
+    ...(opt.length ? ['', '**Optional:**', ...opt] : []),
+    '',
+    '🔒 Documents are seen only by Hushavia’s verification team.',
+  ].join('\n');
+  await saveDraft(userId, { kind, i: -1, answers: {}, editing: false });
+  return show(chatId, messageId, text, [[btn('▶️ Start', 'go')], [btn('⬅️ Back', 'home')]]);
 }
 
-async function ask(userId, chatId) {
-  const d = drafts.get(userId);
+async function ask(userId, chatId, d, messageId = null) {
   const steps = STEPS[d.kind];
-  if (d.i >= steps.length) return review(userId, chatId);
+  if (d.i >= steps.length) return review(userId, chatId, d, messageId);
   const st = steps[d.i];
   const row = [];
   if (d.i > 0 && !d.editing) row.push(btn('⬅️ Back', 'back'));
@@ -107,42 +185,55 @@ async function ask(userId, chatId) {
   const kb = [];
   if (row.length) kb.push(row);
   kb.push([btn('✖ Cancel', 'cancel')]);
-  const hint = st.type === 'photo' ? '📷 Send a photo' : '✍️ Type your answer';
-  return sys().say('verify', chatId, `**Step ${d.i + 1} of ${steps.length} — ${st.label}**${st.optional ? ' (optional)' : ''}\n\n${st.q}\n\n${hint}`, kb);
+  const text = [
+    `${bar(d.i + 1, steps.length)}  ${d.i + 1}/${steps.length}`,
+    `**${st.label}**${st.optional ? '  ·  optional' : ''}`,
+    '',
+    st.q,
+    '',
+    st.type === 'photo' ? '📷 _Send a photo_' : '✍️ _Type your answer below_',
+  ].join('\n');
+  const m = await show(chatId, messageId, text, kb);
+  d.qid = m && m.id ? Number(m.id) : null;
+  await saveDraft(userId, d);
+  return m;
 }
 
 function shown(st, val) {
-  if (val === undefined || val === null || val === '') return '—';
-  return st.type === 'photo' ? '📎 attached' : String(val);
+  if (val === undefined || val === null || val === '') return '_—_';
+  return st.type === 'photo' ? '📎 Photo attached' : String(val);
 }
 
-async function review(userId, chatId) {
-  const d = drafts.get(userId);
+async function review(userId, chatId, d, messageId = null) {
   const steps = STEPS[d.kind];
-  const lines = [`📋 **Check your request** — ${KINDS[d.kind].label}`, ''];
-  steps.forEach((st, n) => lines.push(`${n + 1}. **${st.label}:** ${shown(st, d.answers[st.key])}`));
-  lines.push('', 'Is everything right? Documents are seen only by the Hushavia team.');
+  const lines = [`📋 **Review your request**`, DIV, `${KINDS[d.kind].icon} ${KINDS[d.kind].label}`, ''];
+  steps.forEach((st, n) => lines.push(`**${n + 1}. ${st.label}**`, `     ${shown(st, d.answers[st.key])}`));
+  lines.push('', 'Tap ✏️ and a number to change an answer.');
   const edit = steps.map((st, n) => btn(`✏️ ${n + 1}`, `e:${n}`));
   const rows = [];
   for (let n = 0; n < edit.length; n += 4) rows.push(edit.slice(n, n + 4));
-  return sys().say('verify', chatId, lines.join('\n'), [[btn('✅ Send to Hushavia', 'send')], ...rows, [btn('✖ Cancel', 'cancel')]]);
+  d.i = steps.length;
+  const m = await show(chatId, messageId, lines.join('\n'), [[btn('✅ Submit request', 'send')], ...rows, [btn('✖ Cancel', 'cancel')]]);
+  d.qid = m && m.id ? Number(m.id) : null;
+  await saveDraft(userId, d);
+  return m;
 }
 
-async function answer(userId, chatId, row) {
-  const d = drafts.get(userId);
+async function answer(userId, chatId, row, d) {
   const st = STEPS[d.kind][d.i];
-  if (!st) return review(userId, chatId);
+  if (!st) return review(userId, chatId, d);
+  const nope = (t) => sys().say('verify', chatId, `⚠️ ${t}`);
   if (st.type === 'photo') {
     const own = row && row.media_id && row.type === 'image'
       && await db.one('SELECT id FROM media WHERE id = $1 AND uploader_id = $2', [row.media_id, userId]);
-    if (!own) return sys().say('verify', chatId, '📷 Please send a photo for this step (not a file or text).');
+    if (!own) return nope('This step needs a photo — not a file or text.');
     d.answers[st.key] = Number(own.id);
   } else {
     const t = String((row && row.text) || '').trim();
-    if (!t) return sys().say('verify', chatId, '✍️ Please type your answer.');
-    if (st.min && t.length < st.min) return sys().say('verify', chatId, `That looks too short — please write a bit more (at least ${st.min} characters).`);
-    if (st.max && t.length > st.max) return sys().say('verify', chatId, `That’s too long — please keep it under ${st.max} characters.`);
-    if (st.link && !URL_RE.test(t)) return sys().say('verify', chatId, '🔗 Please send at least one link (e.g. https://example.com).');
+    if (!t) return nope('Please type your answer.');
+    if (st.min && t.length < st.min) return nope(`That looks too short — please write at least ${st.min} characters.`);
+    if (st.max && t.length > st.max) return nope(`That’s too long — please keep it under ${st.max} characters.`);
+    if (st.link && !URL_RE.test(t)) return nope('Please include at least one link, e.g. https://example.com');
     if (st.chat) {
       const m = /@?([A-Za-z0-9_]{4,32})/.exec(t);
       const c = m && await db.one(
@@ -150,83 +241,102 @@ async function answer(userId, chatId, row) {
          WHERE lower(c.username) = lower($1) AND c.type <> 'private'`,
         [m[1], userId],
       );
-      if (!c) return sys().say('verify', chatId, 'I couldn’t find a public channel or group with that @username that you own. Check the username and try again.');
+      if (!c) return nope('I couldn’t find a public channel or group with that @username that you own. Check it and try again.');
       d.chatId = Number(c.id);
-      d.answers[st.key] = `@${m[1]} (${c.title})`;
+      d.answers[st.key] = `@${m[1]} — ${c.title}`;
     } else {
       d.answers[st.key] = t;
     }
   }
-  return next(userId, chatId);
+  await closeQuestion(chatId, d, `✓ **${st.label}:** ${shown(st, d.answers[st.key])}`);
+  return next(userId, chatId, d);
 }
 
-async function next(userId, chatId) {
-  const d = drafts.get(userId);
+async function next(userId, chatId, d, messageId = null) {
   if (d.editing) {
     d.editing = false;
-    d.i = STEPS[d.kind].length;
-    return review(userId, chatId);
+    return review(userId, chatId, d, messageId);
   }
   d.i += 1;
-  return ask(userId, chatId);
+  return ask(userId, chatId, d, messageId);
 }
 
-async function submit(userId, chatId) {
-  const d = drafts.get(userId);
-  if (!d) return home(userId, chatId);
+async function submit(userId, chatId, d, messageId) {
   const steps = STEPS[d.kind];
   const missing = steps.find((st) => !st.optional && (d.answers[st.key] === undefined || d.answers[st.key] === ''));
   if (missing) {
     d.i = steps.indexOf(missing);
     d.editing = true;
-    await sys().say('verify', chatId, `“${missing.label}” is still missing.`);
-    return ask(userId, chatId);
+    return ask(userId, chatId, d, messageId);
   }
   const fields = steps.filter((st) => st.type !== 'photo').map((st) => ({ label: st.label, value: d.answers[st.key] || '' })).filter((f) => f.value);
   const photos = steps.filter((st) => st.type === 'photo' && d.answers[st.key]).map((st) => ({ label: st.label, media_id: d.answers[st.key] }));
-  const r = await db.one(
-    `INSERT INTO verify_requests (user_id, kind, chat_id, details, media_ids, fields) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [userId, d.kind, d.chatId || null, fields.map((f) => `${f.label}: ${f.value}`).join('\n').slice(0, 4000),
-      JSON.stringify(photos.map((p) => p.media_id)), JSON.stringify({ fields, photos })],
-  );
-  drafts.delete(userId);
-  return sys().say('verify', chatId,
-    `📨 **Request ${ref(r.id)} sent**\n\nThe Hushavia team checks requests by hand — usually within 3 working days. I’ll message you here with the answer.`,
-    [[btn('📄 My requests', 'status')]]);
+  let r = null;
+  for (let tries = 0; tries < 5 && !r; tries += 1) {
+    r = await db.one(
+      `INSERT INTO verify_requests (user_id, kind, chat_id, details, media_ids, fields, code) VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (code) DO NOTHING RETURNING id, code, created_at`,
+      [userId, d.kind, d.chatId || null, fields.map((f) => `${f.label}: ${f.value}`).join('\n').slice(0, 4000),
+        JSON.stringify(photos.map((p) => p.media_id)), JSON.stringify({ fields, photos }), newCode()],
+    );
+  }
+  await dropDraft(userId);
+  const text = [
+    '📨 **Request submitted**',
+    DIV,
+    `**Reference:** ${ref(r)}`,
+    `**Type:** ${KINDS[d.kind].label}`,
+    `**Submitted:** ${when(r.created_at)}`,
+    '**Status:** ⏳ In review',
+    '',
+    'Our team checks every request by hand — usually within 3 working days. You’ll get the answer right here.',
+  ].join('\n');
+  return show(chatId, messageId, text, [[btn('📄 My requests', 'status')]]);
 }
+
+const when = (d) => new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' });
 
 async function onMessage(userId, chatId, row) {
   const t = String((row && row.text) || '').trim();
-  const d = drafts.get(userId);
   if (t === '/cancel') {
-    drafts.delete(userId);
-    return sys().say('verify', chatId, 'Cancelled. Nothing was sent.', [[btn('🛡️ Start again', 'home')]]);
+    await dropDraft(userId);
+    return sys().say('verify', chatId, 'Cancelled — nothing was sent.', [[btn('🛡️ Start again', 'home')]]);
   }
   if (t === '/status') return myRequests(userId, chatId);
-  if (!d || t === '/start') return home(userId, chatId);
-  return answer(userId, chatId, row);
+  const d = await getDraft(userId);
+  if (!d || t === '/start' || d.i < 0) return home(userId, chatId);
+  if (d.i >= STEPS[d.kind].length) return sys().say('verify', chatId, '⚠️ Your answers are ready — press **✅ Submit request** above, or ✏️ to change one.');
+  return answer(userId, chatId, row, d);
 }
 
-async function onCallback(userId, chatId, data) {
+async function onCallback(userId, chatId, data, messageId = null) {
   const s = String(data || '');
-  const d = drafts.get(userId);
-  if (s.startsWith('k:') && KINDS[s.slice(2)]) return start(userId, chatId, s.slice(2));
-  if (s === 'status') return myRequests(userId, chatId);
+  if (s === 'home') return home(userId, chatId, messageId);
+  if (s === 'help') return help(chatId, messageId);
+  if (s === 'status') return myRequests(userId, chatId, messageId);
+  if (s.startsWith('k:') && KINDS[s.slice(2)]) return start(userId, chatId, s.slice(2), messageId);
   if (s === 'cancel') {
-    drafts.delete(userId);
-    return sys().say('verify', chatId, 'Cancelled. Nothing was sent.', [[btn('🛡️ Start again', 'home')]]);
+    await dropDraft(userId);
+    return show(chatId, messageId, 'Cancelled — nothing was sent.', [[btn('🛡️ Start again', 'home')]]);
   }
-  if (!d) return home(userId, chatId);
-  if (s === 'send') return submit(userId, chatId);
+  const d = await getDraft(userId);
+  if (!d) return home(userId, chatId, messageId);
+  if (s === 'go') {
+    d.i = 0;
+    return ask(userId, chatId, d, messageId);
+  }
+  if (s === 'send') return submit(userId, chatId, d, messageId);
   if (s === 'back' && d.i > 0) {
     d.i -= 1;
-    return ask(userId, chatId);
+    return ask(userId, chatId, d, messageId);
   }
   if (s === 'skip') {
     const st = STEPS[d.kind][d.i];
     if (st && st.optional) {
       delete d.answers[st.key];
-      return next(userId, chatId);
+      d.qid = null;
+      await show(chatId, messageId, `⏭ **${st.label}:** skipped`, null);
+      return next(userId, chatId, d);
     }
   }
   if (s.startsWith('e:')) {
@@ -234,10 +344,10 @@ async function onCallback(userId, chatId, data) {
     if (STEPS[d.kind][n]) {
       d.i = n;
       d.editing = true;
-      return ask(userId, chatId);
+      return ask(userId, chatId, d, messageId);
     }
   }
-  return ask(userId, chatId);
+  return ask(userId, chatId, d, messageId);
 }
 
 // ------------------------------------------------------------------ admin panel
@@ -255,7 +365,7 @@ async function adminList(query = {}) {
       id: Number(r.id),
       kind: r.kind,
       label: KINDS[r.kind].label,
-      ref: ref(r.id),
+      ref: ref(r),
       details: r.details,
       fields: (r.fields && r.fields.fields) || null,
       photos: (r.fields && r.fields.photos) || (r.media_ids || []).map((m) => ({ label: 'Document', media_id: m })),
@@ -287,8 +397,8 @@ async function adminDecide(admin, idRaw, body = {}, ip) {
   const { chat } = await sysChat(r.user_id);
   await sys().say('verify', chat,
     approve
-      ? `🎉 **Request ${ref(r.id)} approved**\n\nYour ${KINDS[r.kind].label.toLowerCase()} badge is on now.${note ? `\n\n${note}` : ''}`
-      : `**Request ${ref(r.id)} was not approved**\n\nReason: ${note}\n\nYou can send a new request with more proof.`).catch(() => null);
+      ? ['🎉 **Verification approved**', DIV, `**Reference:** ${ref(r)}`, `**Type:** ${KINDS[r.kind].label}`, '', 'Your badge is on now — people will see it on your profile.', ...(note ? ['', `💬 ${note}`] : [])].join('\n')
+      : ['**Verification not approved**', DIV, `**Reference:** ${ref(r)}`, `**Type:** ${KINDS[r.kind].label}`, '', `💬 **Reason:** ${note}`, '', 'You can send a new request with more proof at any time.'].join('\n')).catch(() => null);
   return { ok: true };
 }
 

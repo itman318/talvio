@@ -1509,3 +1509,11 @@ CREATE TABLE IF NOT EXISTS verify_requests (
 );
 CREATE INDEX IF NOT EXISTS verify_requests_status_idx ON verify_requests (status, id);
 ALTER TABLE verify_requests ADD COLUMN IF NOT EXISTS fields JSONB;
+ALTER TABLE verify_requests ADD COLUMN IF NOT EXISTS code VARCHAR(16);
+UPDATE verify_requests SET code = 'HV-' || upper(substr(md5(id::text || random()::text), 1, 4)) || '-' || upper(substr(md5(random()::text), 1, 4)) WHERE code IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS verify_requests_code_uq ON verify_requests (code);
+CREATE TABLE IF NOT EXISTS verify_drafts (
+  user_id    BIGINT      PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  data       JSONB       NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

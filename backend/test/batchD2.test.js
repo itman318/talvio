@@ -1024,6 +1024,8 @@ test('@HushaviaVerifyBot: step-by-step form with review → admin approves → b
   const chat = await chats.getOrCreatePrivate(star.id, botId);
   const say = (text) => vb.onMessage(star.id, chat.id, { text });
   await vb.onCallback(star.id, chat.id, 'k:person');
+  await say('ignored before Start'); // the intro screen: nothing is recorded yet
+  await vb.onCallback(star.id, chat.id, 'go');
   await say('Ab'); // too short: asked again
   await say('Star Khan');
   await say('Singer');
@@ -1039,7 +1041,7 @@ test('@HushaviaVerifyBot: step-by-step form with review → admin approves → b
   await vb.onCallback(star.id, chat.id, 'send');
   const req = (await vb.adminList({})).items.find((r) => r.user.id === star.id);
   assert.ok(req);
-  assert.match(req.ref, /^VR-\d{6}$/);
+  assert.match(req.ref, /^HV-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
   assert.deepEqual(req.fields.map((f) => [f.label, f.value]), [['Full name', 'Star Khan'], ['Known for', 'Singer and songwriter'], ['City & country', 'Lahore, Pakistan'], ['Links', 'https://star.example.com']]);
   assert.deepEqual(req.photos, [{ label: 'ID document', media_id: doc.id }]);
   await rejects(vb.adminDecide(boss, req.id, { approve: false }), 'invalid_input');
@@ -1047,5 +1049,6 @@ test('@HushaviaVerifyBot: step-by-step form with review → admin approves → b
   assert.equal((await users.getUser(A.id, star.id)).is_verified, true);
   await rejects(vb.adminDecide(boss, req.id, { approve: true }), 'already_decided');
   const said = await db.one(`SELECT text FROM messages WHERE chat_id = $1 AND sender_id = $2 ORDER BY id DESC LIMIT 1`, [chat.id, botId]);
-  assert.match(said.text, /approved/);
+  assert.match(said.text, /Verification approved/);
+  assert.match(said.text, new RegExp(req.ref));
 });

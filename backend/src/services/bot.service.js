@@ -851,7 +851,7 @@ async function pressButton(userId, messageIdRaw, body = {}) {
   const sysbots = require('./sysbots.service'); // eslint-disable-line global-require
   if (botfather.isBotForge(bot.user_id) || sysbots.which(bot.user_id)) {
     const run = sysbots.which(bot.user_id)
-      ? () => sysbots.onCallback(bot.user_id, userId, m.chat_id, data)
+      ? () => sysbots.onCallback(bot.user_id, userId, m.chat_id, data, m.id)
       : () => botfather.onCallback(userId, m.chat_id, m.id, data);
     setImmediate(() => run().catch((err) => console.error('system bot error', err))); // eslint-disable-line no-console
     // the app starts listening for the answer once this request returns
