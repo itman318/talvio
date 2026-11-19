@@ -120,6 +120,9 @@ jobs:
           mkdir -p ../ci-report
           cp pubspec.lock ../ci-report/pubspec.lock || true
           flutter pub deps --style=compact > ../ci-report/deps.txt 2>&1 || true
+          for p in shared_preferences_android path_provider_android; do
+            curl -s https://pub.dev/api/packages/$p | python3 -c "import json,sys; d=json.load(sys.stdin); print('$p', ' '.join(v['version']+('*' if 'jni' in v['pubspec'].get('dependencies',{}) else '') for v in d['versions'][-14:]))" >> ../ci-report/deps.txt 2>&1 || true
+          done
 
       - name: Analyze (errors only)
         id: analyze
