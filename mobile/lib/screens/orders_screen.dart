@@ -124,7 +124,7 @@ class _OrderListState extends State<_OrderList> with AutomaticKeepAliveClientMix
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 30),
         itemCount: list.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _OrderCard(
           order: list[i],
           seller: widget.role == 'seller',
