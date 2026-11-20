@@ -11,7 +11,7 @@
  *   GET  {base}/file/bot<id>:<secret>/<file_path>      (downloads from getFile)
  *   → { ok: true, result } | { ok: false, error_code, description, parameters? }
  *
- * The token is the Hushavia token written as "<id>:<secret>" (tlv_<id>_<secret> works too).
+ * The token is the Hushavia token written as "<id>:<secret>" (hsv_<id>_<secret> works too).
  * Everything here is Hushavia's own code; methods call the regular bot service underneath.
  */
 const fs = require('fs');
@@ -28,10 +28,10 @@ const { AppError, badRequest } = require('../utils/errors');
 function toHushaviaToken(raw) {
   const t = String(raw || '').trim();
   const m = /^(\d+):([A-Za-z0-9]{20,})$/.exec(t);
-  return m ? `tlv_${m[1]}_${m[2]}` : t;
+  return m ? `hsv_${m[1]}_${m[2]}` : t;
 }
 function toClassicToken(hushavia) {
-  const m = /^tlv_(\d+)_([A-Za-z0-9]+)$/.exec(String(hushavia || ''));
+  const m = /^(?:hsv|tlv)_(\d+)_([A-Za-z0-9]+)$/.exec(String(hushavia || ''));
   return m ? `${m[1]}:${m[2]}` : null;
 }
 
@@ -339,6 +339,28 @@ const MAP = {
     return { status: r.status === 'left' ? 'left' : 'member', user };
   },
   getChatMemberCount: (t, p) => bot.callMethod(t, 'chats.member-count', p),
+  banChatMember: (t, p) => bot.callMethod(t, 'chats.ban', p),
+  kickChatMember: (t, p) => bot.callMethod(t, 'chats.ban', p),
+  unbanChatMember: (t, p) => bot.callMethod(t, 'chats.unban', p),
+  restrictChatMember: (t, p) => {
+    // can_send_messages false = muted until until_date (none = for good); true = lifted
+    const perms = json(p.permissions) || {};
+    const until = Number(p.until_date) || 0;
+    const mute = perms.can_send_messages === false;
+    const minutes = !mute ? 0 : until ? Math.max(1, Math.ceil((until * 1000 - Date.now()) / 60000)) : 525600;
+    return bot.callMethod(t, 'chats.restrict', { chat_id: p.chat_id, user_id: p.user_id, minutes });
+  },
+  leaveChat: (t, p) => bot.callMethod(t, 'chats.leave', p),
+  getChatAdministrators: (t, p) => bot.callMethod(t, 'chats.admins', p),
+  approveChatJoinRequest: (t, p) => bot.callMethod(t, 'chats.join-request', { ...p, approve: true }),
+  declineChatJoinRequest: (t, p) => bot.callMethod(t, 'chats.join-request', { ...p, approve: false }),
+  setMessageReaction: (t, p) => {
+    const r = json(p.reaction);
+    const first = Array.isArray(r) && r[0] ? r[0].emoji : null;
+    return bot.callMethod(t, 'messages.react', { chat_id: p.chat_id, message_id: p.message_id, emoji: first });
+  },
+  editMessageCaption: async (t, p) => message(await bot.callMethod(t, 'messages.edit', { ...p, text: formatText(p.caption, p.parse_mode) })),
+  sendContact: async (t, p) => message(await bot.callMethod(t, 'contacts.send', p)),
   getChatMembersCount: (t, p) => bot.callMethod(t, 'chats.member-count', p),
   getFile: async (t, p) => {
     const b = await bot.authenticate(t);
@@ -347,7 +369,12 @@ const MAP = {
   },
 };
 
-const botIdOf = (token) => Number((/^tlv_(\d+)_/.exec(token) || [])[1] || 0);
+const botIdOf = (token) => Number((/^(?:hsv|tlv)_(\d+)_/.exec(token) || [])[1] || 0);
+
+/** Checks a token before anything else is read from the request (used before file uploads). */
+async function checkToken(rawToken) {
+  await bot.authenticate(toHushaviaToken(rawToken));
+}
 
 async function call(rawToken, method, params = {}, files = {}) {
   const token = toHushaviaToken(rawToken);
@@ -381,4 +408,4 @@ function errorBody(err) {
   return { status, body };
 }
 
-module.exports = { toGroupId, fromGroupId, call, fileFor, errorBody, update, message, formatText, toHushaviaToken, toClassicToken, tmpDir: os.tmpdir(), v };
+module.exports = { toGroupId, fromGroupId, call, fileFor, errorBody, update, message, formatText, toHushaviaToken, toClassicToken, tmpDir: os.tmpdir(), v, checkToken };

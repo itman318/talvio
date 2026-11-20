@@ -28,6 +28,12 @@ function enforce(key, limit, windowMs, message) {
   if (!r.allowed) throw tooMany(r.retryAfterSec, message);
 }
 
+/** True when the key is already over its limit (does not count a hit). */
+function blocked(key, limit) {
+  const b = buckets.get(key);
+  return !!(b && b.resetAt > Date.now() && b.count >= limit);
+}
+
 function reset(prefix) {
   for (const k of buckets.keys()) if (!prefix || k.startsWith(prefix)) buckets.delete(k);
 }
@@ -38,4 +44,4 @@ const sweeper = setInterval(() => {
 }, 60 * 1000);
 sweeper.unref();
 
-module.exports = { hit, enforce, reset };
+module.exports = { hit, enforce, reset, blocked };

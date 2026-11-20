@@ -155,7 +155,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
 }
 
 Future<void> showTokenDialog(BuildContext context, String token, {String? classic}) {
-  final tm = RegExp(r'^tlv_(\d+)_([A-Za-z0-9]+)$').firstMatch(token);
+  final tm = RegExp(r'^(?:hsv|tlv)_(\d+)_([A-Za-z0-9]+)$').firstMatch(token);
   final classicToken = classic ?? (tm == null ? null : '${tm[1]}:${tm[2]}');
   Future<void> copy(BuildContext ctx, String text, String what) async {
     await Clipboard.setData(ClipboardData(text: text));

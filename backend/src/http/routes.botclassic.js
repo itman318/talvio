@@ -12,6 +12,7 @@ const settings = require('../services/settings.service');
 const classic = require('../services/botclassic.service');
 const media = require('../services/media.service');
 const { storage } = require('./routes.user');
+const guard = require('./botGuard');
 
 async function parseMultipart(req, res) {
   if (!req.is('multipart/form-data')) return {};
@@ -29,11 +30,14 @@ async function parseMultipart(req, res) {
 async function method(req, res) {
   let files = {};
   try {
+    guard.checkIp(req);
+    if (req.is('multipart/form-data')) await classic.checkToken(req.params[0]); // before any upload is stored
     files = await parseMultipart(req, res);
     const params = { ...req.query, ...(req.body && typeof req.body === 'object' ? req.body : {}) };
     const result = await classic.call(req.params[0], req.params[1], params, files);
     res.json({ ok: true, result });
   } catch (err) {
+    guard.noteFailure(req, err);
     for (const f of Object.values(files)) fs.promises.unlink(f.path).catch(() => {});
     const { status, body } = classic.errorBody(err);
     if (status === 500) console.error('classic bot api error', err); // eslint-disable-line no-console
@@ -43,10 +47,19 @@ async function method(req, res) {
 
 async function file(req, res) {
   try {
+    guard.checkIp(req);
     const m = await classic.fileFor(req.params[0], req.params[1]);
-    res.type(m.mime);
+    // a file someone uploaded must never run as a web page on our address
+    res.set('X-Content-Type-Options', 'nosniff');
+    if (media.isInlineSafe(m)) {
+      res.type(m.mime);
+    } else {
+      res.type('application/octet-stream');
+      res.attachment(m.original_name || 'file');
+    }
     res.sendFile(media.absolutePath(m));
   } catch (err) {
+    guard.noteFailure(req, err);
     const { status, body } = classic.errorBody(err);
     res.status(status).json(body);
   }

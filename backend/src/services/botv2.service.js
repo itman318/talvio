@@ -219,6 +219,22 @@ function translate(method, p) {
       return ['chats.member', { chat_id: p.to, user_id: p.person }, (r) => ({ role: { creator: 'owner', administrator: 'admin', member: 'member' }[r.status] || 'not_member', person: person(r.user) })];
     case 'conversation.size':
       return ['chats.member-count', { chat_id: p.to }, (n) => ({ members: n })];
+    case 'member.remove':
+      return ['chats.ban', { chat_id: p.to, user_id: p.person }, () => true];
+    case 'member.allow-back':
+      return ['chats.unban', { chat_id: p.to, user_id: p.person }, () => true];
+    case 'member.mute':
+      return ['chats.restrict', { chat_id: p.to, user_id: p.person, minutes: p.minutes === undefined ? 60 : p.minutes }, () => true];
+    case 'conversation.leave':
+      return ['chats.leave', { chat_id: p.to }, () => true];
+    case 'conversation.admins':
+      return ['chats.admins', { chat_id: p.to }, (r) => ({ admins: r.map((a) => ({ role: a.status === 'creator' ? 'owner' : 'admin', person: person(a.user) })) })];
+    case 'join.answer':
+      return ['chats.join-request', { chat_id: p.to, user_id: p.person, approve: yes(p.approve) }, () => true];
+    case 'message.react':
+      return ['messages.react', { chat_id: p.to, message_id: p.message, emoji: p.emoji || null }, () => true];
+    case 'contact.send':
+      return ['contacts.send', { chat_id: p.to, name: p.name, phone: p.phone, email: p.email, reply_to_message_id: p.reply_to }, msg];
     case 'inline.reply': {
       const results = parseJson(p.results);
       if (!Array.isArray(results)) throw badRequest('invalid_results', 'results: [{id, title, text}]');

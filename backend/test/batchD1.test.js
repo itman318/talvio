@@ -74,7 +74,7 @@ test('create a bot, getMe, user writes → getUpdates, bot replies with buttons,
   const created = await bots.createBot(A.id, { name: 'Weather', username: 'weather_info_bot', about: 'Shows the weather' });
   bot = created.bot;
   token = created.token;
-  assert.match(token, /^tlv_\d+_[A-Za-z0-9]{20,}$/);
+  assert.match(token, /^hsv_\d+_[A-Za-z0-9]{20,}$/);
   await rejects(bots.createBot(B.id, { name: 'X', username: 'WEATHER_INFO_BOT' }), 'username_taken');
   assert.equal((await bots.listMyBots(A.id))[0].username, 'weather_info_bot');
   await rejects(bots.callMethod('tlv_1_wrongtokenwrongtokenwrong', 'me'), 'invalid_token');

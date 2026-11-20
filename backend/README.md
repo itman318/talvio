@@ -263,7 +263,7 @@ switched off in Settings → Features. Reports about a secret chat need the user
 
 ## Bots (Batch D)
 
-Users create bots in the app (Settings → My bots) and get a token (`tlv_<id>_<secret>`). The Hushavia Bot API:
+Users create bots in the app (Settings → My bots) and get a token (`hsv_<id>_<secret>`; older `tlv_…` tokens keep working). The Hushavia Bot API:
 
 ```bash
 API=https://chat.example.com/api/bot/v1
@@ -281,7 +281,7 @@ Hushavia's own bot interface — its own words, event format and signed hooks:
 
 ```bash
 API=https://chat.example.com/api/bots/v2
-KEY="X-Bot-Key: tlv_123_xxxxxxxx"
+KEY="X-Bot-Key: hsv_123_xxxxxxxx"
 curl -X POST $API/profile.get -H "$KEY"
 curl -X POST "$API/events.poll?wait=30" -H "$KEY"                       # long polling; pass after=<last event_id>
 curl -X POST $API/message.send -H "$KEY" -H 'Content-Type: application/json' \

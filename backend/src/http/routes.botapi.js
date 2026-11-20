@@ -11,6 +11,7 @@ const settings = require('../services/settings.service');
 const botService = require('../services/bot.service');
 const { storage } = require('./routes.user');
 const { AppError } = require('../utils/errors');
+const guard = require('./botGuard');
 
 async function parseMultipart(req, res) {
   if (!req.is('multipart/form-data')) return null;
@@ -28,15 +29,21 @@ async function parseMultipart(req, res) {
 }
 
 module.exports = async function botApi(req, res) {
+  let file = null;
   try {
-    const file = await parseMultipart(req, res);
-    const params = { ...req.query, ...(req.body && typeof req.body === 'object' ? req.body : {}) };
+    guard.checkIp(req);
     const auth = req.headers.authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : String(params.token || '');
+    const early = auth.startsWith('Bearer ') ? auth.slice(7).trim() : String((req.query && req.query.token) || '');
+    if (early && req.is('multipart/form-data')) await botService.authenticate(early); // before any upload is stored
+    file = await parseMultipart(req, res);
+    const params = { ...req.query, ...(req.body && typeof req.body === 'object' ? req.body : {}) };
+    const token = early || String(params.token || '');
     delete params.token;
     const data = await botService.callMethod(token, req.params.method, params, file);
     res.json({ ok: true, data });
   } catch (err) {
+    guard.noteFailure(req, err);
+    guard.dropFiles(file);
     const status = err instanceof AppError ? err.status : err.code === 'LIMIT_FILE_SIZE' ? 413 : 500;
     if (status === 500) console.error('bot api error', err); // eslint-disable-line no-console
     const error = { code: status === 500 ? 'internal_error' : err.code || 'bad_request', message: status === 500 ? 'Internal Server Error' : err.message };

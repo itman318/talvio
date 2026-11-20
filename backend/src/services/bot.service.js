@@ -65,12 +65,12 @@ function serializeBot(u, b, { pending = 0 } = {}) {
 
 /** The same token written "<id>:<secret>" — what classic bot libraries expect (Hushavia Bot API — Classic). */
 function classicToken(token) {
-  const m = /^tlv_(\d+)_([A-Za-z0-9]+)$/.exec(String(token || ''));
+  const m = /^(?:hsv|tlv)_(\d+)_([A-Za-z0-9]+)$/.exec(String(token || ''));
   return m ? `${m[1]}:${m[2]}` : null;
 }
 
 function newToken(botId) {
-  return `tlv_${botId}_${randomToken(24).replace(/[^A-Za-z0-9]/g, '').slice(0, 32)}`;
+  return `hsv_${botId}_${randomToken(24).replace(/[^A-Za-z0-9]/g, '').slice(0, 32)}`;
 }
 
 async function createBot(ownerId, body = {}) {
@@ -203,12 +203,14 @@ async function deleteBot(ownerId, botIdRaw) {
 
 // ------------------------------------------------------------------ auth for the Bot API
 async function authenticate(token) {
-  if (typeof token !== 'string' || !/^tlv_\d+_[A-Za-z0-9]{20,}$/.test(token)) throw unauthorized('invalid_token', 'Invalid bot token');
+  if (typeof token !== 'string' || !/^(?:hsv|tlv)_\d+_[A-Za-z0-9]{20,}$/.test(token)) throw unauthorized('invalid_token', 'Invalid bot token');
+  // tokens made before the "hsv_" prefix start with "tlv_": both spellings of the same secret work
+  const tail = token.slice(4);
   const row = await db.one(
     `SELECT u.*, b.*, u.status AS user_status, o.status AS owner_status
      FROM bots b JOIN users u ON u.id = b.user_id JOIN users o ON o.id = b.owner_id
-     WHERE b.token_hash = $1`,
-    [sha256(token)],
+     WHERE b.token_hash = ANY($1::text[]) AND b.user_id = $2`,
+    [[sha256(`hsv_${tail}`), sha256(`tlv_${tail}`)], Number(tail.split('_')[0])],
   );
   if (!row || row.user_status === 'deleted') throw unauthorized('invalid_token', 'Invalid bot token');
   if (row.status !== 'active' || row.owner_status !== 'active') {
@@ -745,6 +747,64 @@ async function callMethod(token, method, params = {}, file = null) {
     case 'chats.get': {
       const chat = await botChat(bot, params.chat_id);
       return { id: chat.id, type: chat.type, title: chat.title || undefined, description: chat.description || undefined };
+    }
+    // ---- group management (the bot needs to be an admin with the right to do it, like a person)
+    case 'chats.ban': {
+      const chat = await botChat(bot, params.chat_id);
+      await chatService.removeMember(bot.user_id, chat.id, params.user_id);
+      return true;
+    }
+    case 'chats.unban': {
+      const chat = await botChat(bot, params.chat_id);
+      await chatService.unbanMember(bot.user_id, chat.id, params.user_id).catch((e) => {
+        if (e.code !== 'not_banned') throw e; // already allowed back: nothing to do
+      });
+      return true;
+    }
+    case 'chats.restrict': {
+      // minutes: 0 lifts it; anything else is rounded up to 1 hour, 1 day, 1 week or 1 year
+      const chat = await botChat(bot, params.chat_id);
+      const want = Math.max(0, Number(params.minutes) || 0);
+      const minutes = want === 0 ? 0 : [60, 1440, 10080, 525600].find((m) => m >= want) || 525600;
+      await chatService.restrictMember(bot.user_id, chat.id, params.user_id, minutes);
+      return true;
+    }
+    case 'chats.leave': {
+      const chat = await botChat(bot, params.chat_id);
+      await chatService.leaveChat(bot.user_id, chat.id);
+      return true;
+    }
+    case 'chats.admins': {
+      const chat = await botChat(bot, params.chat_id);
+      const rows = await db.many(
+        `SELECT u.*, cm.role FROM chat_members cm JOIN users u ON u.id = cm.user_id WHERE cm.chat_id = $1 AND cm.role IN ('owner', 'admin')
+         ORDER BY cm.role = 'owner' DESC, cm.joined_at`,
+        [chat.id],
+      );
+      return rows.map((r) => ({ status: r.role === 'owner' ? 'creator' : 'administrator', user: botUser(r) }));
+    }
+    case 'chats.join-request': {
+      const chat = await botChat(bot, params.chat_id);
+      const approve = params.approve === true || params.approve === 'true';
+      await chatService.resolveJoinRequest(bot.user_id, chat.id, params.user_id, approve);
+      return true;
+    }
+    case 'messages.react': {
+      const chat = await botChat(bot, params.chat_id);
+      const m = await db.one('SELECT id FROM messages WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL', [v.id(params.message_id, 'message_id'), chat.id]);
+      if (!m) throw badRequest('message_not_found', 'message not found');
+      await require('./message.service').react(bot.user_id, m.id, params.emoji || null); // eslint-disable-line global-require
+      return true;
+    }
+    case 'contacts.send': {
+      const chat = await botChat(bot, params.chat_id);
+      const name = [params.first_name, params.last_name].filter(Boolean).join(' ') || params.name;
+      const sent = await require('./message.service').sendMessage(bot.user_id, chat.id, { // eslint-disable-line global-require
+        type: 'contact',
+        contact: { name, phone: params.phone_number || params.phone || null, email: params.email || null },
+        reply_to_id: params.reply_to_message_id || undefined,
+      });
+      return toBotMessage(await db.one('SELECT * FROM messages WHERE id = $1', [sent.id]), chat);
     }
     default:
       throw new AppError(404, 'method_not_found', `Unknown method "${method}" — see the Hushavia Bot API docs`);

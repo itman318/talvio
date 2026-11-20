@@ -1181,3 +1181,42 @@ test('USDT invoice: a sent card that replies to an invoice marks it paid (only w
   assert.equal(row.meta.crypto.paid_tx, ok.meta.crypto.tx);
   assert.equal(row.meta.crypto.paid_by, client.id);
 });
+
+test('bots: hsv_ tokens (old tlv_ still work), group admin methods, reactions, contacts; classic restrict/ban', async () => {
+  const bots = require('../src/services/bot.service');
+  const classic = require('../src/services/botclassic.service');
+  const owner = await signup('+923270000031', 'GroupBoss');
+  const member = await signup('+923270000032', 'Noisy');
+  const created = await bots.createBot(owner.id, { name: 'Guard', username: 'guard_helper_bot' });
+  assert.match(created.token, /^hsv_\d+_[A-Za-z0-9]{20,}$/);
+  // a token issued before the new prefix: same secret, old spelling
+  const old = created.token.replace(/^hsv_/, 'tlv_');
+  await db.query('UPDATE bots SET token_hash = $2 WHERE user_id = $1', [created.bot.id, cryptoUtil.sha256(old)]);
+  assert.equal((await bots.callMethod(old, 'me')).id, created.bot.id);
+  assert.equal((await bots.callMethod(created.token, 'me')).id, created.bot.id); // new spelling of the same token
+  const t = created.token;
+  const g = (await chats.createGroup(owner.id, { title: 'Guarded', member_ids: [member.id, created.bot.id] })).chat;
+  // not an admin yet: can't remove people
+  await rejects(bots.callMethod(t, 'chats.ban', { chat_id: g.id, user_id: member.id }), 'not_allowed');
+  await chats.setMemberRole(owner.id, g.id, created.bot.id, 'admin');
+  const admins = await bots.callMethod(t, 'chats.admins', { chat_id: g.id });
+  assert.deepEqual(admins.map((a) => a.status).sort(), ['administrator', 'creator']);
+  await bots.callMethod(t, 'chats.restrict', { chat_id: g.id, user_id: member.id, minutes: 30 }); // rounded up to 1 hour
+  const r = await db.one('SELECT restricted_until FROM chat_members WHERE chat_id = $1 AND user_id = $2', [g.id, member.id]);
+  assert.ok(new Date(r.restricted_until) > new Date(Date.now() + 50 * 60000));
+  await bots.callMethod(t, 'chats.restrict', { chat_id: g.id, user_id: member.id, minutes: 0 });
+  // classic: same thing with the usual parameters
+  await classic.call(classic.toClassicToken(t), 'restrictChatMember', { chat_id: String(classic.toGroupId(g.id)), user_id: member.id, permissions: JSON.stringify({ can_send_messages: false }) });
+  assert.ok((await db.one('SELECT restricted_until FROM chat_members WHERE chat_id = $1 AND user_id = $2', [g.id, member.id])).restricted_until);
+  await classic.call(classic.toClassicToken(t), 'restrictChatMember', { chat_id: String(classic.toGroupId(g.id)), user_id: member.id, permissions: JSON.stringify({ can_send_messages: true }) });
+  const sent = await bots.callMethod(t, 'messages.send', { chat_id: g.id, text: 'Rules: be kind' });
+  await bots.callMethod(t, 'messages.react', { chat_id: g.id, message_id: sent.message_id, emoji: '👍' });
+  const contact = await bots.callMethod(t, 'contacts.send', { chat_id: g.id, first_name: 'Help', last_name: 'Desk', phone_number: '+923001234567' });
+  assert.ok(contact.message_id);
+  await bots.callMethod(t, 'chats.ban', { chat_id: g.id, user_id: member.id });
+  assert.ok(!(await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [g.id, member.id])));
+  await bots.callMethod(t, 'chats.unban', { chat_id: g.id, user_id: member.id });
+  await bots.callMethod(t, 'chats.unban', { chat_id: g.id, user_id: member.id }); // twice is fine
+  await bots.callMethod(t, 'chats.leave', { chat_id: g.id });
+  await rejects(bots.callMethod(t, 'chats.admins', { chat_id: g.id }), 'chat_not_found');
+});

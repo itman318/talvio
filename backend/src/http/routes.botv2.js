@@ -10,6 +10,7 @@ const settings = require('../services/settings.service');
 const v2 = require('../services/botv2.service');
 const { storage } = require('./routes.user');
 const { AppError } = require('../utils/errors');
+const guard = require('./botGuard');
 
 async function parseMultipart(req, res) {
   if (!req.is('multipart/form-data')) return null;
@@ -20,15 +21,21 @@ async function parseMultipart(req, res) {
 }
 
 module.exports = async function botApiV2(req, res) {
+  let file = null;
   try {
-    const file = await parseMultipart(req, res);
-    const params = { ...req.query, ...(req.body && typeof req.body === 'object' ? req.body : {}) };
+    guard.checkIp(req);
     const auth = req.headers.authorization || '';
-    const key = req.get('x-bot-key') || (auth.startsWith('Bearer ') ? auth.slice(7).trim() : String(params.key || ''));
+    const early = req.get('x-bot-key') || (auth.startsWith('Bearer ') ? auth.slice(7).trim() : String((req.query && req.query.key) || ''));
+    if (early && req.is('multipart/form-data')) await require('../services/bot.service').authenticate(early); // eslint-disable-line global-require
+    file = await parseMultipart(req, res);
+    const params = { ...req.query, ...(req.body && typeof req.body === 'object' ? req.body : {}) };
+    const key = early || String(params.key || '');
     delete params.key;
     const data = await v2.call(key, req.params.method, params, file);
     res.json({ ok: true, data });
   } catch (err) {
+    guard.noteFailure(req, err);
+    guard.dropFiles(file);
     const status = err instanceof AppError ? err.status : err.code === 'LIMIT_FILE_SIZE' ? 413 : 500;
     if (status === 500) console.error('bot api v2 error', err); // eslint-disable-line no-console
     const error = { code: status === 500 ? 'internal_error' : err.code || 'bad_request', message: status === 500 ? 'Internal Server Error' : err.message };

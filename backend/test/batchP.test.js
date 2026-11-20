@@ -161,7 +161,7 @@ test('BotForge creates and manages bots from a chat', async () => {
   assert.match((await send('not valid')).text, /⚠️/);
   const done = await send('price_alert_bot');
   assert.match(done.text, /Congratulations/);
-  const token = done.text.match(/tlv_\d+_[A-Za-z0-9]+/)[0];
+  const token = done.text.match(/hsv_\d+_[A-Za-z0-9]+/)[0];
   const me = await bots.callMethod(token, 'me');
   assert.equal(me.username, 'price_alert_bot');
 

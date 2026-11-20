@@ -141,7 +141,7 @@ The APK is signed with the debug key — fine for testing; set up a release key 
 ## Our own names (not a copy of any other messenger)
 
 Vault chats (end-to-end encrypted), My Notes (chat with yourself), Hushavia Plus (premium), the Hushavia Bot API
-(`/api/bot/v1/<method>`, `Authorization: Bearer tlv_…`), `hushavia://` links, `window.Hushavia` for mini apps.
+(`/api/bot/v1/<method>`, `Authorization: Bearer hsv_…`), `hushavia://` links, `window.Hushavia` for mini apps.
 
 ## Next
 
