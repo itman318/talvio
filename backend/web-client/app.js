@@ -144,7 +144,7 @@
       case 'contact': return `👤 ${m.text || 'Contact'}`;
       case 'gift': return `🎁 Gift: ${(m.meta && m.meta.gift && m.meta.gift.name) || 'coins'}`;
       case 'giveaway': return '🎉 Giveaway';
-      case 'crypto': return '💸 Crypto';
+      case 'crypto': return m.meta && m.meta.crypto && m.meta.crypto.invoice ? '🧾 Invoice' : '💸 Crypto';
       case 'call': {
         const c = (m.meta && m.meta.call) || {};
         if (c.status === 'missed' || c.status === 'busy') return '📞 Missed call';
@@ -1032,7 +1032,9 @@
         return [el('div', { class: 'contact' },
           el('span', { class: 'ic' }, '💸'),
           el('span', {},
-            el('div', { style: 'font-weight:700' }, c.kind === 'request' ? `Payment request · ${c.symbol || ''}` : `Sent ${c.symbol || 'crypto'}`),
+            el('div', { style: 'font-weight:700' }, c.kind === 'request' && c.invoice
+              ? `🧾 Invoice${c.invoice.number ? ` ${c.invoice.number}` : ''} · ${c.invoice.title || ''}${c.paid_tx ? ' · Paid' : ''}`
+              : c.kind === 'request' ? `Payment request · ${c.symbol || ''}` : `Sent ${c.symbol || 'crypto'}`),
             el('div', { class: 'muted', style: 'font-size:12px' }, 'Open the Hushavia app to see it')))];
       }
       case 'call': {
