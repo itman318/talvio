@@ -1,0 +1,1364 @@
+
+> hushavia-backend@1.0.0 test
+> node --test --test-concurrency=1 test/*.test.js
+
+TAP version 13
+# Subtest: older app gets the right APK for its CPU, with size and checksum
+ok 1 - older app gets the right APK for its CPU, with size and checksum
+  ---
+  duration_ms: 554.833828
+  type: 'test'
+  ...
+# Subtest: up to date, dev builds and GitHub being down never offer an update
+ok 2 - up to date, dev builds and GitHub being down never offer an update
+  ---
+  duration_ms: 0.421565
+  type: 'test'
+  ...
+# Subtest: admin minimum version forces the update
+ok 3 - admin minimum version forces the update
+  ---
+  duration_ms: 4.241737
+  type: 'test'
+  ...
+# Subtest: own server first: latest.json + the APK in the downloads folder, full address for the phone
+ok 4 - own server first: latest.json + the APK in the downloads folder, full address for the phone
+  ---
+  duration_ms: 0.680418
+  type: 'test'
+  ...
+# [OTP dev mode] +923220000001 → 557845
+# [OTP dev mode] +923220000002 → 303326
+# [OTP dev mode] +923220000003 → 527281
+# Subtest: mentions: @username and replies count; unread mention badge clears on read
+ok 5 - mentions: @username and replies count; unread mention badge clears on read
+  ---
+  duration_ms: 1844.034928
+  type: 'test'
+  ...
+# Subtest: pins: admins pin in groups, anyone in private chats, list & unpin
+ok 6 - pins: admins pin in groups, anyone in private chats, list & unpin
+  ---
+  duration_ms: 59.848678
+  type: 'test'
+  ...
+# Subtest: mark as unread, silent and location messages
+ok 7 - mark as unread, silent and location messages
+  ---
+  duration_ms: 37.949372
+  type: 'test'
+  ...
+# Subtest: message search: prefix, words, only my chats, per-chat filter
+ok 8 - message search: prefix, words, only my chats, per-chat filter
+  ---
+  duration_ms: 58.76044
+  type: 'test'
+  ...
+# Subtest: slow mode: members wait, admins exempt
+ok 9 - slow mode: members wait, admins exempt
+  ---
+  duration_ms: 36.797649
+  type: 'test'
+  ...
+# [OTP dev mode] +923220000004 → 153674
+# [OTP dev mode] +923220000005 → 852867
+# Subtest: invite links with limits/expiry and join requests
+ok 10 - invite links with limits/expiry and join requests
+  ---
+  duration_ms: 80.645986
+  type: 'test'
+  ...
+# Subtest: ownership transfer by owner and by admin panel
+ok 11 - ownership transfer by owner and by admin panel
+  ---
+  duration_ms: 17.842206
+  type: 'test'
+  ...
+# Subtest: reserved usernames and feature flags
+ok 12 - reserved usernames and feature flags
+  ---
+  duration_ms: 10.428641
+  type: 'test'
+  ...
+# [OTP dev mode] +923220000003 → 530395
+# Subtest: ban appeals: token after OTP, one pending at a time, accept unbans
+ok 13 - ban appeals: token after OTP, one pending at a time, accept unbans
+  ---
+  duration_ms: 11.213404
+  type: 'test'
+  ...
+# Subtest: admin notes, user detail, data export
+ok 14 - admin notes, user detail, data export
+  ---
+  duration_ms: 11.873473
+  type: 'test'
+  ...
+# Subtest: content pages and HTML rendering
+ok 15 - content pages and HTML rendering
+  ---
+  duration_ms: 1.89552
+  type: 'test'
+  ...
+# [OTP dev mode] +923220000009 → 339999
+# Subtest: broadcast targeted at old app versions; IP blacklist
+ok 16 - broadcast targeted at old app versions; IP blacklist
+  ---
+  duration_ms: 13.243604
+  type: 'test'
+  ...
+# [OTP dev mode] +923230000001 → 363507
+# [OTP dev mode] +923230000002 → 269510
+# [OTP dev mode] +923230000003 → 056750
+# Subtest: voice call: ring → accept → signaling relay → hang up → call message + history
+ok 17 - voice call: ring → accept → signaling relay → hang up → call message + history
+  ---
+  duration_ms: 531.484398
+  type: 'test'
+  ...
+# Subtest: decline, caller cancel = missed, busy line, missed filter
+ok 18 - decline, caller cancel = missed, busy line, missed filter
+  ---
+  duration_ms: 107.787173
+  type: 'test'
+  ...
+# Subtest: calling each other at the same time answers the existing call
+ok 19 - calling each other at the same time answers the existing call
+  ---
+  duration_ms: 33.255102
+  type: 'test'
+  ...
+# Subtest: no answer → missed by the sweep; lost connection ends the call; active call lookup
+ok 20 - no answer → missed by the sweep; lost connection ends the call; active call lookup
+  ---
+  duration_ms: 67.027761
+  type: 'test'
+  ...
+# Subtest: privacy, blocks, restrictions, self-calls and feature switches
+ok 21 - privacy, blocks, restrictions, self-calls and feature switches
+  ---
+  duration_ms: 41.745248
+  type: 'test'
+  ...
+# Subtest: ICE servers: coturn time-limited credentials and static ones
+ok 22 - ICE servers: coturn time-limited credentials and static ones
+  ---
+  duration_ms: 2.459416
+  type: 'test'
+  ...
+# Subtest: call messages cannot be edited or forwarded; admin list, stats and force end
+ok 23 - call messages cannot be edited or forwarded; admin list, stats and force end
+  ---
+  duration_ms: 30.821724
+  type: 'test'
+  ...
+# [OTP dev mode] +923240000001 → 701478
+# [OTP dev mode] +923240000002 → 413122
+# [OTP dev mode] +923240000002 → 598498
+# [OTP dev mode] +923240000003 → 598986
+# Subtest: key exchange, device binding and an encrypted round trip the server cannot read
+ok 24 - key exchange, device binding and an encrypted round trip the server cannot read
+  ---
+  duration_ms: 868.872516
+  type: 'test'
+  ...
+# Subtest: validation: keys, ciphertext size, timer values, self & blocked users, feature switch
+ok 25 - validation: keys, ciphertext size, timer values, self & blocked users, feature switch
+  ---
+  duration_ms: 19.642615
+  type: 'test'
+  ...
+# Subtest: encrypted media is only reachable by the two people of an active secret chat
+ok 26 - encrypted media is only reachable by the two people of an active secret chat
+  ---
+  duration_ms: 25.267039
+  type: 'test'
+  ...
+# Subtest: decline, close wipes messages, logout closes the device’s chats, sweep, admin counts
+ok 27 - decline, close wipes messages, logout closes the device’s chats, sweep, admin counts
+  ---
+  duration_ms: 34.824354
+  type: 'test'
+  ...
+# [OTP dev mode] +923250000001 → 538161
+# [OTP dev mode] +923250000002 → 176973
+# Subtest: create a bot, getMe, user writes → getUpdates, bot replies with buttons, callback flow, edit
+ok 28 - create a bot, getMe, user writes → getUpdates, bot replies with buttons, callback flow, edit
+  ---
+  duration_ms: 780.656334
+  type: 'test'
+  ...
+# Subtest: advanced bot API: reply keyboards, chat actions, locations, pin, members, profile
+ok 29 - advanced bot API: reply keyboards, chat actions, locations, pin, members, profile
+  ---
+  duration_ms: 55.518567
+  type: 'test'
+  ...
+# Subtest: groups: privacy mode delivers only commands, mentions and replies
+ok 30 - groups: privacy mode delivers only commands, mentions and replies
+  ---
+  duration_ms: 287.435967
+  type: 'test'
+  ...
+# Subtest: webhook delivery with secret header; getUpdates refused while a webhook is set
+ok 31 - webhook delivery with secret header; getUpdates refused while a webhook is set
+  ---
+  duration_ms: 71.730633
+  type: 'test'
+  ...
+# Subtest: mini app init data is signed so the bot server can verify it; web_app_data reaches the bot
+ok 32 - mini app init data is signed so the bot server can verify it; web_app_data reaches the bot
+  ---
+  duration_ms: 14.809045
+  type: 'test'
+  ...
+# Subtest: admin can disable a bot; regenerating the token kills the old one; deleting frees the username
+ok 33 - admin can disable a bot; regenerating the token kills the old one; deleting frees the username
+  ---
+  duration_ms: 11.435915
+  type: 'test'
+  ...
+# Subtest: channel comments: subscribers comment under posts; timeline, unread and last message ignore comments
+ok 34 - channel comments: subscribers comment under posts; timeline, unread and last message ignore comments
+  ---
+  duration_ms: 48.924962
+  type: 'test'
+  ...
+# Subtest: topics: forum groups, per-topic messages, closed topics, delete topic
+ok 35 - topics: forum groups, per-topic messages, closed topics, delete topic
+  ---
+  duration_ms: 71.616915
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000001 → 971633
+# [OTP dev mode] +923260000002 → 564256
+# [OTP dev mode] +923260000003 → 488588
+# Subtest: premium info, manual payment with screenshot → admin approves → perks unlocked
+ok 36 - premium info, manual payment with screenshot → admin approves → perks unlocked
+  ---
+  duration_ms: 983.197281
+  type: 'test'
+  ...
+# Subtest: JazzCash: signed request, verified callback activates Premium; tampered or failed callbacks do not
+ok 37 - JazzCash: signed request, verified callback activates Premium; tampered or failed callbacks do not
+  ---
+  duration_ms: 46.836837
+  type: 'test'
+  ...
+# Subtest: Easypaisa: encrypted request; without the inquiry API the payment goes to admin review
+ok 38 - Easypaisa: encrypted request; without the inquiry API the payment goes to admin review
+  ---
+  duration_ms: 6.743588
+  type: 'test'
+  ...
+# Subtest: admin grant / revoke, plans editor, order expiry
+ok 39 - admin grant / revoke, plans editor, order expiry
+  ---
+  duration_ms: 25.521937
+  type: 'test'
+  ...
+# Subtest: sponsored messages: big public channels only, never for Premium, unique daily views & clicks, revenue
+ok 40 - sponsored messages: big public channels only, never for Premium, unique daily views & clicks, revenue
+  ---
+  duration_ms: 56.552476
+  type: 'test'
+  ...
+# Subtest: Plus with USDT from the wallet: unique amount, checked on the network, one transaction pays one order
+ok 41 - Plus with USDT from the wallet: unique amount, checked on the network, one transaction pays one order
+  ---
+  duration_ms: 121.556727
+  type: 'test'
+  ...
+# Subtest: Hushavia Coins: bought with USDT, spent on Plus, sent to a friend, never below zero
+ok 42 - Hushavia Coins: bought with USDT, spent on Plus, sent to a friend, never below zero
+  ---
+  duration_ms: 114.529754
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000011 → 692988
+# [OTP dev mode] +923260000012 → 701887
+# [OTP dev mode] +923260000013 → 780861
+# Subtest: coins at work: gifts in chats, tips on posts, paid channels, giveaways
+ok 43 - coins at work: gifts in chats, tips on posts, paid channels, giveaways
+  ---
+  duration_ms: 309.151387
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000021 → 250725
+# [OTP dev mode] +923260000022 → 514214
+# Subtest: coins by deposit: own address per member from an xpub, booked once, too-small deposits, sweep list
+ok 44 - coins by deposit: own address per member from an xpub, booked once, too-small deposits, sweep list
+  ---
+  duration_ms: 92.63234
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000031 → 623942
+# Subtest: @HushaviaWalletBot: money news in a chat, balance, history, prices
+ok 45 - @HushaviaWalletBot: money news in a chat, balance, history, prices
+  ---
+  duration_ms: 901.658257
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000041 → 465900
+# [OTP dev mode] +923260000042 → 173027
+# [OTP dev mode] +923260000043 → 689079
+# [OTP dev mode] +923260000044 → 987272
+# [OTP dev mode] +923260000045 → 875955
+# [OTP dev mode] +923260000046 → 617701
+# Subtest: self-service ads: budget held, review, paid views, owner share, daily cap, refund
+ok 46 - self-service ads: budget held, review, paid views, owner share, daily cap, refund
+  ---
+  duration_ms: 205.016973
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000051 → 813205
+# Subtest: card payments (Stripe): off by default, signed webhook only, amount checked, coins once
+ok 47 - card payments (Stripe): off by default, signed webhook only, amount checked, coins once
+  ---
+  duration_ms: 53.59074
+  type: 'test'
+  ...
+# Subtest: the database update runs again over real data (deposits, gifts, giveaways, card and coin orders)
+ok 48 - the database update runs again over real data (deposits, gifts, giveaways, card and coin orders)
+  ---
+  duration_ms: 32.002234
+  type: 'test'
+  ...
+# [OTP dev mode] +923251110001 → 392151
+# [OTP dev mode] +923251110002 → 784031
+# Subtest: fake members: new accounts are limited, suspicious accounts are listed for the admins
+ok 49 - fake members: new accounts are limited, suspicious accounts are listed for the admins
+  ---
+  duration_ms: 106.405155
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000091 → 265945
+# [OTP dev mode] +923260000092 → 403092
+# Subtest: business catalog: Plus only, order with coins moves coins once, price change and sold out are refused
+ok 50 - business catalog: Plus only, order with coins moves coins once, price change and sold out are refused
+  ---
+  duration_ms: 69.07469
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000093 → 660494
+# [OTP dev mode] +923260000094 → 993508
+# Subtest: profile tags: admin sets warning tags with evidence, the card shows them, scam accounts are held back
+ok 51 - profile tags: admin sets warning tags with evidence, the card shows them, scam accounts are held back
+  ---
+  duration_ms: 35.449815
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000096 → 827383
+# Subtest: official @HushaviaNews channel: new people follow it, admins publish, people can leave
+ok 52 - official @HushaviaNews channel: new people follow it, admins publish, people can leave
+  ---
+  duration_ms: 27.477146
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000097 → 742372
+# Subtest: @HushaviaVerifyBot: step-by-step form with review → admin approves → badge; decline needs a reason
+ok 53 - @HushaviaVerifyBot: step-by-step form with review → admin approves → badge; decline needs a reason
+  ---
+  duration_ms: 160.501158
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000098 → 467621
+# Subtest: @HushaviaPlusBot: status, perks, buying Plus with coins in two taps
+ok 54 - @HushaviaPlusBot: status, perks, buying Plus with coins in two taps
+  ---
+  duration_ms: 55.449336
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000001 → 732600
+# [OTP dev mode] +923270000002 → 480891
+# [OTP dev mode] +923270000003 → 512760
+# Subtest: order tracker: order in chat, seller moves it forward, buyer can cancel early, coin orders are refunded
+ok 55 - order tracker: order in chat, seller moves it forward, buyer can cancel early, coin orders are refunded
+  ---
+  duration_ms: 160.213952
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000011 → 104121
+# [OTP dev mode] +923270000012 → 785797
+# Subtest: channel promotion: admins pay coins per day, days add up, promoted channels go first in the directory
+ok 56 - channel promotion: admins pay coins per day, days add up, promoted channels go first in the directory
+  ---
+  duration_ms: 37.85439
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000021 → 263454
+# [OTP dev mode] +923270000022 → 734214
+# Subtest: USDT invoice: a sent card that replies to an invoice marks it paid (only with the same amount and address)
+ok 57 - USDT invoice: a sent card that replies to an invoice marks it paid (only with the same amount and address)
+  ---
+  duration_ms: 34.421311
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000031 → 092714
+# [OTP dev mode] +923270000032 → 234558
+# Subtest: bots: hsv_ tokens (old tlv_ still work), group admin methods, reactions, contacts; classic restrict/ban
+ok 58 - bots: hsv_ tokens (old tlv_ still work), group admin methods, reactions, contacts; classic restrict/ban
+  ---
+  duration_ms: 82.864005
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000041 → 684465
+# [OTP dev mode] +923270000042 → 211940
+# [OTP dev mode] +923270000043 → 264316
+# Subtest: bots v2: member joined / left and join request events, file.get, signed hook body shape
+ok 59 - bots v2: member joined / left and join request events, file.get, signed hook body shape
+  ---
+  duration_ms: 999.05915
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000001 → 769023
+# [OTP dev mode] +923270000002 → 210181
+# Subtest: QR login: create → scan → approve wakes the long poll → tokens are handed out once
+ok 60 - QR login: create → scan → approve wakes the long poll → tokens are handed out once
+  ---
+  duration_ms: 577.790337
+  type: 'test'
+  ...
+# Subtest: QR login: decline, expiry, bad codes, feature switch
+ok 61 - QR login: decline, expiry, bad codes, feature switch
+  ---
+  duration_ms: 7.197916
+  type: 'test'
+  ...
+# Subtest: albums: several photos share an album_id
+ok 62 - albums: several photos share an album_id
+  ---
+  duration_ms: 56.134482
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000001 → 090144
+# [OTP dev mode] +923260000002 → 375414
+# [OTP dev mode] +923260000003 → 627026
+# Subtest: who can message me, bio, phone search, forwards, default timer
+ok 63 - who can message me, bio, phone search, forwards, default timer
+  ---
+  duration_ms: 2106.585865
+  type: 'test'
+  ...
+# Subtest: inactive devices are logged out; long-away accounts are deleted
+ok 64 - inactive devices are logged out; long-away accounts are deleted
+  ---
+  duration_ms: 7.010829
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000004 → 802538
+# [OTP dev mode] +923260000005 → 136962
+# [OTP dev mode] +923260000006 → 284501
+# Subtest: group protection: human check, permissions, links, banned words, flood, quiet joins
+ok 65 - group protection: human check, permissions, links, banned words, flood, quiet joins
+  ---
+  duration_ms: 149.058566
+  type: 'test'
+  ...
+# Subtest: BotForge creates and manages bots from a chat
+ok 66 - BotForge creates and manages bots from a chat
+  ---
+  duration_ms: 1890.112542
+  type: 'test'
+  ...
+# Subtest: Plus: prices in the buyer currency, perks enforced
+ok 67 - Plus: prices in the buyer currency, perks enforced
+  ---
+  duration_ms: 14.937376
+  type: 'test'
+  ...
+# Subtest: Tavi animated stickers: free ones for everybody, the rest with Plus
+ok 68 - Tavi animated stickers: free ones for everybody, the rest with Plus
+  ---
+  duration_ms: 23.031446
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000010 → 877520
+# Subtest: global search: my chats, people, bots, public groups & channels; discover
+ok 69 - global search: my chats, people, bots, public groups & channels; discover
+  ---
+  duration_ms: 57.605215
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000020 → 531463
+# [OTP dev mode] +923260000021 → 723966
+# Subtest: groups: sender badges, member tags; similar channels
+ok 70 - groups: sender badges, member tags; similar channels
+  ---
+  duration_ms: 72.145903
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000041 → 902305
+# [OTP dev mode] +923260000042 → 967635
+# [OTP dev mode] +923260000043 → 942767
+# [OTP dev mode] +923260000044 → 589954
+# [OTP dev mode] +923260000500 → 218694
+# [OTP dev mode] +923260000501 → 062444
+# [OTP dev mode] +923260000502 → 809086
+# [OTP dev mode] +923260000503 → 359769
+# [OTP dev mode] +923260000504 → 175151
+# [OTP dev mode] +923260000505 → 671440
+# [OTP dev mode] +923260000506 → 483927
+# [OTP dev mode] +923260000507 → 830433
+# [OTP dev mode] +923260000508 → 194777
+# [OTP dev mode] +923260000509 → 455119
+# Subtest: Group Guard: forwarded spam, mention spam, 3 strikes and the raid shield
+ok 71 - Group Guard: forwarded spam, mention spam, 3 strikes and the raid shield
+  ---
+  duration_ms: 284.593265
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000061 → 224081
+# [OTP dev mode] +923260000062 → 840940
+# [OTP dev mode] +923260000063 → 825782
+# Subtest: removed members stay out until unbanned; admin panel has full control of a group
+ok 72 - removed members stay out until unbanned; admin panel has full control of a group
+  ---
+  duration_ms: 258.732765
+  type: 'test'
+  ...
+# [OTP dev mode] +923260000071 → 372810
+# [OTP dev mode] +923260000072 → 322187
+# Subtest: admin panel: server status, message search (groups only), a user’s groups, spam clean-up, bots
+ok 73 - admin panel: server status, message search (groups only), a user’s groups, spam clean-up, bots
+  ---
+  duration_ms: 272.267177
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000001 → 406574
+# [OTP dev mode] +923270000002 → 228197
+# [OTP dev mode] +923270000003 → 161034
+# Subtest: voice messages: the sender learns it was listened to
+ok 74 - voice messages: the sender learns it was listened to
+  ---
+  duration_ms: 611.567605
+  type: 'test'
+  ...
+# Subtest: read later bookmarks
+ok 75 - read later bookmarks
+  ---
+  duration_ms: 37.759462
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000003 → 141575
+# Subtest: login activity: logins, a wrong two-step password, "this wasn't me"
+ok 76 - login activity: logins, a wrong two-step password, "this wasn't me"
+  ---
+  duration_ms: 119.974964
+  type: 'test'
+  ...
+# Subtest: inline bots: @bot query → results → sent "via @bot"
+ok 77 - inline bots: @bot query → results → sent "via @bot"
+  ---
+  duration_ms: 191.408634
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000004 → 208961
+# Subtest: voice chats: start, join, mute, raise hand in channels, signalling, end
+ok 78 - voice chats: start, join, mute, raise hand in channels, signalling, end
+  ---
+  duration_ms: 136.150749
+  type: 'test'
+  ...
+# Subtest: Hushavia Bot API v2: own names, Hushavia events, buttons, signed hooks
+ok 79 - Hushavia Bot API v2: own names, Hushavia events, buttons, signed hooks
+  ---
+  duration_ms: 363.466588
+  type: 'test'
+  ...
+# Subtest: notification settings: defaults, update, validation
+ok 80 - notification settings: defaults, update, validation
+  ---
+  duration_ms: 2.926021
+  type: 'test'
+  ...
+# Subtest: clear history: only me, or both sides in a private chat; admins only in groups
+ok 81 - clear history: only me, or both sides in a private chat; admins only in groups
+  ---
+  duration_ms: 66.925719
+  type: 'test'
+  ...
+# Subtest: reserved names: a long list, look-alikes, shown as "taken"
+ok 82 - reserved names: a long list, look-alikes, shown as "taken"
+  ---
+  duration_ms: 1.375125
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000044 → 761448
+# [OTP dev mode] +923270000045 → 608593
+# Subtest: admins & moderators: owner, admins who may add admins, only rights they have
+ok 83 - admins & moderators: owner, admins who may add admins, only rights they have
+  ---
+  duration_ms: 42.145404
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000099 → 866383
+# Subtest: refresh: a lost answer does not log you out (the previous token still works for a while)
+ok 84 - refresh: a lost answer does not log you out (the previous token still works for a while)
+  ---
+  duration_ms: 8.13182
+  type: 'test'
+  ...
+# Subtest: admin full control: group messages, delete, edit group & user, remove member, sessions
+ok 85 - admin full control: group messages, delete, edit group & user, remove member, sessions
+  ---
+  duration_ms: 101.897956
+  type: 'test'
+  ...
+# Subtest: support: screenshot, phone info, rating once after it is resolved
+ok 86 - support: screenshot, phone info, rating once after it is resolved
+  ---
+  duration_ms: 7.181379
+  type: 'test'
+  ...
+# Subtest: support desk: big uneven request numbers, team notes, saved answers, stats, auto-close
+ok 87 - support desk: big uneven request numbers, team notes, saved answers, stats, auto-close
+  ---
+  duration_ms: 16.594511
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000077 → 609763
+# Subtest: blocking: the blocked person sees they were blocked
+ok 88 - blocking: the blocked person sees they were blocked
+  ---
+  duration_ms: 19.760547
+  type: 'test'
+  ...
+# [OTP dev mode] +923270000088 → 247669
+# Subtest: in-app notifications: new login, added to a group, admin rights, read all
+ok 89 - in-app notifications: new login, added to a group, admin rights, read all
+  ---
+  duration_ms: 31.08968
+  type: 'test'
+  ...
+# Subtest: contact joined: a synced number that later signs up becomes a contact
+ok 90 - contact joined: a synced number that later signs up becomes a contact
+  ---
+  duration_ms: 305.739288
+  type: 'test'
+  ...
+# Subtest: emoji status: set, shown to others, expires, cleared, only emoji
+ok 91 - emoji status: set, shown to others, expires, cleared, only emoji
+  ---
+  duration_ms: 14.03018
+  type: 'test'
+  ...
+# Subtest: hashtag search: my chats and public channels, whole tags only
+ok 92 - hashtag search: my chats and public channels, whole tags only
+  ---
+  duration_ms: 62.120643
+  type: 'test'
+  ...
+# Subtest: more privacy: voice messages (with exceptions) and hiding "typing…"
+ok 93 - more privacy: voice messages (with exceptions) and hiding "typing…"
+  ---
+  duration_ms: 38.088159
+  type: 'test'
+  ...
+# Subtest: wallet in chats: shared addresses, sent / request cards, bad cards refused, admin switch
+ok 94 - wallet in chats: shared addresses, sent / request cards, bad cards refused, admin switch
+  ---
+  duration_ms: 59.411568
+  type: 'test'
+  ...
+# [OTP dev mode] +923290000001 → 230127
+# [OTP dev mode] +923290000002 → 039321
+# Subtest: formatting: HTML, MarkdownV2 and Markdown become Hushavia marks
+ok 95 - formatting: HTML, MarkdownV2 and Markdown become Hushavia marks
+  ---
+  duration_ms: 575.288656
+  type: 'test'
+  ...
+# Subtest: getMe, bad token, unknown method
+ok 96 - getMe, bad token, unknown method
+  ---
+  duration_ms: 4.492329
+  type: 'test'
+  ...
+# Subtest: updates: a user message arrives in the classic shape
+ok 97 - updates: a user message arrives in the classic shape
+  ---
+  duration_ms: 266.826998
+  type: 'test'
+  ...
+# Subtest: sendMessage: form-style params, HTML, inline keyboard, reply_parameters
+ok 98 - sendMessage: form-style params, HTML, inline keyboard, reply_parameters
+  ---
+  duration_ms: 15.532299
+  type: 'test'
+  ...
+# Subtest: buttons: callback_query has chat_instance; answer + edit with MarkdownV2
+ok 99 - buttons: callback_query has chat_instance; answer + edit with MarkdownV2
+  ---
+  duration_ms: 24.230103
+  type: 'test'
+  ...
+# Subtest: files: upload a document, getFile, then resend a photo by file_id
+ok 100 - files: upload a document, getFile, then resend a photo by file_id
+  ---
+  duration_ms: 57.132601
+  type: 'test'
+  ...
+# Subtest: commands, chat info, members, webhook info
+ok 101 - commands, chat info, members, webhook info
+  ---
+  duration_ms: 15.244342
+  type: 'test'
+  ...
+# Subtest: groups use negative IDs; an unknown user is "chat not found"
+ok 102 - groups use negative IDs; an unknown user is "chat not found"
+  ---
+  duration_ms: 291.078548
+  type: 'test'
+  ...
+# Subtest: ID bot: your ID, a forwarded sender, @username
+ok 103 - ID bot: your ID, a forwarded sender, @username
+  ---
+  duration_ms: 1253.372276
+  type: 'test'
+  ...
+# Subtest: helper bots: support requests in a chat, team replies come back; account status and review
+ok 104 - helper bots: support requests in a chat, team replies come back; account status and review
+  ---
+  duration_ms: 3210.005651
+  type: 'test'
+  ...
+# Subtest: official bots have their profile pictures (and keep them on restart)
+ok 105 - official bots have their profile pictures (and keep them on restart)
+  ---
+  duration_ms: 4.846365
+  type: 'test'
+  ...
+# [OTP dev mode] +923279990011 → 743033
+# Subtest: a forwarded channel post shows (and adds to) the original post’s views
+ok 106 - a forwarded channel post shows (and adds to) the original post’s views
+  ---
+  duration_ms: 50.707521
+  type: 'test'
+  ...
+# Subtest: forwarding keeps link buttons and drops bot-only buttons
+ok 107 - forwarding keeps link buttons and drops bot-only buttons
+  ---
+  duration_ms: 21.662871
+  type: 'test'
+  ...
+# Subtest: Button Maker bot: post + "Text - link" buttons → preview → publish in my channel
+ok 108 - Button Maker bot: post + "Text - link" buttons → preview → publish in my channel
+  ---
+  duration_ms: 1465.406773
+  type: 'test'
+  ...
+# Subtest: Button Maker: copy and @name buttons, change buttons on a published post, schedule, steps survive in the database
+ok 109 - Button Maker: copy and @name buttons, change buttons on a published post, schedule, steps survive in the database
+  ---
+  duration_ms: 1576.061808
+  type: 'test'
+  ...
+# Subtest: BotForge: stats, share links, about text, transfer to another person
+ok 110 - BotForge: stats, share links, about text, transfer to another person
+  ---
+  duration_ms: 859.334079
+  type: 'test'
+  ...
+# Subtest: Button Maker: buttons sent first are kept, then the post text
+ok 111 - Button Maker: buttons sent first are kept, then the post text
+  ---
+  duration_ms: 1130.73281
+  type: 'test'
+  ...
+# [OTP dev mode] +923280000001 → 582412
+# [OTP dev mode] +923280000002 → 420138
+# [OTP dev mode] +923280000003 → 970561
+# Subtest: settings: validation and saving
+ok 112 - settings: validation and saving
+  ---
+  duration_ms: 491.714859
+  type: 'test'
+  ...
+# Subtest: greeting: once for a new customer, not again
+ok 113 - greeting: once for a new customer, not again
+  ---
+  duration_ms: 633.477116
+  type: 'test'
+  ...
+# Subtest: away: always mode replies once every few hours, not to the owner’s own messages
+ok 114 - away: always mode replies once every few hours, not to the owner’s own messages
+  ---
+  duration_ms: 932.031057
+  type: 'test'
+  ...
+# Subtest: working hours: open / closed in the owner time zone
+ok 115 - working hours: open / closed in the owner time zone
+  ---
+  duration_ms: 0.58649
+  type: 'test'
+  ...
+# Subtest: quick replies: add, list, rename, duplicate, delete
+ok 116 - quick replies: add, list, rename, duplicate, delete
+  ---
+  duration_ms: 6.601106
+  type: 'test'
+  ...
+# Subtest: same crash from many phones is grouped; users counted; resolve/reopen
+ok 117 - same crash from many phones is grouped; users counted; resolve/reopen
+  ---
+  duration_ms: 377.47122
+  type: 'test'
+  ...
+# Subtest: long/garbage input is cut down, never throws
+ok 118 - long/garbage input is cut down, never throws
+  ---
+  duration_ms: 1.871434
+  type: 'test'
+  ...
+# Subtest: legal pages have built-in text
+ok 119 - legal pages have built-in text
+  ---
+  duration_ms: 2.235754
+  type: 'test'
+  ...
+# [OTP dev mode] +923661110001 → 509986
+# [OTP dev mode] +923661110002 → 410615
+# Subtest: edit history keeps earlier versions; checklist ticks are free; delete-for-everyone window
+ok 120 - edit history keeps earlier versions; checklist ticks are free; delete-for-everyone window
+  ---
+  duration_ms: 533.11652
+  type: 'test'
+  ...
+# [OTP dev mode] sana.ahmed@gmail.com → 762211
+# [OTP dev mode] sana.ahmed@gmail.com → 571331
+# Subtest: email login: code → new account without a phone → profile → same account next time
+ok 121 - email login: code → new account without a phone → profile → same account next time
+  ---
+  duration_ms: 630.731708
+  type: 'test'
+  ...
+# [OTP dev mode] ali@example.com → 342713
+# [OTP dev mode] +923001234500 → 240899
+# Subtest: email and phone accounts can chat with each other
+ok 122 - email and phone accounts can chat with each other
+  ---
+  duration_ms: 27.774131
+  type: 'test'
+  ...
+# [OTP dev mode] wait@example.com → 161231
+# Subtest: email validation, rate limit, and the admin switch
+ok 123 - email validation, rate limit, and the admin switch
+  ---
+  duration_ms: 6.314985
+  type: 'test'
+  ...
+# Subtest: code email content
+ok 124 - code email content
+  ---
+  duration_ms: 0.435216
+  type: 'test'
+  ...
+# [OTP dev mode] two.devices@example.com → 475200
+# [OTP dev mode] two.devices@example.com → 435732
+# [OTP dev mode] two.devices@example.com → 374312
+# Subtest: logged in on another device: the code arrives in the Hushavia app (no email), email on request
+ok 125 - logged in on another device: the code arrives in the Hushavia app (no email), email on request
+  ---
+  duration_ms: 63.683208
+  type: 'test'
+  ...
+# [OTP dev mode] asad1@hushavia.test → 621828
+# [OTP dev mode] +923007000002 → 378857
+# [OTP dev mode] chand3@hushavia.test → 062061
+# Subtest: disappearing messages: timer on → messages expire and are deleted for everyone
+ok 126 - disappearing messages: timer on → messages expire and are deleted for everyone
+  ---
+  duration_ms: 710.386692
+  type: 'test'
+  ...
+# Subtest: live location: sender updates and stops; others cannot
+ok 127 - live location: sender updates and stops; others cannot
+  ---
+  duration_ms: 15.283601
+  type: 'test'
+  ...
+# Subtest: contact cards link to Hushavia accounts by phone
+ok 128 - contact cards link to Hushavia accounts by phone
+  ---
+  duration_ms: 15.722864
+  type: 'test'
+  ...
+# [OTP dev mode] +923881000001 → 091304
+# [OTP dev mode] +923881000002 → 250628
+# [OTP dev mode] +923881000003 → 331469
+# [OTP dev mode] +923881000004 → 160799
+# Subtest: admin rights, restrictions, admin log, @all, welcome, message info
+ok 129 - admin rights, restrictions, admin log, @all, welcome, message info
+  ---
+  duration_ms: 619.867499
+  type: 'test'
+  ...
+# [OTP dev mode] +923881000005 → 701882
+# [OTP dev mode] +923881000006 → 515103
+# Subtest: private reply, drafts, reactions setting, protected content
+ok 130 - private reply, drafts, reactions setting, protected content
+  ---
+  duration_ms: 81.774107
+  type: 'test'
+  ...
+# [OTP dev mode] +923881000007 → 812036
+# [OTP dev mode] +923881000008 → 123165
+# [OTP dev mode] +923881000009 → 890967
+# Subtest: channels: directory, discussion group, stats, post queue
+ok 131 - channels: directory, discussion group, stats, post queue
+  ---
+  duration_ms: 342.198363
+  type: 'test'
+  ...
+# Subtest: first link in a message
+ok 132 - first link in a message
+  ---
+  duration_ms: 0.718135
+  type: 'test'
+  ...
+# Subtest: Open Graph and <title> parsing
+ok 133 - Open Graph and <title> parsing
+  ---
+  duration_ms: 1.050778
+  type: 'test'
+  ...
+# Subtest: private and internal addresses are refused
+ok 134 - private and internal addresses are refused
+  ---
+  duration_ms: 6.99225
+  type: 'test'
+  ...
+# [OTP dev mode] +923331110001 → 665348
+# [OTP dev mode] +923331110002 → 360803
+# Subtest: shared media filters, counts and round video messages
+ok 135 - shared media filters, counts and round video messages
+  ---
+  duration_ms: 570.576272
+  type: 'test'
+  ...
+# [OTP dev mode] +923331110011 → 271267
+# [OTP dev mode] +923331110012 → 941876
+# Subtest: replies carry a small picture of the photo they answer (never of view-once media)
+ok 136 - replies carry a small picture of the photo they answer (never of view-once media)
+  ---
+  duration_ms: 46.280333
+  type: 'test'
+  ...
+# [OTP dev mode] +923551110001 → 497060
+# [OTP dev mode] +923551110002 → 832112
+# Subtest: reply token: reply + read work only for that chat and session
+ok 137 - reply token: reply + read work only for that chat and session
+  ---
+  duration_ms: 640.331129
+  type: 'test'
+  ...
+# [OTP dev mode] +923771110001 → 708714
+# [OTP dev mode] +923771110002 → 707916
+# Subtest: view once: opened a single time, file only right after opening, not forwardable
+ok 138 - view once: opened a single time, file only right after opening, not forwardable
+  ---
+  duration_ms: 1467.936375
+  type: 'test'
+  ...
+# [OTP dev mode] +923771110003 → 260514
+# [OTP dev mode] +923771110004 → 851489
+# Subtest: message effects and chat lock
+ok 139 - message effects and chat lock
+  ---
+  duration_ms: 45.371289
+  type: 'test'
+  ...
+# [OTP dev mode] pk@hushavia.test → 159983
+# Subtest: passkey: register → challenge → signed login; wrong key, replay and removed key fail
+ok 140 - passkey: register → challenge → signed login; wrong key, replay and removed key fail
+  ---
+  duration_ms: 460.138936
+  type: 'test'
+  ...
+# [OTP dev mode] two.step@hushavia.test → 418590
+# [OTP dev mode] two.step@hushavia.test → 890240
+# [OTP dev mode] two.step@hushavia.test → 006004
+# Subtest: two-step verification: set → login asks for it → wrong/right password → change → remove
+ok 141 - two-step verification: set → login asks for it → wrong/right password → change → remove
+  ---
+  duration_ms: 1375.578011
+  type: 'test'
+  ...
+# [OTP dev mode] forgot@hushavia.test → 201765
+# [OTP dev mode] forgot@hushavia.test → 016925
+# [MAIL → forgot@hushavia.test] Two-step verification reset requested
+# Someone asked to reset the two-step verification password of your Hushavia account.
+# If this was not you, open Hushavia on a logged-in device: Settings → Privacy → Two-step verification → Cancel reset.
+# Otherwise the password will be removed on Fri, 27 Nov 2026 05:35:39 GMT.
+# [MAIL → forgot@hushavia.test] Two-step verification reset requested
+# Someone asked to reset the two-step verification password of your Hushavia account.
+# If this was not you, open Hushavia on a logged-in device: Settings → Privacy → Two-step verification → Cancel reset.
+# Otherwise the password will be removed on Fri, 27 Nov 2026 05:35:39 GMT.
+# [OTP dev mode] forgot@hushavia.test → 839509
+# Subtest: forgot password: reset waits 7 days, owner can cancel, then it is removed
+ok 142 - forgot password: reset waits 7 days, owner can cancel, then it is removed
+  ---
+  duration_ms: 85.181559
+  type: 'test'
+  ...
+# [OTP dev mode] +923110000001 → 961471
+# [OTP dev mode] +923110000002 → 393053
+# [OTP dev mode] +923110000003 → 405710
+# [OTP dev mode] +447700900004 → 351189
+# Subtest: channels: create, public username, join, admin-only posting, anonymity, views, stats
+ok 143 - channels: create, public username, join, admin-only posting, anonymity, views, stats
+  ---
+  duration_ms: 1680.800189
+  type: 'test'
+  ...
+# Subtest: polls: create, vote, quiz reveal, close, voters, realtime counts
+ok 144 - polls: create, vote, quiz reveal, close, voters, realtime counts
+  ---
+  duration_ms: 83.447328
+  type: 'test'
+  ...
+# Subtest: reactions: add, change, remove, validation, event
+ok 145 - reactions: add, change, remove, validation, event
+  ---
+  duration_ms: 18.586002
+  type: 'test'
+  ...
+# Subtest: scheduled posts: validation, publish when due, cancel
+ok 146 - scheduled posts: validation, publish when due, cancel
+  ---
+  duration_ms: 21.556716
+  type: 'test'
+  ...
+# Subtest: folders: create with own chats only, update, reorder, delete
+ok 147 - folders: create with own chats only, update, reorder, delete
+  ---
+  duration_ms: 19.58905
+  type: 'test'
+  ...
+# Subtest: stories: privacy, media access, views, viewers, reply, delete
+ok 148 - stories: privacy, media access, views, viewers, reply, delete
+  ---
+  duration_ms: 42.946386
+  type: 'test'
+  ...
+# [OTP dev mode] +923110000099 → 866057
+# Subtest: moderation: banned words, links from new accounts, copy-paste spam, report threshold, phone blacklist
+ok 149 - moderation: banned words, links from new accounts, copy-paste spam, report threshold, phone blacklist
+  ---
+  duration_ms: 379.689269
+  type: 'test'
+  ...
+# Subtest: support tickets: user opens, admin replies, statuses
+ok 150 - support tickets: user opens, admin replies, statuses
+  ---
+  duration_ms: 16.708334
+  type: 'test'
+  ...
+# Subtest: announcements: targeting by phone prefix and platform, dismiss
+ok 151 - announcements: targeting by phone prefix and platform, dismiss
+  ---
+  duration_ms: 7.740325
+  type: 'test'
+  ...
+# Subtest: admin 2FA: setup, enable, login with code / backup code, disable, policy
+ok 152 - admin 2FA: setup, enable, login with code / backup code, disable, policy
+  ---
+  duration_ms: 340.669674
+  type: 'test'
+  ...
+# Subtest: admin: channels in group list, verify badge, dashboard counters, restrict
+ok 153 - admin: channels in group list, verify badge, dashboard counters, restrict
+  ---
+  duration_ms: 17.311413
+  type: 'test'
+  ...
+# [OTP dev mode] asad1@hushavia.test → 253232
+# [OTP dev mode] bina2@hushavia.test → 486886
+# Subtest: a photo gets an instant thumb, its real size and a smaller bubble preview
+ok 154 - a photo gets an instant thumb, its real size and a smaller bubble preview
+  ---
+  duration_ms: 939.94859
+  type: 'test'
+  ...
+# Subtest: files sharp cannot read still upload (no thumb, original served)
+ok 155 - files sharp cannot read still upload (no thumb, original served)
+  ---
+  duration_ms: 6.10472
+  type: 'test'
+  ...
+# Subtest: a video gets a poster frame, its real size and length
+ok 156 - a video gets a poster frame, its real size and length
+  ---
+  duration_ms: 309.604877
+  type: 'test'
+  ...
+# Subtest: a video without a poster never serves itself as the "preview"
+ok 157 - a video without a poster never serves itself as the "preview"
+  ---
+  duration_ms: 85.347043
+  type: 'test'
+  ...
+# Subtest: Plus perks: animated profile photos and Plus emoji statuses
+ok 158 - Plus perks: animated profile photos and Plus emoji statuses
+  ---
+  duration_ms: 97.808563
+  type: 'test'
+  ...
+# Subtest: online = app on screen; hidden → last seen after the grace time; back quickly → no flicker
+ok 159 - online = app on screen; hidden → last seen after the grace time; back quickly → no flicker
+  ---
+  duration_ms: 9903.54989
+  type: 'test'
+  ...
+# Subtest: firebase-admin: the modular API the push service uses is there
+ok 160 - firebase-admin: the modular API the push service uses is there
+  ---
+  duration_ms: 49.00451
+  type: 'test'
+  ...
+# [OTP dev mode] +923441110001 → 986806
+# [OTP dev mode] +923441110002 → 181866
+# Subtest: a stranger lands in requests; replying accepts it
+ok 161 - a stranger lands in requests; replying accepts it
+  ---
+  duration_ms: 505.34387
+  type: 'test'
+  ...
+# [OTP dev mode] +923441110003 → 767909
+# [OTP dev mode] +923441110004 → 522857
+# [OTP dev mode] +923441110005 → 378967
+# [OTP dev mode] +923441110006 → 231512
+# [OTP dev mode] +923441110009 → 777158
+# [OTP dev mode] +923441110007 → 295005
+# [OTP dev mode] +923441110008 → 213369
+# Subtest: contacts are not requests; adding a contact clears a request; decline + block
+ok 162 - contacts are not requests; adding a contact clears a request; decline + block
+  ---
+  duration_ms: 207.173617
+  type: 'test'
+  ...
+# Subtest: outgoing requests: private, loopback and metadata addresses are refused
+ok 163 - outgoing requests: private, loopback and metadata addresses are refused
+  ---
+  duration_ms: 16.772372
+  type: 'test'
+  ...
+# Subtest: client address: a forged X-Forwarded-For does not change who we think is calling
+ok 164 - client address: a forged X-Forwarded-For does not change who we think is calling
+  ---
+  duration_ms: 132.098561
+  type: 'test'
+  ...
+# Subtest: crypto: JWT sign/verify, tamper and expiry
+ok 165 - crypto: JWT sign/verify, tamper and expiry
+  ---
+  duration_ms: 452.242862
+  type: 'test'
+  ...
+# Subtest: validate: phone and username
+ok 166 - validate: phone and username
+  ---
+  duration_ms: 0.818833
+  type: 'test'
+  ...
+# [OTP dev mode] +923001110001 → 526904
+# Subtest: auth: OTP flow, wrong code, refresh rotation, logout
+ok 167 - auth: OTP flow, wrong code, refresh rotation, logout
+  ---
+  duration_ms: 105.396742
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000001 → 418031
+# [OTP dev mode] +923001000002 → 576063
+# [OTP dev mode] +923001000003 → 813808
+# [OTP dev mode] +923001000004 → 999619
+# Subtest: users: profile, username, privacy, search
+ok 168 - users: profile, username, privacy, search
+  ---
+  duration_ms: 84.913959
+  type: 'test'
+  ...
+# Subtest: private chat: hidden until first message, unread, receipts, dedupe
+ok 169 - private chat: hidden until first message, unread, receipts, dedupe
+  ---
+  duration_ms: 67.349864
+  type: 'test'
+  ...
+# Subtest: messages: pagination, edit, delete for me / everyone
+ok 170 - messages: pagination, edit, delete for me / everyone
+  ---
+  duration_ms: 62.61836
+  type: 'test'
+  ...
+# Subtest: blocking prevents messages in private chats
+ok 171 - blocking prevents messages in private chats
+  ---
+  duration_ms: 14.199768
+  type: 'test'
+  ...
+# Subtest: groups: create, privacy skip, roles, ownership transfer, invites
+ok 172 - groups: create, privacy skip, roles, ownership transfer, invites
+  ---
+  duration_ms: 98.078148
+  type: 'test'
+  ...
+# Subtest: per-user chat settings: mute, pin limit, archive, clear
+ok 173 - per-user chat settings: mute, pin limit, archive, clear
+  ---
+  duration_ms: 34.137623
+  type: 'test'
+  ...
+# Subtest: media: upload rules, access control, image message, forward
+ok 174 - media: upload rules, access control, image message, forward
+  ---
+  duration_ms: 37.524047
+  type: 'test'
+  ...
+# Subtest: reports: create with snapshot, dedupe
+ok 175 - reports: create with snapshot, dedupe
+  ---
+  duration_ms: 10.786244
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000001 → 782223
+# [OTP dev mode] +923001000001 → 832371
+# Subtest: admin: login, dashboard, users, ban, reports, settings, logs
+ok 176 - admin: login, dashboard, users, ban, reports, settings, logs
+  ---
+  duration_ms: 276.02096
+  type: 'test'
+  ...
+# [OTP dev mode] +923001000004 → 808206
+# Subtest: account deletion frees phone, leaves groups, keeps history as Deleted Account
+ok 177 - account deletion frees phone, leaves groups, keeps history as Deleted Account
+  ---
+  duration_ms: 22.404908
+  type: 'test'
+  ...
+# Subtest: saved messages (chat with yourself)
+ok 178 - saved messages (chat with yourself)
+  ---
+  duration_ms: 19.646224
+  type: 'test'
+  ...
+# Subtest: markAllDelivered on reconnect
+ok 179 - markAllDelivered on reconnect
+  ---
+  duration_ms: 19.321272
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000001 → 505537
+# [OTP dev mode] +923781000002 → 509200
+# [OTP dev mode] +923781000003 → 390151
+# [OTP dev mode] +923781000004 → 965315
+# Subtest: call links skip calls privacy but not blocks; second call waits, third is busy
+ok 180 - call links skip calls privacy but not blocks; second call waits, third is busy
+  ---
+  duration_ms: 563.402844
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000005 → 028256
+# [OTP dev mode] +923781000005 → 979381
+# Subtest: new login tells the other devices
+ok 181 - new login tells the other devices
+  ---
+  duration_ms: 93.356026
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000006 → 816563
+# [OTP dev mode] +923781000007 → 192753
+# [OTP dev mode] +923781000008 → 735391
+# Subtest: birthday: shown by privacy + exceptions, upcoming list
+ok 182 - birthday: shown by privacy + exceptions, upcoming list
+  ---
+  duration_ms: 39.630679
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000009 → 623838
+# [OTP dev mode] +923781000010 → 893820
+# Subtest: last seen / avatar exceptions: never share with
+ok 183 - last seen / avatar exceptions: never share with
+  ---
+  duration_ms: 30.219533
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000011 → 804143
+# [OTP dev mode] +923781000012 → 566932
+# Subtest: read receipts off: no blue ticks either way in private chats
+ok 184 - read receipts off: no blue ticks either way in private chats
+  ---
+  duration_ms: 52.091315
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000013 → 094427
+# [OTP dev mode] +923781000014 → 470082
+# [OTP dev mode] +923781000015 → 914768
+# Subtest: story reactions go to the chat; highlights keep expired stories on the profile
+ok 185 - story reactions go to the chat; highlights keep expired stories on the profile
+  ---
+  duration_ms: 66.70032
+  type: 'test'
+  ...
+# [OTP dev mode] +923781000016 → 497547
+# [OTP dev mode] +923781000017 → 494674
+# [OTP dev mode] +923781000018 → 482650
+# [OTP dev mode] +923781000019 → 291702
+# Subtest: poll deadline: closes by itself; story mentions; live locations of a chat
+ok 186 - poll deadline: closes by itself; story mentions; live locations of a chat
+  ---
+  duration_ms: 98.442688
+  type: 'test'
+  ...
+# [OTP dev mode] asad1@hushavia.test → 686767
+# [OTP dev mode] bina2@hushavia.test → 244525
+# Subtest: official pack is installed once and everyone has it
+ok 187 - official pack is installed once and everyone has it
+  ---
+  duration_ms: 613.509529
+  type: 'test'
+  ...
+# Subtest: send a sticker; the other person can see it
+ok 188 - send a sticker; the other person can see it
+  ---
+  duration_ms: 17.941592
+  type: 'test'
+  ...
+# Subtest: own pack: create, add sticker (only sticker uploads), share, install, delete
+ok 189 - own pack: create, add sticker (only sticker uploads), share, install, delete
+  ---
+  duration_ms: 26.241047
+  type: 'test'
+  ...
+# Subtest: GIF messages only from Tenor
+ok 190 - GIF messages only from Tenor
+  ---
+  duration_ms: 14.783348
+  type: 'test'
+  ...
+# Subtest: premium sticker pack: everyone sees it, only Plus members send it
+ok 191 - premium sticker pack: everyone sees it, only Plus members send it
+  ---
+  duration_ms: 7.941148
+  type: 'test'
+  ...
+# Subtest: cut keeps emoji whole
+ok 192 - cut keeps emoji whole
+  ---
+  duration_ms: 0.857691
+  type: 'test'
+  ...
+# Subtest: geo: where an IP is, and readable device names
+ok 193 - geo: where an IP is, and readable device names
+  ---
+  duration_ms: 85.75412
+  type: 'test'
+  ...
+1..193
+# tests 193
+# suites 0
+# pass 193
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 60821.596591
