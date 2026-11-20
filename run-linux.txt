@@ -1,0 +1,9 @@
+
+(com.hushavia.chatapp:6037): dbind-WARNING **: 05:05:44.660: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+
+(com.hushavia.chatapp:6037): Atk-CRITICAL **: 05:05:45.110: atk_socket_embed: assertion 'plug_id != NULL' failed
+[IMPORTANT:flutter/shell/platform/embedder/embedder_surface_gl_impeller.cc(127)] Using the Impeller rendering backend (OpenGLESSDF).
+terminate called after throwing an instance of 'char const*'
+terminate called recursively
