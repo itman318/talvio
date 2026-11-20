@@ -65,7 +65,11 @@ sendLocation · sendChatAction · editMessageText · editMessageReplyMarkup · d
 deleteMessages · forwardMessage · copyMessage · pinChatMessage · unpinChatMessage ·
 answerCallbackQuery · answerInlineQuery · setMyCommands · getMyCommands · deleteMyCommands ·
 setMyName · setMyDescription · setMyShortDescription · setChatMenuButton · getChat ·
-getChatMember · getChatMemberCount · getFile · logOut · close
+getChatMember · getChatMemberCount · getChatAdministrators · banChatMember · unbanChatMember ·
+restrictChatMember (mute) · leaveChat · approveChatJoinRequest · declineChatJoinRequest ·
+setMessageReaction · editMessageCaption · sendContact · getFile · logOut · close
+
+Group tools work when the bot is an admin of the group with that right, like a person.
 
 Updates: `message` (text, photos, files, locations, mini-app data), `callback_query`, `inline_query`.
 

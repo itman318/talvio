@@ -290,7 +290,8 @@ curl -X POST $API/hook.set -H "$KEY" -d url=https://yourbot.example.com/hook  # 
 ```
 
 Methods: `profile.get/update`, `events.poll`, `hook.set/remove/status`, `message.send/photo/file/edit/buttons/delete/pin/unpin/forward`,
-`poll.send`, `place.send`, `activity.show`, `button.reply`, `commands.set/get/clear`, `conversation.get/member/size`, `inline.reply`.
+`poll.send`, `place.send`, `activity.show`, `button.reply`, `commands.set/get/clear`, `conversation.get/member/size/admins/leave`, `member.remove/allow-back/mute`, `join.answer`,
+`message.react`, `contact.send`, `inline.reply`.
 Words: `to` = conversation id, `buttons` = rows under a message (`data` / `link` / `app` / `copy`), `keyboard` = rows of big
 buttons (`keyboard_once`, `keyboard_hint`, `hide_keyboard`). Events: `{event_id, kind, at, …}` with kind `message`,
 `button_press`, `inline_search` or `app_data`. Hooks are signed: `X-Hushavia-Signature: sha256=HMAC_SHA256(secret, body)`.
@@ -305,7 +306,9 @@ Methods: `me`, `updates`, `webhook.set`, `webhook.delete`, `webhook.info`, `mess
 `chat.action` (`action`: typing, uploading_photo, recording_voice …), `polls.send` (`question`, `options`,
 `type`=quiz, `correct_option_id`, `open_period`), `locations.send` (`latitude`, `longitude`), `messages.forward`
 (`from_chat_id`, `message_id`), `messages.pin`, `messages.unpin`, `chats.member` (`user_id`),
-`chats.member-count`, `me.set` (`name`, `description`, `menu_url`), `inline.answer` (`inline_query_id`,
+`chats.member-count`, `chats.admins`, `chats.ban` / `chats.unban` (`user_id`), `chats.restrict` (`user_id`, `minutes`; 0 lifts it),
+`chats.leave`, `chats.join-request` (`user_id`, `approve`), `messages.react` (`message_id`, `emoji`), `contacts.send`
+(`first_name`, `phone_number`), `me.set` (`name`, `description`, `menu_url`), `inline.answer` (`inline_query_id`,
 `results`: [{`id`, `title`, `description`, `text`, `thumb_url`, `reply_markup`}]). Updates: `message`,
 `callback_query`, `inline_query` (when inline mode is on — BotForge → /setinline), and `message.web_app_data`. Webhooks get the header `X-Hushavia-Webhook-Secret`.
 
