@@ -1197,7 +1197,7 @@ test('bots: hsv_ tokens (old tlv_ still work), group admin methods, reactions, c
   const t = created.token;
   const g = (await chats.createGroup(owner.id, { title: 'Guarded', member_ids: [member.id, created.bot.id] })).chat;
   // not an admin yet: can't remove people
-  await rejects(bots.callMethod(t, 'chats.ban', { chat_id: g.id, user_id: member.id }), 'not_allowed');
+  await rejects(bots.callMethod(t, 'chats.ban', { chat_id: g.id, user_id: member.id }), 'not_admin');
   await chats.setMemberRole(owner.id, g.id, created.bot.id, 'admin');
   const admins = await bots.callMethod(t, 'chats.admins', { chat_id: g.id });
   assert.deepEqual(admins.map((a) => a.status).sort(), ['administrator', 'creator']);
