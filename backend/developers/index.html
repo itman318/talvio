@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hushavia Bot API</title>
+<meta name="description" content="Build bots for Hushavia with the Hushavia Bot API v2: methods, events, webhooks and ready-to-run examples.">
+<link rel="icon" href="/web/icon.svg">
+<link rel="stylesheet" href="/developers/docs.css?v=1">
+</head>
+<body>
+<header class="top">
+  <div class="wrap row">
+    <a class="brand" href="#top"><span class="logo">H</span> Hushavia <b>Bot API</b></a>
+    <nav>
+      <a href="#start">Start</a><a href="#methods">Methods</a><a href="#events">Events</a><a href="#examples">Examples</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+<section class="hero">
+  <h1>Build a bot for Hushavia</h1>
+  <p class="lead">Bots are accounts that a program runs. People chat with them, press their buttons, add them to groups and open their mini apps. You write the program in any language — it talks to Hushavia over simple HTTPS requests.</p>
+  <div class="cards">
+    <div class="card"><b>1 · Create the bot</b><span>In the Hushavia app open <code>@BotForge</code> → <i>New bot</i> (or Settings → My bots). You get its key.</span></div>
+    <div class="card"><b>2 · Call the API</b><span><code>POST <span class="base"></span>/api/bots/v2/&lt;method&gt;</code> with the header <code>X-Bot-Key</code>.</span></div>
+    <div class="card"><b>3 · Answer events</b><span>Read new messages and button presses with <code>events.poll</code>, or get them on your server with a hook.</span></div>
+  </div>
+</section>
+
+<section id="start">
+  <h2>Quick start</h2>
+  <p>Every call is a <code>POST</code> (or <code>GET</code>) to <code><span class="base"></span>/api/bots/v2/&lt;method&gt;</code>. Send parameters as JSON, a form, or multipart (for files). Put the key in the <code>X-Bot-Key</code> header (<code>Authorization: Bearer &lt;key&gt;</code> works too).</p>
+<pre><code>curl -X POST <span class="base"></span>/api/bots/v2/profile.get -H "X-Bot-Key: hsv_123_yourSecretKey"</code></pre>
+  <p>Every answer looks like one of these:</p>
+<pre><code>{ "ok": true,  "data": { … } }
+{ "ok": false, "error": { "code": "chat_not_found", "message": "…", "retry_after": 3 } }</code></pre>
+  <div class="note"><b>Keep the key secret.</b> Anyone with it controls your bot. Never put it in an app, a web page or a public repository. If it leaks, open @BotForge → your bot → <i>New key</i>: the old one stops working at once.</div>
+  <h3>Limits</h3>
+  <ul>
+    <li>120 calls per 10 seconds per bot. Above that you get <code>429</code> with <code>retry_after</code> (seconds).</li>
+    <li>Text: up to 4,096 characters; captions up to 1,024. Button <code>data</code>: up to 64 bytes.</li>
+    <li>Events not read within 24 hours are dropped (at most 1,000 waiting per bot).</li>
+    <li>A bot only sees a person after they open it (press Start) or meet it in a group.</li>
+  </ul>
+  <h3>Words used</h3>
+  <table>
+    <tr><td><code>to</code></td><td>the conversation: a person's direct chat with the bot, a group or a channel (its <code>id</code>)</td></tr>
+    <tr><td><code>message</code></td><td>a message id in that conversation</td></tr>
+    <tr><td><code>person</code></td><td>a user id</td></tr>
+    <tr><td><code>buttons</code></td><td>buttons under a message: rows of <code>{label, data | link | app | copy}</code></td></tr>
+    <tr><td><code>keyboard</code></td><td>big buttons that replace the phone keyboard: rows of labels</td></tr>
+  </table>
+</section>
+
+<section id="methods">
+  <h2>Methods</h2>
+  <h3>The bot</h3>
+  <table class="m">
+    <tr><th>Method</th><th>Parameters</th><th>Returns</th></tr>
+    <tr><td>profile.get</td><td>—</td><td><code>{id, name, username, groups, sees_all_group_messages, inline}</code></td></tr>
+    <tr><td>profile.update</td><td><code>name</code>, <code>description</code>, <code>app_url</code> (mini app opened from the menu button)</td><td>true</td></tr>
+    <tr><td>commands.set</td><td><code>commands</code>: <code>[{name, about}]</code> — shown when people type “/”</td><td>true</td></tr>
+    <tr><td>commands.get · commands.clear</td><td>—</td><td>list · true</td></tr>
+  </table>
+  <h3>Events and hooks</h3>
+  <table class="m">
+    <tr><th>Method</th><th>Parameters</th><th>Returns</th></tr>
+    <tr><td>events.poll</td><td><code>after</code> (last <code>event_id</code> you handled), <code>wait</code> (seconds to wait for new ones, up to 50), <code>max</code> (up to 100)</td><td><code>{events: […]}</code></td></tr>
+    <tr><td>hook.set</td><td><code>url</code> (https), <code>secret</code> (optional — made for you if left out)</td><td><code>{url, secret}</code></td></tr>
+    <tr><td>hook.status</td><td>—</td><td><code>{url, pending, last_error, last_error_at}</code></td></tr>
+    <tr><td>hook.remove</td><td><code>drop_pending</code></td><td>true</td></tr>
+  </table>
+  <h3>Messages</h3>
+  <table class="m">
+    <tr><th>Method</th><th>Parameters</th><th>Returns</th></tr>
+    <tr><td>message.send</td><td><code>to</code>, <code>text</code>, <code>reply_to</code>, <code>topic</code>, <code>silent</code>, <code>buttons</code> — or <code>keyboard</code>, <code>keyboard_once</code>, <code>keyboard_hint</code>, <code>hide_keyboard</code></td><td>message</td></tr>
+    <tr><td>message.photo · message.file</td><td>multipart: the file in the field <code>file</code>; <code>to</code>, <code>text</code> (caption), <code>buttons</code></td><td>message</td></tr>
+    <tr><td>message.edit</td><td><code>to</code>, <code>message</code>, <code>text</code>, <code>buttons</code> (only the bot's own messages)</td><td>message</td></tr>
+    <tr><td>message.buttons</td><td><code>to</code>, <code>message</code>, <code>buttons</code> (empty removes them)</td><td>message</td></tr>
+    <tr><td>message.delete · message.pin · message.unpin</td><td><code>to</code>, <code>message</code></td><td>true</td></tr>
+    <tr><td>message.forward</td><td><code>to</code>, <code>from</code>, <code>message</code></td><td>message</td></tr>
+    <tr><td>message.react</td><td><code>to</code>, <code>message</code>, <code>emoji</code> (empty removes it)</td><td>true</td></tr>
+    <tr><td>poll.send</td><td><code>to</code>, <code>question</code>, <code>options</code> (list), <code>anonymous</code>, <code>multiple</code>, <code>quiz</code> <code>{correct, explanation}</code>, <code>closes_in</code> (seconds)</td><td>message</td></tr>
+    <tr><td>place.send</td><td><code>to</code>, <code>lat</code>, <code>lng</code>, <code>title</code></td><td>message</td></tr>
+    <tr><td>contact.send</td><td><code>to</code>, <code>name</code>, <code>phone</code>, <code>email</code></td><td>message</td></tr>
+    <tr><td>activity.show</td><td><code>to</code>, <code>activity</code>: typing · photo · video · file · voice · sticker</td><td>true</td></tr>
+    <tr><td>button.reply</td><td><code>press</code> (the press id), <code>notice</code> (short text), <code>alert</code> (show as a box), <code>link</code></td><td>true</td></tr>
+    <tr><td>file.get</td><td><code>file</code> (an <code>attachment.file_id</code>)</td><td><code>{file, name, size, mime, url}</code> — download <code>url</code> with the same <code>X-Bot-Key</code></td></tr>
+  </table>
+  <h3>Groups and channels</h3>
+  <p>For these the bot has to be an admin of the group with the right to do it — just like a person.</p>
+  <table class="m">
+    <tr><th>Method</th><th>Parameters</th><th>Returns</th></tr>
+    <tr><td>conversation.get</td><td><code>to</code></td><td><code>{id, kind, title, description}</code></td></tr>
+    <tr><td>conversation.member</td><td><code>to</code>, <code>person</code></td><td><code>{role: owner | admin | member | not_member, person}</code></td></tr>
+    <tr><td>conversation.size · conversation.admins</td><td><code>to</code></td><td><code>{members}</code> · <code>{admins}</code></td></tr>
+    <tr><td>conversation.leave</td><td><code>to</code></td><td>true</td></tr>
+    <tr><td>member.remove · member.allow-back</td><td><code>to</code>, <code>person</code></td><td>true</td></tr>
+    <tr><td>member.mute</td><td><code>to</code>, <code>person</code>, <code>minutes</code> (rounded up to 1 hour, 1 day, 1 week or 1 year; 0 lifts it)</td><td>true</td></tr>
+    <tr><td>join.answer</td><td><code>to</code>, <code>person</code>, <code>approve</code> (true / false)</td><td>true</td></tr>
+  </table>
+  <h3>Inline mode</h3>
+  <p>Turn it on in @BotForge → your bot → <i>Inline mode</i>. People then type <code>@yourbot something</code> in any chat.</p>
+  <table class="m">
+    <tr><th>Method</th><th>Parameters</th><th>Returns</th></tr>
+    <tr><td>inline.reply</td><td><code>search</code> (the search id), <code>results</code>: <code>[{id, title, subtitle, text, image, buttons}]</code></td><td>true</td></tr>
+  </table>
+</section>
+
+<section id="events">
+  <h2>Events</h2>
+  <p>Each event has <code>event_id</code>, <code>kind</code> and <code>at</code>, plus one object named after its kind.</p>
+  <table class="m">
+    <tr><th>kind</th><th>What happened</th></tr>
+    <tr><td>message</td><td><code>message: {id, conversation, author, sent_at, text, reply_to, topic, attachment, place}</code></td></tr>
+    <tr><td>button_press</td><td><code>press: {id, data, message_id, conversation, author}</code> — answer it with <code>button.reply</code></td></tr>
+    <tr><td>member_joined</td><td><code>member_joined: {conversation, people}</code> — in groups</td></tr>
+    <tr><td>member_left</td><td><code>member_left: {conversation, person}</code></td></tr>
+    <tr><td>join_request</td><td><code>join_request: {conversation, person}</code> — for admin bots in groups that approve new members</td></tr>
+    <tr><td>inline_search</td><td><code>search: {id, query, author}</code></td></tr>
+    <tr><td>app_data</td><td><code>app_data: {data, button, conversation, author}</code> — sent by your mini app</td></tr>
+  </table>
+  <p>In groups with <i>privacy</i> on (the default) the bot only gets messages that start with “/”, mention it, or reply to it. Turn privacy off in @BotForge to get every message.</p>
+
+  <h3>Hooks</h3>
+  <p>With a hook, Hushavia sends each event to your https address as a <code>POST</code> with a JSON body. Answer with any 2xx status. If your server is down, events wait and are sent again later.</p>
+  <p>Every hook request is signed: <code>X-Hushavia-Signature: sha256=&lt;hex&gt;</code> is the HMAC-SHA256 of the raw body with your secret. Check it before you trust a request:</p>
+<pre><code># Python
+import hmac, hashlib
+def genuine(raw_body: bytes, header: str, secret: str) -&gt; bool:
+    good = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(good, header or "")</code></pre>
+<pre><code>// Node.js
+const crypto = require('crypto');
+const genuine = (rawBody, header, secret) =&gt; {
+  const good = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  return header &amp;&amp; good.length === header.length &amp;&amp; crypto.timingSafeEqual(Buffer.from(good), Buffer.from(header));
+};</code></pre>
+</section>
+
+<section id="examples">
+  <h2>Examples</h2>
+  <h3>Python — an echo bot with buttons (no library needed)</h3>
+<pre><code>import requests
+
+API = "<span class="base"></span>/api/bots/v2/"
+KEY = "hsv_123_yourSecretKey"        # better: read it from an environment variable
+
+def call(method, **params):
+    r = requests.post(API + method, json=params, headers={"X-Bot-Key": KEY}, timeout=60).json()
+    if not r["ok"]:
+        raise RuntimeError(r["error"])
+    return r["data"]
+
+last = 0
+while True:
+    for e in call("events.poll", after=last, wait=30)["events"]:
+        last = e["event_id"]
+        if e["kind"] == "message":
+            m = e["message"]
+            call("message.send", to=m["conversation"]["id"], text="You said: " + m["text"],
+                 buttons=[[{"label": "👍 Nice", "data": "like"}, {"label": "Website", "link": "https://example.com"}]])
+        elif e["kind"] == "button_press":
+            call("button.reply", press=e["press"]["id"], notice="Thanks!")</code></pre>
+
+  <h3>Node.js (18+)</h3>
+<pre><code>const API = '<span class="base"></span>/api/bots/v2/';
+const KEY = process.env.HUSHAVIA_KEY;
+
+async function call(method, params = {}) {
+  const r = await (await fetch(API + method, {
+    method: 'POST', headers: { 'X-Bot-Key': KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(params),
+  })).json();
+  if (!r.ok) throw new Error(r.error.message);
+  return r.data;
+}
+
+(async () =&gt; {
+  await call('commands.set', { commands: [{ name: 'start', about: 'Say hello' }] });
+  let last = 0;
+  for (;;) {
+    const { events } = await call('events.poll', { after: last, wait: 30 });
+    for (const e of events) {
+      last = e.event_id;
+      if (e.kind === 'message' &amp;&amp; e.message.text === '/start') {
+        await call('message.send', { to: e.message.conversation.id, text: 'Welcome! 👋' });
+      }
+      if (e.kind === 'member_joined') {
+        const names = e.member_joined.people.map((p) =&gt; p.name).join(', ');
+        await call('message.send', { to: e.member_joined.conversation.id, text: `Welcome ${names}! Please read the rules.` });
+      }
+    }
+  }
+})();</code></pre>
+
+  <h3>PHP — a hook (webhook)</h3>
+<pre><code>&lt;?php
+$secret = getenv('HUSHAVIA_HOOK_SECRET');
+$raw = file_get_contents('php://input');
+$good = 'sha256=' . hash_hmac('sha256', $raw, $secret);
+if (!hash_equals($good, $_SERVER['HTTP_X_HUSHAVIA_SIGNATURE'] ?? '')) { http_response_code(401); exit; }
+
+$e = json_decode($raw, true);
+if ($e['kind'] === 'message') {
+    $ch = curl_init('<span class="base"></span>/api/bots/v2/message.send');
+    curl_setopt_array($ch, [CURLOPT_POST =&gt; true, CURLOPT_RETURNTRANSFER =&gt; true,
+        CURLOPT_HTTPHEADER =&gt; ['X-Bot-Key: ' . getenv('HUSHAVIA_KEY'), 'Content-Type: application/json'],
+        CURLOPT_POSTFIELDS =&gt; json_encode(['to' =&gt; $e['message']['conversation']['id'], 'text' =&gt; 'Got it ✅'])]);
+    curl_exec($ch);
+}
+http_response_code(200);</code></pre>
+  <p>Turn the hook on once: <code>hook.set</code> with <code>url</code> = the address of this file (https). Save the <code>secret</code> it returns.</p>
+
+  <h3>Sending a photo</h3>
+<pre><code>curl -X POST <span class="base"></span>/api/bots/v2/message.photo -H "X-Bot-Key: $KEY" \
+  -F to=12345 -F text="Today's chart" -F file=@chart.png</code></pre>
+</section>
+
+<section id="classic">
+  <h2>Already have a bot made with aiogram, grammY or a similar library?</h2>
+  <p>Use the <b>Classic API</b> instead: those libraries work by changing only the server address, with the key written as <code>&lt;id&gt;:&lt;secret&gt;</code> (both forms are shown in @BotForge).</p>
+<pre><code>from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
+session = AiohttpSession(api=TelegramAPIServer.from_base("<span class="base"></span>/api/classic"))
+bot = Bot("123:yourSecretKey", session=session)</code></pre>
+  <p>Use one way per bot at a time: a hook set through the Classic API sends Classic updates, one set with <code>hook.set</code> sends v2 events.</p>
+</section>
+
+<section>
+  <h2>Rules</h2>
+  <p>Bots must follow the Terms of Service (in the app: Settings → Help → Terms of service): no spam, scams or asking people for passwords, login codes or wallet words. Tell people what your bot stores about them. Bots that break the rules are switched off.</p>
+</section>
+</main>
+<footer class="wrap foot">Hushavia Bot API v2 · questions: Settings → Help &amp; support in the app</footer>
+<script src="/developers/docs.js?v=1"></script>
+</body>
+</html>

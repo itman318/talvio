@@ -1048,6 +1048,7 @@ async function joinChat(userId, chat) {
     );
     const admins = await db.many(`SELECT user_id FROM chat_members WHERE chat_id = $1 AND role IN ('owner', 'admin')`, [chat.id]);
     bus.emit('chat:updated', { chatId: chat.id, memberIds: admins.map((a) => a.user_id) });
+    bus.emit('chat:join_request', { chatId: chat.id, userId });
     return { requested: true, chat_id: chat.id, title: chat.title };
   }
   if (!existing) {

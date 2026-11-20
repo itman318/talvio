@@ -148,12 +148,14 @@ const HELP = [
 const API_HELP = [
   '📖 **For developers**',
   '',
-  '**Classic API** (works with common bot libraries such as aiogram and grammY — just change the server address):',
-  `${config.publicUrl}/api/classic/bot<key>/<method>`,
-  '',
-  '**Hushavia Bot API v2:**',
+  '**Hushavia Bot API v2** (recommended):',
   `POST ${config.publicUrl}/api/bots/v2/<method>`,
   'with the header “X-Bot-Key: <key>”. Start with profile.get, events.poll and message.send.',
+  '',
+  '**Classic API** (bots already made with libraries such as aiogram and grammY — just change the server address):',
+  `${config.publicUrl}/api/classic/bot<key>/<method>`,
+  '',
+  `Full guide with every method, events and ready examples: ${config.publicUrl}/developers`,
 ].join('\n');
 
 async function myBots(ownerId) {
@@ -527,7 +529,7 @@ async function onCallback(userId, chatId, messageId, data) {
       const l = await listMessage(userId);
       return edit(chatId, messageId, l.text, l.markup);
     }
-    if (action === 'api') return say(chatId, API_HELP, kb([[btn('🤖 My bots', 'list')]]));
+    if (action === 'api') return say(chatId, API_HELP, kb([[{ text: '📘 Open the guide', url: `${config.publicUrl}/developers` }], [btn('🤖 My bots', 'list')]]));
     if (action === 'xferyes') {
       const st = await getState(userId);
       const b = await ownedBot(userId, id);

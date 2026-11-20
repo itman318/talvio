@@ -1220,3 +1220,48 @@ test('bots: hsv_ tokens (old tlv_ still work), group admin methods, reactions, c
   await bots.callMethod(t, 'chats.leave', { chat_id: g.id });
   await rejects(bots.callMethod(t, 'chats.admins', { chat_id: g.id }), 'chat_not_found');
 });
+
+test('bots v2: member joined / left and join request events, file.get, signed hook body shape', async () => {
+  const bots = require('../src/services/bot.service');
+  const v2 = require('../src/services/botv2.service');
+  const owner = await signup('+923270000041', 'WelcomeBoss');
+  const newbie = await signup('+923270000042', 'Newbie');
+  const asker = await signup('+923270000043', 'Asker');
+  const created = await bots.createBot(owner.id, { name: 'Welcome', username: 'welcome_helper_bot' });
+  const key = created.token;
+  const g = (await chats.createGroup(owner.id, { title: 'Welcome Club', member_ids: [created.bot.id] })).chat;
+  await chats.setMemberRole(owner.id, g.id, created.bot.id, 'admin');
+  await chats.setChatUsername(owner.id, g.id, 'welcome_club_pk').catch(() => null);
+  await db.query('UPDATE chats SET is_public = TRUE, username = COALESCE(username, $2) WHERE id = $1', [g.id, 'welcome_club_pk']);
+  await chats.joinPublic(newbie.id, g.id);
+  await new Promise((r) => setTimeout(r, 300)); // updates are written right after the message
+  let ev = (await v2.call(key, 'events.poll', {})).events;
+  const joined = ev.find((e) => e.kind === 'member_joined');
+  assert.ok(joined, `no member_joined in ${JSON.stringify(ev.map((e) => e.kind))}`);
+  assert.equal(joined.member_joined.people[0].id, newbie.id);
+  await chats.leaveChat(newbie.id, g.id);
+  await new Promise((r) => setTimeout(r, 300));
+  ev = (await v2.call(key, 'events.poll', { after: joined.event_id })).events;
+  assert.ok(ev.find((e) => e.kind === 'member_left' && e.member_left.person.id === newbie.id));
+  const lastId = ev[ev.length - 1].event_id;
+  // approval needed → the admin bot is asked, and can approve
+  await db.query('UPDATE chats SET join_approval = TRUE WHERE id = $1', [g.id]);
+  await chats.joinPublic(asker.id, g.id).catch(() => null);
+  await new Promise((r) => setTimeout(r, 300));
+  ev = (await v2.call(key, 'events.poll', { after: lastId })).events;
+  const jr = ev.find((e) => e.kind === 'join_request');
+  assert.ok(jr);
+  assert.equal(jr.join_request.person.id, asker.id);
+  await v2.call(key, 'join.answer', { to: g.id, person: asker.id, approve: true });
+  assert.ok(await db.one('SELECT 1 AS x FROM chat_members WHERE chat_id = $1 AND user_id = $2', [g.id, asker.id]));
+  // a file the bot can see
+  const pic = await fakeUpload(owner.id);
+  await bots.callMethod(key, 'messages.send', { chat_id: g.id, text: 'hi' });
+  const messages = require('../src/services/message.service');
+  await messages.sendMessage(owner.id, g.id, { type: 'image', media_id: pic.id, text: '/photo' });
+  const f = await v2.call(key, 'file.get', { file: pic.id });
+  assert.equal(f.file, String(pic.id));
+  assert.match(f.url, /\/api\/bots\/v2\/file\/\d+$/);
+  const stranger = await fakeUpload(asker.id); // never shown to the bot
+  await rejects(v2.call(key, 'file.get', { file: stranger.id }), 'media_not_found');
+});

@@ -26,6 +26,9 @@
  *   button_press → press: { id, data, message_id, conversation, author }
  *   inline_search→ search: { id, query, author }
  *   app_data     → app_data: { data, button, conversation, author }
+ *   member_joined→ member_joined: { conversation, people }      member_left → member_left: { conversation, person }
+ *   join_request → join_request: { conversation, person }        (answer with join.answer)
+ * Files: file.get {file} → { file, name, size, mime, url } — download the url with the same X-Bot-Key header.
  * Hooks are signed: X-Hushavia-Signature: sha256=HEX(HMAC_SHA256(secret, raw body)), plus X-Hushavia-Event-Id.
  */
 const crypto = require('crypto');
@@ -78,6 +81,16 @@ function event(update, at) {
   if (update.inline_query) {
     const q = update.inline_query;
     return { ...base, kind: 'inline_search', search: { id: q.id, query: q.query, author: person(q.from) } };
+  }
+  if (update.chat_join_request) {
+    const r = update.chat_join_request;
+    return { ...base, kind: 'join_request', join_request: { conversation: conversation(r.chat), person: person(r.from) } };
+  }
+  if (update.message && update.message.new_chat_members) {
+    return { ...base, kind: 'member_joined', member_joined: { conversation: conversation(update.message.chat), people: update.message.new_chat_members.map(person) } };
+  }
+  if (update.message && update.message.left_chat_member) {
+    return { ...base, kind: 'member_left', member_left: { conversation: conversation(update.message.chat), person: person(update.message.left_chat_member) } };
   }
   if (update.message && update.message.web_app_data) {
     const m = update.message;
@@ -250,6 +263,12 @@ function translate(method, p) {
 
 /** Runs a v2 method for the bot with this key. */
 async function call(key, method, params = {}, file = null) {
+  if (method === 'file.get') {
+    const b = await botService.authenticate(key);
+    const m = await require('./media.service').getAccessible(b.user_id, params.file); // eslint-disable-line global-require
+    const base = require('../config').publicUrl || ''; // eslint-disable-line global-require
+    return { file: String(m.id), name: m.original_name || null, size: Number(m.size_bytes), mime: m.mime, url: `${base}/api/bots/v2/file/${m.id}` };
+  }
   if (method === 'hook.set') {
     // own handling: v2 hooks are signed, so a secret always exists
     await botService.authenticate(key);

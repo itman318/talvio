@@ -20,7 +20,27 @@ async function parseMultipart(req, res) {
   });
 }
 
-module.exports = async function botApiV2(req, res) {
+/** GET /api/bots/v2/file/<id> with X-Bot-Key: a file the bot may see, as a download. */
+async function fileDownload(req, res) {
+  try {
+    guard.checkIp(req);
+    const auth = req.headers.authorization || '';
+    const key = req.get('x-bot-key') || (auth.startsWith('Bearer ') ? auth.slice(7).trim() : String(req.query.key || ''));
+    const b = await require('../services/bot.service').authenticate(key); // eslint-disable-line global-require
+    const media = require('../services/media.service'); // eslint-disable-line global-require
+    const m = await media.getAccessible(b.user_id, req.params.id);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.type('application/octet-stream');
+    res.attachment(m.original_name || 'file');
+    res.sendFile(media.absolutePath(m));
+  } catch (err) {
+    guard.noteFailure(req, err);
+    const status = err instanceof AppError ? err.status : 500;
+    res.status(status).json({ ok: false, error: { code: err.code || 'internal_error', message: status === 500 ? 'Internal Server Error' : err.message } });
+  }
+}
+
+async function botApiV2(req, res) {
   let file = null;
   try {
     guard.checkIp(req);
@@ -42,4 +62,7 @@ module.exports = async function botApiV2(req, res) {
     if (err.extra && err.extra.retry_after) error.retry_after = err.extra.retry_after;
     res.status(status).json({ ok: false, error });
   }
-};
+}
+
+module.exports = botApiV2;
+module.exports.fileDownload = fileDownload;

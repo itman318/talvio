@@ -324,7 +324,54 @@ async function toBotMessage(m, chatRow, extra = {}) {
 }
 
 /** bus message:new → updates for bots that are members of the chat. */
+/** Ordinary (owner-made) bots in this chat: not the built-in Hushavia bots. */
+async function ownerBotsIn(chatId, onlyAdmins = false) {
+  const rows = await db.many(
+    `SELECT u.id FROM chat_members cm JOIN users u ON u.id = cm.user_id JOIN bots b ON b.user_id = u.id
+     WHERE cm.chat_id = $1 AND u.is_bot AND b.status = 'active' ${onlyAdmins ? "AND cm.role IN ('owner', 'admin')" : ''}`,
+    [chatId],
+  );
+  const sysbots = require('./sysbots.service'); // eslint-disable-line global-require
+  const forge = require('./botforge.service'); // eslint-disable-line global-require
+  const idbot = require('./idbot.service'); // eslint-disable-line global-require
+  return rows.map((r) => Number(r.id)).filter((id) => !sysbots.which(id) && !forge.isBotForge(id) && !idbot.isIdBot(id));
+}
+
+/** People joining or leaving a group → updates for the bots in it (welcome and moderation bots need these). */
+async function onMemberChange(chatId, message) {
+  const meta = message.meta || {};
+  const joined = meta.event === 'member_joined' ? [meta.user_id] : meta.event === 'members_added' ? meta.user_ids || [] : [];
+  const left = ['member_left', 'member_removed'].includes(meta.event) ? meta.user_id : null;
+  if (!joined.length && !left) return;
+  const chat = await db.one('SELECT id, type, title FROM chats WHERE id = $1', [chatId]);
+  if (!chat || chat.type !== 'group') return;
+  const ids = await ownerBotsIn(chatId);
+  if (!ids.length) return;
+  const users = await db.many('SELECT * FROM users WHERE id = ANY($1::bigint[])', [[...joined, left].filter(Boolean)]);
+  const byId = new Map(users.map((u) => [Number(u.id), botUser(u)]));
+  const row = await db.one('SELECT * FROM messages WHERE id = $1', [message.id]);
+  for (const id of ids) {
+    const base = await toBotMessage(row, chat);
+    if (joined.length) {
+      const people = joined.map((x) => byId.get(Number(x))).filter((u) => u && u.id !== id);
+      if (people.length) await enqueue(id, { message: { ...base, new_chat_members: people } });
+    }
+    if (left && byId.get(Number(left)) && Number(left) !== id) await enqueue(id, { message: { ...base, left_chat_member: byId.get(Number(left)) } });
+  }
+}
+
+/** Someone asked to join a group or channel that needs approval → its admin bots can decide. */
+async function onJoinRequest({ chatId, userId }) {
+  const chat = await db.one('SELECT id, type, title FROM chats WHERE id = $1', [chatId]);
+  const u = await db.one('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!chat || !u) return;
+  for (const id of await ownerBotsIn(chatId, true)) {
+    await enqueue(id, { chat_join_request: { chat: { id: chat.id, type: chat.type, title: chat.title }, from: botUser(u), user_chat_id: Number(u.id), date: unix(new Date()) } });
+  }
+}
+
 async function onNewMessage({ chatId, message, memberIds, senderId }) {
+  if (message && message.type === 'system') return onMemberChange(chatId, message);
   if (!message || ['system', 'call'].includes(message.type) || message.thread_id) return;
   const bots = await db.many(
     `SELECT u.id, u.username, b.group_privacy FROM users u JOIN bots b ON b.user_id = u.id
@@ -370,6 +417,9 @@ async function onNewMessage({ chatId, message, memberIds, senderId }) {
 
 bus.on('message:new', (e) => {
   onNewMessage(e).catch((err) => console.error('bot update error', err)); // eslint-disable-line no-console
+});
+bus.on('chat:join_request', (e) => {
+  onJoinRequest(e).catch((err) => console.error('bot join request error', err)); // eslint-disable-line no-console
 });
 
 async function getUpdates(bot, q = {}) {

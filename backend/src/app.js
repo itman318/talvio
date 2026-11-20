@@ -35,6 +35,7 @@ function createApp() {
   // Hushavia Bot API: /api/bot/v1/<method>, token in "Authorization: Bearer <token>"
   app.all('/api/bot/v1/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botapi'));
   // Hushavia Bot API v2 (own naming, Hushavia events, signed hooks): /api/bots/v2/<method>, key in "X-Bot-Key"
+  app.get('/api/bots/v2/file/:id', require('./http/routes.botv2').fileDownload);
   app.all('/api/bots/v2/:method', express.urlencoded({ extended: false, limit: '1mb' }), require('./http/routes.botv2'));
 
   // Hushavia Bot API — Classic: existing bot libraries work by pointing them at /api/classic
@@ -65,6 +66,12 @@ function createApp() {
   const noCacheHtml = (res, file) => {
     if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
   };
+
+  // Bot API guide for developers at /developers
+  app.use('/developers', (req, res, next) => {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'");
+    next();
+  }, express.static(path.join(__dirname, '..', 'developers'), { setHeaders: noCacheHtml }));
 
   // Web / desktop app (installable PWA) at /web
   const webDir = path.join(__dirname, '..', 'web-client');
