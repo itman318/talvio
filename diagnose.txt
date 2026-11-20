@@ -1,0 +1,258 @@
+from GitHub (US): health 0.254083s
+from GitHub: TURN tcp 3478 OPEN
+--- server
+ 09:14:56 up 26 days,  4:13,  1 user,  load average: 0.00, 0.00, 0.00
+               total        used        free      shared  buff/cache   available
+Mem:            3819         700         814          59        2659        3119
+/dev/sda1        38G  7.3G   29G  21% /
+--- outbound (DNS + https)
+api.brevo.com: dns 0.002130s total 0.149351s code 404
+fcm.googleapis.com: dns 0.001900s total 0.068853s code 404
+www.google.com: dns 0.001814s total 0.094761s code 200
+--- local endpoint timings
+auth/email/request 200 122ms
+auth/email/verify 200 334ms
+--- slowest GET endpoints
+    21ms  200  /coins/deposit
+    20ms  200  /chats
+    15ms  200  /search
+    13ms  200  /me/export
+    13ms  200  /premium
+    11ms  200  /bookmarks
+    10ms  200  /coins
+     8ms  200  /me/login-activity
+     8ms  200  /me/sessions
+     8ms  200  /ads/meta
+     8ms  200  /ads/mine
+     8ms  200  /stickers/packs
+     7ms  200  /users/search
+     7ms  200  /stories
+     7ms  200  /announcements
+--- database
+shared_buffers 763MB · db size 19 MB
+1.9 ms avg · 4621 calls · 8.6 s total · INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id, forwarded_from_user_id
+0.1 ms avg · 40985 calls · 6.0 s total · INSERT INTO coin_deposit_state (id, last_block) VALUES ($2, $1) ON CONFLICT (id) DO UPDATE SET last_block = EX
+0.1 ms avg · 47352 calls · 4.8 s total · SELECT key, value FROM app_settings
+1.3 ms avg · 3226 calls · 4.0 s total · UPDATE users SET last_seen_at = now() WHERE id = $1 RETURNING last_seen_at
+1.8 ms avg · 1764 calls · 3.1 s total · SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended, c.created_by, c
+0.1 ms avg · 46799 calls · 2.4 s total · SELECT DISTINCT b.user_id FROM bots b JOIN bot_updates u ON u.bot_id = b.user_id WHERE b.webhook_url IS NOT NU
+0.0 ms avg · 46799 calls · 2.0 s total · SELECT chat_id, user_id FROM chat_members WHERE captcha_until IS NOT NULL AND captcha_until < now() LIMIT $1
+0.1 ms avg · 35950 calls · 2.0 s total · SELECT user_id, address FROM coin_deposit_addresses WHERE watch_until > now() ORDER BY watch_until DESC LIMIT 
+40.7 ms avg · 47 calls · 1.9 s total · COPY public.messages (id, chat_id, sender_id, type, text, media_id, reply_to_id, forwarded_from_user_id, forwa
+0.1 ms avg · 23808 calls · 1.7 s total · SELECT u.*, s.id AS session_id, s.revoked_at AS session_revoked_at FROM sessions s JOIN users u ON u.id = s.us
+2.1 ms avg · 747 calls · 1.6 s total · SELECT c.id, c.type, c.title, c.description, c.avatar_media_id, c.invite_code, c.is_suspended, c.created_by, c
+0.0 ms avg · 41231 calls · 1.5 s total · SELECT last_block FROM coin_deposit_state WHERE id = $1
+--- pages edited in the admin panel (these override the built-in text)
+--- coin deposits
+xpub set: true
+scanner at block 134669428
+addresses 13
+--- push notifications
+Nov 20 04:22:37 ubuntu-4gb-hel1-2 node[688657]: Push notifications enabled (FCM)
+Nov 20 04:48:42 ubuntu-4gb-hel1-2 node[690178]: Push notifications enabled (FCM)
+Nov 20 05:37:17 ubuntu-4gb-hel1-2 node[692102]: Push notifications enabled (FCM)
+--- fast photos
+sharp: ok 0.35.5
+video with thumb: 7 / 7
+image with thumb: 177 / 177
+ffmpeg: ok
+videos: id=262 mime=video/mp4 size=2045408 failed=false thumb=true
+videos: id=138 mime=video/mp4 size=4961647 failed=false thumb=true
+videos: id=75 mime=video/mp4 size=4552928 failed=false thumb=true
+videos: id=72 mime=video/mp4 size=4037465 failed=false thumb=true
+videos: id=67 mime=video/mp4 size=12565498 failed=false thumb=true
+newest video probe: "mov,mp4,m4a,3gp,3g2,mj2",12.245333
+app update: {"update":true,"force":false,"current_build":1,"latest_build":361,"version":"1.1.361","url":"http://127.0.0.1:4000/download/hushavia-361.apk","size":63314430,"sha256":"051a5b8f7c7c91f7893e07cca3b308421f011b23d3c62443bc44aef40c1da5fe","notes":"","published_at":"2026-11-20T04:59:11Z"}
+--- newest photos (size, thumb, preview file)
+325 image/jpeg 57506 1280x663 thumb=true 11-20 07:01 · previews: none
+322 image/jpeg 95148 736x692 thumb=true 11-19 23:11 · previews: none
+321 image/jpeg 100312 1080x2365 thumb=true 11-19 15:52 · previews: none
+320 image/jpeg 118795 1140x2124 thumb=true 11-19 15:51 · previews: none
+318 image/jpeg 314574 1080x2460 thumb=true 11-19 11:53 · previews: 74iZMycqDZEtEIutRoxzog.jpg.p.webp:65438 
+316 image/jpeg 104304 1280x1096 thumb=true 11-19 10:06 · previews: none
+--- photo downloads, last 2 hours (time, status, bytes, url, client)
+media requests last 2h: 23 · not 200/206/304: 0
+--- newest voice messages (media id, mime, bytes, on disk) and their downloads
+msg 8707 media 324 audio/mp4 153379 voice_1795157027435.m4a 11-20 06:44 · disk: 153379 ·  · gets: 200/153379 
+msg 8431 media 323 audio/mp4 95754 voice_1795137769332.m4a 11-20 01:23 · disk: 95754 ·  · gets: 200/95754 
+msg 8118 media 317 audio/mp4 13324 voice_1795085422063.m4a 11-19 10:50 · disk: 13324 ·  · gets: 
+msg 6849 media 288 audio/mp4 102817 voice_1794912762935.m4a 11-17 10:52 · disk: 102817 ·  · gets: 
+msg 6648 media 282 audio/mp4 236498 voice_1794889845717.m4a 11-17 04:31 · disk: 236498 ·  · gets: 
+msg 5514 media 265 audio/mp4 318310 voice_1794748759724.m4a 11-15 13:19 · disk: 318310 ·  · gets: 
+--- recent upload / sticker requests (status, size)
+[19/Nov/2026:00:34:20 "POST /api/media 200 548
+[19/Nov/2026:00:43:51 "POST /api/media 200 648
+[19/Nov/2026:01:07:09 "POST /api/media 200 520
+[19/Nov/2026:01:45:50 "POST /api/media 200 1008
+[19/Nov/2026:05:34:20 "POST /api/media 200 177
+[19/Nov/2026:05:45:57 "POST /api/media 200 455
+[19/Nov/2026:05:49:33 "POST /api/media 200 430
+[19/Nov/2026:08:42:59 "POST /api/media 200 492
+[19/Nov/2026:10:06:43 "POST /api/media 200 572
+[19/Nov/2026:10:50:22 "POST /api/media 200 153
+[19/Nov/2026:11:53:11 "POST /api/media 200 580
+[19/Nov/2026:12:02:44 "POST /api/media 200 178
+[19/Nov/2026:15:51:29 "POST /api/media 200 566
+[19/Nov/2026:15:52:28 "POST /api/media 200 449
+[19/Nov/2026:23:11:31 "POST /api/media 200 820
+--- logout check
+auth answers today (path status → count):
+     88 /api/auth/refresh 200
+      1 /api/auth/refresh 401
+      1 /api/auth/email/verify 200
+      1 /api/auth/email/request 200
+401/429 anywhere today:
+     16 /api/stories N
+     16 /api/announcements N
+     14 /api/admin/login N
+     11 /api/calls/active N
+      5 /api/me/push-token N
+      5 /api/me/birthdays N
+      5 /api/folders N
+      4 /api/secret-chats N
+      4 /api/me/quick-replies N
+      4 /api/chats/13 N
+      3 /api/chats N
+      1 /api/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php N
+nginx limit hits: 0
+sessions revoked 2d: 13
+new sessions 2d: 14
+5000001064 11-20 09:14 revoked 11-20 09:14 last 11-20 09:14
+5000000027 11-20 05:18 revoked - last 11-20 09:13
+5000001043 11-20 04:18 revoked 11-20 04:18 last 11-20 04:18
+5000000027 11-19 17:55 revoked - last 11-20 05:04
+5000000027 11-19 11:51 revoked - last 11-19 17:48
+5000001033 11-19 11:24 revoked 11-19 11:24 last 11-19 11:24
+5000001026 11-19 06:37 revoked 11-19 06:37 last 11-19 06:37
+5000000027 11-19 05:32 revoked - last 11-19 11:38
+5000001003 11-19 04:50 revoked 11-19 04:50 last 11-19 04:50
+5000000966 11-19 02:17 revoked 11-19 02:17 last 11-19 02:17
+5000000953 11-19 02:11 revoked 11-19 02:11 last 11-19 02:11
+5000000926 11-18 16:22 revoked 11-18 16:22 last 11-18 16:22
+--- push log
+Nov 19 12:50:36 ubuntu-4gb-hel1-2 node[675124]: Push notifications enabled (FCM)
+Nov 19 12:57:06 ubuntu-4gb-hel1-2 node[676274]: Push notifications enabled (FCM)
+Nov 19 13:06:23 ubuntu-4gb-hel1-2 node[677491]: Push notifications enabled (FCM)
+Nov 19 17:34:30 ubuntu-4gb-hel1-2 node[681021]: Push notifications enabled (FCM)
+Nov 20 04:22:37 ubuntu-4gb-hel1-2 node[688657]: Push notifications enabled (FCM)
+Nov 20 04:48:42 ubuntu-4gb-hel1-2 node[690178]: Push notifications enabled (FCM)
+Nov 20 05:37:17 ubuntu-4gb-hel1-2 node[692102]: Push notifications enabled (FCM)
+firebase pkg: 14.5.1
+sa file: -rw------- 1 hushavia hushavia 2375 Nov 20 05:36 /etc/hushavia/firebase.json
+push tokens: ERROR:  relation "push_tokens" does not exist
+LINE 1: SELECT count(*) FROM push_tokens
+                             ^
+--- app crash reports (last 7 days, newest version first)
+1.1.348 · android · x1 · 1 users · 11-19 09:33 · JThrowable: Exception in Java: java.lang.ClassNotFoundException: Didn't find class "Landroid/content/Context;" on path: DexPathList[[zip file "/data/app/~~kupDn @ *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** | pid: 19402, tid: 539108363552, name 2.ui | os: android arch: arm64 comp: yes sim: no
+1.1.348 · android · x1 · 1 users · 11-19 05:58 · JThrowable: Exception in Java: java.lang.ClassNotFoundException: Didn't find class "Landroid/content/Context;" on path: DexPathList[[zip file "/data/app/~~kupDn @ *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** | pid: 6011, tid: 539108363552, name 2.ui | os: android arch: arm64 comp: yes sim: no
+1.1.348 · android · x1 · 1 users · 11-19 06:09 · JThrowable: Exception in Java: java.lang.ClassNotFoundException: Didn't find class "Landroid/content/Context;" on path: DexPathList[[zip file "/data/app/~~kupDn @ *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** | pid: 10641, tid: 539108363552, name 2.ui | os: android arch: arm64 comp: yes sim: no
+1.1.348 · android · x1 · 1 users · 11-19 06:35 · JThrowable: Exception in Java: java.lang.ClassNotFoundException: Didn't find class "Landroid/content/Context;" on path: DexPathList[[zip file "/data/app/~~kupDn @ *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** | pid: 5806, tid: 539108363552, name 2.ui | os: android arch: arm64 comp: yes sim: no
+1.1.348 · android · x1 · 1 users · 11-19 07:58 · JThrowable: Exception in Java: java.lang.ClassNotFoundException: Didn't find class "Landroid/content/Context;" on path: DexPathList[[zip file "/data/app/~~kupDn @ *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** | pid: 5220, tid: 539108363552, name 2.ui | os: android arch: arm64 comp: yes sim: no
+1.1.348 · android · x1 · 1 users · 11-19 05:32 · JThrowable: Exception in Java: java.lang.ClassNotFoundException: Didn't find class "Landroid/content/Context;" on path: DexPathList[[zip file "/data/app/~~kupDn @ *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** | pid: 17173, tid: 539108363552, name 2.ui | os: android arch: arm64 comp: yes sim: no
+1.1.321 · android · x1 · 1 users · 11-16 15:33 · ClientException: ClientException: Connection closed while receiving data, uri=http://<server-ip>/api/media/205/public (resolving an image codec) @  | | 
+1.1.302 · android · x1 · 1 users · 11-13 12:27 · ClientException: ClientException: Connection closed before full header was received, uri=http://<server-ip>/api/media/212/public (resolving an image codec) @  | | 
+1.1.302 · android · x1 · 1 users · 11-13 12:27 · ClientException: ClientException: Connection closed before full header was received, uri=http://<server-ip>/api/media/214/public (resolving an image codec) @  | | 
+1.1.302 · android · x1 · 1 users · 11-13 12:27 · ClientException: ClientException: Connection closed before full header was received, uri=http://<server-ip>/api/media/211/public (resolving an image codec) @  | | 
+--- calls (TURN)
+coturn: active
+listening 3478: udp=8 tcp=8
+env: TURN_SECRET set=1 · TURN_URLS=turn:<server-ip>:3478?transport=udp,turn:<server-ip>:3478?transport=tcp
+firewall 3478: 2 rules · relay ports: 2 rules
+listening-port=3478 use-auth-secret realm=hushavia external-ip=<server-ip> min-port=49160 max-port=49400 
+relay test (udp): 15: : Total lost packets 4 (100.000000%), total send dropped 0 (0.000000%) 
+calls last 7d: declined=1 missed=7 ended=3 
+--- security
+fail2ban: active ·  |- Currently banned: 2  |- Total banned: 14 
+sandbox: PrivateTmp=yes ProtectSystem=full NoNewPrivileges=yes 
+auto security updates: APT::Periodic::Update-Package-Lists "1"; APT::Periodic::Unattended-Upgrade "1"; 
+turn blocks localhost: 1
+hidden file: 404 (expect 404)
+faked address: 401 401 401 401 401 401 401 401 401 401 429 429 429 429  (expect 401 ×10 then 429)
+open ports: 0.0.0.0:22 0.0.0.0:80 127.0.0.1:3478 127.0.0.1:4000 127.0.0.1:5432 127.0.0.53%lo:53 127.0.0.54:53 [::1]:3478 [::1]:5432 [::]:22 [2a01:4f9:c012:7c6b::1]:3478 <server-ip>:3478 [::]:80 
+firewall: 10 rules · Status: active
+ssh root/password: maxauthtries 6 permitrootlogin yes passwordauthentication yes 
+--- recent server errors
+Nov 18 16:24:42 ubuntu-4gb-hel1-2 node[652456]: system bot error TypeError: payments(...).perks is not a function
+Nov 18 16:24:45 ubuntu-4gb-hel1-2 node[652456]: system bot error TypeError: payments(...).perks is not a function
+Nov 18 16:24:48 ubuntu-4gb-hel1-2 node[652456]: system bot error TypeError: payments(...).perks is not a function
+Nov 18 16:24:49 ubuntu-4gb-hel1-2 node[652456]: system bot error TypeError: payments(...).perks is not a function
+Nov 18 16:24:53 ubuntu-4gb-hel1-2 node[652456]: system bot error TypeError: payments(...).perks is not a function
+Nov 18 16:24:54 ubuntu-4gb-hel1-2 node[652456]: system bot error TypeError: payments(...).perks is not a function
+--- classic bot api (fake token → expect 401 JSON)
+{"ok":false,"error_code":401,"description":"Unauthorized: Invalid bot token"}
+{"ok":false,"error_code":401,"description":"Unauthorized: Invalid bot token"}
+--- built-in bots
+5000000290|HushaviaIDBot|active
+5000000085|BotForge|active
+--- recent replies (type, reply target, first bytes of the target)
+8733|13|text|8731|text|5000000027|30|4d65206e6520616220697320|
+8732|13|text|8729|text|5000000027|54|4a6162206d65737361676520|
+8728|13|text|8726|text|5000000027|19|42696c6b756c2074686b206b|
+8702|13|text|8699|text|5000000158|31|5965206c6576656c73206162|
+8699|13|text|8697|text|5000000027|18|42686169206e6520746f2062|
+8696|13|text|8693|text|5000000158|22|506872206d652062206c6761|
+--- geo lookup
+{"ip":"39.32.0.10","city":"Rawalpindi","country":"Pakistan","countryCode":"PK","timezone":"Asia/Karachi","label":"Rawalpindi, Pakistan"}
+/etc/cron.d/hushavia-backup
+--- ids
+users|5000000027|5000001064|60
+chats|1|1000003470|30
+user_ids_v1|2026-10-31 14:09:04.334955+00
+plus_packages_v1|2026-11-11 14:23:49.32085+00
+-rw-r--r-- 1 root root 485410 Nov 18 03:15 daily-20261118.sql.gz
+-rw-r--r-- 1 root root 529519 Nov 19 03:15 daily-20261119.sql.gz
+-rw-r--r-- 1 root root 562937 Nov 20 03:15 daily-20261120.sql.gz
+--- recent sessions (no tokens)
+198|5000001064|11-20 09:14:56|11-20 09:14:57|11-20 09:14|01-19|f
+197|5000000027|11-20 05:18:46||11-20 09:15|01-19|t
+196|5000001043|11-20 04:18:00|11-20 04:18:01|11-20 04:18|01-19|f
+195|5000000027|11-19 17:55:38||11-20 05:04|01-19|f
+194|5000000027|11-19 11:51:14||11-19 17:48|01-18|f
+193|5000001033|11-19 11:24:34|11-19 11:24:34|11-19 11:24|01-18|f
+192|5000001026|11-19 06:37:31|11-19 06:37:31|11-19 06:37|01-18|f
+191|5000000027|11-19 05:32:09||11-19 11:38|01-18|f
+190|5000001003|11-19 04:50:22|11-19 04:50:23|11-19 04:50|01-18|f
+189|5000000966|11-19 02:17:17|11-19 02:17:18|11-19 02:17|01-18|f
+188|5000000953|11-19 02:11:49|11-19 02:11:50|11-19 02:11|01-18|f
+187|5000000926|11-18 16:22:34|11-18 16:22:35|11-18 16:22|01-17|f
+186|5000000027|11-18 12:34:51|11-19 05:33:41|11-19 05:04|01-18|f
+185|5000000027|11-18 10:37:44|11-19 05:33:41|11-18 12:34|01-17|f
+184|5000000027|11-17 08:51:16|11-19 05:33:41|11-18 10:32|01-17|f
+--- auth requests (last 2h)
+[20/Nov/2026:05:45:26 "POST /api/auth/refresh 200
+[20/Nov/2026:05:49:03 "POST /api/auth/refresh 200
+[20/Nov/2026:05:50:08 "POST /api/auth/refresh 200
+[20/Nov/2026:05:59:28 "POST /api/auth/refresh 200
+[20/Nov/2026:06:01:16 "POST /api/auth/refresh 200
+[20/Nov/2026:06:04:12 "POST /api/auth/refresh 200
+[20/Nov/2026:06:15:30 "POST /api/auth/refresh 200
+[20/Nov/2026:06:17:36 "POST /api/auth/refresh 200
+[20/Nov/2026:06:17:39 "GET /api/me/sessions 200
+[20/Nov/2026:06:17:48 "POST /api/auth/refresh 200
+[20/Nov/2026:06:31:49 "POST /api/auth/refresh 200
+[20/Nov/2026:06:32:43 "POST /api/auth/refresh 200
+[20/Nov/2026:06:46:47 "POST /api/auth/refresh 200
+[20/Nov/2026:06:48:09 "POST /api/auth/refresh 200
+[20/Nov/2026:07:00:48 "POST /api/auth/refresh 200
+[20/Nov/2026:07:02:10 "POST /api/auth/refresh 200
+[20/Nov/2026:07:04:38 "POST /api/auth/refresh 200
+[20/Nov/2026:07:20:49 "POST /api/auth/refresh 200
+[20/Nov/2026:07:35:18 "POST /api/auth/refresh 200
+[20/Nov/2026:07:50:31 "POST /api/auth/refresh 200
+[20/Nov/2026:08:05:58 "POST /api/auth/refresh 200
+[20/Nov/2026:08:05:59 "POST /api/auth/refresh 200
+[20/Nov/2026:08:06:22 "POST /api/auth/refresh 200
+[20/Nov/2026:08:06:23 "POST /api/auth/refresh 200
+[20/Nov/2026:08:20:23 "POST /api/auth/refresh 200
+[20/Nov/2026:08:34:24 "POST /api/auth/refresh 200
+[20/Nov/2026:08:48:24 "POST /api/auth/refresh 200
+[20/Nov/2026:08:55:54 "POST /api/auth/refresh 200
+[20/Nov/2026:09:13:32 "POST /api/auth/refresh 200
+[20/Nov/2026:09:13:33 "POST /api/auth/refresh 200
+--- nginx slow / failed requests
+187.55.133.245 - - [20/Nov/2026:04:22:37 +0000] "GET /socket.io/?EIO=4&transport=websocket HTTP/1.1" 502 150 "-" "Dart/3.14 (dart:io)"
+2026/11/20 06:17:46 [alert] 692115#692115: *37434 open socket #9 left in connection 9
+2026/11/20 06:17:46 [alert] 692115#692115: *37270 open socket #12 left in connection 10
+2026/11/20 06:17:46 [alert] 692115#692115: *37428 open socket #25 left in connection 17
+2026/11/20 06:17:46 [alert] 692115#692115: aborting
+2026/11/20 06:17:46 [notice] 693192#693192: using inherited sockets from "5;6;"
