@@ -1,0 +1,201 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.4.0 available)
+  app_links 6.4.1 (7.2.2 available)
+  audio_session 0.1.25 (0.2.4 available)
+  cached_network_image 3.4.1 (4.0.7 available)
+  cached_network_image_platform_interface 4.1.1 (5.0.4 available)
+  cached_network_image_web 1.3.1 (2.0.5 available)
+  camera 0.11.4 (0.12.2 available)
+  camera_android_camerax 0.6.30 (0.7.6+1 available)
+  camera_avfoundation 0.9.23+2 (0.11.1 available)
+  connectivity_plus 6.1.5 (7.3.2 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  dbus 0.7.15 (0.8.1 available)
+  device_info_plus 11.5.0 (13.3.0 available)
+  device_info_plus_platform_interface 7.0.3 (8.1.0 available)
+  file_picker 10.3.10 (13.4.0 available)
+  firebase_core 3.15.2 (5.2.0 available)
+  firebase_core_platform_interface 6.0.3 (8.2.0 available)
+  firebase_core_web 2.24.1 (4.2.0 available)
+  firebase_messaging 15.2.10 (17.1.0 available)
+  firebase_messaging_platform_interface 4.6.10 (4.12.0 available)
+  firebase_messaging_web 3.10.10 (4.4.0 available)
+  flutter_contacts 1.1.9+2 (2.6.0 available)
+  flutter_foreground_task 9.2.2 (11.0.3 available)
+  flutter_lints 4.0.0 (6.0.0 available)
+  flutter_local_notifications 18.0.1 (23.0.3 available)
+  flutter_local_notifications_linux 5.0.0 (9.0.0 available)
+  flutter_local_notifications_platform_interface 8.0.0 (13.0.0 available)
+  flutter_map 7.0.2 (8.3.2 available)
+  flutter_secure_storage 9.2.4 (11.2.0 available)
+  flutter_secure_storage_linux 1.2.3 (3.0.3 available)
+  flutter_secure_storage_macos 3.1.3 (4.0.0 available)
+  flutter_secure_storage_platform_interface 1.1.2 (2.1.1 available)
+  flutter_secure_storage_web 1.2.1 (2.1.1 available)
+  flutter_secure_storage_windows 3.1.2 (4.2.2 available)
+  flutter_webrtc 0.12.12+hotfix.1 (1.6.3 available)
+  gal 2.3.3 (3.0.1 available)
+  geolocator 13.0.4 (14.1.2 available)
+  geolocator_android 4.6.2 (5.2.1 available)
+  google_mlkit_commons 0.13.0 (1.0.3 available)
+  google_mlkit_subject_segmentation 0.2.1 (0.3.2 available)
+  intl 0.19.0 (0.20.3 available)
+  js 0.6.7 (0.7.2 available)
+  just_audio 0.9.46 (0.10.6 available)
+  latlong2 0.9.1 (0.10.1 available)
+  lints 4.0.0 (6.1.0 available)
+  local_auth 2.3.0 (3.0.2 available)
+  local_auth_android 1.0.56 (2.3.0 available)
+  local_auth_darwin 1.6.1 (2.0.5 available)
+  local_auth_windows 1.0.11 (2.0.2 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  mime 1.0.6 (2.1.0 available)
+  mobile_scanner 5.2.3 (7.5.0 available)
+  nm 0.5.0 (0.6.0 available)
+  no_screenshot 0.3.6 (2.0.1 available)
+  open_filex 4.7.0 (5.0.0 available)
+  package_info_plus 9.0.1 (10.2.2 available)
+  package_info_plus_platform_interface 3.2.1 (4.1.0 available)
+! path_provider_android 2.2.23 (overridden) (2.3.1 available)
+  pointycastle 3.9.1 (4.0.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  proximity_sensor 1.4.0 (2.0.0 available)
+  qr 3.0.3 (4.0.1 available)
+  record 6.2.1 (7.2.0 available)
+  record_android 1.5.2 (2.3.0 available)
+  record_ios 1.2.1 (2.1.1 available)
+  record_linux 1.3.1 (2.2.0 available)
+  record_macos 1.2.2 (2.1.1 available)
+  record_platform_interface 1.6.0 (2.2.0 available)
+  record_web 1.3.0 (2.2.0 available)
+  record_windows 1.0.7 (2.4.0 available)
+  sensors_plus 6.1.2 (7.1.1 available)
+! shared_preferences_android 2.4.28 (overridden) (2.5.5 available)
+  test_api 0.7.14 (0.7.15 available)
+  timezone 0.10.1 (0.11.2 available)
+  unicode 0.3.1 (1.1.9 available)
+  vector_math 2.4.3 (2.4.4 available)
+  wakelock_plus 1.5.2 (1.8.2 available)
+  win32 5.15.0 (6.4.0 available)
+  win32_registry 2.1.0 (3.0.3 available)
+Got dependencies!
+80 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Installing ../app-test.apk...                                    1,659ms
+I/flutter ( 2387): The Dart VM service is listening on http://127.0.0.1:43773/abTPvXURziw=/
+D/FlutterGeolocator( 2387): Attaching Geolocator to activity
+D/FlutterRenderer( 2387): Width is zero. 0,0
+I/Choreographer( 2387): Skipped 63 frames!  The application may be doing too much work on its main thread.
+D/FlutterRenderer( 2387): Width is zero. 0,0
+D/FlutterRenderer( 2387): Width is zero. 0,0
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/HostConnection( 2387): HostConnection::get() New Host Connection established 0x78ac14ea5e90, tid 2410
+D/HostConnection( 2387): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform ANDROID_EMU_hwc_display_power_mode GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 
+W/OpenGLRenderer( 2387): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+D/EGL_emulation( 2387): eglCreateContext: 0x78ac04eb61e0: maj 3 min 1 rcv 4
+D/EGL_emulation( 2387): eglMakeCurrent: 0x78ac04eb61e0: ver 3 1 (tinfo 0x78aba4f397d0) (first time)
+I/Gralloc4( 2387): mapper 4.x is not supported
+D/HostConnection( 2387): createUnique: call
+D/HostConnection( 2387): HostConnection::get() New Host Connection established 0x78ac14ea5650, tid 2416
+D/goldfish-address-space( 2387): allocate: Ask for block of size 0x100
+D/goldfish-address-space( 2387): allocate: ioctl allocate returned offset 0x3fbffe000 size 0x2000
+D/HostConnection( 2387): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform ANDROID_EMU_hwc_display_power_mode GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 
+D/HostConnection( 2387): HostConnection::get() New Host Connection established 0x78ac14ea4450, tid 2416
+D/HostConnection( 2387): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform ANDROID_EMU_hwc_display_power_mode GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 
+D/EGL_emulation( 2387): eglMakeCurrent: 0x78ac04ead0d0: ver 3 1 (tinfo 0x78aba4f39710) (first time)
+D/EGL_emulation( 2387): eglCreateContext: 0x78ac04eb63f0: maj 3 min 1 rcv 4
+D/FlutterGeolocator( 2387): Creating service.
+D/FlutterGeolocator( 2387): Binding to location service.
+W/FlutterWebRTCPlugin( 2387): audioFocusChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+D/FlutterGeolocator( 2387): Geolocator foreground service connected
+D/FlutterGeolocator( 2387): Initializing Geolocator services
+D/FlutterGeolocator( 2387): Flutter engine connected. Connected engine count 1
+W/om.hushavia.ap( 2387): Accessing hidden method Landroid/app/ActivityThread;->currentActivityThread()Landroid/app/ActivityThread; (greylist, linking, allowed)
+W/om.hushavia.ap( 2387): Accessing hidden method Landroid/app/ActivityThread;->getActivity(Landroid/os/IBinder;)Landroid/app/Activity; (greylist, linking, allowed)
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+VMServiceFlutterDriver: Connecting to Flutter application at http://127.0.0.1:46485/LoY9xjnTXoE=/
+VMServiceFlutterDriver: Isolate found with number: 6512698811850879
+VMServiceFlutterDriver: Isolate 6512698811850879 is runnable.
+VMServiceFlutterDriver: Isolate is paused at start.
+VMServiceFlutterDriver: Attempting to resume isolate
+I/flutter ( 2387): 00:00 +0: login → chats → send message → tabs
+VMServiceFlutterDriver: Connected to Flutter application.
+I/flutter ( 2387): Push disabled (Firebase not configured): PlatformException(java.lang.Exception: Failed to load FirebaseOptions from resource. Check that you have defined values.xml correctly., Exception, Cause: null, Stacktrace: java.lang.Exception: Failed to load FirebaseOptions from resource. Check that you have defined values.xml correctly.
+I/flutter ( 2387): 	at io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin.lambda$optionsFromResource$5(FlutterFirebaseCorePlugin.java:222)
+I/flutter ( 2387): 	at io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin.$r8$lambda$UKjIMRLnh50mCq5Rg7c5X1_2d5w(Unknown Source:0)
+I/flutter ( 2387): 	at io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin$$ExternalSyntheticLambda3.run(D8$$SyntheticClass:0)
+I/flutter ( 2387): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)
+I/flutter ( 2387): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)
+I/flutter ( 2387): 	at java.lang.Thread.run(Thread.java:923)
+I/flutter ( 2387): , null)
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+W/IInputConnectionWrapper( 2387): getSelectedText on inactive InputConnection
+W/IInputConnectionWrapper( 2387): requestCursorAnchorInfo on inactive InputConnection
+W/IInputConnectionWrapper( 2387): getTextBeforeCursor on inactive InputConnection
+W/IInputConnectionWrapper( 2387): getTextBeforeCursor on inactive InputConnection
+W/IInputConnectionWrapper( 2387): getTextBeforeCursor on inactive InputConnection
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+W/IInputConnectionWrapper( 2387): getTextBeforeCursor on inactive InputConnection
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 1 line
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/ProfileInstaller( 2387): Installing profile for com.hushavia.app
+D/InputConnectionAdaptor( 2387): The input method toggled cursor monitoring on
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/InputConnectionAdaptor( 2387): The input method toggled cursor monitoring on
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+VMServiceFlutterDriver: request_data message is taking a long time to complete...
+I/om.hushavia.ap( 2387): Explicit concurrent copying GC freed 22760(1320KB) AllocSpace objects, 13(692KB) LOS objects, 49% free, 3474KB/6948KB, paused 11us total 10.280ms
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/InputConnectionAdaptor( 2387): The input method toggled cursor monitoring on
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+W/Gralloc4( 2387): allocator 3.x is not supported
+I/flutter ( 2387): SCREENSHOT 01-chats
+I/flutter ( 2387): SCREENSHOT 02-chat
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/flutter ( 2387): SCREENSHOT 03-user-profile
+D/InputConnectionAdaptor( 2387): The input method toggled cursor monitoring on
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/flutter ( 2387): SCREENSHOT 04-composer-long
+I/flutter ( 2387): SCREENSHOT 05-composer-typing
+I/om.hushavia.ap( 2387): Explicit concurrent copying GC freed 3084(188KB) AllocSpace objects, 7(336KB) LOS objects, 49% free, 3552KB/7105KB, paused 8us total 5.401ms
+I/flutter ( 2387): SCREENSHOT 06-chat-sent
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/flutter ( 2387): SCREENSHOT 07-message-menu
+D/InputConnectionAdaptor( 2387): The input method toggled cursor monitoring on
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/flutter ( 2387): SCREENSHOT 08-reply
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/chatty  ( 2387): uid=10130(com.hushavia.app) identical 2 lines
+D/FlutterJNI( 2387): Sending viewport metrics to the engine.
+I/flutter ( 2387): SCREENSHOT 09-attach
+I/flutter ( 2387): 00:28 +1: (tearDownAll)
+I/flutter ( 2387): 00:28 +2: All tests passed!
+All tests passed.
