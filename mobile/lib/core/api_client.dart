@@ -272,17 +272,17 @@ class ApiClient {
   /// Downloads into [target]. Mobile data often drops a connection without closing it: if no bytes
   /// arrive for 20 s the download is dropped and tried again once on a fresh connection, instead of
   /// spinning for minutes. [onProgress] gets 0…1 while bytes come in (when the size is known).
-  Future<File> download(String apiUrl, File target, {bool retry = true, void Function(double)? onProgress}) async {
+  Future<File> download(String apiUrl, File target, {bool retry = true, void Function(double)? onProgress, http.Client? via}) async {
     await _freshen();
     final tmp = File('${target.path}.part');
     try {
       final req = http.Request('GET', Uri.parse(AppConfig.absolute(apiUrl)));
       req.headers.addAll(authHeaders);
-      final streamed = await _http.send(req).timeout(const Duration(seconds: 30));
+      final streamed = await (via ?? _http).send(req).timeout(const Duration(seconds: 30));
       if (streamed.statusCode == 401 && retry && refreshToken != null) {
         await streamed.stream.drain<void>();
         await refreshTokens();
-        return download(apiUrl, target, retry: false, onProgress: onProgress);
+        return await download(apiUrl, target, retry: false, onProgress: onProgress, via: via);
       }
       if (streamed.statusCode != 200) {
         await streamed.stream.drain<void>();
@@ -301,7 +301,7 @@ class ApiClient {
         await sink.close();
       }
       if (total > 0 && got < total) throw const SocketException('Download cut off');
-      return tmp.rename(target.path);
+      return await tmp.rename(target.path);
     } on ApiException {
       rethrow;
     } catch (_) {
@@ -309,8 +309,14 @@ class ApiClient {
         if (tmp.existsSync()) tmp.deleteSync();
       } catch (_) {}
       if (!retry) rethrow;
-      _resetConnections(); // the old connection may be dead: next try opens a new one
-      return download(apiUrl, target, retry: false, onProgress: onProgress);
+      // the connection may be dead: try once more on a connection of its own. Resetting the shared one
+      // would cut every other photo and request that is loading right now.
+      final fresh = _newClient();
+      try {
+        return await download(apiUrl, target, retry: false, onProgress: onProgress, via: fresh);
+      } finally {
+        fresh.close();
+      }
     }
   }
 

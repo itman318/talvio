@@ -194,6 +194,7 @@ async function order(userId, idRaw, body = {}) {
   if (await users.isBlockedEither(userId, sellerId)) throw forbidden('blocked', 'You can’t order from this seller');
   const seller = await db.one(`SELECT id, tags FROM users WHERE id = $1 AND status = 'active' AND NOT is_bot`, [sellerId]);
   if (!seller) throw notFound('user_not_found', 'This seller is no longer available');
+  if ((seller.tags || []).some((t) => ['scam', 'fake'].includes(t))) throw forbidden('seller_flagged', 'This seller is flagged after confirmed scam reports — ordering is turned off');
   rateLimit.enforce(`catalog:order:${userId}`, 30, 60 * 60 * 1000, 'Too many orders. Try again later.');
   const chat = await require('./chat.service').getOrCreatePrivate(userId, sellerId); // eslint-disable-line global-require
   const chatId = chatIdOf(chat);
@@ -243,7 +244,12 @@ async function setStatus(userId, idRaw, body = {}) {
     if (status === 'cancelled' && o.paid_with === 'coins' && Number(o.coins) > 0 && o.buyer_id && o.seller_id) {
       await c.query('SELECT id FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE', [o.buyer_id, o.seller_id]);
       const note = `Refund: ${o.title}`.slice(0, 120);
-      const back = await coins.change(c, Number(o.seller_id), -Number(o.coins), 'shop_refund', { peerId: Number(o.buyer_id), note });
+      const back = await coins.change(c, Number(o.seller_id), -Number(o.coins), 'shop_refund', { peerId: Number(o.buyer_id), note }).catch((e) => {
+        if (e.code !== 'not_enough_coins') throw e;
+        throw conflict('refund_not_possible', seller
+          ? `You need ${Number(o.coins).toLocaleString('en-US')} coins to refund this order — add coins first`
+          : 'The seller doesn’t have enough coins for the refund right now — ask them in the chat');
+      });
       const got = await coins.change(c, Number(o.buyer_id), Number(o.coins), 'shop_refund', { peerId: Number(o.seller_id), note });
       refund = { back, got };
     }
