@@ -324,19 +324,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ]),
                       const SizedBox(height: 3),
                       Text(
-                        [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  ·  '),
+                        (me.username ?? '').trim().isNotEmpty ? '@${me.username}' : [me.email, me.phone].whereType<String>().firstWhere((v) => v.trim().isNotEmpty, orElse: () => ''),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13.5),
                       ),
-                      if (plus) ...[
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(20)),
-                          child: const Text('PLUS', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-                        ),
-                      ],
                     ]),
                   ),
                 ]),
@@ -390,7 +382,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Text('Hushavia Plus', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                          Text(plus ? 'Active — thank you for your support' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
+                          Text(plus ? 'Manage your membership' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Brand.muted)),
                         ]),
                       ),
