@@ -91,7 +91,9 @@ class MyProfileScreen extends StatelessWidget {
     void go(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
     final link = (me.username ?? '').isEmpty ? null : '${AppConfig.serverUrl}/c/${me.username}';
     final top = MediaQuery.viewPaddingOf(context).top; // the tab bar may have removed padding.top
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
       body: Stack(children: [
         ListView(padding: EdgeInsets.zero, children: [
         _Header(
@@ -196,8 +198,9 @@ class MyProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         ]),
-        if (me.birthday?.isToday == true) const Positioned.fill(child: BirthdayCelebration()),
+        if (me.birthday?.isToday == true) const Positioned.fill(child: IgnorePointer(child: BirthdayCelebration())),
       ]),
+      ),
     );
   }
 }
@@ -298,6 +301,7 @@ class _StatsStripState extends State<_StatsStrip> {
   }
 
   void _set(int b) {
+    if (!mounted) return;
     _lastCoins[widget.me.id] = b;
     if (mounted) setState(() => _coins = b);
   }
@@ -465,7 +469,7 @@ class _Header extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(3),
                       decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF16193A)),
-                      child: Hero(tag: 'avatar-${me.id}', child: ClipOval(child: Avatar(id: me.id, name: me.name, url: url, size: 96))),
+                      child: Hero(tag: 'avatar-${me.id}', child: ClipOval(child: Avatar(id: me.id, name: me.name, url: url, size: 76))),
                     ),
                   ),
                 ),
@@ -513,7 +517,7 @@ class _Header extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(children: [
                     _action(Icons.edit_rounded, 'Edit', onEdit, main: true),
-                    _action(Icons.ios_share_rounded, 'Share', onShare),
+                    _action(Icons.link_rounded, 'Copy link', onShare),
                     _action(Icons.qr_code_2_rounded, 'QR code', onQr),
                     _action(Icons.add_reaction_outlined, 'Status', () => showEmojiStatusPicker(context)),
                   ]),
