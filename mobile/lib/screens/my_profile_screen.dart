@@ -144,6 +144,25 @@ class MyProfileScreen extends StatelessWidget {
             ),
           ),
         _completeCard(context, me, () => go(const EditProfileScreen())),
+        ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('View as'), subtitle: const Text('Preview your default privacy settings'), onTap: () async {
+          final contact = await showModalBottomSheet<bool>(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(title: const Text('Contact'), onTap: () => Navigator.pop(ctx, true)),
+            ListTile(title: const Text('Non-contact'), onTap: () => Navigator.pop(ctx, false)),
+          ])));
+          if (contact == null || !context.mounted) return;
+          final p = me.privacy;
+          if (p == null) { showInfo(context, 'Privacy settings unavailable'); return; }
+          bool visible(String k) => p[k] == 'everyone' || (contact && p[k] == 'contacts');
+          await showDialog<void>(context: context, builder: (ctx) => AlertDialog(title: Text(contact ? 'Contact view' : 'Non-contact view'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Avatar(id: me.id, name: me.name, url: visible('avatar') ? me.avatarAbsolute : null, size: 64),
+            Text(me.name), if ((me.username ?? '').isNotEmpty) Text('@${me.username}'),
+            if (visible('bio') && me.bio.isNotEmpty) Text(me.bio),
+            if (visible('phone') && (me.phone ?? '').isNotEmpty) Text(me.phone!),
+            if (visible('birthday') && me.birthday != null) Text(me.birthday!.label),
+            Text(visible('last_seen') ? 'Last seen visible' : 'Exact last seen hidden'),
+            const SizedBox(height: 12), const Text('Individual privacy exceptions can change this view.'),
+          ])), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))]));
+        }),
         // contact details: one slim line each
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
