@@ -137,8 +137,8 @@ class SettingsGroup extends StatelessWidget {
         Material(
           color: Theme.of(context).colorScheme.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: dark ? BorderSide(color: Colors.white.withValues(alpha: 0.05)) : BorderSide.none,
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.08) : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(children: rows),
@@ -198,7 +198,7 @@ class SettingsTile extends StatelessWidget {
                 ),
             ]),
           ),
-          if (trailing != null) Padding(padding: const EdgeInsets.only(left: 8), child: Text(trailing!, style: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant))),
+          if (trailing != null) Flexible(child: Padding(padding: const EdgeInsets.only(left: 8), child: Text(trailing!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant)))),
           if (trailingWidget != null) Padding(padding: const EdgeInsets.only(left: 8), child: trailingWidget!),
           if (onTap != null && !danger && trailingWidget == null) Icon(Icons.chevron_right_rounded, size: 21, color: scheme.onSurfaceVariant.withValues(alpha: 0.45)),
         ]),
@@ -408,12 +408,13 @@ class ProfileHero extends StatelessWidget {
           ],
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 18),
-            Row(children: [
-              for (var i = 0; i < actions.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8),
-                Expanded(child: actions[i]),
-              ],
-            ]),
+            LayoutBuilder(builder: (context, box) {
+              final columns = math.min(actions.length, math.max(1, (box.maxWidth / 78).floor()));
+              final width = (box.maxWidth - (columns - 1) * 8) / columns;
+              return Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+                for (final action in actions) SizedBox(width: width, child: action),
+              ]);
+            }),
           ],
         ]),
       ),

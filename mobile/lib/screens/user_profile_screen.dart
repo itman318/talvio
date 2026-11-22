@@ -129,9 +129,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final other = u != null && !u.deleted && u.id != myId;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white, // over the cover banner
-        systemOverlayStyle: SystemUiOverlayStyle.light,
+        backgroundColor: u == null ? Theme.of(context).colorScheme.surface : Colors.transparent,
+        foregroundColor: u == null ? Theme.of(context).colorScheme.onSurface : Colors.white,
+        systemOverlayStyle: u == null ? null : SystemUiOverlayStyle.light,
       ),
       extendBodyBehindAppBar: true,
       body: u == null

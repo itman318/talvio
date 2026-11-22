@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Tavi — Hushavia's own mascot: a round, fluffy little night-bird in the app's aurora colours.
+/// Hushi — Hushavia's own purple penguin. The Tavi identifiers remain for sticker compatibility.
 /// Drawn in code (sharp at any size, tiny download) and animated: blinks, breathes, waves,
 /// hides its eyes on password screens, searches with a magnifier, sleeps, celebrates…
 enum TaviPose {
@@ -67,6 +67,15 @@ class _TaviMascotState extends State<TaviMascot> with TickerProviderStateMixin {
   late final AnimationController _loop; // endless motion (breathing, waving, floating things)
   late final AnimationController _blend; // smooth change between poses (wings move into place)
   TaviPose _from = TaviPose.idle;
+  bool _reduceMotion = false;
+
+  void _syncMotion() {
+    if (widget.animate && !_reduceMotion) {
+      if (!_loop.isAnimating) _loop.repeat();
+    } else {
+      _loop.stop();
+    }
+  }
 
   @override
   void initState() {
@@ -74,7 +83,13 @@ class _TaviMascotState extends State<TaviMascot> with TickerProviderStateMixin {
     _loop = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600));
     _blend = AnimationController(vsync: this, duration: const Duration(milliseconds: 420), value: 1);
     _from = widget.pose;
-    if (widget.animate) _loop.repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _syncMotion();
   }
 
   @override
@@ -82,10 +97,13 @@ class _TaviMascotState extends State<TaviMascot> with TickerProviderStateMixin {
     super.didUpdateWidget(old);
     if (old.pose != widget.pose) {
       _from = old.pose;
-      _blend.forward(from: 0);
+      if (widget.animate && !_reduceMotion) {
+        _blend.forward(from: 0);
+      } else {
+        _blend.value = 1;
+      }
     }
-    if (widget.animate && !_loop.isAnimating) _loop.repeat();
-    if (!widget.animate && _loop.isAnimating) _loop.stop();
+    _syncMotion();
   }
 
   @override
@@ -97,6 +115,7 @@ class _TaviMascotState extends State<TaviMascot> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return RepaintBoundary(
       child: SizedBox.square(
         dimension: widget.size,
@@ -107,7 +126,7 @@ class _TaviMascotState extends State<TaviMascot> with TickerProviderStateMixin {
               pose: widget.pose,
               from: _from,
               blend: Curves.easeOutBack.transform(_blend.value).clamp(0.0, 1.1),
-              t: _loop.value,
+              t: reducedMotion || !widget.animate ? 0 : _loop.value,
             ),
           ),
         ),
@@ -148,17 +167,16 @@ class _TaviPainter extends CustomPainter {
   final double t;
 
   // palette
-  static const _bodyLight = Color(0xFFFFB08A);
-  static const _bodyMid = Color(0xFF6D4AFF);
-  static const _bodyDark = Color(0xFF7B4FE0);
-  static const _wingA = Color(0xFFB65BE8);
-  static const _wingB = Color(0xFF5B3FC8);
-  static const _belly = Color(0xFFFFF4EA);
-  static const _bellyShade = Color(0xFFFBDCCB);
-  static const _disc = Color(0xFFFFE6EE);
+  static const _bodyLight = Color(0xFF72559D);
+  static const _bodyMid = Color(0xFF49336F);
+  static const _bodyDark = Color(0xFF30234F);
+  static const _wingA = Color(0xFF594080);
+  static const _wingB = Color(0xFF392657);
+  static const _belly = Color(0xFFFFF5E8);
+  static const _bellyShade = Color(0xFFEBDCD6);
   static const _ink = Color(0xFF1C1836);
-  static const _beak = Color(0xFFFFB534);
-  static const _beakDark = Color(0xFFF08A1C);
+  static const _beak = Color(0xFFFFA13A);
+  static const _beakDark = Color(0xFFE96925);
 
   double get _wave => math.sin(t * 2 * math.pi);
 
@@ -254,7 +272,6 @@ class _TaviPainter extends CustomPainter {
         break;
     }
 
-    _shadow(canvas, bob);
     canvas.save();
     canvas.translate(50, 92);
     canvas.rotate(tilt);
@@ -280,7 +297,10 @@ class _TaviPainter extends CustomPainter {
     if (pose == TaviPose.coffee) _cup(canvas);
     if (pose == TaviPose.music) _headphones(canvas);
     if (wingsInFront) _wingsPaint(canvas, wings);
-    if (pose == TaviPose.search) _magnifier(canvas);
+    if (pose == TaviPose.search) {
+      _contactsBook(canvas);
+      _magnifier(canvas);
+    }
     if (pose == TaviPose.cool) _sunglasses(canvas);
     canvas.restore();
 
@@ -320,35 +340,26 @@ class _TaviPainter extends CustomPainter {
   }
 
   // ------------------------------------------------------------------ body parts
-  void _shadow(Canvas c, double bob) {
-    final w = 44 - bob * 1.2;
-    c.drawOval(
-      Rect.fromCenter(center: const Offset(50, 95), width: w, height: 6),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.16)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2),
-    );
-  }
-
   void _feet(Canvas c) {
     final p = Paint()..shader = const LinearGradient(colors: [_beak, _beakDark], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(const Rect.fromLTWH(36, 86, 28, 8));
     for (final x in [42.0, 58.0]) {
-      final r = RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, 90.5), width: 10, height: 5.5), const Radius.circular(3));
+      final r = RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, 90.5), width: 15, height: 8), const Radius.circular(4));
       c.drawRRect(r, p);
     }
   }
 
   void _body(Canvas c) {
-    const rect = Rect.fromLTWH(20, 26, 60, 66);
+    const rect = Rect.fromLTWH(16, 19, 68, 73);
     final body = Path()
       // a soft egg shape: wider at the bottom
-      ..moveTo(50, 26)
-      ..cubicTo(70, 26, 81, 44, 81, 62)
-      ..cubicTo(81, 80, 68, 92, 50, 92)
-      ..cubicTo(32, 92, 19, 80, 19, 62)
-      ..cubicTo(19, 44, 30, 26, 50, 26)
+      ..moveTo(50, 19)
+      ..cubicTo(74, 19, 84, 37, 84, 51)
+      ..cubicTo(84, 66, 76, 67, 78, 74)
+      ..cubicTo(83, 90, 67, 92, 50, 92)
+      ..cubicTo(33, 92, 17, 90, 22, 74)
+      ..cubicTo(24, 67, 16, 66, 16, 51)
+      ..cubicTo(16, 37, 26, 19, 50, 19)
       ..close();
-    c.drawShadow(body, Colors.black, 3, false);
     c.drawPath(
       body,
       Paint()
@@ -359,29 +370,13 @@ class _TaviPainter extends CustomPainter {
           stops: [0.0, 0.48, 1.0],
         ).createShader(rect),
     );
-    // fluffy feather marks
-    final feather = Paint()
-      ..color = Colors.white.withValues(alpha: 0.13)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1
-      ..strokeCap = StrokeCap.round;
-    for (final o in const [Offset(30, 46), Offset(70, 46), Offset(26, 58), Offset(74, 58), Offset(34, 38), Offset(66, 38)]) {
-      c.drawArc(Rect.fromCenter(center: o, width: 6, height: 4), 0.3, 2.4, false, feather);
-    }
+    c.drawPath(body, Paint()..color = _bodyDark..style = PaintingStyle.stroke..strokeWidth = 1.2);
     // belly
     final belly = Path()..addOval(Rect.fromCenter(center: const Offset(50, 72), width: 38, height: 34));
     c.drawPath(
       belly,
       Paint()..shader = const RadialGradient(center: Alignment(0, -0.5), radius: 0.9, colors: [_belly, _bellyShade]).createShader(const Rect.fromLTWH(31, 55, 38, 34)),
     );
-    final bellyMark = Paint()
-      ..color = _bellyShade
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-    for (final o in const [Offset(44, 68), Offset(56, 68), Offset(50, 75), Offset(44, 81), Offset(56, 81)]) {
-      c.drawArc(Rect.fromCenter(center: o, width: 5, height: 3.4), 0.4, 2.3, false, bellyMark);
-    }
     // gloss highlight
     c.drawOval(
       Rect.fromCenter(center: const Offset(36, 36), width: 14, height: 8),
@@ -396,12 +391,12 @@ class _TaviPainter extends CustomPainter {
     final p = Paint()..shader = const LinearGradient(colors: [_bodyLight, _bodyMid], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(const Rect.fromLTWH(40, 14, 20, 16));
     for (final (x, dir) in [(46.0, -1.0), (54.0, 1.0)]) {
       c.save();
-      c.translate(x, 28);
+      c.translate(x, 22);
       c.rotate(dir * 0.35 + sway);
       final f = Path()
         ..moveTo(0, 0)
-        ..quadraticBezierTo(-4, -8, dir * 1.5, -13)
-        ..quadraticBezierTo(4, -7, 0, 0)
+      ..cubicTo(-8, -7, -4, -15, dir * 3, -14)
+      ..cubicTo(8, -13, 7, -5, 0, 0)
         ..close();
       c.drawPath(f, p);
       c.restore();
@@ -418,10 +413,15 @@ class _TaviPainter extends CustomPainter {
   }
 
   void _face(Canvas c) {
-    // facial discs (owl-like)
-    final disc = Paint()..shader = const RadialGradient(colors: [_disc, Color(0xFFFFC9D9)], stops: [0.6, 1]).createShader(const Rect.fromLTWH(26, 34, 48, 28));
-    c.drawOval(Rect.fromCenter(center: const Offset(39.5, 48), width: 22, height: 21), disc);
-    c.drawOval(Rect.fromCenter(center: const Offset(60.5, 48), width: 22, height: 21), disc);
+    // Hushi's signature creamy heart-shaped face, shared across every pose.
+    final face = Path()
+      ..moveTo(50, 39)
+      ..cubicTo(39, 23, 23, 32, 23, 49)
+      ..cubicTo(23, 66, 37, 70, 50, 70)
+      ..cubicTo(63, 70, 77, 66, 77, 49)
+      ..cubicTo(77, 32, 61, 23, 50, 39)
+      ..close();
+    c.drawPath(face, Paint()..shader = const LinearGradient(colors: [_belly, _bellyShade], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(const Rect.fromLTWH(23, 30, 54, 40)));
 
     // where the eyes look
     var look = Offset.zero;
@@ -527,8 +527,7 @@ class _TaviPainter extends CustomPainter {
       c.drawPath(path, p);
       return;
     }
-    // white
-    c.drawOval(Rect.fromCenter(center: center, width: big ? 18 : 15, height: big ? 19 : 16), Paint()..color = Colors.white);
+    // Simple dark oval eyes, readable at small sticker sizes.
     if (big) {
       // tiny surprised pupils
       final iris = center + look;
@@ -536,17 +535,10 @@ class _TaviPainter extends CustomPainter {
       c.drawCircle(iris + const Offset(-1.2, -1.3), 1.2, Paint()..color = Colors.white);
       return;
     }
-    // iris with a warm ring
     final iris = center + look;
-    c.drawCircle(iris, 6.2, Paint()..shader = const RadialGradient(colors: [Color(0xFF3A2F7A), _ink], stops: [0.3, 1]).createShader(Rect.fromCircle(center: iris, radius: 6.2)));
-    c.drawCircle(iris, 6.2, Paint()
-      ..color = const Color(0xFFFFB534).withValues(alpha: 0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9);
-    c.drawCircle(iris, 3, Paint()..color = Colors.black);
+    c.drawOval(Rect.fromCenter(center: iris, width: 8.5, height: 12.5), Paint()..color = _ink);
     // catch-lights: what makes it look alive
     c.drawCircle(iris + const Offset(-2.2, -2.4), 1.9, Paint()..color = Colors.white);
-    c.drawCircle(iris + const Offset(2.1, 2.0), 0.9, Paint()..color = Colors.white.withValues(alpha: 0.85));
   }
 
   void _wingsPaint(Canvas c, _Wings w) {
@@ -566,24 +558,30 @@ class _TaviPainter extends CustomPainter {
       ..cubicTo(d * 2, 21, d * -2, 20, d * -3, 16)
       ..cubicTo(d * -5, 8, d * -5, -5, 0, -6)
       ..close();
-    c.drawShadow(path, Colors.black, 1.6, false);
     c.drawPath(
       path,
       Paint()..shader = LinearGradient(colors: const [_wingA, _wingB], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(const Rect.fromLTWH(-10, -6, 20, 26)),
     );
-    // feather lines
-    final p = Paint()
-      ..color = Colors.white.withValues(alpha: 0.22)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.9
-      ..strokeCap = StrokeCap.round;
-    for (final y in [6.0, 10.5, 15.0]) {
-      c.drawLine(Offset(d * -1.5, y), Offset(d * 3.5, y - 2.5), p);
-    }
     c.restore();
   }
 
   // ------------------------------------------------------------------ props
+  void _contactsBook(Canvas c) {
+    final book = Path()
+      ..moveTo(30, 68)
+      ..quadraticBezierTo(40, 65, 50, 71)
+      ..quadraticBezierTo(60, 65, 72, 68)
+      ..lineTo(69, 85)
+      ..quadraticBezierTo(59, 83, 50, 89)
+      ..quadraticBezierTo(40, 83, 29, 85)
+      ..close();
+    c.drawPath(book, Paint()..color = const Color(0xFF18A9A4));
+    c.drawPath(book, Paint()..color = const Color(0xFF135B63)..style = PaintingStyle.stroke..strokeWidth = 1.2);
+    c.drawLine(const Offset(50, 71), const Offset(50, 89), Paint()..color = const Color(0xFF135B63)..strokeWidth = 1.2);
+    c.drawCircle(const Offset(60, 74), 2.4, Paint()..color = _belly);
+    c.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(56, 77, 8, 5), const Radius.circular(2)), Paint()..color = _belly);
+  }
+
   void _magnifier(Canvas c) {
     final sweep = 5 * math.sin(t * 2 * math.pi);
     final center = Offset(72 + sweep * 0.4, 44 + sweep * 0.2);
@@ -899,26 +897,8 @@ class AppMascot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = art;
-    final animate = !MediaQuery.disableAnimationsOf(context);
-    if (name == null || !animate) {
-      return TaviMascot(pose: pose, size: size, animate: animate);
-    }
-    return SizedBox.square(
-      dimension: size,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        transitionBuilder: (c, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.92, end: 1.0).animate(a), child: c)),
-        child: Image.asset(
-          'assets/mascot/$name.webp',
-          key: ValueKey(name),
-          width: size,
-          height: size,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-          errorBuilder: (_, __, ___) => TaviMascot(pose: pose, size: size),
-        ),
-      ),
-    );
+    // Use the same fully animated Hushi on every screen, including callers with
+    // legacy artwork names. Do not mix in the old static mascot illustrations.
+    return TaviMascot(pose: pose, size: size, animate: !MediaQuery.disableAnimationsOf(context));
   }
 }

@@ -916,15 +916,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
                 child: Text('Share', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               ),
-              // Row-major categories, four readable columns; no hidden sideways actions.
+              // Two compact rows; narrow screens can scroll sideways rather than clipping labels.
               LayoutBuilder(builder: (ctx2, box) {
-                final columns = box.maxWidth >= 320 ? 4 : 3;
-                return ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.48),
+                final columns = (items.length + 1) ~/ 2;
+                final width = box.maxWidth < columns * 48.0 ? columns * 48.0 : box.maxWidth;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: width,
+                    height: 144,
                   child: GridView(
-                    shrinkWrap: true,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisSpacing: 8, crossAxisSpacing: 4, mainAxisExtent: 88),
-                    physics: const ClampingScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisSpacing: 4, crossAxisSpacing: 2, mainAxisExtent: 70),
+                    physics: const NeverScrollableScrollPhysics(),
                     children: [
                       for (final (key, icon, label, colors) in items)
                         InkWell(
@@ -935,24 +939,26 @@ class _ChatScreenState extends State<ChatScreen> {
                           },
                           child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
                             Container(
-                              width: 50,
-                              height: 50,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(17),
+                                borderRadius: BorderRadius.circular(13),
                                 gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                                boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
+                                boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.19), blurRadius: 5, offset: const Offset(0, 2))],
                               ),
-                              child: Icon(icon, color: Colors.white, size: 24),
+                              child: Icon(icon, color: Colors.white, size: 21),
                             ),
-                            const SizedBox(height: 7),
+                            const SizedBox(height: 4),
                             Text(label,
-                                maxLines: 1,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.1),
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                style: const TextStyle(fontSize: 10, height: 1.05, fontWeight: FontWeight.w600)),
                           ]),
                         ),
                     ],
+                  ),
                   ),
                 );
               }),
@@ -960,7 +966,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         );
-    if (choice == null) return;
+    if (choice == null || !mounted) return;
     if (choice == 'checklist') {
       if (!mounted) return;
       final text = await buildChecklist(context);
@@ -2893,8 +2899,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final iconColor = dark ? Colors.white70 : Brand.muted;
     return GlassPanel(
       radius: 26,
-      ring: false,
-      opacity: 0.82, // nearly solid: text stays easy to read over any wallpaper
+      ring: true,
+      opacity: 0.96, // readable even on busy or dark wallpapers
       child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 50),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -2961,7 +2967,7 @@ class _ChatScreenState extends State<ChatScreen> {
             width: 38,
             height: 50,
             child: IconButton(
-              tooltip: 'Attach: camera, gallery, files…',
+              tooltip: 'Share media, audio and more',
               padding: EdgeInsets.zero,
               icon: Transform.rotate(angle: 0.78, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 22)),
               onPressed: () => _attach(),
@@ -3366,7 +3372,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         ]),
                       ),
                     ),
-                    IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => setState(() => _quote = null)),
+                    IconButton(tooltip: 'Cancel private reply', icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => setState(() => _quote = null)),
                   ]),
                 ),
               ),
