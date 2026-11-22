@@ -1,13 +1,19 @@
 'use strict';
 
-/**
- * First `n` characters of a text without cutting an emoji in half.
- * (String.slice counts UTF-16 units: cutting inside an emoji leaves half of it, which apps show as "�".)
- */
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** First `n` code points, without splitting an emoji sequence or an accented character. */
 function cut(s, n) {
   const str = String(s || '');
   if (str.length <= n) return str;
-  return Array.from(str).slice(0, n).join('');
+  let remaining = n;
+  let out = '';
+  for (const { segment } of segmenter.segment(str)) {
+    remaining -= Array.from(segment).length;
+    if (remaining < 0) break;
+    out += segment;
+  }
+  return out;
 }
 
 module.exports = { cut };
