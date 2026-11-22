@@ -132,8 +132,9 @@ async function serializeRows(viewerId, rows) {
     : [];
   const replyMap = new Map(replies.map((r) => [r.id, r]));
 
-  // replies show a small picture of the photo / video / sticker they answer (never of a view-once one)
-  const REPLY_THUMB = ['image', 'video', 'gif', 'sticker', 'video_note'];
+  // Replies include safe media metadata so audio files can be identified accurately.
+  // Never include deleted or view-once media.
+  const REPLY_THUMB = ['image', 'video', 'gif', 'sticker', 'video_note', 'file'];
   const replyMedia = (r) => (r && !r.deleted_at && r.media_id && REPLY_THUMB.includes(r.type) && !(r.meta && r.meta.view_once) ? r.media_id : null);
   const mediaIds = [...new Set([...rows.map((r) => r.media_id), ...replies.map(replyMedia)].filter(Boolean))];
   const medias = mediaIds.length ? await db.many('SELECT * FROM media WHERE id = ANY($1::bigint[])', [mediaIds]) : [];

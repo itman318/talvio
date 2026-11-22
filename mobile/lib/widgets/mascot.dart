@@ -886,8 +886,8 @@ class TaviEmptyState extends StatelessWidget {
   }
 }
 
-/// The Hushavia duck, the app's illustrated mascot (animated WebP art in assets/mascot) for screens:
-/// password, empty lists, code sent, success… Tavi stays for the stickers people send.
+/// Hushavia's contextual animated mascot. Each pose has its own expression, props and
+/// motion; explicit illustrated artwork remains available for dedicated screens.
 class AppMascot extends StatelessWidget {
   const AppMascot({super.key, required this.pose, this.size = 150, this.art});
   final TaviPose pose;
@@ -897,19 +897,13 @@ class AppMascot extends StatelessWidget {
   /// delete, contacts, settings, secure.
   final String? art;
 
-  static String assetFor(TaviPose p) => switch (p) {
-        TaviPose.hideEyes => 'hide',
-        TaviPose.peek || TaviPose.search || TaviPose.shocked => 'search',
-        TaviPose.mail || TaviPose.wave || TaviPose.idle || TaviPose.love => 'wave',
-        TaviPose.think || TaviPose.sad || TaviPose.angry || TaviPose.coffee => 'settings',
-        TaviPose.sleep => 'sleep',
-        TaviPose.celebrate || TaviPose.laugh || TaviPose.thumbsUp || TaviPose.music => 'cool',
-        TaviPose.cool => 'secure',
-      };
-
   @override
   Widget build(BuildContext context) {
-    final name = art ?? assetFor(pose);
+    final name = art;
+    final animate = !MediaQuery.disableAnimationsOf(context);
+    if (name == null || !animate) {
+      return TaviMascot(pose: pose, size: size, animate: animate);
+    }
     return SizedBox.square(
       dimension: size,
       child: AnimatedSwitcher(

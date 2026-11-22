@@ -835,7 +835,7 @@ class ChatStore extends ChangeNotifier {
       final pulse = Timer.periodic(const Duration(seconds: 3), (_) => sendTyping(local.chatId, action: action));
       try {
         final m = local.media!;
-        final media = await api.upload(local.localFilePath!, kind: local.uploadKind!, mime: m.mime, fields: {
+        final media = await api.upload(local.localFilePath!, kind: local.uploadKind!, mime: m.mime, filename: m.name.isEmpty ? null : m.name, fields: {
           if (m.duration != null) 'duration': '${m.duration}',
           if (m.width != null) 'width': '${m.width}',
           if (m.height != null) 'height': '${m.height}',

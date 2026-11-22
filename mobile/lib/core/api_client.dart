@@ -251,6 +251,7 @@ class ApiClient {
     String filePath, {
     required String kind,
     String? mime,
+    String? filename,
     Map<String, String> fields = const {},
     bool retry = true,
   }) async {
@@ -259,11 +260,11 @@ class ApiClient {
     req.fields['kind'] = kind;
     req.fields.addAll(fields);
     final type = mime ?? lookupMimeType(filePath) ?? 'application/octet-stream';
-    req.files.add(await http.MultipartFile.fromPath('file', filePath, contentType: MediaType.parse(type)));
+    req.files.add(await http.MultipartFile.fromPath('file', filePath, filename: filename, contentType: MediaType.parse(type)));
     final res = await _execute(() => _http.send(req), timeout: const Duration(minutes: 10));
     if (res.statusCode == 401 && retry && refreshToken != null) {
       await refreshTokens();
-      return upload(filePath, kind: kind, mime: mime, fields: fields, retry: false);
+      return upload(filePath, kind: kind, mime: mime, filename: filename, fields: fields, retry: false);
     }
     return Map<String, dynamic>.from(_decode(res) as Map);
   }
