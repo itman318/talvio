@@ -45,15 +45,7 @@ void main() {
 
   testWidgets('login → chats → send message → tabs', (t) async {
     app.main();
-    await pumpUntil(t, find.text('Phone number'), seconds: 60, what: 'login screen (phone first)');
-    // the email option shows once the server's settings arrive
-    // below "Next" (the list builds it once scrolled into view, e.g. with the keyboard open)
-    FocusManager.instance.primaryFocus?.unfocus();
-    await settle(t, 800);
-    await t.scrollUntilVisible(find.text('Continue with email'), 150, scrollable: find.byType(Scrollable).first);
-    await t.tap(find.text('Continue with email'));
-    await settle(t, 600);
-    await pumpUntil(t, find.text('Email address'), what: 'email login');
+    await pumpUntil(t, find.text('Email address'), seconds: 60, what: 'email-first login screen');
 
     await t.enterText(find.widgetWithText(TextField, 'Email address'), email);
     await t.testTextInput.receiveAction(TextInputAction.go); // keyboard "Go" (the button can be under the keyboard)
@@ -178,7 +170,7 @@ void main() {
     await t.tap(find.text('Log out'));
     await settle(t, 800);
     await t.tap(find.text('Log out').last);
-    await pumpUntil(t, find.byKey(const ValueKey('phone-field')), what: 'login screen after logout');
+    await pumpUntil(t, find.byKey(const ValueKey('email-field')), what: 'login screen after logout');
     await snap(t, 'logged-out');
   });
 }
