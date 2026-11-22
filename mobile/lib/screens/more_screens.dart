@@ -648,7 +648,8 @@ class _StorageScreenState extends State<StorageScreen> {
   }
 
   Future<void> _clear() async {
-    if (!await confirm(context, 'Clear media cache?', 'Photos, videos and files will download again when you open them.', ok: 'Clear')) return;
+    final bytes = await context.read<AppServices>().media.sizeBytes();
+    if (!mounted || !await confirm(context, 'Remove downloaded copies?', 'Free up approximately ${fileSize(bytes)} on this phone. Messages stay in your chats. Media can download again when opened.', ok: 'Remove copies')) return;
     if (!mounted) return;
     await context.read<AppServices>().media.clear();
     await _measure();
