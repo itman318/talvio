@@ -31,7 +31,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
   final _number = TextEditingController();
   final _email = TextEditingController();
   bool _busy = false;
-  bool? _useEmail; // null → phone first (email if the server only allows email)
+  bool? _useEmail; // null → email first when available
   bool _smsUnavailable = false;
   List<LocalPasskey> _passkeys = const [];
 
@@ -108,7 +108,8 @@ class _PhoneScreenState extends State<PhoneScreen> {
     final reason = auth.logoutReason;
     final canEmail = auth.emailLoginEnabled;
     final canPhone = auth.phoneLoginEnabled || !canEmail;
-    final email = !canPhone || (canEmail && (_useEmail ?? false));
+    final smsAvailable = auth.appConfig['sms_available'] == true;
+    final email = !canPhone || (canEmail && (_useEmail ?? true));
     final dark = Theme.of(context).brightness == Brightness.dark;
     InputDecoration deco(String label, {String? hint, Widget? prefix}) => InputDecoration(
           labelText: label,
@@ -154,10 +155,22 @@ class _PhoneScreenState extends State<PhoneScreen> {
                 textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              email ? 'We’ll email you a 6-digit code to log in.' : 'Enter your number with country code. We’ll send you a verification code.',
+              email ? 'We’ll email you a 6-digit code to log in.' : smsAvailable ? 'Enter your number with country code. We’ll send you a verification code.' : 'Already signed in on another device? You can receive a code in Hushavia there.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4),
             ),
+            if (email && !smsAvailable) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: Brand.primary.withAlpha(18), borderRadius: BorderRadius.circular(14)),
+                child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.info_outline_rounded, color: Brand.primary),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('SMS verification is currently unavailable in your country. Please continue with your email address.')),
+                ]),
+              ),
+            ],
             if (reason != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -211,7 +224,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
             AnimatedSize(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              child: !email && _smsUnavailable
+              child: !email && canEmail && (_smsUnavailable || !smsAvailable)
                   ? Padding(
                       padding: const EdgeInsets.only(top: 16),
                       child: Container(
@@ -260,7 +273,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
               TextButton.icon(
                 onPressed: _busy ? null : () => email ? setState(() => _useEmail = false) : _switchToEmail(),
                 icon: Icon(email ? Icons.phone_iphone_rounded : Icons.alternate_email_rounded),
-                label: Text(email ? 'Use phone number instead' : 'Continue with email'),
+                label: Text(email ? (smsAvailable ? 'Use phone number instead' : 'Use existing phone account') : 'Continue with email'),
               ),
             ],
             for (final p in _passkeys) ...[
