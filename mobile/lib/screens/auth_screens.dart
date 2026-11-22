@@ -325,6 +325,10 @@ class _OtpScreenState extends State<OtpScreen> {
   String? _devCode;
   Timer? _timer;
   late bool _inApp;
+  bool _sending = false;
+  bool _sendFailed = false;
+  bool _retryFallback = false;
+  String get _masked => widget.phone.replaceFirstMapped(RegExp(r'^([^@])[^@]*@'), (m) => '${m[1]}•••@');
 
   @override
   void initState() {
@@ -385,6 +389,8 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _resend({bool byFallback = false}) async {
+    if (_sending) return;
+    setState(() { _sending = true; _sendFailed = false; _retryFallback = byFallback; });
     final auth = context.read<AuthState>();
     try {
       final r = widget.isEmail
@@ -398,7 +404,9 @@ class _OtpScreenState extends State<OtpScreen> {
       _startTimer();
       showInfo(context, _inApp ? 'A new code was sent to your Hushavia app' : (widget.isEmail ? 'Code sent to your email' : 'Code sent by SMS'));
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted) setState(() => _sendFailed = true);
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -413,6 +421,9 @@ class _OtpScreenState extends State<OtpScreen> {
           const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
+          if (widget.isEmail) TextButton(onPressed: _sending ? null : () => Navigator.maybePop(context), child: const Text('Change email')),
+          if (_sendFailed) TextButton(onPressed: () => _resend(byFallback: _retryFallback), child: const Text('Could not send a code. Try again')),
+          if (_sending) const LinearProgressIndicator(),
           if (_inApp) ...[
             Container(
               padding: const EdgeInsets.all(14),
@@ -435,7 +446,7 @@ class _OtpScreenState extends State<OtpScreen> {
               label: Text(widget.isEmail ? 'Send the code by email instead' : 'Send the code by SMS instead'),
             ),
           ] else
-            Text(widget.isEmail ? 'We emailed a 6-digit code to ${widget.phone}' : 'We sent an SMS with a code to ${widget.phone}',
+            Text(widget.isEmail ? 'We emailed a 6-digit code to $_masked' : 'We sent an SMS with a code to ${widget.phone}',
                 textAlign: TextAlign.center),
           if (widget.isEmail && !_inApp) ...[
             const SizedBox(height: 6),
