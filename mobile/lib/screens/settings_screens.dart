@@ -244,8 +244,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: _closeSearch,
           ),
         ),
-        body: ListView(children: [
+        body: Column(children: [
           searchField,
+          Expanded(child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            children: [
           if (hits.isEmpty)
             const Padding(
               padding: EdgeInsets.all(40),
@@ -258,10 +261,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ]),
             )
           else
-            SettingsGroup(title: '${hits.length} result${hits.length == 1 ? '' : 's'}', children: [
-              for (final h in hits)
-                SettingsTile(icon: h.icon, color: h.color, title: h.title, subtitle: h.subtitle ?? h.section, trailing: h.trailing, onTap: h.onTap),
-            ]),
+            for (final section in hits.map((h) => h.section).toSet())
+              SettingsGroup(title: section, children: [
+                for (final h in hits.where((h) => h.section == section))
+                  SettingsTile(icon: h.icon, color: h.color, title: h.title, subtitle: h.subtitle, trailing: h.trailing, onTap: h.onTap),
+              ]),
+          ])),
         ]),
         ),
       );
