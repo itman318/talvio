@@ -649,7 +649,8 @@ class _StorageScreenState extends State<StorageScreen> {
 
   Future<void> _reviewChat() async {
     final store = context.read<ChatStore>();
-    final cache = context.read<AppServices>().media;
+    final services = context.read<AppServices>();
+    final cache = services.media;
     final chat = await showModalBottomSheet<Chat>(context: context, builder: (ctx) => SafeArea(child: ListView(children: [
       for (final c in store.mainChats) ListTile(title: Text(c.title), onTap: () => Navigator.pop(ctx, c)),
     ])));
@@ -657,7 +658,22 @@ class _StorageScreenState extends State<StorageScreen> {
     try {
       final files = <MediaInfo, int>{};
       final seen = <int>{};
-      for (final message in store.messagesOf(chat.id)) {
+      Stream<Message> history() async* {
+        yield* Stream.fromIterable(store.messagesOf(chat.id));
+        int? before;
+        while (mounted) {
+          final page = await services.api.get('/chats/${chat.id}/messages?limit=100${before == null ? '' : '&before=$before'}') as Map;
+          final rows = page['messages'] as List;
+          if (rows.isEmpty) break;
+          for (final row in rows) {
+            yield Message.fromJson(Map<String, dynamic>.from(row as Map));
+          }
+          final next = (rows.last['id'] as num).toInt();
+          if (page['has_more'] != true || (before != null && next >= before)) break;
+          before = next;
+        }
+      }
+      await for (final message in history()) {
         final media = message.media;
         if (media == null || !seen.add(media.id)) continue;
         final full = await cache.cached(media);
@@ -666,7 +682,7 @@ class _StorageScreenState extends State<StorageScreen> {
         if (bytes > 0) files[media] = bytes;
       }
       if (!mounted) return;
-      if (files.isEmpty) { showInfo(context, 'No downloaded copies found in loaded messages.'); return; }
+      if (files.isEmpty) { showInfo(context, 'No downloaded copies found for this chat.'); return; }
       final selected = <MediaInfo>{};
       final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, update) => AlertDialog(
         title: Text(chat.title), content: SizedBox(width: double.maxFinite, child: ListView(shrinkWrap: true, children: [
@@ -725,7 +741,7 @@ class _StorageScreenState extends State<StorageScreen> {
           trailing: TextButton(onPressed: (_size ?? 0) == 0 ? null : _clear, child: const Text('Clear')),
         ),
         const Divider(),
-        ListTile(leading: const Icon(Icons.folder_open), title: const Text('Review downloaded copies by chat'), subtitle: const Text('Select files from loaded messages'), onTap: _reviewChat),
+        ListTile(leading: const Icon(Icons.folder_open), title: const Text('Review downloaded copies by chat'), subtitle: const Text('Choose a chat to review files on this phone'), onTap: _reviewChat),
         for (final (net, title, icon) in const [
           ('wifi', 'When on Wi-Fi', Icons.wifi_rounded),
           ('mobile', 'When using mobile data', Icons.signal_cellular_alt_rounded),
