@@ -212,7 +212,7 @@ class ApiClient {
 
   Future<http.Response> _execute(Future<http.StreamedResponse> Function() send, {Duration timeout = const Duration(seconds: 30)}) async {
     try {
-      return await http.Response.fromStream(await send().timeout(timeout));
+      return await send().then(http.Response.fromStream).timeout(timeout);
     } on SocketException {
       _resetConnections();
       throw ApiException(0, 'network', 'No internet connection');
