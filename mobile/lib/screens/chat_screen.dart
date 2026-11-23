@@ -2895,12 +2895,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// The rounded message field: emoji / text / attach / camera, like modern messengers.
   Widget _inputPill(Chat chat) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final iconColor = dark ? Colors.white70 : Brand.muted;
-    return GlassPanel(
-      radius: 26,
-      ring: true,
-      opacity: 0.96, // readable even on busy or dark wallpapers
+    final colors = Theme.of(context).colorScheme;
+    final iconColor = colors.onSurfaceVariant;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: colors.outlineVariant),
+      ),
       child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 50),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -2945,7 +2947,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (_emojiOpen) setState(() => _emojiOpen = false);
               },
               decoration: InputDecoration(
-                hintText: chat.slowModeSec > 0 && !chat.isAdmin ? 'Message (slow mode: ${chat.slowModeSec}s)' : 'Message',
+                hintText: _editing != null ? 'Edit message' : _replyTo != null ? 'Write a reply' : chat.slowModeSec > 0 && !chat.isAdmin ? 'Message (slow mode: ${chat.slowModeSec}s)' : 'Message',
                 hintStyle: TextStyle(color: iconColor, fontSize: 16),
                 filled: false,
                 isDense: true,
@@ -2964,7 +2966,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         if (_editing == null)
           SizedBox(
-            width: 38,
+            width: 48,
             height: 50,
             child: IconButton(
               tooltip: 'Share media, audio and more',
