@@ -422,8 +422,8 @@ class _Header extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: main ? Colors.white : Colors.white.withValues(alpha: 0.12),
@@ -431,7 +431,7 @@ class _Header extends StatelessWidget {
                 ),
                 child: Icon(icon, size: 22, color: main ? const Color(0xFF151A2E) : Colors.white),
               ),
-              const SizedBox(height: 7),
+              const SizedBox(height: 4),
               Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.85))),
             ]),
           ),
@@ -533,13 +533,23 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(children: [
-                    _action(Icons.edit_rounded, 'Edit', onEdit, main: true),
-                    _action(Icons.link_rounded, 'Copy link', onShare),
-                    _action(Icons.qr_code_2_rounded, 'QR code', onQr),
-                    _action(Icons.add_reaction_outlined, 'Status', () => showEmojiStatusPicker(context)),
-                  ]),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(children: [
+                        _action(Icons.edit_rounded, 'Edit', onEdit, main: true),
+                        _action(Icons.link_rounded, 'Copy link', onShare),
+                        _action(Icons.qr_code_2_rounded, 'QR code', onQr),
+                        _action(Icons.add_reaction_outlined, 'Status', () => showEmojiStatusPicker(context)),
+                      ]),
+                    ),
+                  ),
                 ),
               ]),
             ),
