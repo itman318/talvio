@@ -64,6 +64,14 @@ class _PhoneScreenState extends State<PhoneScreen> {
     return '$c$n';
   }
 
+  @override
+  void dispose() {
+    _email.dispose();
+    _number.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
   static final _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$');
 
   Future<void> _submit(bool email) async {
@@ -351,12 +359,13 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _code.dispose();
     super.dispose();
   }
 
   Future<void> _verify() async {
     final code = _code.text.trim();
-    if (code.length < 4 || _busy) return;
+    if (code.length != 6 || _busy || _sending) return;
     setState(() => _busy = true);
     final auth = context.read<AuthState>();
     try {
@@ -389,7 +398,7 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Future<void> _resend({bool byFallback = false}) async {
-    if (_sending) return;
+    if (_sending || _busy) return;
     setState(() { _sending = true; _sendFailed = false; _retryFallback = byFallback; });
     final auth = context.read<AuthState>();
     try {
@@ -401,6 +410,7 @@ class _OtpScreenState extends State<OtpScreen> {
         _devCode = r['dev_code'] as String?;
         _inApp = r['delivery'] == 'app';
       });
+      _code.clear();
       _startTimer();
       showInfo(context, _inApp ? 'A new code was sent to your Hushavia app' : (widget.isEmail ? 'Code sent to your email' : 'Code sent by SMS'));
     } catch (e) {
@@ -421,8 +431,8 @@ class _OtpScreenState extends State<OtpScreen> {
           const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
-          if (widget.isEmail) TextButton(onPressed: _sending ? null : () => Navigator.maybePop(context), child: const Text('Change email')),
-          if (_sendFailed) TextButton(onPressed: () => _resend(byFallback: _retryFallback), child: const Text('Could not send a code. Try again')),
+          if (widget.isEmail) TextButton(onPressed: _sending || _busy ? null : () => Navigator.maybePop(context), child: const Text('Change email')),
+          if (_sendFailed) TextButton(onPressed: _busy || _sending ? null : () => _resend(byFallback: _retryFallback), child: const Text('Could not send a code. Try again')),
           if (_sending) const LinearProgressIndicator(),
           if (_inApp) ...[
             Container(
@@ -441,7 +451,7 @@ class _OtpScreenState extends State<OtpScreen> {
             ),
             const SizedBox(height: 4),
             TextButton.icon(
-              onPressed: () => _resend(byFallback: true),
+              onPressed: _busy || _sending ? null : () => _resend(byFallback: true),
               icon: Icon(widget.isEmail ? Icons.mail_outline_rounded : Icons.sms_outlined, size: 18),
               label: Text(widget.isEmail ? 'Send the code by email instead' : 'Send the code by SMS instead'),
             ),
@@ -459,6 +469,7 @@ class _OtpScreenState extends State<OtpScreen> {
           const SizedBox(height: 24),
           TextField(
             controller: _code,
+            enabled: !_busy && !_sending,
             autofocus: true,
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
@@ -472,13 +483,13 @@ class _OtpScreenState extends State<OtpScreen> {
           ),
           const SizedBox(height: 20),
           FilledButton(
-            onPressed: _busy ? null : _verify,
+            onPressed: _busy || _sending ? null : _verify,
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
             child: _busy ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Verify'),
           ),
           const SizedBox(height: 12),
           TextButton(
-            onPressed: _resendIn > 0 ? null : _resend,
+            onPressed: _busy || _sending || _resendIn > 0 ? null : _resend,
             child: Text(_resendIn > 0 ? 'Resend code in $_resendIn s' : 'Resend code'),
           ),
         ],
@@ -501,9 +512,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String? _avatarPath;
   bool _busy = false;
 
+  @override
+  void dispose() {
+    _first.dispose();
+    _last.dispose();
+    super.dispose();
+  }
+
   Future<void> _pick() async {
     final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
-    if (x != null) setState(() => _avatarPath = x.path);
+    if (mounted && x != null) setState(() => _avatarPath = x.path);
   }
 
   Future<void> _save() async {
