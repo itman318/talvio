@@ -487,12 +487,20 @@ router.post('/media/uploads', h(async (req, res) => {
   if (active.length >= 4) return res.status(429).json({ error: {code: 'upload_limit', message: 'Finish an existing upload first'} });
   const id = randomToken(24);
   const dir = path.join(config.uploadDir, new Date().toISOString().slice(0, 7).replace('-', '/'));
-  await fs.promises.mkdir(dir, {recursive: true});
   const name = path.basename(String(req.body.name || 'file'));
   const ext = path.extname(name).toLowerCase();
   const target = path.join(dir, randomToken(16) + (/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ''));
-  await fs.promises.writeFile(target, '', {flag: 'wx'});
-  uploadSessions.set(id, {owner, path: target, size, offset: 0, name, mime: String(req.body.mime || ''), fields: req.body.fields || {}, touched: Date.now()});
+  // Reserve the slot before either filesystem operation yields.
+  const session = {owner, path: target, size, offset: 0, name, mime: String(req.body.mime || ''), fields: req.body.fields || {}, touched: Date.now(), busy: true};
+  uploadSessions.set(id, session);
+  try {
+    await fs.promises.mkdir(dir, {recursive: true});
+    await fs.promises.writeFile(target, '', {flag: 'wx'});
+    session.busy = false;
+  } catch (err) {
+    uploadSessions.delete(id);
+    throw err;
+  }
   res.json({id});
 }));
 
