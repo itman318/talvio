@@ -466,6 +466,71 @@ const storage = multer.diskStorage({
   },
 });
 
+// Each session belongs to its authenticated uploader. Keep a short-lived receipt so
+// a lost response to the last chunk can be retried without creating another media row.
+const uploadSessions = new Map();
+const chunkTTL = 30 * 60 * 1000;
+setInterval(() => {
+  for (const [key, session] of uploadSessions) {
+    if (session.busy || Date.now() - session.touched < chunkTTL) continue;
+    uploadSessions.delete(key);
+    if (!session.result) fs.promises.unlink(session.path).catch(() => {});
+  }
+}, 60000).unref();
+
+router.post('/media/uploads', h(async (req, res) => {
+  const size = req.body.size;
+  const max = (await paymentService.limitsFor(req.userId)).upload_mb * 1024 * 1024;
+  if (!Number.isSafeInteger(size) || size <= 0 || size > max) throw badRequest('size', 'Invalid upload size');
+  const owner = String(req.userId);
+  const active = [...uploadSessions.values()].filter(s => s.owner === owner && !s.result);
+  if (active.length >= 4) return res.status(429).json({ error: {code: 'upload_limit', message: 'Finish an existing upload first'} });
+  const id = randomToken(24);
+  const dir = path.join(config.uploadDir, new Date().toISOString().slice(0, 7).replace('-', '/'));
+  await fs.promises.mkdir(dir, {recursive: true});
+  const name = path.basename(String(req.body.name || 'file'));
+  const ext = path.extname(name).toLowerCase();
+  const target = path.join(dir, randomToken(16) + (/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ''));
+  await fs.promises.writeFile(target, '', {flag: 'wx'});
+  uploadSessions.set(id, {owner, path: target, size, offset: 0, name, mime: String(req.body.mime || ''), fields: req.body.fields || {}, touched: Date.now()});
+  res.json({id});
+}));
+
+router.put('/media/uploads/:id', express.raw({type: 'application/octet-stream', limit: '512kb'}), h(async (req, res) => {
+  const s = uploadSessions.get(req.params.id);
+  if (!s || s.owner !== String(req.userId)) return res.sendStatus(404);
+  if (s.busy) return res.sendStatus(409);
+  s.touched = Date.now();
+  if (s.result) return res.json({offset: s.size, media: s.result});
+  const offset = Number(req.query.offset);
+  if (offset !== s.offset) return res.json({offset: s.offset});
+  const chunk = req.body;
+  if (!Buffer.isBuffer(chunk) || !chunk.length || offset + chunk.length > s.size) throw badRequest('chunk', 'Invalid upload chunk');
+  s.busy = true;
+  try {
+    const file = await fs.promises.open(s.path, 'r+');
+    try {
+      let written = 0;
+      while (written < chunk.length) {
+        const part = await file.write(chunk, written, chunk.length - written, offset + written);
+        if (!part.bytesWritten) throw new Error('Incomplete chunk write');
+        written += part.bytesWritten;
+      }
+    } finally { await file.close(); }
+    s.offset += chunk.length;
+    if (s.offset === s.size) {
+      try {
+        s.result = await mediaService.registerUpload(req.userId, {path: s.path, size: s.size, originalname: s.name, mimetype: s.mime}, s.fields);
+      } catch (err) {
+        uploadSessions.delete(req.params.id);
+        await fs.promises.unlink(s.path).catch(() => {});
+        throw err;
+      }
+    }
+    res.json({offset: s.offset, media: s.result});
+  } finally { s.busy = false; }
+}));
+
 router.post('/media', h(async (req, res, next) => {
   const maxMb = (await paymentService.limitsFor(req.userId)).upload_mb;
   multer({ storage, limits: { fileSize: maxMb * 1024 * 1024, files: 1, fields: 10 } }).single('file')(req, res, (err) => {
