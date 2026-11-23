@@ -647,6 +647,40 @@ class _StorageScreenState extends State<StorageScreen> {
     if (mounted) setState(() => _size = s);
   }
 
+  Future<void> _reviewChat() async {
+    final store = context.read<ChatStore>();
+    final cache = context.read<AppServices>().media;
+    final chat = await showModalBottomSheet<Chat>(context: context, builder: (ctx) => SafeArea(child: ListView(children: [
+      for (final c in store.mainChats) ListTile(title: Text(c.title), onTap: () => Navigator.pop(ctx, c)),
+    ])));
+    if (chat == null || !mounted) return;
+    try {
+      final files = <MediaInfo, int>{};
+      final seen = <int>{};
+      for (final message in store.messagesOf(chat.id)) {
+        final media = message.media;
+        if (media == null || !seen.add(media.id)) continue;
+        final full = await cache.cached(media);
+        final preview = await cache.cachedPreview(media);
+        final bytes = (full == null ? 0 : await full.length()) + (preview == null ? 0 : await preview.length());
+        if (bytes > 0) files[media] = bytes;
+      }
+      if (!mounted) return;
+      if (files.isEmpty) { showInfo(context, 'No downloaded copies found in loaded messages.'); return; }
+      final selected = <MediaInfo>{};
+      final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, update) => AlertDialog(
+        title: Text(chat.title), content: SizedBox(width: double.maxFinite, child: ListView(shrinkWrap: true, children: [
+          for (final entry in files.entries) CheckboxListTile(title: Text(entry.key.name), subtitle: Text(fileSize(entry.value)), value: selected.contains(entry.key), onChanged: (v) => update(() { if (v == true) { selected.add(entry.key); } else { selected.remove(entry.key); } })),
+        ])), actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: selected.isEmpty ? null : () => Navigator.pop(ctx, true), child: Text('Remove copies · ${fileSize(selected.fold<int>(0, (n, m) => n + files[m]!))}')),
+        ])));
+      if (ok != true || !mounted) return;
+      for (final media in selected) { await cache.remove(media); }
+      if (mounted) await _measure();
+    } catch (e) { if (mounted) showError(context, e); }
+  }
+
   Future<void> _clear() async {
     final bytes = await context.read<AppServices>().media.sizeBytes();
     if (!mounted || !await confirm(context, 'Remove downloaded copies?', 'Free up approximately ${fileSize(bytes)} on this phone. Messages stay in your chats. Media can download again when opened.', ok: 'Remove copies')) return;
@@ -691,6 +725,7 @@ class _StorageScreenState extends State<StorageScreen> {
           trailing: TextButton(onPressed: (_size ?? 0) == 0 ? null : _clear, child: const Text('Clear')),
         ),
         const Divider(),
+        ListTile(leading: const Icon(Icons.folder_open), title: const Text('Review downloaded copies by chat'), subtitle: const Text('Select files from loaded messages'), onTap: _reviewChat),
         for (final (net, title, icon) in const [
           ('wifi', 'When on Wi-Fi', Icons.wifi_rounded),
           ('mobile', 'When using mobile data', Icons.signal_cellular_alt_rounded),
