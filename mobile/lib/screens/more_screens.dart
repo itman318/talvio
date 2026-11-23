@@ -665,10 +665,13 @@ class _StorageScreenState extends State<StorageScreen> {
           final page = await services.api.get('/chats/${chat.id}/messages?limit=100${before == null ? '' : '&before=$before'}') as Map;
           final rows = page['messages'] as List;
           if (rows.isEmpty) break;
+          late int next;
           for (final row in rows) {
-            yield Message.fromJson(Map<String, dynamic>.from(row as Map));
+            if (!mounted) return;
+            final message = Message.fromJson(Map<String, dynamic>.from(row as Map));
+            next = message.id;
+            yield message;
           }
-          final next = (rows.last['id'] as num).toInt();
           if (page['has_more'] != true || (before != null && next >= before)) break;
           before = next;
         }
