@@ -255,6 +255,22 @@ class ApiClient {
     Map<String, String> fields = const {},
     bool retry = true,
   }) async {
+    final file = File(filePath);
+    final length = await file.length();
+    if (length > 512 * 1024) {
+      try {
+        final session = await post('/media/uploads', {
+          'size': length,
+          'name': filename ?? file.uri.pathSegments.last,
+          'mime': mime ?? lookupMimeType(filePath) ?? 'application/octet-stream',
+          'fields': {'kind': kind, ...fields},
+        }) as Map;
+        return await _sendChunks(file, length, session['id'] as String);
+      } on ApiException catch (e) {
+        // Keep uploads compatible with servers running the previous API.
+        if (e.status != 404) rethrow;
+      }
+    }
     final req = http.MultipartRequest('POST', uri('/media'));
     req.headers.addAll(authHeaders);
     req.fields['kind'] = kind;
@@ -267,6 +283,47 @@ class ApiClient {
       return upload(filePath, kind: kind, mime: mime, filename: filename, fields: fields, retry: false);
     }
     return Map<String, dynamic>.from(_decode(res) as Map);
+  }
+
+  Future<Map<String, dynamic>> _sendChunks(File file, int length, String id) async {
+    final input = await file.open();
+    try {
+      var offset = 0;
+      while (offset < length) {
+        await input.setPosition(offset);
+        final remaining = length - offset;
+        final bytes = await input.read(remaining < 524288 ? remaining : 524288);
+        if (bytes.isEmpty) throw const FileSystemException('File changed during upload');
+        for (var attempt = 0; ; attempt++) {
+          try {
+            await _freshen();
+            final req = http.Request('PUT', uri('/media/uploads/$id', {'offset': '$offset'}));
+            req.headers.addAll(authHeaders);
+            req.headers['Content-Type'] = 'application/octet-stream';
+            req.bodyBytes = bytes;
+            final response = await _execute(() => _http.send(req), timeout: const Duration(minutes: 2));
+            if (response.statusCode == 401 && attempt == 0 && refreshToken != null) {
+              await refreshTokens();
+              continue;
+            }
+            final body = _decode(response) as Map;
+            if (body['media'] is Map) return Map<String, dynamic>.from(body['media'] as Map);
+            final next = body['offset'];
+            if (next is! int || next <= offset || next >= length) {
+              throw ApiException(502, 'upload_offset', 'Unexpected upload position');
+            }
+            offset = next;
+            break;
+          } on ApiException catch (e) {
+            if (attempt >= 4 || !(e.isNetwork || e.status == 409 || e.status == 503)) rethrow;
+            await Future<void>.delayed(Duration(seconds: 1 << attempt));
+          }
+        }
+      }
+      throw ApiException(502, 'upload_incomplete', 'Upload could not be completed');
+    } finally {
+      await input.close();
+    }
   }
 
   /// Downloads a protected file (e.g. /api/media/12) to [target].
