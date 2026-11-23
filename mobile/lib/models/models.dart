@@ -165,6 +165,14 @@ class MediaInfo {
   /// Tiny base64 JPEG (≈40 px) sent inside the message: drawn blurred at once, before any download.
   final String? thumb;
 
+  bool get isAudio => mime.toLowerCase().startsWith('audio/') || const ['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.flac', '.wma', '.aiff'].any(name.toLowerCase().endsWith);
+
+  /// Providers sometimes return a generated cache ID rather than the track's title.
+  String get audioTitle {
+    final title = name.replaceFirst(RegExp(r'\.[A-Za-z0-9]{2,5}$'), '').trim();
+    return title.isEmpty || RegExp(r'^[a-fA-F0-9]{20,}$').hasMatch(title) ? 'Audio' : title;
+  }
+
   MediaInfo({
     required this.id,
     required this.kind,
@@ -501,7 +509,7 @@ class Message {
       case 'video_note':
         return '📹 Video message';
       case 'file':
-        return '📎 ${media?.name ?? 'File'}';
+        return media?.isAudio == true ? '🎵 ${media!.audioTitle}' : '📎 ${media?.name ?? 'File'}';
       case 'poll':
         return '📊 $text';
       case 'location':

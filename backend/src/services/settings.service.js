@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db');
+const config = require('../config');
 const { badRequest } = require('../utils/errors');
 
 /** Admin-editable settings with defaults and type rules. */
@@ -220,6 +221,7 @@ async function publicConfig() {
   return {
     registration_open: s.registration_open,
     login_methods: { email: s.login_email_enabled, phone: s.login_phone_enabled },
+    sms_available: config.sms.provider !== 'console',
     maintenance_mode: s.maintenance_mode,
     maintenance_message: s.maintenance_message,
     max_upload_mb: s.max_upload_mb,

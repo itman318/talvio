@@ -202,7 +202,7 @@ class _PackSheetState extends State<_PackSheet> {
     } else if (_tavi) {
       final plus = context.read<AuthState>().me?.limits?['exclusive_stickers'] == true;
       final list = taviStickers.where((t) => !t.$3 || plus).toList();
-      title = 'Tavi — animated';
+      title = 'Hushi — animated';
       body = grid(list.length, (i) => TaviMascot(pose: list[i].$1, size: 78), (i) => () {
             store.sendTavi(chatId, list[i].$1.name, list[i].$2);
             _sent();
@@ -624,7 +624,7 @@ class _StickerPanelState extends State<StickerPanel> {
       title = 'Pebo — animated';
     } else if (_sel == -2) {
       stickers = const [];
-      title = 'Tavi — animated';
+      title = 'Hushi — animated';
     } else if (_sel == -1 && _favs.isNotEmpty) {
       stickers = _favs;
       title = 'Favorites';
@@ -678,7 +678,7 @@ class _StickerPanelState extends State<StickerPanel> {
           ),
           packButton(
             selected: _sel == -2,
-            tooltip: 'Tavi (animated)',
+            tooltip: 'Hushi (animated)',
             onTap: () => setState(() => _sel = -2),
             child: const TaviMascot(pose: TaviPose.wave, size: 36, animate: false),
           ),
@@ -794,7 +794,7 @@ extension on _StickerPanelState {
           borderRadius: BorderRadius.circular(14),
           onTap: () {
             if (locked) {
-              showInfo(context, context.read<AuthState>().plusAvailable ? 'This Tavi sticker comes with Hushavia Plus ⭐' : 'This Tavi sticker comes with Hushavia Plus — coming soon ⭐');
+              showInfo(context, context.read<AuthState>().plusAvailable ? 'This Hushi sticker comes with Hushavia Plus ⭐' : 'This Hushi sticker comes with Hushavia Plus — coming soon ⭐');
               return;
             }
             HapticFeedback.selectionClick();

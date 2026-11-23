@@ -177,6 +177,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _q = '';
   bool _searchOpen = false;
 
+  void _closeSearch() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _searchOpen = false;
+      _search.clear();
+      _q = '';
+    });
+  }
+
   @override
   void dispose() {
     _search.dispose();
@@ -222,16 +231,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (q.isNotEmpty || _searchOpen) {
       final hits = items.where((i) => i.matches(q)).toList();
-      return Scaffold(
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _closeSearch();
+        },
+        child: Scaffold(
         appBar: AppBar(
           title: const Text('Search settings'),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => setState(() {
-              _searchOpen = false;
-              _search.clear();
-              _q = '';
-            }),
+            onPressed: _closeSearch,
           ),
         ),
         body: ListView(children: [
@@ -242,7 +252,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(children: [
                 Icon(Icons.search_off_rounded, size: 44, color: Brand.muted),
                 SizedBox(height: 10),
-                Text('Nothing found', textAlign: TextAlign.center, style: TextStyle(color: Brand.muted, fontWeight: FontWeight.w600)),
+                Text('Nothing found', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
+                SizedBox(height: 6),
+                Text('Try a different keyword, such as privacy or notifications.', textAlign: TextAlign.center),
               ]),
             )
           else
@@ -251,6 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SettingsTile(icon: h.icon, color: h.color, title: h.title, subtitle: h.subtitle ?? h.section, trailing: h.trailing, onTap: h.onTap),
             ]),
         ]),
+        ),
       );
     }
 
@@ -274,7 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => setState(() => _searchOpen = true),
                 child: const SizedBox(
-                  height: 42,
+                  height: 48,
                   child: Row(children: [
                     SizedBox(width: 12),
                     Icon(Icons.search_rounded, size: 20, color: Brand.muted),
@@ -311,19 +324,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ]),
                       const SizedBox(height: 3),
                       Text(
-                        [me.phone ?? me.email ?? '', if (me.username != null) '@${me.username}'].where((x) => x.isNotEmpty).join('  ·  '),
+                        (me.username ?? '').trim().isNotEmpty ? '@${me.username}' : [me.email, me.phone].whereType<String>().firstWhere((v) => v.trim().isNotEmpty, orElse: () => ''),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13.5),
                       ),
-                      if (plus) ...[
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(gradient: Brand.plusGradient, borderRadius: BorderRadius.circular(20)),
-                          child: const Text('PLUS', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-                        ),
-                      ],
                     ]),
                   ),
                 ]),
@@ -377,7 +382,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Text('Hushavia Plus', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                          Text(plus ? 'Active — thank you for your support' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
+                          Text(plus ? 'Manage your membership' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Brand.muted)),
                         ]),
                       ),
@@ -388,13 +393,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           // every section is one row here and a short page of its own; three small cards instead of one long list
-          for (final part in const [
-            ['Account', 'Coins & wallet'],
-            ['Notifications', 'Privacy & security', 'Chats', 'Data & connection'],
-            ['Extras', 'Help'],
+          for (final (heading, part) in const [
+            ('Your account', ['Account', 'Coins & wallet']),
+            ('Preferences', ['Notifications', 'Privacy & security', 'Chats', 'Data & connection']),
+            ('More from Hushavia', ['Extras', 'Help']),
           ])
             if (sections.any(part.contains))
-              SettingsGroup(children: [
+              SettingsGroup(title: heading, children: [
                 for (final sec in sections.where(part.contains))
                   () {
                     final of = items.where((i) => i.section == sec).toList();
@@ -415,7 +420,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               for (final sec in sections.where((x) => !const ['Account', 'Coins & wallet', 'Notifications', 'Privacy & security', 'Chats', 'Data & connection', 'Extras', 'Help'].contains(x)))
                 SettingsTile(icon: Icons.tune_rounded, color: Brand.muted, title: sec, onTap: () => go(_SectionScreen(section: sec))),
             ]),
-          SettingsGroup(children: [
+          SettingsGroup(title: 'Account actions', children: [
             SettingsTile(
               icon: Icons.logout_rounded,
               color: const Color(0xFF5E6B8C),

@@ -1,6 +1,5 @@
 # Builds the Hushavia Android app (APK) on every push to main, or by hand from the Actions tab.
-# Set the server address once: repo → Settings → Secrets and variables → Actions → Variables → API_BASE
-# (e.g. https://chat.yourdomain.com). Without it the APK points at the Android emulator (10.0.2.2:4000).
+# Production APKs use the verified Hushavia HTTPS endpoint.
 name: Android APK
 
 on:
@@ -140,6 +139,9 @@ jobs:
           set -o pipefail
           flutter test test/wallet_crypto_test.dart 2>&1 | tail -60 | tee ../ci-report/wallet-test.txt
 
+      - name: Audio attachment and reply tests
+        run: flutter test test/audio_reply_test.dart
+
       - name: Wallet against the live TRON network (read only)
         continue-on-error: true
         run: flutter test test/wallet_network_test.dart 2>&1 | tail -40
@@ -228,9 +230,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          # tidy the address: no spaces, no trailing "/" or "/32" (a network mask copied with the IP)
-          API="$(echo '${{ vars.API_BASE || 'http://10.0.2.2:4000' }}' | tr -d '[:space:]' | sed -E 's#/[0-9]{1,3}$##; s#/+$##')"
-          case "$API" in http://*|https://*) ;; *) API="http://$API" ;; esac
+          API='https://hushavia.com'
           echo "API_BASE=$API" >> "$GITHUB_ENV"
           # version number 10000+ (the 64-bit APK becomes 12000+): always above older builds, so it updates over them
           # every build has its own version: 1.1.<build> (shown in Settings, Devices and login codes)

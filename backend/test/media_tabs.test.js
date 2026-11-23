@@ -76,6 +76,12 @@ test('replies carry a small picture of the photo they answer (never of view-once
   const r = await messages.sendMessage(b, chat.id, { text: 'nice!', reply_to_id: photo.id });
   assert.equal(r.reply_to.type, 'image');
   assert.equal(r.reply_to.media.id, photo.media.id);
+  const audio = await media(a, 'file');
+  await db.query("UPDATE media SET mime = 'audio/mpeg', original_name = 'Track.mp3' WHERE id = $1", [audio.id]);
+  const song = await messages.sendMessage(a, chat.id, { type: 'file', media_id: audio.id });
+  const audioReply = await messages.sendMessage(b, chat.id, { text: 'Nice song', reply_to_id: song.id });
+  assert.equal(audioReply.reply_to.media.mime, 'audio/mpeg');
+  assert.equal(audioReply.reply_to.media.name, 'Track.mp3');
   const once = await messages.sendMessage(a, chat.id, { type: 'image', media_id: (await media(a, 'image')).id, view_once: true }).catch(() => null);
   if (once) {
     const r2 = await messages.sendMessage(b, chat.id, { text: 'hmm', reply_to_id: once.id });

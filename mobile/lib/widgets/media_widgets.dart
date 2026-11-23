@@ -776,10 +776,7 @@ class AudioFilePlayer extends StatelessWidget {
   final bool isMine;
 
   static bool isAudio(Message m) {
-    final md = m.media;
-    if (md == null || m.type != 'file') return false;
-    final n = md.name.toLowerCase();
-    return md.mime.startsWith('audio/') || ['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.opus', '.flac'].any(n.endsWith);
+    return m.type == 'file' && m.media?.isAudio == true;
   }
 
   @override
@@ -789,7 +786,7 @@ class AudioFilePlayer extends StatelessWidget {
     final mine = vp.isCurrent(message);
     final playing = mine && vp.playing;
     final loading = mine && vp.loading;
-    final name = md.name.isEmpty ? 'Audio' : md.name.replaceAll(RegExp(r'\.[A-Za-z0-9]{2,4}$'), '');
+    final name = md.audioTitle;
     final c = color;
     return SizedBox(
       width: 250,
@@ -998,20 +995,23 @@ class PlayedMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const teal = Color(0xFF12B89C);
+    final darkBubble = onDark || (color != null && !softMineOf(context));
+    final darkTheme = Theme.of(context).brightness == Brightness.dark;
+    final dark = darkBubble || (color == null && darkTheme);
+    final success = dark ? const Color(0xFFB8F7DE) : const Color(0xFF176B50);
     final label = played ? (video ? 'Watched' : 'Listened') : (video ? 'Not watched' : 'Not played');
     final icon = video ? (played ? Icons.visibility_rounded : Icons.visibility_outlined) : (played ? Icons.headphones_rounded : Icons.headset_off_rounded);
-    final fg = onDark ? Colors.white : (played ? (color == null ? teal : const Color(0xFF7DF3DB)) : (color ?? Brand.muted).withValues(alpha: 0.75));
+    final fg = played ? success : (onDark ? Colors.white70 : color ?? (darkTheme ? Colors.white70 : Brand.muted));
     return Tooltip(
       message: played ? (video ? 'They watched it' : 'They listened to it') : (video ? 'Not watched yet' : 'Not listened to yet'),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
         decoration: BoxDecoration(
-          color: onDark ? Colors.black.withValues(alpha: 0.5) : (played ? teal.withValues(alpha: color == null ? 0.14 : 0.22) : Colors.transparent),
+          color: onDark ? Colors.black.withValues(alpha: 0.65) : (played ? (dark ? const Color(0xFF174C40) : const Color(0xFFDDF4E8)) : Colors.transparent),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13, color: onDark && played ? const Color(0xFF7DF3DB) : fg),
+          Icon(icon, size: 13, color: fg),
           const SizedBox(width: 4),
           Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
         ]),

@@ -295,7 +295,7 @@ class MessageBubble extends StatelessWidget {
                       Text(m.replyTo!.senderName.isEmpty ? chat.title : m.replyTo!.senderName,
                           maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 12.5)),
                       Text(
-                        replyLabel(m.replyTo!.type, m.replyTo!.text, deleted: m.replyTo!.deleted),
+                        replyLabel(m.replyTo!.type, m.replyTo!.text, deleted: m.replyTo!.deleted, media: m.replyTo!.media),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 13.5, color: textColor.withAlpha(215)),
@@ -617,7 +617,7 @@ class MessageBubble extends StatelessWidget {
 }
 
 /// What a reply shows of the message it answers: its text, or "📷 Photo", "🎤 Voice message"…
-String replyLabel(String type, String text, {bool deleted = false}) {
+String replyLabel(String type, String text, {bool deleted = false, MediaInfo? media}) {
   if (deleted) return 'Deleted message';
   final t = taliToPlain(stripFormatting(wellFormed(text))).replaceAll('\n', ' ').trim();
   final kind = switch (type) {
@@ -627,7 +627,7 @@ String replyLabel(String type, String text, {bool deleted = false}) {
     'sticker' => 'Sticker',
     'voice' => '🎤 Voice message',
     'video_note' => '⏺ Video message',
-    'file' => '📄 File',
+    'file' => media?.isAudio == true ? '🎵 ${media!.audioTitle}' : '📄 File',
     'poll' => '📊 Poll',
     'location' => '📍 Location',
     'contact' => '👤 Contact',

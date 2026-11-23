@@ -240,9 +240,14 @@ cat > /etc/nginx/sites-available/hushavia <<'EOF'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name _;
+    server_name _ hushavia.com www.hushavia.com api.hushavia.com;
     client_max_body_size 2100m;
     keepalive_timeout 30s;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/hushavia-acme;
+        try_files $uri =404;
+    }
 
     # hidden files (.env, .git ...) are never served, whatever the app does
     location ~ /\.(?!well-known) { return 404; }
@@ -283,12 +288,79 @@ server {
     }
 }
 EOF
+install -d -m 755 /var/www/hushavia-acme/.well-known/acme-challenge
+TLS_CERT=/etc/letsencrypt/live/hushavia.com/fullchain.pem
+TLS_KEY=/etc/letsencrypt/live/hushavia.com/privkey.pem
+# Keep HTTPS configured during every later deployment, including certificate renewal.
+enable_domain_tls() {
+  sed -i '/listen \[::\]:80 default_server;/a\    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate /etc/letsencrypt/live/hushavia.com/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/hushavia.com/privkey.pem;\n    ssl_protocols TLSv1.2 TLSv1.3;' /etc/nginx/sites-available/hushavia
+}
+if [ -s "$TLS_CERT" ] && [ -s "$TLS_KEY" ]; then
+  enable_domain_tls
+fi
 ln -sf /etc/nginx/sites-available/hushavia /etc/nginx/sites-enabled/hushavia
 rm -f /etc/nginx/sites-enabled/default
 if nginx -t >/dev/null 2>&1; then
   systemctl reload nginx
 else
   echo "nginx: the new config has a problem — keeping the running one"; nginx -t 2>&1 | tail -3
+fi
+
+# Issue the certificate only after all website/API DNS records point to this server.
+# The existing HTTP/IP endpoint remains available for installed app versions.
+domain_ready=true
+for host in hushavia.com www.hushavia.com api.hushavia.com; do
+  resolved=$(getent ahostsv4 "$host" | awk '{print $1}' | sort -u || true)
+  if [ "$resolved" != "$PUBLIC_IP" ]; then
+    domain_ready=false
+    echo "domain: $host DNS not ready; keeping existing connection"
+  fi
+done
+if [ "$domain_ready" = true ] && [ ! -s "$TLS_CERT" ]; then
+  if ! command -v certbot >/dev/null; then
+    apt-get update -qq && apt-get install -y -qq certbot >/dev/null || echo "domain: certbot installation failed"
+  fi
+  if command -v certbot >/dev/null; then
+    contact=(--register-unsafely-without-email)
+    if [ -n "${ADMIN_EMAIL:-}" ]; then contact=(--email "$ADMIN_EMAIL"); fi
+    if certbot certonly --webroot -w /var/www/hushavia-acme --non-interactive --agree-tos "${contact[@]}" --cert-name hushavia.com -d hushavia.com -d www.hushavia.com -d api.hushavia.com; then
+      cp /etc/nginx/sites-available/hushavia /etc/nginx/sites-available/hushavia.pre-tls
+      enable_domain_tls
+      if nginx -t && systemctl reload nginx; then
+        echo "domain: HTTPS enabled"
+      else
+        mv /etc/nginx/sites-available/hushavia.pre-tls /etc/nginx/sites-available/hushavia
+        nginx -t && systemctl reload nginx
+        echo "domain: HTTPS configuration failed; keeping HTTP available"
+      fi
+    else
+      echo "domain: certificate issuance failed; keeping existing connection"
+    fi
+  fi
+fi
+if [ -s "$TLS_CERT" ] && [ -s "$TLS_KEY" ]; then
+  install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy
+  printf '#!/bin/sh\nnginx -t && systemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/hushavia-nginx
+  chmod 755 /etc/letsencrypt/renewal-hooks/deploy/hushavia-nginx
+  systemctl enable --now certbot.timer >/dev/null 2>&1 || true
+  if curl -fsS --max-time 15 --resolve hushavia.com:443:127.0.0.1 https://hushavia.com/health >/dev/null; then
+    if [ "${PUBLIC_URL:-}" != 'https://hushavia.com' ]; then
+      old_public_url=${PUBLIC_URL:-http://${PUBLIC_IP}}
+      set_env PUBLIC_URL 'https://hushavia.com'
+      healthy=false
+      if systemctl restart hushavia; then
+        for attempt in 1 2 3 4 5; do
+          if curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null; then healthy=true; break; fi
+          sleep 2
+        done
+      fi
+      if [ "$healthy" != true ]; then
+        set_env PUBLIC_URL "$old_public_url"
+        systemctl restart hushavia
+        echo "domain: reverted PUBLIC_URL after failed restart"
+      fi
+    fi
+  fi
 fi
 
 # ------------------------------------------------------------------ password guessing & security patches

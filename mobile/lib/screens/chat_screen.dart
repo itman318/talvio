@@ -868,7 +868,7 @@ class _ChatScreenState extends State<ChatScreen> {
       path,
       type: type,
       caption: noCaption ? '' : caption,
-      mime: type == 'voice' ? 'audio/mp4' : type == 'video_note' ? 'video/mp4' : lookupMimeType(path),
+      mime: type == 'voice' ? 'audio/mp4' : type == 'video_note' ? 'video/mp4' : lookupMimeType(name ?? path) ?? lookupMimeType(path),
       name: name,
       duration: duration,
       width: w,
@@ -887,17 +887,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = context.read<AuthState>();
     final multi = _store.chatById(chatId)?.isMulti ?? _chat?.isMulti ?? false;
     final items = <(String, IconData, String, List<Color>)>[
-      ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
       ('photo', Icons.photo_library_rounded, 'Gallery', const [Color(0xFF8E7CF8), Color(0xFF6C5BE3)]),
+      ('camera', Icons.photo_camera_rounded, 'Camera', const [Color(0xFFFF7A9C), Color(0xFFE0417A)]),
       ('video', Icons.videocam_rounded, 'Video', const [Color(0xFFFF9A6E), Color(0xFF6D4AFF)]),
+      ('audio', Icons.headphones_rounded, 'Audio', const [Color(0xFFAD92F8), Color(0xFF7851D6)]),
       ('file', Icons.insert_drive_file_rounded, 'File', const [Color(0xFF6FB6F7), Color(0xFF3C83DE)]),
-      ('checklist', Icons.checklist_rounded, 'Checklist', const [Color(0xFF6FCB8C), Color(0xFF2F9D5A)]),
       if (auth.feature('voice_messages')) ('videonote', Icons.radio_button_checked_rounded, 'Round video', const [Color(0xFF9AA3C8), Color(0xFF59628F)]),
       if (auth.feature('location')) ('location', Icons.location_on_rounded, 'Location', const [Color(0xFF4FD8A6), Color(0xFF10B37A)]),
       ('contact', Icons.person_rounded, 'Contact', const [Color(0xFF5FD0E6), Color(0xFF1597B8)]),
+      ('checklist', Icons.checklist_rounded, 'Checklist', const [Color(0xFF6FCB8C), Color(0xFF2F9D5A)]),
+      if (multi && auth.feature('polls')) ('poll', Icons.bar_chart_rounded, 'Poll', const [Color(0xFFF7D27E), Color(0xFFE0A43A)]),
       if (auth.feature('wallet') && !(_store.chatById(chatId)?.isChannel ?? false))
         ('crypto', Icons.account_balance_wallet_rounded, 'Crypto', const [Color(0xFF3FD8C0), Color(0xFF12B89C)]),
-      if (multi && auth.feature('polls')) ('poll', Icons.bar_chart_rounded, 'Poll', const [Color(0xFFF7D27E), Color(0xFFE0A43A)]),
       if (!multi && auth.feature('coins') && _giftable(_store.chatById(chatId) ?? _chat))
         ('gift', Icons.card_giftcard_rounded, 'Gift', const [Color(0xFFFFB347), Color(0xFFFF6FA0)]),
       if (multi && auth.feature('coins') && (_store.chatById(chatId)?.isAdmin ?? false))
@@ -915,15 +916,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
                 child: Text('Share', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               ),
-              // two rows: 5 on screen, more slide in from the side
+              // Two compact rows; narrow screens can scroll sideways rather than clipping labels.
               LayoutBuilder(builder: (ctx2, box) {
-                final w = box.maxWidth / 5;
-                return SizedBox(
-                  height: 2 * 88 + 8,
+                final columns = (items.length + 1) ~/ 2;
+                final width = box.maxWidth < columns * 48.0 ? columns * 48.0 : box.maxWidth;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: width,
+                    height: 144,
                   child: GridView(
-                    scrollDirection: Axis.horizontal,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 0, crossAxisSpacing: 8, mainAxisExtent: w),
-                    physics: items.length > 10 ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisSpacing: 4, crossAxisSpacing: 2, mainAxisExtent: 70),
+                    physics: const NeverScrollableScrollPhysics(),
                     children: [
                       for (final (key, icon, label, colors) in items)
                         InkWell(
@@ -934,24 +939,26 @@ class _ChatScreenState extends State<ChatScreen> {
                           },
                           child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
                             Container(
-                              width: 50,
-                              height: 50,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(17),
+                                borderRadius: BorderRadius.circular(13),
                                 gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                                boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
+                                boxShadow: [BoxShadow(color: colors.last.withValues(alpha: 0.19), blurRadius: 5, offset: const Offset(0, 2))],
                               ),
-                              child: Icon(icon, color: Colors.white, size: 24),
+                              child: Icon(icon, color: Colors.white, size: 21),
                             ),
-                            const SizedBox(height: 7),
+                            const SizedBox(height: 4),
                             Text(label,
-                                maxLines: 1,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 textScaler: MediaQuery.textScalerOf(ctx).clamp(maxScaleFactor: 1.1),
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                style: const TextStyle(fontSize: 10, height: 1.05, fontWeight: FontWeight.w600)),
                           ]),
                         ),
                     ],
+                  ),
                   ),
                 );
               }),
@@ -959,7 +966,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         );
-    if (choice == null) return;
+    if (choice == null || !mounted) return;
     if (choice == 'checklist') {
       if (!mounted) return;
       final text = await buildChecklist(context);
@@ -1091,8 +1098,9 @@ class _ChatScreenState extends State<ChatScreen> {
             if (r != null) await _sendFile(r.path, type: 'video', name: r.path == x.path ? x.name : 'video.mp4', duration: r.seconds, viewOnce: r.viewOnce);
           }
           break;
+        case 'audio':
         case 'file':
-          final r = await FilePicker.platform.pickFiles();
+          final r = await FilePicker.platform.pickFiles(type: choice == 'audio' ? FileType.audio : FileType.any);
           final f = r?.files.single;
           if (f?.path != null) await _sendFile(f!.path!, type: 'file', name: f.name);
           break;
@@ -2891,8 +2899,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final iconColor = dark ? Colors.white70 : Brand.muted;
     return GlassPanel(
       radius: 26,
-      ring: false,
-      opacity: 0.82, // nearly solid: text stays easy to read over any wallpaper
+      ring: true,
+      opacity: 0.96, // readable even on busy or dark wallpapers
       child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 50),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -2959,7 +2967,7 @@ class _ChatScreenState extends State<ChatScreen> {
             width: 38,
             height: 50,
             child: IconButton(
-              tooltip: 'Attach: camera, gallery, files…',
+              tooltip: 'Share media, audio and more',
               padding: EdgeInsets.zero,
               icon: Transform.rotate(angle: 0.78, child: Icon(Icons.attach_file_rounded, color: iconColor, size: 22)),
               onPressed: () => _attach(),
@@ -3364,7 +3372,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         ]),
                       ),
                     ),
-                    IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => setState(() => _quote = null)),
+                    IconButton(tooltip: 'Cancel private reply', icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => setState(() => _quote = null)),
                   ]),
                 ),
               ),
@@ -3402,7 +3410,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   style: const TextStyle(color: Brand.primary, fontWeight: FontWeight.w700, fontSize: 13),
                                 ),
                                 const SizedBox(height: 1),
-                                Text(_editing != null ? taliToPlain(banner.preview) : replyLabel(banner.type, banner.text),
+                                Text(_editing != null ? taliToPlain(banner.preview) : replyLabel(banner.type, banner.text, media: banner.media),
                                     maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
                               ]),
                             ),

@@ -89,9 +89,11 @@ class MyProfileScreen extends StatelessWidget {
     final me = context.watch<AuthState>().me;
     if (me == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     void go(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
-    final link = me.username == null ? null : '${AppConfig.serverUrl}/c/${me.username}';
+    final link = (me.username ?? '').isEmpty ? null : '${AppConfig.serverUrl}/c/${me.username}';
     final top = MediaQuery.viewPaddingOf(context).top; // the tab bar may have removed padding.top
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
       body: Stack(children: [
         ListView(padding: EdgeInsets.zero, children: [
         _Header(
@@ -142,15 +144,39 @@ class MyProfileScreen extends StatelessWidget {
             ),
           ),
         _completeCard(context, me, () => go(const EditProfileScreen())),
+        ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('View as'), subtitle: const Text('Preview your default privacy settings'), onTap: () async {
+          final contact = await showModalBottomSheet<bool>(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(title: const Text('Contact'), onTap: () => Navigator.pop(ctx, true)),
+            ListTile(title: const Text('Non-contact'), onTap: () => Navigator.pop(ctx, false)),
+          ])));
+          if (contact == null || !context.mounted) return;
+          final p = me.privacy;
+          if (p == null) { showInfo(context, 'Privacy settings unavailable'); return; }
+          bool visible(String k) => p[k] == 'everyone' || (contact && p[k] == 'contacts');
+          await showDialog<void>(context: context, builder: (ctx) => AlertDialog(title: Text(contact ? 'Contact view' : 'Non-contact view'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Avatar(id: me.id, name: me.name, url: visible('avatar') ? me.avatarAbsolute : null, size: 64),
+            Text(me.name), if ((me.username ?? '').isNotEmpty) Text('@${me.username}'),
+            if (visible('bio') && me.bio.isNotEmpty) Text(me.bio),
+            if (visible('phone') && (me.phone ?? '').isNotEmpty) Text(me.phone!),
+            if (visible('birthday') && me.birthday != null) Text(me.birthday!.label),
+            Text(visible('last_seen') ? 'Last seen visible' : 'Exact last seen hidden'),
+            const SizedBox(height: 12), const Text('Individual privacy exceptions can change this view.'),
+          ])), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))]));
+        }),
         // contact details: one slim line each
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Text('Contact & personal info', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
           child: _Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if ((me.phone ?? '').isNotEmpty)
                 _InfoRow(caption: 'Mobile', first: true, icon: Icons.phone_rounded, color: Brand.green, value: me.phone!, label: 'Who sees it', onTap: () => go(const PrivacyScreen())),
               if ((me.email ?? '').isNotEmpty) _InfoRow(first: (me.phone ?? '').isEmpty, caption: 'Email · only for login', icon: Icons.mail_rounded, color: const Color(0xFF3C83DE), value: me.email!, label: ''),
               _InfoRow(
+                first: (me.phone ?? '').isEmpty && (me.email ?? '').isEmpty,
                 caption: 'Birthday',
                 icon: Icons.cake_rounded,
                 color: Brand.rose,
@@ -160,6 +186,10 @@ class MyProfileScreen extends StatelessWidget {
               ),
             ]),
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('Your space', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
         ),
         // my things: one plain list
         Padding(
@@ -187,8 +217,9 @@ class MyProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         ]),
-        if (me.birthday?.isToday == true) const Positioned.fill(child: BirthdayCelebration()),
+        if (me.birthday?.isToday == true) const Positioned.fill(child: IgnorePointer(child: BirthdayCelebration())),
       ]),
+      ),
     );
   }
 }
@@ -204,8 +235,8 @@ class _Card extends StatelessWidget {
     return Material(
       color: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: dark ? BorderSide(color: Colors.white.withValues(alpha: 0.05)) : BorderSide.none,
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: dark ? Colors.white.withValues(alpha: 0.08) : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -234,15 +265,21 @@ class _InfoRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, size: 19, color: color),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 1),
-                Text(caption, style: const TextStyle(fontSize: 12.5, color: Brand.muted)),
+                Text(caption, style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ]),
             ),
             const SizedBox(width: 8),
-            if (onTap != null) Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Brand.primary)),
+            if (onTap != null) Tooltip(message: label, child: const Icon(Icons.chevron_right_rounded, size: 20, color: Brand.primary)),
           ]),
         ),
       ),
@@ -252,7 +289,7 @@ class _InfoRow extends StatelessWidget {
 
 /// Coins · Plus · Wallet at a glance, right under the name.
 class _StatsStrip extends StatefulWidget {
-  const _StatsStrip({required this.me, this.onCard = false, this.bare = false});
+  const _StatsStrip({super.key, required this.me, this.onCard = false, this.bare = false});
   final AppUser me;
   final bool bare; // inside a box that already has a fixed height
   final bool onCard; // drawn on the dark ID card (white text, no card of its own)
@@ -283,6 +320,7 @@ class _StatsStripState extends State<_StatsStrip> {
   }
 
   void _set(int b) {
+    if (!mounted) return;
     _lastCoins[widget.me.id] = b;
     if (mounted) setState(() => _coins = b);
   }
@@ -394,7 +432,7 @@ class _Header extends StatelessWidget {
                 child: Icon(icon, size: 22, color: main ? const Color(0xFF151A2E) : Colors.white),
               ),
               const SizedBox(height: 7),
-              Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.85))),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.85))),
             ]),
           ),
         ),
@@ -404,6 +442,8 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = me.avatarAbsolute;
     final plus = me.isPremium;
+    final auth = context.watch<AuthState>();
+    final hasStats = auth.feature('coins') || auth.feature('premium') || auth.feature('wallet');
     // The whole top of the page is the "ID" area: deep ink, a soft glow, and the brand line at the bottom.
     // The stats card floats half over its lower edge.
     return Stack(clipBehavior: Clip.none, children: [
@@ -428,7 +468,7 @@ class _Header extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(8, top + 2, 8, 50),
+              padding: EdgeInsets.fromLTRB(8, top + 2, 8, hasStats ? 50 : 16),
               child: Column(children: [
                 Row(children: [
                   const SizedBox(width: 48),
@@ -448,7 +488,7 @@ class _Header extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(3),
                       decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF16193A)),
-                      child: Hero(tag: 'avatar-${me.id}', child: ClipOval(child: Avatar(id: me.id, name: me.name, url: url, size: 96))),
+                      child: Hero(tag: 'avatar-${me.id}', child: ClipOval(child: Avatar(id: me.id, name: me.name, url: url, size: 76))),
                     ),
                   ),
                 ),
@@ -469,11 +509,12 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  GestureDetector(
+                  Flexible(child: GestureDetector(
                     onTap: me.username == null ? onEdit : null,
                     child: Text(me.username != null ? '@${me.username}' : 'Add a username',
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.7))),
-                  ),
+                  )),
                   const SizedBox(width: 10),
                   const DecoratedBox(decoration: BoxDecoration(color: Color(0xFF3FE0C0), shape: BoxShape.circle), child: SizedBox(width: 7, height: 7)),
                   const SizedBox(width: 5),
@@ -495,7 +536,7 @@ class _Header extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(children: [
                     _action(Icons.edit_rounded, 'Edit', onEdit, main: true),
-                    _action(Icons.ios_share_rounded, 'Share', onShare),
+                    _action(Icons.link_rounded, 'Copy link', onShare),
                     _action(Icons.qr_code_2_rounded, 'QR code', onQr),
                     _action(Icons.add_reaction_outlined, 'Status', () => showEmojiStatusPicker(context)),
                   ]),
@@ -504,10 +545,10 @@ class _Header extends StatelessWidget {
             ),
           ]),
         ),
-        const SizedBox(height: 46),
+        if (hasStats) const SizedBox(height: 46),
       ]),
       // the stats float half over the bottom edge
-      Positioned(
+      if (hasStats) Positioned(
         left: 16,
         right: 16,
         bottom: 0,
@@ -521,7 +562,7 @@ class _Header extends StatelessWidget {
               border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
             ),
             height: 74,
-            child: _StatsStrip(me: me, onCard: false, bare: true),
+            child: _StatsStrip(key: ValueKey(me.id), me: me, onCard: false, bare: true),
           ),
         ),
       ),
