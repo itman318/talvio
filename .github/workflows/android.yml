@@ -1,4 +1,5 @@
 # Builds the Hushavia Android app (APK) on every push to main, or by hand from the Actions tab.
+# Rebuild requested 2026-11-23.
 # Set the server address once: repo → Settings → Secrets and variables → Actions → Variables → API_BASE
 # (e.g. https://chat.yourdomain.com). Without it the APK points at the Android emulator (10.0.2.2:4000).
 name: Android APK
