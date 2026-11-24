@@ -161,7 +161,10 @@ test('BotForge creates and manages bots from a chat', async () => {
   assert.match((await send('not valid')).text, /⚠️/);
   const done = await send('price_alert_bot');
   assert.match(done.text, /Congratulations/);
-  const token = done.text.match(/hsv_\d+_[A-Za-z0-9]+/)[0];
+  assert.doesNotMatch(JSON.stringify(done), /hsv_\d+_/);
+  assert.match(done.text, /New key/);
+  const created = await db.one('SELECT id FROM users WHERE username = $1', ['price_alert_bot']);
+  const { token } = await bots.regenerateToken(B.id, created.id);
   const me = await bots.callMethod(token, 'me');
   assert.equal(me.username, 'price_alert_bot');
 
@@ -193,6 +196,9 @@ test('BotForge creates and manages bots from a chat', async () => {
   await flush();
   await bots.pressButton(B.id, list.id, { data: `revyes:${me.id}` });
   await flush();
+  assert.match((await last()).text, /New key/);
+  assert.equal((await bots.callMethod(token, 'me')).id, me.id);
+  await bots.regenerateToken(B.id, me.id);
   await rejects(bots.callMethod(token, 'me'), 'invalid_token');
   assert.match((await send('/cancel')).text, /Stopped|Nothing/);
 });

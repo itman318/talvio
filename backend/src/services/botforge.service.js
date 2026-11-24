@@ -253,20 +253,9 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
     case 'edit':
       return show(editCard(b));
     case 'tok':
-    case 'rev': {
-      if (action === 'tok') {
-        // tokens are stored hashed: showing it means issuing a fresh one
-        await say(chatId, 'For safety I only keep a fingerprint of your token, so I can’t show the old one. Tap below to make a new token (the old one stops working).', kb([[btn('🔄 Make a new token', `revyes:${b.id}`)], [btn('« Back', `bot:${b.id}`)]]));
-        return null;
-      }
-      return show({
-        text: `Make a new token for @${b.username}? The current token will stop working immediately.`,
-        markup: kb([[btn('Yes, make a new token', `revyes:${b.id}`)], [btn('« Back', `bot:${b.id}`)]]),
-      });
-    }
-    case 'revyes': {
-      return say(chatId, 'For security, open Settings → My bots → this bot → New key. Keys are never sent in chat.');
-    }
+    case 'rev':
+    case 'revyes':
+      return say(chatId, `Open Settings → My bots → @${b.username} → New key. Your current key stays active until you confirm there.`);
     case 'priv': {
       await bots.updateBot(userId, b.id, { group_privacy: !b.group_privacy });
       return show(botCard(await ownedBot(userId, b.id)));
