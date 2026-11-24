@@ -557,6 +557,7 @@ async function sendLocation(bot, p) {
   const messageService = require('./message.service');
   const chat = await botChat(bot, p.chat_id);
   const body = { type: 'location', location: { lat: Number(p.latitude), lng: Number(p.longitude), title: p.title || '' } };
+  if (p.client_id) body.client_id = sha256(`${chat.id}:${String(p.client_id)}`);
   if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
   const msg = await messageService.sendMessage(bot.user_id, chat.id, body, { replyMarkup: parseReplyMarkup(p.reply_markup) });
   return toBotMessage(await db.one('SELECT * FROM messages WHERE id = $1', [msg.id]), chat);
@@ -615,6 +616,7 @@ async function sendMessage(bot, p, kind = 'text', file = null) {
   const messageService = require('./message.service');
   const chat = await botChat(bot, p.chat_id);
   const body = { type: kind, text: kind === 'text' ? p.text : p.caption || '' };
+  if (p.client_id) body.client_id = sha256(`${chat.id}:${String(p.client_id)}`);
   if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
   if (p.message_thread_id) body.topic_id = p.message_thread_id;
   if (p.disable_notification === true || p.disable_notification === 'true') body.silent = true;
@@ -632,6 +634,7 @@ async function sendMessageWithMedia(bot, p, kind, mediaId) {
   const messageService = require('./message.service');
   const chat = await botChat(bot, p.chat_id);
   const body = { type: kind, text: p.caption || '', media_id: mediaId };
+  if (p.client_id) body.client_id = sha256(`${chat.id}:${String(p.client_id)}`);
   if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
   if (p.message_thread_id) body.topic_id = p.message_thread_id;
   if (p.disable_notification === true || p.disable_notification === 'true') body.silent = true;
@@ -995,7 +998,12 @@ async function webAppInit(userId, botIdRaw, body = {}) {
     query_id: queryId,
     user: JSON.stringify(botUser(me)),
   };
-  if (body.chat_id) fields.chat_id = String(v.id(body.chat_id, 'chat_id'));
+  if (body.chat_id) {
+    const chatId = v.id(body.chat_id, 'chat_id');
+    const member = await db.one('SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, userId]);
+    if (!member) throw forbidden('not_member', 'Not a member of this chat');
+    fields.chat_id = String(chatId);
+  }
   const check = Object.keys(fields).sort().map((k) => `${k}=${fields[k]}`).join('\n');
   const hash = crypto.createHmac('sha256', webAppSecret(bot.token_hash)).update(check).digest('hex');
   const initData = new URLSearchParams({ ...fields, hash }).toString();
@@ -1006,10 +1014,14 @@ async function webAppInit(userId, botIdRaw, body = {}) {
 function verifyInitData(initData, botToken) {
   const params = new URLSearchParams(initData);
   const hash = params.get('hash');
+  if (new Set(params.keys()).size !== [...params.keys()].length) return false;
+  const issued = Number(params.get('auth_date'));
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(issued) || issued < now - 300 || issued > now + 30 || !params.get('query_id')) return false;
   params.delete('hash');
   const check = [...params.keys()].sort().map((k) => `${k}=${params.get(k)}`).join('\n');
   const expected = crypto.createHmac('sha256', webAppSecret(sha256(botToken))).update(check).digest('hex');
-  return !!hash && hash.length === expected.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
+  return !!hash && /^[a-f0-9]{64}$/.test(hash) && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
 }
 
 /** The mini app called Hushavia.sendData(data) → the bot gets a web_app_data message. */
