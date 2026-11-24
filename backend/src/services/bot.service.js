@@ -29,7 +29,7 @@ const chatService = require('./chat.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { randomToken, sha256 } = require('../utils/crypto');
-const { AppError, badRequest, forbidden, notFound, conflict, unauthorized } = require('../utils/errors');
+const { AppError, badRequest, forbidden, notFound, conflict, unauthorized, tooMany } = require('../utils/errors');
 
 const USERNAME_RE = /^[A-Za-z][A-Za-z0-9_]{1,28}bot$/i;
 const MAX_UPDATES_KEPT = 1000;
@@ -230,16 +230,18 @@ function botUser(u) {
 async function enqueue(botId, payload) {
   const r = await db.one('INSERT INTO bot_updates (bot_id, payload) VALUES ($1, $2) RETURNING id', [botId, JSON.stringify(payload)]);
   // keep the queue bounded for bots that never read it
-  await db.query(
-    `DELETE FROM bot_updates WHERE bot_id = $1 AND id <= (SELECT id FROM bot_updates WHERE bot_id = $1 ORDER BY id DESC OFFSET $2 LIMIT 1)`,
-    [botId, MAX_UPDATES_KEPT],
-  );
+  await archiveUpdates('bot_id = $1 AND id <= (SELECT id FROM bot_updates WHERE bot_id = $1 ORDER BY id DESC OFFSET $2 LIMIT 1)', [botId, MAX_UPDATES_KEPT], 'queue_limit');
   waiters.emit(`bot:${botId}`);
   const b = await db.one('SELECT webhook_url FROM bots WHERE user_id = $1', [botId]);
   if (b && b.webhook_url) deliverWebhook(botId).catch(() => {});
   return r.id;
 }
 
+async function archiveUpdates(where, args, reason) {
+  await db.query(`WITH moved AS (DELETE FROM bot_updates WHERE ${where} RETURNING id,bot_id,payload,attempts,created_at)
+    INSERT INTO bot_failed_updates(id,bot_id,payload,attempts,created_at,reason)
+    SELECT id,bot_id,payload,attempts,created_at,${args.length+1} FROM moved ON CONFLICT(id) DO NOTHING`, [...args,reason]);
+}
 const delivering = new Set();
 /** POSTs queued updates to the bot's webhook one by one; stops at the first failure (retried by the scheduler). */
 async function deliverWebhook(botId) {
@@ -250,7 +252,7 @@ async function deliverWebhook(botId) {
       const b = await db.one('SELECT webhook_url, webhook_secret, api_version FROM bots WHERE user_id = $1 AND status = $2', [botId, 'active']);
       if (!b || !b.webhook_url) return;
       const u = await db.one('SELECT * FROM bot_updates WHERE bot_id = $1 ORDER BY id LIMIT 1', [botId]);
-      if (!u) return;
+      if (!u || new Date(u.next_attempt_at).getTime() > Date.now()) return;
       try {
         const update = { update_id: Number(u.id), ...u.payload };
         // v2 bots get Hushavia events, signed with their hook secret
@@ -276,9 +278,9 @@ async function deliverWebhook(botId) {
         await db.query('DELETE FROM bot_updates WHERE id = $1', [u.id]);
         await db.query('UPDATE bots SET webhook_error = NULL WHERE user_id = $1 AND webhook_error IS NOT NULL', [botId]);
       } catch (err) {
-        await db.query('UPDATE bot_updates SET attempts = attempts + 1 WHERE id = $1', [u.id]);
+        await db.query('UPDATE bot_updates SET attempts = attempts + 1, next_attempt_at = now() + make_interval(secs => LEAST(3600, 5 * power(2, LEAST(attempts, 10)))::int) WHERE id = $1', [u.id]);
         await db.query('UPDATE bots SET webhook_error = $2, webhook_error_at = now() WHERE user_id = $1', [botId, String(err.message).slice(0, 300)]);
-        if (u.attempts + 1 >= 20) await db.query('DELETE FROM bot_updates WHERE id = $1', [u.id]); // give up on this one
+        if (u.attempts + 1 >= 20) await archiveUpdates('id = $1', [u.id], 'delivery_failed'); // give up on this one
         return;
       }
     }
@@ -289,7 +291,8 @@ async function deliverWebhook(botId) {
 
 /** Scheduler: retry webhooks that failed, drop updates nobody read for a day. */
 async function sweep() {
-  await db.query(`DELETE FROM bot_updates WHERE created_at < now() - interval '24 hours'`);
+  await archiveUpdates("created_at < now() - interval '24 hours'", [], 'expired');
+  await db.query("DELETE FROM bot_failed_updates WHERE failed_at < now() - interval '30 days'");
   await db.query(`DELETE FROM bot_callback_queries WHERE created_at < now() - interval '1 hour'`);
   const rows = await db.many(
     `SELECT DISTINCT b.user_id FROM bots b JOIN bot_updates u ON u.bot_id = b.user_id WHERE b.webhook_url IS NOT NULL AND b.status = 'active'`,
@@ -725,7 +728,11 @@ async function getWebhookInfo(bot) {
 /** Runs a Bot API method. `file` = multer upload for sendPhoto / sendDocument. */
 async function callMethod(token, method, params = {}, file = null) {
   const bot = await authenticate(token);
-  rateLimit.enforce(`botapi:${bot.user_id}`, 120, 10 * 1000, 'Too many requests — slow down');
+  const limit = await db.one(`INSERT INTO bot_api_limits(bot_id,hits,expires_at) VALUES ($1,1,now()+interval '10 seconds')
+    ON CONFLICT(bot_id) DO UPDATE SET hits=CASE WHEN bot_api_limits.expires_at<=now() THEN 1 ELSE bot_api_limits.hits+1 END,
+    expires_at=CASE WHEN bot_api_limits.expires_at<=now() THEN now()+interval '10 seconds' ELSE bot_api_limits.expires_at END
+    RETURNING hits, GREATEST(1,ceil(extract(epoch FROM expires_at-now()))) AS retry`, [bot.user_id]);
+  if (limit.hits > 120) throw tooMany(Number(limit.retry), 'Too many requests — slow down');
   switch (method) {
     case 'me':
       return { ...botUser(bot), can_join_groups: true, can_read_all_group_messages: !bot.group_privacy, supports_inline_queries: !!bot.inline_placeholder };
