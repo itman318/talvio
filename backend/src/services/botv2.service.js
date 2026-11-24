@@ -160,6 +160,7 @@ function translate(method, p) {
   const msg = (r) => message(r);
   const send = () => ({
     chat_id: p.to,
+    client_id: p.client_id,
     text: p.text,
     caption: p.text,
     reply_to_message_id: p.reply_to,
