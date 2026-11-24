@@ -38,6 +38,7 @@ class AppUpdater extends ChangeNotifier {
   double progress = 0; // 0..1
   String? error;
   File? _apk;
+  bool _installInProgress = false;
   DateTime? _lastCheck;
   http.Client? _client;
 
@@ -62,10 +63,10 @@ class AppUpdater extends ChangeNotifier {
   Future<UpdateInfo?> check(ApiClient api, {bool force = false}) async {
     if (!Platform.isAndroid || currentBuild == 0) return null;
     if (!force && _lastCheck != null && DateTime.now().difference(_lastCheck!) < const Duration(hours: 3)) return info;
-    _lastCheck = DateTime.now();
     try {
       final r = await api.get('/app/update', query: {'build': '$currentBuild', 'abi': await _abi(), if (force) 'fresh': '1'});
       info = UpdateInfo(Map<String, dynamic>.from(r as Map));
+      _lastCheck = DateTime.now();
       notifyListeners();
     } catch (_) {}
     return info;
@@ -84,17 +85,18 @@ class AppUpdater extends ChangeNotifier {
   /// Downloads (or reuses an already-checked file) and opens the installer.
   Future<void> downloadAndInstall() async {
     final i = info;
-    if (i == null || !i.available || stage == UpdateStage.downloading || stage == UpdateStage.verifying) return;
+    if (i == null || !i.available || _installInProgress) return;
+    _installInProgress = true;
     error = null;
     try {
       final file = await _target(i);
       if (!(stage == UpdateStage.ready && _apk?.path == file.path && await file.exists())) {
         await _download(i, file);
-        stage = UpdateStage.verifying;
-        notifyListeners();
-        await _verify(i, file);
-        _apk = file;
       }
+      stage = UpdateStage.verifying;
+      notifyListeners();
+      await _verify(i, file);
+      _apk = file;
       stage = UpdateStage.ready;
       notifyListeners();
       await install();
@@ -102,6 +104,8 @@ class AppUpdater extends ChangeNotifier {
       stage = UpdateStage.failed;
       error = e is _UpdateError ? e.message : 'Download failed — check your internet and try again';
       notifyListeners();
+    } finally {
+      _installInProgress = false;
     }
   }
 
