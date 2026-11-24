@@ -1041,6 +1041,13 @@ function verifyInitData(initData, botToken) {
   return !!hash && /^[a-f0-9]{64}$/.test(hash) && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
 }
 
+/** Verify once at the developer's login endpoint; consume must atomically claim the query ID in shared storage. */
+async function verifyInitDataOnce(initData, botToken, consume) {
+  if (!verifyInitData(initData, botToken) || typeof consume !== 'function') return false;
+  const p = new URLSearchParams(initData);
+  return (await consume(sha256(botToken) + ':' + p.get('query_id'), Number(p.get('auth_date')) + 330)) === true;
+}
+
 /** The mini app called Hushavia.sendData(data) → the bot gets a web_app_data message. */
 async function webAppData(userId, botIdRaw, body = {}) {
   const botId = v.id(botIdRaw, 'bot_id');
@@ -1122,6 +1129,7 @@ module.exports = {
   webAppInit,
   webAppData,
   verifyInitData,
+  verifyInitDataOnce,
   enqueue,
   sweep,
   adminList,
