@@ -748,6 +748,16 @@ async function callMethod(token, method, params = {}, file = null) {
       return true;
     case 'webhook.info':
       return getWebhookInfo(bot);
+    case 'webhook.failed':
+      return db.many('SELECT id, attempts, reason, failed_at FROM bot_failed_updates WHERE bot_id=$1 ORDER BY id DESC LIMIT 100', [bot.user_id]);
+    case 'webhook.retry': {
+      const id = v.id(params.id, 'id');
+      const restored = await db.one(`WITH moved AS (DELETE FROM bot_failed_updates WHERE bot_id=$1 AND id=$2 RETURNING payload,bot_id)
+        INSERT INTO bot_updates(bot_id,payload) SELECT bot_id,payload FROM moved RETURNING id`, [bot.user_id,id]);
+      if (!restored) throw notFound('event_not_found', 'Failed event not found');
+      if (bot.webhook_url) deliverWebhook(bot.user_id).catch(() => {});
+      return { update_id: restored.id };
+    }
     case 'messages.send':
       return sendMessage(bot, params);
     case 'photos.send':
