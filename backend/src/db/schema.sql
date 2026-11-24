@@ -1550,3 +1550,21 @@ ALTER TABLE stories ADD COLUMN IF NOT EXISTS music_title VARCHAR(80);
 
 -- ------------------------------------------------------------------ hide a channel's subscriber count (official @HushaviaNews)
 ALTER TABLE chats ADD COLUMN IF NOT EXISTS hide_count BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Bot API shared limits and failed-event recovery.
+CREATE TABLE IF NOT EXISTS bot_api_limits (
+  bot_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  hits INTEGER NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+ALTER TABLE bot_updates ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE TABLE IF NOT EXISTS bot_failed_updates (
+  id BIGINT PRIMARY KEY,
+  bot_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  payload JSONB NOT NULL,
+  attempts INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  failed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reason TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS bot_failed_updates_bot_idx ON bot_failed_updates(bot_id, id);

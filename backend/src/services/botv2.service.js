@@ -160,6 +160,7 @@ function translate(method, p) {
   const msg = (r) => message(r);
   const send = () => ({
     chat_id: p.to,
+    client_id: p.client_id,
     text: p.text,
     caption: p.text,
     reply_to_message_id: p.reply_to,
@@ -176,6 +177,10 @@ function translate(method, p) {
       return ['updates', { offset: p.after !== undefined ? Number(p.after) + 1 : undefined, timeout: p.wait, limit: p.max }, null];
     case 'hook.remove':
       return ['webhook.delete', { drop_pending_updates: yes(p.drop_pending) }, () => true];
+    case 'hook.failed':
+      return ['webhook.failed', {}, (r) => r];
+    case 'hook.retry':
+      return ['webhook.retry', { id: p.id }, (r) => ({ event_id: r.update_id })];
     case 'hook.status':
       return ['webhook.info', {}, (r) => ({ url: r.url || null, pending: r.pending_update_count, last_error: r.last_error_message || null, last_error_at: iso(r.last_error_date) })];
     case 'message.send':

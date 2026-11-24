@@ -29,7 +29,7 @@ const chatService = require('./chat.service');
 const rateLimit = require('../utils/rateLimit');
 const v = require('../utils/validate');
 const { randomToken, sha256 } = require('../utils/crypto');
-const { AppError, badRequest, forbidden, notFound, conflict, unauthorized } = require('../utils/errors');
+const { AppError, badRequest, forbidden, notFound, conflict, unauthorized, tooMany } = require('../utils/errors');
 
 const USERNAME_RE = /^[A-Za-z][A-Za-z0-9_]{1,28}bot$/i;
 const MAX_UPDATES_KEPT = 1000;
@@ -230,16 +230,18 @@ function botUser(u) {
 async function enqueue(botId, payload) {
   const r = await db.one('INSERT INTO bot_updates (bot_id, payload) VALUES ($1, $2) RETURNING id', [botId, JSON.stringify(payload)]);
   // keep the queue bounded for bots that never read it
-  await db.query(
-    `DELETE FROM bot_updates WHERE bot_id = $1 AND id <= (SELECT id FROM bot_updates WHERE bot_id = $1 ORDER BY id DESC OFFSET $2 LIMIT 1)`,
-    [botId, MAX_UPDATES_KEPT],
-  );
+  await archiveUpdates('bot_id = $1 AND id <= (SELECT id FROM bot_updates WHERE bot_id = $1 ORDER BY id DESC OFFSET $2 LIMIT 1)', [botId, MAX_UPDATES_KEPT], 'queue_limit');
   waiters.emit(`bot:${botId}`);
   const b = await db.one('SELECT webhook_url FROM bots WHERE user_id = $1', [botId]);
   if (b && b.webhook_url) deliverWebhook(botId).catch(() => {});
   return r.id;
 }
 
+async function archiveUpdates(where, args, reason) {
+  await db.query(`WITH moved AS (DELETE FROM bot_updates WHERE ${where} RETURNING id,bot_id,payload,attempts,created_at)
+    INSERT INTO bot_failed_updates(id,bot_id,payload,attempts,created_at,reason)
+    SELECT id,bot_id,payload,attempts,created_at,$${args.length + 1} FROM moved ON CONFLICT(id) DO NOTHING`, [...args,reason]);
+}
 const delivering = new Set();
 /** POSTs queued updates to the bot's webhook one by one; stops at the first failure (retried by the scheduler). */
 async function deliverWebhook(botId) {
@@ -250,7 +252,7 @@ async function deliverWebhook(botId) {
       const b = await db.one('SELECT webhook_url, webhook_secret, api_version FROM bots WHERE user_id = $1 AND status = $2', [botId, 'active']);
       if (!b || !b.webhook_url) return;
       const u = await db.one('SELECT * FROM bot_updates WHERE bot_id = $1 ORDER BY id LIMIT 1', [botId]);
-      if (!u) return;
+      if (!u || new Date(u.next_attempt_at).getTime() > Date.now()) return;
       try {
         const update = { update_id: Number(u.id), ...u.payload };
         // v2 bots get Hushavia events, signed with their hook secret
@@ -276,9 +278,9 @@ async function deliverWebhook(botId) {
         await db.query('DELETE FROM bot_updates WHERE id = $1', [u.id]);
         await db.query('UPDATE bots SET webhook_error = NULL WHERE user_id = $1 AND webhook_error IS NOT NULL', [botId]);
       } catch (err) {
-        await db.query('UPDATE bot_updates SET attempts = attempts + 1 WHERE id = $1', [u.id]);
+        await db.query('UPDATE bot_updates SET attempts = attempts + 1, next_attempt_at = now() + make_interval(secs => LEAST(3600, 5 * power(2, LEAST(attempts, 10)))::int) WHERE id = $1', [u.id]);
         await db.query('UPDATE bots SET webhook_error = $2, webhook_error_at = now() WHERE user_id = $1', [botId, String(err.message).slice(0, 300)]);
-        if (u.attempts + 1 >= 20) await db.query('DELETE FROM bot_updates WHERE id = $1', [u.id]); // give up on this one
+        if (u.attempts + 1 >= 20) await archiveUpdates('id = $1', [u.id], 'delivery_failed'); // give up on this one
         return;
       }
     }
@@ -289,7 +291,8 @@ async function deliverWebhook(botId) {
 
 /** Scheduler: retry webhooks that failed, drop updates nobody read for a day. */
 async function sweep() {
-  await db.query(`DELETE FROM bot_updates WHERE created_at < now() - interval '24 hours'`);
+  await archiveUpdates("created_at < now() - interval '24 hours'", [], 'expired');
+  await db.query("DELETE FROM bot_failed_updates WHERE failed_at < now() - interval '30 days'");
   await db.query(`DELETE FROM bot_callback_queries WHERE created_at < now() - interval '1 hour'`);
   const rows = await db.many(
     `SELECT DISTINCT b.user_id FROM bots b JOIN bot_updates u ON u.bot_id = b.user_id WHERE b.webhook_url IS NOT NULL AND b.status = 'active'`,
@@ -557,6 +560,7 @@ async function sendLocation(bot, p) {
   const messageService = require('./message.service');
   const chat = await botChat(bot, p.chat_id);
   const body = { type: 'location', location: { lat: Number(p.latitude), lng: Number(p.longitude), title: p.title || '' } };
+  if (p.client_id) body.client_id = sha256(`${chat.id}:${String(p.client_id)}`);
   if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
   const msg = await messageService.sendMessage(bot.user_id, chat.id, body, { replyMarkup: parseReplyMarkup(p.reply_markup) });
   return toBotMessage(await db.one('SELECT * FROM messages WHERE id = $1', [msg.id]), chat);
@@ -615,6 +619,7 @@ async function sendMessage(bot, p, kind = 'text', file = null) {
   const messageService = require('./message.service');
   const chat = await botChat(bot, p.chat_id);
   const body = { type: kind, text: kind === 'text' ? p.text : p.caption || '' };
+  if (p.client_id) body.client_id = sha256(`${chat.id}:${String(p.client_id)}`);
   if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
   if (p.message_thread_id) body.topic_id = p.message_thread_id;
   if (p.disable_notification === true || p.disable_notification === 'true') body.silent = true;
@@ -632,6 +637,7 @@ async function sendMessageWithMedia(bot, p, kind, mediaId) {
   const messageService = require('./message.service');
   const chat = await botChat(bot, p.chat_id);
   const body = { type: kind, text: p.caption || '', media_id: mediaId };
+  if (p.client_id) body.client_id = sha256(`${chat.id}:${String(p.client_id)}`);
   if (p.reply_to_message_id) body.reply_to_id = p.reply_to_message_id;
   if (p.message_thread_id) body.topic_id = p.message_thread_id;
   if (p.disable_notification === true || p.disable_notification === 'true') body.silent = true;
@@ -722,7 +728,11 @@ async function getWebhookInfo(bot) {
 /** Runs a Bot API method. `file` = multer upload for sendPhoto / sendDocument. */
 async function callMethod(token, method, params = {}, file = null) {
   const bot = await authenticate(token);
-  rateLimit.enforce(`botapi:${bot.user_id}`, 120, 10 * 1000, 'Too many requests — slow down');
+  const limit = await db.one(`INSERT INTO bot_api_limits(bot_id,hits,expires_at) VALUES ($1,1,now()+interval '10 seconds')
+    ON CONFLICT(bot_id) DO UPDATE SET hits=CASE WHEN bot_api_limits.expires_at<=now() THEN 1 ELSE bot_api_limits.hits+1 END,
+    expires_at=CASE WHEN bot_api_limits.expires_at<=now() THEN now()+interval '10 seconds' ELSE bot_api_limits.expires_at END
+    RETURNING hits, GREATEST(1,ceil(extract(epoch FROM expires_at-now()))) AS retry`, [bot.user_id]);
+  if (limit.hits > 120) throw tooMany(Number(limit.retry), 'Too many requests — slow down');
   switch (method) {
     case 'me':
       return { ...botUser(bot), can_join_groups: true, can_read_all_group_messages: !bot.group_privacy, supports_inline_queries: !!bot.inline_placeholder };
@@ -738,6 +748,16 @@ async function callMethod(token, method, params = {}, file = null) {
       return true;
     case 'webhook.info':
       return getWebhookInfo(bot);
+    case 'webhook.failed':
+      return db.many('SELECT id, attempts, reason, failed_at FROM bot_failed_updates WHERE bot_id=$1 ORDER BY id DESC LIMIT 100', [bot.user_id]);
+    case 'webhook.retry': {
+      const id = v.id(params.id, 'id');
+      const restored = await db.one(`WITH moved AS (DELETE FROM bot_failed_updates WHERE bot_id=$1 AND id=$2 RETURNING payload,bot_id)
+        INSERT INTO bot_updates(bot_id,payload) SELECT bot_id,payload FROM moved RETURNING id`, [bot.user_id,id]);
+      if (!restored) throw notFound('event_not_found', 'Failed event not found');
+      if (bot.webhook_url) deliverWebhook(bot.user_id).catch(() => {});
+      return { update_id: restored.id };
+    }
     case 'messages.send':
       return sendMessage(bot, params);
     case 'photos.send':
@@ -995,7 +1015,12 @@ async function webAppInit(userId, botIdRaw, body = {}) {
     query_id: queryId,
     user: JSON.stringify(botUser(me)),
   };
-  if (body.chat_id) fields.chat_id = String(v.id(body.chat_id, 'chat_id'));
+  if (body.chat_id) {
+    const chatId = v.id(body.chat_id, 'chat_id');
+    const member = await db.one('SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, userId]);
+    if (!member) throw forbidden('not_member', 'Not a member of this chat');
+    fields.chat_id = String(chatId);
+  }
   const check = Object.keys(fields).sort().map((k) => `${k}=${fields[k]}`).join('\n');
   const hash = crypto.createHmac('sha256', webAppSecret(bot.token_hash)).update(check).digest('hex');
   const initData = new URLSearchParams({ ...fields, hash }).toString();
@@ -1006,10 +1031,21 @@ async function webAppInit(userId, botIdRaw, body = {}) {
 function verifyInitData(initData, botToken) {
   const params = new URLSearchParams(initData);
   const hash = params.get('hash');
+  if (new Set(params.keys()).size !== [...params.keys()].length) return false;
+  const issued = Number(params.get('auth_date'));
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(issued) || issued < now - 300 || issued > now + 30 || !params.get('query_id')) return false;
   params.delete('hash');
   const check = [...params.keys()].sort().map((k) => `${k}=${params.get(k)}`).join('\n');
   const expected = crypto.createHmac('sha256', webAppSecret(sha256(botToken))).update(check).digest('hex');
-  return !!hash && hash.length === expected.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
+  return !!hash && /^[a-f0-9]{64}$/.test(hash) && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected));
+}
+
+/** Verify once at the developer's login endpoint; consume must atomically claim the query ID in shared storage. */
+async function verifyInitDataOnce(initData, botToken, consume) {
+  if (!verifyInitData(initData, botToken) || typeof consume !== 'function') return false;
+  const p = new URLSearchParams(initData);
+  return (await consume(sha256(botToken) + ':' + p.get('query_id'), Number(p.get('auth_date')) + 330)) === true;
 }
 
 /** The mini app called Hushavia.sendData(data) → the bot gets a web_app_data message. */
@@ -1093,6 +1129,7 @@ module.exports = {
   webAppInit,
   webAppData,
   verifyInitData,
+  verifyInitDataOnce,
   enqueue,
   sweep,
   adminList,

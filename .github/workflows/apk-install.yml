@@ -1,4 +1,4 @@
-# Installs the published phone APK (hushavia.apk) on fresh Android emulators and prints the exact result.
+# Installs the published emulator APK on fresh Android emulators and prints the exact result.
 name: APK install check
 on: workflow_dispatch
 permissions:
@@ -18,7 +18,7 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download android-latest -p hushavia.apk -R "${{ github.repository }}"
+        run: gh release download android-latest -p hushavia-x86_64-emulator.apk -R "${{ github.repository }}"
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
@@ -27,7 +27,4 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            echo "== adb install (api ${{ matrix.api }})"; adb install -r hushavia.apk || true
-            echo "== pm via session"; adb push hushavia.apk /data/local/tmp/h.apk >/dev/null; adb shell pm install -r /data/local/tmp/h.apk || true
-            adb shell pm list packages | grep -i hushavia || echo "NOT INSTALLED"
-            adb logcat -d | grep -iE 'PackageManager|PackageInstaller|INSTALL_' | tail -40 || true
+            adb install -r hushavia-x86_64-emulator.apk
