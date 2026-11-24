@@ -57,8 +57,8 @@ function str(value, { field, max, min = 0, trim = true, required = false } = {})
 }
 
 function id(value, field = 'id') {
-  const n = typeof value === 'number' ? value : parseInt(value, 10);
-  if (!Number.isSafeInteger(n) || n <= 0 || (typeof value === 'string' && !/^\d+$/.test(value))) {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(n) || n <= 0) {
     throw badRequest('invalid_input', `${field} must be a positive integer`);
   }
   return n;
