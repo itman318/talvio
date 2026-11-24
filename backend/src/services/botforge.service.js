@@ -227,15 +227,6 @@ function editCard(b) {
   };
 }
 
-function tokenText(b, token) {
-  return [
-    `Here is the new key for @${b.username}:`,
-    '',
-    token,
-    '',
-    'Keep it secret — anyone with it can control the bot. The old key no longer works.',
-  ].join('\n');
-}
 
 function parseCommandsText(text) {
   return String(text)
@@ -274,8 +265,7 @@ async function runAction(userId, chatId, action, botId, messageId = null) {
       });
     }
     case 'revyes': {
-      const { token } = await bots.regenerateToken(userId, b.id);
-      return say(chatId, tokenText(b, token), kb([[{ text: '📋 Copy key', copy_text: { text: token } }], [btn('📖 For developers', 'api'), btn('« Back to bot', `bot:${b.id}`)]]));
+      return say(chatId, 'For security, open Settings → My bots → this bot → New key. Keys are never sent in chat.');
     }
     case 'priv': {
       await bots.updateBot(userId, b.id, { group_privacy: !b.group_privacy });
@@ -453,12 +443,9 @@ async function onMessage(userId, chatId, row) {
             '',
             'You can now add a description, commands and a profile photo — see /mybots.',
             '',
-            'Your bot key for the Hushavia Bot API:',
-            r.token,
-            '',
-            'Keep your key secret — anyone who has it can control your bot.',
+            'Open Settings → My bots → this bot → New key to obtain your API key securely.',
           ].join('\n'),
-          kb([[{ text: '📋 Copy key', copy_text: { text: r.token } }], [btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }], [btn('📖 For developers', 'api')]]),
+          kb([[btn('⚙️ Manage bot', `bot:${r.bot.id}`), { text: '💬 Open bot', url: link(r.bot.username) }], [btn('📖 For developers', 'api')]]),
         );
       }
       case 'set_name':
