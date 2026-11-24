@@ -194,8 +194,6 @@ test('BotForge creates and manages bots from a chat', async () => {
   assert.equal((await db.one('SELECT group_privacy FROM bots WHERE user_id = $1', [me.id])).group_privacy, false);
   await bots.pressButton(B.id, list.id, { data: `rev:${me.id}` });
   await flush();
-  await bots.pressButton(B.id, list.id, { data: `revyes:${me.id}` });
-  await flush();
   assert.match((await last()).text, /New key/);
   assert.equal((await bots.callMethod(token, 'me')).id, me.id);
   await bots.regenerateToken(B.id, me.id);
