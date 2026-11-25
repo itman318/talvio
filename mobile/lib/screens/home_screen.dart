@@ -116,19 +116,29 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final f in store.folders) {
       if (f.id == _folderId) folder = f;
     }
-    final main = store.mainChats;
-    final requests = q.isEmpty && folder == null ? store.requests : const <Chat>[];
-    final locked = q.isEmpty && folder == null ? store.lockedChats : const <Chat>[];
+    final showSpecial = q.isEmpty && folder == null;
+    final main = <Chat>[];
+    final requests = <Chat>[];
+    final locked = <Chat>[];
+    for (final chat in store.chats) {
+      if (chat.isRequest) {
+        if (showSpecial) requests.add(chat);
+      } else if (chat.isLocked) {
+        if (showSpecial) locked.add(chat);
+      } else {
+        main.add(chat);
+      }
+    }
     final extraRows = (requests.isEmpty ? 0 : 1) + (locked.isEmpty ? 0 : 1);
-    var chats = folder == null ? main : main.where(folder.matches).toList();
-    if (q.isNotEmpty) chats = chats.where((c) => c.title.toLowerCase().contains(q)).toList();
+    final chats = main.where((c) =>
+        (folder?.matches(c) ?? true) && (q.isEmpty || c.title.toLowerCase().contains(q)));
     final showStories = q.isEmpty && folder == null && auth.feature('stories');
     final secrets = q.isEmpty && folder == null ? context.watch<SecretStore>().sortedChats : const <SecretChat>[];
     final showFound = q.length >= 2;
     // one list, newest first: vault chats sit among the others by time (they used to be stuck on top,
     // so a new message never brought its chat to the top); pinned chats stay first
     final rows = <Object>[...chats, ...secrets];
-    rows.sort((a, b) {
+    if (secrets.isNotEmpty) rows.sort((a, b) {
       final pa = a is Chat && a.isPinned, pb = b is Chat && b.isPinned;
       if (pa != pb) return pa ? -1 : 1;
       final ta = a is Chat ? a.sortTime : (a as SecretChat).lastActivity;
@@ -218,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _FolderChip(label: 'All', selected: _folderId == null, onTap: () => setState(() => _folderId = null)),
                       ...store.folders.map((f) {
-                        final unread = store.mainChats.where(f.matches).where((c) => !c.isMuted).fold<int>(0, (s, c) => s + c.unreadCount);
+                        final unread = main.where((c) => c.unreadCount != 0 && !c.isMuted && f.matches(c)).fold<int>(0, (s, c) => s + c.unreadCount);
                         return _FolderChip(
                           label: unread > 0 ? '${f.name}  $unread' : f.name,
                           selected: _folderId == f.id,
