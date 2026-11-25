@@ -130,8 +130,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     final extraRows = (requests.isEmpty ? 0 : 1) + (locked.isEmpty ? 0 : 1);
-    final chats = main.where((c) =>
-        (folder?.matches(c) ?? true) && (q.isEmpty || c.title.toLowerCase().contains(q)));
+    final chats = folder == null && q.isEmpty ? main : main.where((c) =>
+        (folder?.matches(c) ?? true) && (q.isEmpty || c.title.toLowerCase().contains(q))).toList();
     final showStories = q.isEmpty && folder == null && auth.feature('stories');
     final secrets = q.isEmpty && folder == null ? context.watch<SecretStore>().sortedChats : const <SecretChat>[];
     final showFound = q.length >= 2;
