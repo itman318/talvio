@@ -1910,8 +1910,10 @@ class ChatStore extends ChangeNotifier {
 
   void _onPresence(int userId, bool online, String? lastSeen) {
     final seen = lastSeen == null ? null : DateTime.parse(lastSeen).toLocal();
+    final affected = <int>[];
     for (final c in chats) {
       if (c.peer?.id == userId) {
+        affected.add(c.id);
         c.peer!.online = online;
         if (seen != null) c.peer!.lastSeen = seen;
       }
@@ -1922,7 +1924,7 @@ class ChatStore extends ChangeNotifier {
       if (seen != null) u.lastSeen = seen;
     }
     // only chats with this person redraw (their header shows "online"); groups count online members on their own
-    _notifySoon([for (final c in chats) if (c.peer?.id == userId) c.id]);
+    _notifySoon(affected);
   }
 
   /// Inserts a message from the server into the loaded list (dedupes own optimistic copies).
