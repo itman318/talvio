@@ -22,8 +22,8 @@ class ChatThemeDef {
 const chatThemes = <ChatThemeDef>[
   // Default: Hushavia — my messages on soft lilac with dark text (light mode) / brand violet (dark mode),
   // a calm lilac-to-mist wallpaper, white cards for others.
-  ChatThemeDef('hush', 'Hushavia', [Color(0xFFF1EEFF), Color(0xFFEAF1F8)], [Color(0xFF0B0A1C), Color(0xFF0E1226)], Color(0xFFE1DCF6),
-      Color(0xFF191735), [Color(0xFFEFEBFF), Color(0xFFE4DDFF)], [Color(0xFF6E52F2), Color(0xFF4F33D6)]),
+  ChatThemeDef('hush', 'Hushavia', [Color(0xFFF4F3FA), Color(0xFFEDF1F7)], [Color(0xFF0B0A1C), Color(0xFF0E1226)], Color(0xFFE6E5EF),
+      Color(0xFF191735), [Color(0xFFEFEBFF), Color(0xFFE4DDFF)], [Color(0xFF5841C8), Color(0xFF47329F)]),
   // Sapphire — a clear indigo gradient for my messages, calm white cards for others.
   ChatThemeDef('classic', 'Sapphire', [Color(0xFFEEF1F8), Color(0xFFE7EBF5)], [Color(0xFF0A0D18), Color(0xFF0D1122)], Color(0xFFDDE3EF),
       Color(0xFF161B30), [Color(0xFF3442B8), Color(0xFF5A5CE6)], [Color(0xFF2F3CA6), Color(0xFF4D52D0)]),
@@ -117,7 +117,11 @@ class ChatThemeScope extends InheritedWidget {
   static ChatAppearance? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<ChatThemeScope>()?.appearance;
 
   @override
-  bool updateShouldNotify(ChatThemeScope old) => old.appearance.toJson() != appearance.toJson();
+  bool updateShouldNotify(ChatThemeScope old) => old.appearance.themeId != appearance.themeId ||
+      old.appearance.pattern != appearance.pattern ||
+      old.appearance.photoPath != appearance.photoPath ||
+      old.appearance.dim != appearance.dim ||
+      old.appearance.blur != appearance.blur;
 }
 
 /// My bubble gradient for the current chat theme (null outside a themed chat).
@@ -129,18 +133,23 @@ LinearGradient? mineGradientOf(BuildContext context) {
   return LinearGradient(colors: c, begin: Alignment.topLeft, end: Alignment.bottomRight);
 }
 
+final _softBubble = <Color, bool>{};
+
 /// True when my bubbles are light (soft lilac), so their text and icons are dark.
 bool softMineOf(BuildContext context) {
-  final g = mineGradientOf(context);
-  return g != null && g.colors.first.computeLuminance() > 0.5;
+  final appearance = ChatThemeScope.maybeOf(context);
+  if (appearance == null) return false;
+  final theme = appearance.def;
+  final colors = Theme.of(context).brightness == Brightness.dark ? theme.mineDark : theme.mine;
+  return _softBubble.putIfAbsent(colors.first, () => colors.first.computeLuminance() > 0.5);
 }
 
 /// Colours for things drawn on my bubble: white on a deep bubble, dark ink on a soft one.
 class MineInk {
   static const ink = Color(0xFF1C1838); // text on a soft bubble
-  static const accent = Color(0xFF6A47F5); // names, links, icons on a soft bubble
+  static const accent = Color(0xFF5433C5); // names, links, icons on a soft bubble
   static Color text(BuildContext c) => softMineOf(c) ? ink : Colors.white;
-  static Color muted(BuildContext c) => softMineOf(c) ? const Color(0xFF6D6890) : Colors.white70;
+  static Color muted(BuildContext c) => softMineOf(c) ? const Color(0xFF575273) : Colors.white70;
   /// a round button / chip on my bubble
   static Color fill(BuildContext c) => softMineOf(c) ? accent : Colors.white.withValues(alpha: 0.18);
   /// progress / waveform colour on my bubble
