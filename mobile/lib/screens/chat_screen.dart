@@ -2422,12 +2422,24 @@ class _ChatScreenState extends State<ChatScreen> {
       if (fwd.isNotEmpty) WidgetsBinding.instance.addPostFrameCallback((_) => store.recordViews(chatId, fwd));
     }
     final stranger = _isStranger(chat);
+    // Flutter asks about mounted rows when the delegate changes. Index only as
+    // far into history as those lookups require, once per delegate.
     final rowIndex = <Object, int>{};
-    for (var i = 0; i < messages.length; i++) {
-      final m = messages[i];
-      // an album is one row, drawn at its newest photo
-      if (m.albumId != null && i > 0 && messages[i - 1].albumId == m.albumId) continue;
-      rowIndex[m.albumId != null && i + 1 < messages.length && messages[i + 1].albumId == m.albumId ? 'album-${m.albumId}' : store.keyOf(m)] = i;
+    var nextRow = 0;
+    int? indexFor(Object key) {
+      final known = rowIndex[key];
+      if (known != null) return known;
+      while (nextRow < messages.length) {
+        final i = nextRow++;
+        final m = messages[i];
+        final album = m.albumId;
+        if (album != null && i > 0 && messages[i - 1].albumId == album) continue;
+        final grouped = album != null && i + 1 < messages.length && messages[i + 1].albumId == album;
+        final rowKey = grouped ? 'album-${album}' : store.keyOf(m);
+        rowIndex[rowKey] = i;
+        if (rowKey == key) return i;
+      }
+      return null;
     }
     return ListView.builder(
       controller: _scroll,
@@ -2440,7 +2452,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // nothing is rebuilt or reloaded
       findChildIndexCallback: (key) {
         if (key is! ValueKey<Object>) return null;
-        final i = rowIndex[key.value];
+        final i = indexFor(key.value);
         return i == null ? null : i + (_ad != null ? 1 : 0);
       },
       itemBuilder: (ctx, idx) {
