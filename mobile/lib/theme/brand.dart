@@ -59,8 +59,11 @@ class Brand {
     [Color(0xFF8A93B4), Color(0xFF4E5675)],
   ];
 
-  static ThemeData light() => _theme(Brightness.light);
-  static ThemeData dark() => _theme(Brightness.dark);
+  static final _lightTheme = _theme(Brightness.light);
+  static final _darkTheme = _theme(Brightness.dark);
+
+  static ThemeData light() => _lightTheme;
+  static ThemeData dark() => _darkTheme;
 
   static ThemeData _theme(Brightness b) {
     final dark = b == Brightness.dark;
