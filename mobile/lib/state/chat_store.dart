@@ -485,9 +485,10 @@ class ChatStore extends ChangeNotifier {
   bool hasMore(int chatId) => _hasMore[chatId] ?? true;
 
   Future<void> openChat(int chatId) async {
+    final gen = _session;
     activeChatId = chatId;
     if (!_messages.containsKey(chatId)) await loadMessages(chatId);
-    markChatRead(chatId);
+    if (gen == _session && activeChatId == chatId) markChatRead(chatId);
   }
 
   void closeChat(int chatId) {
