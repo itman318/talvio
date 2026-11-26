@@ -87,7 +87,8 @@ class ChatStore extends ChangeNotifier {
 
   final Map<int, List<Message>> _messages = {}; // newest first
   final Map<int, bool> _hasMore = {};
-  final Set<int> _loadingMore = {};
+  final Set<(int, int)> _loadingMore = {};
+  final Map<(int, int), Future<void>> _historyRequests = {};
   final Map<int, Map<int, DateTime>> _typing = {}; // chatId -> userId -> expiry
   final Map<int, Map<int, String>> _typingAction = {}; // chatId -> userId -> typing | recording_voice | uploading_photo…
   final Map<int, DateTime> _typingSent = {};
@@ -500,8 +501,13 @@ class ChatStore extends ChangeNotifier {
     }
   }
 
-  Future<void> loadMessages(int chatId) async {
-    final gen = _session;
+  Future<void> loadMessages(int chatId) {
+    final key = (_session, chatId);
+    return _historyRequests.putIfAbsent(key, () =>
+        _loadMessages(chatId, key.$1).whenComplete(() { _historyRequests.remove(key); }));
+  }
+
+  Future<void> _loadMessages(int chatId, int gen) async {
     final fresh = api.get('/chats/$chatId/messages', query: {'limit': '50'});
     fresh.ignore(); // offline: the error is handled at the await below, not reported as "unhandled"
     await _showCachedMessages(chatId); // while the server answers
@@ -528,7 +534,8 @@ class ChatStore extends ChangeNotifier {
   }
 
   Future<void> loadMore(int chatId) async {
-    if (_loadingMore.contains(chatId) || !hasMore(chatId)) return;
+    final key = (_session, chatId);
+    if (_loadingMore.contains(key) || !hasMore(chatId)) return;
     final list = _messages[chatId];
     if (list == null) return;
     final oldest = list.lastWhere((m) => !m.isLocal, orElse: () => list.isEmpty ? Message(id: 0, chatId: chatId, type: 'text', createdAt: DateTime.now()) : list.last);
@@ -536,26 +543,29 @@ class ChatStore extends ChangeNotifier {
       _hasMore[chatId] = false;
       return;
     }
-    _loadingMore.add(chatId);
+    _loadingMore.add(key);
     try {
       final data = Map<String, dynamic>.from(
           await api.get('/chats/$chatId/messages', query: {'before': '${oldest.id}', 'limit': '50'}) as Map);
+      if (_session != key.$1 || !identical(list, _messages[chatId])) return;
       final older = (data['messages'] as List).map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
       _cacheSenders(older);
       final known = list.map((m) => m.id).toSet();
-      list.addAll(older.where((m) => !known.contains(m.id)));
+      list.addAll(older.where((m) => known.add(m.id)));
       _hasMore[chatId] = data['has_more'] == true;
     } finally {
-      _loadingMore.remove(chatId);
-      notifyListeners();
+      _loadingMore.remove(key);
+      if (_session == key.$1) notifyListeners();
     }
   }
 
   /// After a reconnect: fetch anything we missed in the open chat; drop other caches.
   Future<void> _resync() async {
+    final gen = _session;
     try {
       await loadChats();
     } catch (_) {}
+    if (gen != _session) return;
     final active = activeChatId;
     // chats with a message still sending (or failed) keep it: they are refreshed, not dropped
     final unsent = [for (final e in _messages.entries) if (e.key != active && e.value.any((m) => m.isLocal)) e.key];
@@ -572,6 +582,7 @@ class ChatStore extends ChangeNotifier {
       } else {
         final data = Map<String, dynamic>.from(
             await api.get('/chats/$active/messages', query: {'after': '${newest.id}', 'limit': '100'}) as Map);
+        if (gen != _session || !identical(list, _messages[active])) return;
         if (data['has_more'] == true) {
           await loadMessages(active);
         } else {
@@ -581,7 +592,7 @@ class ChatStore extends ChangeNotifier {
           notifyListeners();
         }
       }
-      markChatRead(active);
+      if (gen == _session && activeChatId == active) markChatRead(active);
     } catch (_) {}
   }
 
