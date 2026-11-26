@@ -90,12 +90,23 @@ class AppUpdater extends ChangeNotifier {
     error = null;
     try {
       final file = await _target(i);
-      if (!(stage == UpdateStage.ready && _apk?.path == file.path && await file.exists())) {
-        await _download(i, file);
+      var verified = false;
+      if (i.sha256?.isNotEmpty == true && await file.exists()) {
+        stage = UpdateStage.verifying;
+        notifyListeners();
+        try {
+          await _verify(i, file);
+          verified = true;
+        } on _UpdateError {
+          // Verification removed the incomplete or damaged cached download.
+        }
       }
-      stage = UpdateStage.verifying;
-      notifyListeners();
-      await _verify(i, file);
+      if (!verified) {
+        await _download(i, file);
+        stage = UpdateStage.verifying;
+        notifyListeners();
+        await _verify(i, file);
+      }
       _apk = file;
       stage = UpdateStage.ready;
       notifyListeners();
