@@ -92,12 +92,14 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   }
 
   void _onChanged(String _) {
+    ++_seq; // Invalidate the previous request as soon as the text changes.
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 280), _run);
     setState(() {});
   }
 
   Future<void> _run() async {
+    _debounce?.cancel(); // Submit and filter taps supersede any pending keystroke timer.
     final q = _q.text.trim();
     final seq = ++_seq;
     final api = context.read<AppServices>().api;
