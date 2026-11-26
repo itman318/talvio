@@ -429,7 +429,7 @@ class AppLockSettingsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: TextField(
+        content: SingleChildScrollView(child: SecretEntryMascot(child: TextField(
           controller: c,
           autofocus: true,
           obscureText: true,
@@ -437,7 +437,7 @@ class AppLockSettingsScreen extends StatelessWidget {
           maxLength: 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: const InputDecoration(hintText: '4–6 digits'),
-        ),
+        ))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, c.text.length >= 4 ? c.text : null), child: const Text('OK')),
@@ -579,7 +579,7 @@ class _LockScreenState extends State<LockScreen> {
     return Scaffold(
       body: SafeArea(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const AppMascot(pose: TaviPose.hideEyes, size: 120),
+          AppMascot(pose: _pin.isEmpty ? TaviPose.idle : TaviPose.hideEyes, size: 120),
           const SizedBox(height: 12),
           Text(_wrong ? 'Wrong PIN, try again' : 'Enter your PIN', style: TextStyle(fontSize: 18, color: _wrong ? Colors.red : null)),
           const SizedBox(height: 16),

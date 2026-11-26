@@ -897,8 +897,39 @@ class AppMascot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use the same fully animated Hushi on every screen, including callers with
-    // legacy artwork names. Do not mix in the old static mascot illustrations.
-    return TaviMascot(pose: pose, size: size, animate: !MediaQuery.disableAnimationsOf(context));
+    final still = MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context);
+    final loop = art == 'nocontacts' || art == 'contacts' ? 'contacts' : pose == TaviPose.wave ? 'hello' : null;
+    final name = switch (pose) {
+      TaviPose.angry => 'sad',
+      TaviPose.shocked => 'think',
+      _ => pose.name,
+    };
+    final asset = loop == null ? '$name.webp' : still ? '$loop-still.webp' : '$loop.gif';
+    return ExcludeSemantics(
+      child: SizedBox.square(
+        dimension: size,
+        child: AnimatedSwitcher(
+          duration: still ? Duration.zero : const Duration(milliseconds: 160),
+          child: Image.asset('assets/mascot/duck-$asset', key: ValueKey(asset), fit: BoxFit.contain),
+        ),
+      ),
+    );
   }
+}
+
+/// Groups only secret inputs. Leaving them for a hint, Done, or a dialog
+/// action uncovers the eyes without inspecting or retaining the secret.
+class SecretEntryMascot extends StatelessWidget {
+  const SecretEntryMascot({super.key, required this.child, this.size = 90});
+  final Widget child;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    child: Builder(builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
+      AppMascot(pose: Focus.of(context).hasFocus ? TaviPose.hideEyes : TaviPose.idle, size: size),
+      child,
+    ])),
+  );
 }

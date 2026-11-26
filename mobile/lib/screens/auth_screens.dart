@@ -668,10 +668,11 @@ class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
     super.dispose();
   }
 
-  TaviPose get _pose => _show ? TaviPose.peek : (_focus.hasFocus || _pw.text.isNotEmpty ? TaviPose.hideEyes : TaviPose.idle);
+  TaviPose get _pose => !_focus.hasFocus || _busy ? TaviPose.idle : _show ? TaviPose.peek : TaviPose.hideEyes;
 
   Future<void> _submit() async {
-    if (_pw.text.isEmpty) return;
+    if (_busy || _pw.text.isEmpty) return;
+    _focus.unfocus();
     setState(() => _busy = true);
     try {
       await context.read<AuthState>().verifyPassword(_pw.text);
@@ -732,7 +733,6 @@ class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
             focusNode: _focus,
             autofocus: true,
             obscureText: !_show,
-            onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _submit(),
             decoration: InputDecoration(

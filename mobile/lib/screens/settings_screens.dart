@@ -1480,10 +1480,11 @@ class _TwoStepScreenState extends State<TwoStepScreen> {
         title: Text(change ? 'Change password' : 'Set a password'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const AppMascot(pose: TaviPose.hideEyes, size: 110),
+            SecretEntryMascot(size: 110, child: Column(mainAxisSize: MainAxisSize.min, children: [
             if (change) TextField(controller: cur, obscureText: true, decoration: const InputDecoration(labelText: 'Current password')),
             TextField(controller: pw, obscureText: true, autofocus: !change, decoration: const InputDecoration(labelText: 'New password', helperText: 'At least 6 characters')),
             TextField(controller: pw2, obscureText: true, decoration: const InputDecoration(labelText: 'Repeat new password')),
+            ])),
             TextField(controller: hint, maxLength: 64, decoration: const InputDecoration(labelText: 'Hint (optional)')),
           ]),
         ),
@@ -1519,7 +1520,7 @@ class _TwoStepScreenState extends State<TwoStepScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Turn off two-step verification?'),
-        content: TextField(controller: cur, obscureText: true, autofocus: true, decoration: const InputDecoration(labelText: 'Current password')),
+        content: SingleChildScrollView(child: SecretEntryMascot(child: TextField(controller: cur, obscureText: true, autofocus: true, decoration: const InputDecoration(labelText: 'Current password')))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: Colors.red), child: const Text('Turn off')),
