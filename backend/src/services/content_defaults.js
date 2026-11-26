@@ -5,7 +5,7 @@
  * (Admin → Pages & FAQ). Format the app understands:
  *   "# Heading", "## Subheading", "• bullet" lines, "Q: …" followed by "A: …" (FAQ), blank line = new paragraph.
  */
-const UPDATED = '19 November 2026';
+const UPDATED = '26 November 2026';
 
 const privacy = `Last updated: ${UPDATED}
 
@@ -85,7 +85,7 @@ Voice and video calls connect directly between devices when possible. When a dir
 
 # 5. Bots, channels and groups
 • Public channels and groups can be seen by anyone, including their posts, member counts and public links.
-• When you send a message to a bot or use it in a group, that bot's owner receives what you send to it. Bots are made by other people, not by Hushavia, so only use bots you trust.
+• When you send a message to a bot or use it in a group, that bot's owner receives what you send to it. Hushavia operates official bots, including its support bot. Independent developers also run bots. Check who operates a bot before sharing personal information.
 • Group and channel admins can see what members post and can manage the group according to the rights they were given.
 • Warning tags: when our team confirms serious reports about an account (for example scams or a fake account), a warning tag may be shown on its profile so others can protect themselves. We keep the reason and the evidence with it. Tags can be appealed in Help & support.
 
@@ -129,7 +129,7 @@ Our servers are located in the European Union. If you use Hushavia from another 
 We may update this policy as Hushavia changes. We will post the new version here and update the date at the top. For important changes we will also tell you in the app.
 
 # 14. Contact us
-For any question about privacy or this policy, contact us from the app: Settings → Help & support.`;
+For any question about privacy or this policy, contact us from the app: Settings → Help → Help & support.`;
 
 const terms = `Last updated: ${UPDATED}
 
@@ -287,15 +287,15 @@ These Terms are governed by the laws of Pakistan. Before going to court, please 
 We may update these Terms from time to time. We will post the new version here and change the date at the top, and tell you in the app about important changes. If you keep using Hushavia after the changes take effect, you accept the new Terms.
 
 # 19. Contact
-Questions about these Terms? Contact us from the app: Settings → Help & support.`;
+Questions about these Terms? Contact us from the app: Settings → Help → Help & support.`;
 
 const faq = `# Getting started
 
 Q: How do I create an account?
-A: Open Hushavia, enter your phone number (or choose "Continue with email"), then type the one-time code we send you. Add your name and, if you like, a photo — that's it.
+A: Open Hushavia and follow the sign-in options on screen. If SMS codes are unavailable in your country, use an email address you can access. Enter the one-time code, then follow the prompts to set up your profile.
 
 Q: Why didn't my login code arrive?
-A: Check that the number or email is correct, wait a minute and tap "Resend". For email, look in your Spam or Promotions folder. Never share your code with anyone — Hushavia staff will never ask for it.
+A: Check where the sign-in screen says your code was sent. If it went to another device, open the Hushavia chat on that device, or tap "Send the code by email instead" if available. For email, check your inbox and spam folder. If the code still hasn’t arrived, check the address and request a new code when the timer ends. Keep your code private.
 
 Q: Can I use Hushavia on more than one device?
 A: Yes. Your regular chats sync on all your devices. Hushavia is available for Android, Windows, macOS, Linux and the web. To log in on a computer, open the app or the web app there and scan the QR code from Settings → Devices. You can see and log out any device there.
@@ -313,9 +313,6 @@ A: Open the chat → ⋮ menu → Clear history, and tick "Also clear for …". 
 
 Q: What does "view once" mean?
 A: A photo, video or voice message sent as "view once" can be opened one time by the other person and then disappears for them. Use the "1" button before sending.
-
-Q: How do I know someone listened to my voice message?
-A: The small microphone under your voice message turns blue when it has been played.
 
 Q: Can I schedule a message?
 A: Yes. Type your message, then hold the Send button and pick a time.
@@ -427,7 +424,7 @@ Q: How do I pay for Hushavia Plus?
 A: Open Settings → Hushavia Plus, pick a plan and pay with USDT from your wallet or with your coins. Plus starts by itself as soon as the payment is confirmed — usually about a minute.
 
 Q: I paid but Plus or my coins did not arrive.
-A: Wait a few minutes — the network may be busy — then open the page again. If it still has not arrived, contact Settings → Help & support with the transaction ID.
+A: Wait a few minutes — the network may be busy — then open the page again. If it still has not arrived, contact Settings → Help → Help & support with the transaction ID.
 
 # Privacy and security
 
@@ -476,16 +473,16 @@ Q: My account was banned. What can I do?
 A: If you think it was a mistake, try to log in and tap "Appeal" to tell us what happened. We review every appeal.
 
 Q: How do I contact support?
-A: Settings → Help & support → New request. Add a screenshot if it helps — we reply right there in the app.`;
+A: Settings → Help → Help & support → New request. Add a screenshot if it helps — we reply right there in the app.`;
 
 const about = `# Hushavia — talk, share, belong
 
-Hushavia is a fast, secure messaging app made for everyday conversations and growing communities. Chat one-to-one, talk in groups, follow channels, make voice and video calls and build bots — all in one clean, friendly app.
+Hushavia brings one-to-one chats, groups, channels, and voice and video calls together in one app.
 
 # What you can do
 • Chats: text, photos, videos, files, voice messages and video notes, with replies, reactions, editing and scheduled messages.
 • Groups: communities with admins and moderators, granular rights, topics, polls, slow mode and strong spam protection.
-• Channels: broadcast to unlimited subscribers with views, comments, reactions and post approvals.
+• Channels: share updates with subscribers with views, comments, reactions and post approvals.
 • Calls: free voice and video calls, plus live voice chats in groups and channels.
 • Vault chats: end-to-end encrypted conversations only you and the other person can read.
 • Stories and highlights: share moments with the people you choose — with music if you like.
@@ -505,7 +502,7 @@ You decide who sees your phone number, photo and last seen. Your account is prot
 Hushavia works well on any phone and any connection: it is light on data, supports proxies and keeps working on slow networks. It is available on Android, Windows, macOS, Linux and the web.
 
 # Contact
-Questions, ideas or problems? We'd love to hear from you: Settings → Help & support.
+Questions, ideas or problems? We'd love to hear from you: Settings → Help → Help & support.
 
 Thank you for being part of Hushavia. 💜`;
 
