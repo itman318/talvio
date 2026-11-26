@@ -6,6 +6,8 @@ name: Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches: [release/help-deploy-07b3334]
 
 permissions:
   contents: write
@@ -125,6 +127,17 @@ jobs:
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
           echo "outside health: $(curl -fsS --max-time 15 "http://$HOST/health" || echo FAILED)" | tee -a deploy.txt
+
+      - name: Verify published help pages
+        run: |
+          set -eu
+          for page in faq terms about privacy; do
+            curl -fsSL --retry 3 --max-time 30 "https://hushavia.com/p/$page" -o "/tmp/$page.html"
+          done
+          grep -Fq 'Send the code by email instead' /tmp/faq.html
+          grep -Fq 'Hushavia operates official bots' /tmp/privacy.html
+          grep -Fq 'Hushavia brings one-to-one chats' /tmp/about.html
+          grep -Fq 'Settings → Help → Help &amp; support' /tmp/terms.html
 
       - name: Save result to ci-deploy branch
         if: always()
