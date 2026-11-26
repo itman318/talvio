@@ -4,7 +4,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/hushavia-duck-0d00313]
     paths: ['mobile/**', '.github/workflows/android.yml']
   workflow_dispatch:
     inputs:
