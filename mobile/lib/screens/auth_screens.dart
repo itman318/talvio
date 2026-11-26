@@ -155,7 +155,7 @@ class _PhoneScreenState extends State<PhoneScreen> {
                     gradient: RadialGradient(colors: [Color(0x556D4AFF), Color(0x308B5CF6), Color(0x00FFFFFF)], stops: [0, 0.55, 1]),
                   ),
                 ),
-                const BrandMark(size: 84),
+                const AppMascot(pose: TaviPose.wave, size: 116),
               ]),
             ),
             const SizedBox(height: 14),
@@ -427,7 +427,7 @@ class _OtpScreenState extends State<OtpScreen> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Center(child: AppMascot(pose: TaviPose.mail, size: 112)),
+          Center(child: AppMascot(pose: _sendFailed ? TaviPose.sad : _busy || _sending ? TaviPose.think : TaviPose.mail, size: 112)),
           const SizedBox(height: 6),
           Text('Enter code', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),

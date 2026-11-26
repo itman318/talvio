@@ -887,30 +887,27 @@ class TaviEmptyState extends StatelessWidget {
 /// Hushavia's contextual animated mascot. Each pose has its own expression, props and
 /// motion; explicit illustrated artwork remains available for dedicated screens.
 class AppMascot extends StatelessWidget {
-  const AppMascot({super.key, required this.pose, this.size = 150, this.art});
+  const AppMascot({super.key, required this.pose, this.size = 150, this.art, this.animate = true});
   final TaviPose pose;
   final double size;
 
   /// A specific picture instead of the pose's default: hide, wave, nocontacts, search, cool, sleep,
   /// delete, contacts, settings, secure.
   final String? art;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
-    final still = MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context);
+    final still = !animate || MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context);
     final loop = art == 'nocontacts' || art == 'contacts' ? 'contacts' : pose == TaviPose.wave ? 'hello' : null;
-    final name = switch (pose) {
-      TaviPose.angry => 'sad',
-      TaviPose.shocked => 'think',
-      _ => pose.name,
-    };
-    final asset = loop == null ? '$name.webp' : still ? '$loop-still.webp' : '$loop.gif';
+    final extension = pose == TaviPose.angry || pose == TaviPose.shocked ? 'png' : 'webp';
+    final asset = loop == null ? '${pose.name}.$extension' : still ? '$loop-still.webp' : '$loop.gif';
     return ExcludeSemantics(
       child: SizedBox.square(
         dimension: size,
         child: AnimatedSwitcher(
           duration: still ? Duration.zero : const Duration(milliseconds: 160),
-          child: Image.asset('assets/mascot/duck-$asset', key: ValueKey(asset), fit: BoxFit.contain),
+          child: Image.asset('assets/mascot/duck-$asset', key: ValueKey(asset), cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, 512).toInt(), fit: BoxFit.contain),
         ),
       ),
     );
