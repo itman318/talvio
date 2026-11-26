@@ -323,7 +323,7 @@ class _SupportListScreenState extends State<SupportListScreen> {
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text('How can we help?', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
                           SizedBox(height: 3),
-                          Text('Our team replies right here, usually within a day.', style: TextStyle(fontSize: 13, color: Brand.muted)),
+                          Text('Open a request to read replies and message our support team.', style: TextStyle(fontSize: 13, color: Brand.muted)),
                         ]),
                       ),
                     ]),
@@ -359,7 +359,7 @@ class _SupportListScreenState extends State<SupportListScreen> {
                     TextButton.icon(
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPageScreen(slug: 'faq', fallbackTitle: 'FAQ'))),
                       icon: const Icon(Icons.quiz_rounded, size: 18),
-                      label: const Text('Read the FAQ first'),
+                      label: const Text('Browse the FAQ'),
                     ),
                   ]),
                 ),
