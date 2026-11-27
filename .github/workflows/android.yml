@@ -57,6 +57,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.38.9'
           cache: true
 
       # Gradle itself (≈200 MB) is kept between builds: a GitHub download hiccup can't stop a build
