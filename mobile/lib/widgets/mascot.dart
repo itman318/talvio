@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Hushi — Hushavia's own purple penguin. The Tavi identifiers remain for sticker compatibility.
+/// Hushi — Hushavia's violet-cap duck. The Tavi identifiers remain for sticker compatibility.
 /// Drawn in code (sharp at any size, tiny download) and animated: blinks, breathes, waves,
 /// hides its eyes on password screens, searches with a magnifier, sleeps, celebrates…
 enum TaviPose {
@@ -167,11 +167,11 @@ class _TaviPainter extends CustomPainter {
   final double t;
 
   // palette
-  static const _bodyLight = Color(0xFF72559D);
-  static const _bodyMid = Color(0xFF49336F);
-  static const _bodyDark = Color(0xFF30234F);
-  static const _wingA = Color(0xFF594080);
-  static const _wingB = Color(0xFF392657);
+  static const _bodyLight = Color(0xFFFFE488);
+  static const _bodyMid = Color(0xFFFFCA43);
+  static const _bodyDark = Color(0xFFD9972A);
+  static const _wingA = Color(0xFFFFDA68);
+  static const _wingB = Color(0xFFE5A335);
   static const _belly = Color(0xFFFFF5E8);
   static const _bellyShade = Color(0xFFEBDCD6);
   static const _ink = Color(0xFF1C1836);
@@ -281,7 +281,7 @@ class _TaviPainter extends CustomPainter {
     _feet(canvas);
     final wings = _Wings.lerp(_wingsFor(from), _wingsFor(pose), blend.clamp(0.0, 1.0));
     // back wing details are drawn after the body when they cover the face
-    final wingsInFront = pose == TaviPose.hideEyes ||
+    final wingsInFront = (blend < 1 && (from == TaviPose.hideEyes || from == TaviPose.peek)) || pose == TaviPose.hideEyes ||
         pose == TaviPose.peek ||
         pose == TaviPose.mail ||
         pose == TaviPose.love ||
@@ -290,7 +290,7 @@ class _TaviPainter extends CustomPainter {
         pose == TaviPose.laugh;
     if (!wingsInFront) _wingsPaint(canvas, wings);
     _body(canvas);
-    _tuft(canvas);
+    _cap(canvas);
     _face(canvas);
     if (pose == TaviPose.mail) _envelope(canvas);
     if (pose == TaviPose.love) _heldHeart(canvas);
@@ -386,21 +386,13 @@ class _TaviPainter extends CustomPainter {
     );
   }
 
-  void _tuft(Canvas c) {
-    final sway = 0.12 * math.sin(t * 2 * math.pi + 0.8);
-    final p = Paint()..shader = const LinearGradient(colors: [_bodyLight, _bodyMid], begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(const Rect.fromLTWH(40, 14, 20, 16));
-    for (final (x, dir) in [(46.0, -1.0), (54.0, 1.0)]) {
-      c.save();
-      c.translate(x, 22);
-      c.rotate(dir * 0.35 + sway);
-      final f = Path()
-        ..moveTo(0, 0)
-      ..cubicTo(-8, -7, -4, -15, dir * 3, -14)
-      ..cubicTo(8, -13, 7, -5, 0, 0)
-        ..close();
-      c.drawPath(f, p);
-      c.restore();
-    }
+  void _cap(Canvas c) {
+    final crown = Path()..moveTo(20, 33)..quadraticBezierTo(22, 6, 48, 8)..quadraticBezierTo(73, 8, 79, 30)..close();
+    c.drawPath(crown, Paint()..shader = const LinearGradient(colors: [Color(0xFF9168F5), Color(0xFF47349A)]).createShader(const Rect.fromLTWH(19, 8, 62, 25)));
+    c.drawOval(const Rect.fromLTWH(21, 25, 66, 9), Paint()..color = const Color(0xFF473486));
+    final label = TextPainter(text: const TextSpan(text: 'Hushavia', style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.white)), textDirection: TextDirection.ltr)..layout();
+    label.paint(c, Offset(48 - label.width / 2, 16));
+    label.dispose();
   }
 
   bool get _eyesClosed {
@@ -900,6 +892,9 @@ class AppMascot extends StatelessWidget {
   Widget build(BuildContext context) {
     final still = !animate || MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context);
     final loop = art == 'nocontacts' || art == 'contacts' ? 'contacts' : pose == TaviPose.wave ? 'hello' : null;
+    if (loop == null && !still) {
+      return ExcludeSemantics(child: TaviMascot(pose: pose, size: size));
+    }
     final extension = pose == TaviPose.angry || pose == TaviPose.shocked ? 'png' : 'webp';
     final asset = loop == null ? '${pose.name}.$extension' : still ? '$loop-still.webp' : '$loop.gif';
     return ExcludeSemantics(
