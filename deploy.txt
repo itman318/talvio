@@ -1,0 +1,31 @@
+SERVER_HOST: set
+SERVER_PASSWORD: set
+ADMIN_EMAIL: set
+ADMIN_PASSWORD: set (20 characters)
+API_BASE variable: set
+FIREBASE_SERVICE_ACCOUNT (push notifications): set
+code check: ok
+port 22 (ssh): open
+login: ok
+upload: ok
+rename: nothing to do (already hushavia)
+setting: MAIL_PROVIDER updated
+setting: MAIL_FROM updated
+setting: BREVO_API_KEY updated
+setting: OTP_DEV_MODE updated
+setting: FIREBASE_SERVICE_ACCOUNT_PATH updated
+push notifications: Firebase key installed
+postgres: shared_buffers 763MB
+==> Updating the app
+==> Database backup
+backup: saved
+==> Database migration
+Database schema is up to date.
+==> Admin account
+admin: ready
+curl: (22) The requested URL returned error: 502
+health: {"ok":true}
+service: active · nginx: active · coturn: active · postgres: active
+node: v22.23.4 · public address: http://<server-ip>
+outside health: {"ok":true}
+host looks like an IPv4 address: yes
