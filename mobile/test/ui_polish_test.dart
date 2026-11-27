@@ -17,7 +17,10 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.byType(TaviMascot), findsNWidgets(TaviPose.values.length + 1));
+    expect(find.byType(Image), findsNWidgets(TaviPose.values.length + 1));
+    expect(find.byKey(const ValueKey('hello-still.webp')), findsOneWidget);
+    expect(find.byKey(const ValueKey('contacts-still.webp')), findsOneWidget);
+    expect(find.byKey(const ValueKey('hello.gif')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
