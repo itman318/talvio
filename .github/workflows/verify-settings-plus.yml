@@ -1,0 +1,53 @@
+# Runs the real backend (Express + Socket.IO + PostgreSQL): unit tests, then starts the
+# server and drives every main API + socket event end-to-end. Report → ci-backend branch.
+name: Verify Settings and Plus stickers
+
+on:
+  push:
+    branches: [verify/plus-settings-69575c4]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: chatapp
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chat" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PGPASSWORD: chat
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: npm install --no-audit --no-fund
+      - run: psql -h localhost -U chat -d chatapp -c 'CREATE DATABASE chatapp_test'
+      - run: node --test test/sticker.test.js
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: mobile
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        working-directory: mobile
+      - run: flutter test test/ui_polish_test.dart
+        working-directory: mobile
