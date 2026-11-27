@@ -74,6 +74,7 @@ function createApp() {
   }, express.static(path.join(__dirname, '..', 'developers'), { setHeaders: noCacheHtml }));
 
   // Web / desktop app (installable PWA) at /web
+  app.use('/home-media', express.static(path.join(__dirname, '..', 'public-home', 'media')));
   const webDir = path.join(__dirname, '..', 'web-client');
   app.use(
     '/web',
