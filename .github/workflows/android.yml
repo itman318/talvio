@@ -4,7 +4,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/duck-motion-45c678f]
     paths: ['mobile/**', '.github/workflows/android.yml']
   workflow_dispatch:
     inputs:
