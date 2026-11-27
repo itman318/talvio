@@ -72,10 +72,10 @@ const userRoom = (id) => `user:${id}`;
 const sessionRoom = (id) => `session:${id}`;
 
 function toAck(err) {
-  if (err instanceof AppError) return { ok: false, error: err.code, message: err.message, ...(err.extra || {}) };
+  if (err instanceof AppError) return { ok: false, error: err.code, message: err.message, ...(err.extra || {}), status: err.status };
   // eslint-disable-next-line no-console
   console.error('Socket handler error', err);
-  return { ok: false, error: 'server_error', message: 'Something went wrong' };
+  return { ok: false, error: 'server_error', status: 500, message: 'Something went wrong' };
 }
 
 function handler(fn) {

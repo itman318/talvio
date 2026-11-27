@@ -2,30 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Hushi — Hushavia's violet-cap duck. The Tavi identifiers remain for sticker compatibility.
-/// Drawn in code (sharp at any size, tiny download) and animated: blinks, breathes, waves,
-/// hides its eyes on password screens, searches with a magnifier, sleeps, celebrates…
-enum TaviPose {
-  idle,
-  wave, // hello / empty chats
-  search, // nothing found / no contacts
-  hideEyes, // password screens (wings over the eyes)
-  peek, // password shown: one wing lowered
-  celebrate, // success, Hushavia Plus
-  sleep, // nothing new, no calls
-  mail, // check your email for the code
-  sad, // error / offline
-  love, // hearts
-  think, // bots / setting things up
-  cool, // sunglasses
-  laugh, // laughing with happy tears
-  thumbsUp, // "great!"
-  coffee, // good morning / a break
-  angry, // grumpy, steam puffs
-  shocked, // wide eyes, "!"
-  music, // headphones, swaying
-}
-
 /// Poses used by Hushavia's illustrated duck stickers.
 enum TaviPose {
   idle,

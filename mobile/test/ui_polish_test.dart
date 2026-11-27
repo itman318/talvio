@@ -24,6 +24,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an animated sticker moves the illustrated duck', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Center(child: AppMascot(pose: TaviPose.angry)),
+    ));
+    final image = find.byKey(const ValueKey('angry.png'));
+    expect(image, findsOneWidget);
+    final before = tester.getTopLeft(image);
+    await tester.pump(const Duration(milliseconds: 175));
+    expect(tester.getTopLeft(image), isNot(before));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('profile actions wrap on narrow screens', (tester) async {
     tester.view.physicalSize = const Size(320, 700);
     tester.view.devicePixelRatio = 1;

@@ -887,7 +887,11 @@ class ChatStore extends ChangeNotifier {
       try {
         r = Map<String, dynamic>.from(await socket.request('message:send', payload, timeout: const Duration(seconds: 8)) as Map);
       } on ApiException catch (e) {
-        if (e.status != 0) return _refused(local, e);
+        if (e.status == 429) {
+          _waitForNetwork(local, e.message);
+          return null;
+        }
+        if (e.status != 0 && e.status != 408 && e.status < 500) return _refused(local, e);
         lastNet = e; // the connection is half-dead (a network change): try HTTPS below
       } catch (_) {}
     }

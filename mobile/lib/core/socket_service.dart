@@ -90,12 +90,16 @@ class SocketService {
           .build(),
     );
     s.onConnect((_) {
+      if (!_wantConnected || s != _socket) return;
       _setConnected(true);
       _recheck = 0;
       if (!_foreground) s.emit('app:state', {'active': false}); // reconnected while hidden: keep pushes coming
     });
-    s.onDisconnect((_) => _setConnected(false));
+    s.onDisconnect((_) {
+      if (s == _socket) _setConnected(false);
+    });
     s.onConnectError((err) async {
+      if (!_wantConnected || s != _socket) return;
       _setConnected(false);
       final text = '$err';
       if (text.contains('invalid_token')) {
@@ -105,7 +109,7 @@ class SocketService {
         } catch (_) {
           return;
         }
-        if (_wantConnected) connect();
+        if (_wantConnected && s == _socket) connect();
       } else if (text.contains('session_revoked') || text.contains('account_banned') || text.contains('account_deleted')) {
         // Double-check with the server before logging out: the socket may have tried a token from before a re-login.
         if (s != _socket || token != api.accessToken) {
@@ -116,7 +120,8 @@ class SocketService {
           await api.get('/me');
           if (_wantConnected && s == _socket && _recheck++ < 3) connect(); // the session is fine
         } catch (e) {
-          if (e is ApiException && (e.status == 401 || e.status == 403)) {
+          if (_wantConnected && s == _socket && token == api.accessToken &&
+              e is ApiException && (e.status == 401 || e.status == 403)) {
             _events.add(SocketEvent('session:revoked', {'reason': text}));
           }
         }
@@ -124,7 +129,7 @@ class SocketService {
     });
     for (final name in _serverEvents) {
       s.on(name, (data) {
-        if (data is Map) _events.add(SocketEvent(name, Map<String, dynamic>.from(data)));
+        if (s == _socket && data is Map) _events.add(SocketEvent(name, Map<String, dynamic>.from(data)));
       });
     }
     _socket = s;
@@ -190,7 +195,14 @@ class SocketService {
       if (m['ok'] == true) {
         c.complete(m);
       } else {
-        c.completeError(ApiException(400, (m['error'] ?? 'error') as String, (m['message'] ?? 'Something went wrong') as String, m));
+        final code = m['error'] as String? ?? 'error';
+        // Older servers send only the error code in acknowledgements.
+        final status = m['status'] as int? ?? switch (code) {
+          'server_error' => 500,
+          'rate_limited' => 429,
+          _ => 400,
+        };
+        c.completeError(ApiException(status, code, (m['message'] ?? 'Something went wrong') as String, m));
       }
     });
     return c.future.timeout(timeout, onTimeout: () => throw ApiException(0, 'network', 'The server did not respond'));
