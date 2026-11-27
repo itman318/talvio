@@ -1,9 +1,12 @@
 # Builds Hushavia for computers: Windows (.zip), Linux (.tar.gz) and macOS (.zip), from the same Flutter code
-# as the phone app. Run it by hand from the Actions tab. Files go to the "desktop-latest" release;
+# as the phone app. Run it by hand from the Actions tab. Files go to the "desktop-234bd9f" release;
 # a report (build logs + a Linux start-up screenshot) goes to the ci-desktop branch.
 name: Desktop apps
 
 on:
+  push:
+    branches: [release/apps-234bd9f]
+    paths: ['.github/workflows/desktop.yml']
   workflow_dispatch:
     inputs:
       platforms:
@@ -14,7 +17,7 @@ permissions:
   contents: write
 
 env:
-  API_BASE_RAW: ${{ vars.API_BASE || 'http://127.0.0.1:4000' }}
+  API_BASE_RAW: https://hushavia.com
 
 jobs:
   build:
@@ -39,7 +42,7 @@ jobs:
         id: want
         working-directory: .
         run: |
-          case ",${{ inputs.platforms }}," in *,${{ matrix.platform }},*) echo "go=1" >> $GITHUB_OUTPUT ;; *) echo "go=0" >> $GITHUB_OUTPUT ;; esac
+          case ",${{ inputs.platforms || 'windows,linux,macos' }}," in *,${{ matrix.platform }},*) echo "go=1" >> $GITHUB_OUTPUT ;; *) echo "go=0" >> $GITHUB_OUTPUT ;; esac
 
       - uses: actions/checkout@v5
         if: steps.want.outputs.go == '1'
@@ -193,7 +196,7 @@ jobs:
           esac
           ls -la ../dist
 
-      - name: Publish (desktop-latest)
+      - name: Publish (desktop-234bd9f)
         if: steps.pkg.outcome == 'success'
         working-directory: .
         env:
@@ -201,16 +204,16 @@ jobs:
         run: |
           R="${{ github.repository }}"
           for i in 1 2 3 4 5; do
-            if gh release view desktop-latest -R "$R" >/dev/null 2>&1; then
-              if gh release upload desktop-latest dist/* --clobber -R "$R"; then
+            if gh release view desktop-234bd9f -R "$R" >/dev/null 2>&1; then
+              if gh release upload desktop-234bd9f dist/* --clobber -R "$R"; then
                 # files with the app's old name: remove them so only Hushavia files remain
-                gh release view desktop-latest -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
-                  gh release delete-asset desktop-latest "$old" -y -R "$R" || true
+                gh release view desktop-234bd9f -R "$R" --json assets -q '.assets[].name' | grep -v '^hushavia' | while read -r old; do
+                  gh release delete-asset desktop-234bd9f "$old" -y -R "$R" || true
                 done || true
                 exit 0
               fi
             else
-              gh release create desktop-latest dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
+              gh release create desktop-234bd9f dist/* -R "$R" --target "${{ github.sha }}" --prerelease \
                 --title "Hushavia Desktop (test build)" --notes "Windows: run hushavia-windows-setup.exe (or unzip hushavia-windows.zip and run Hushavia.exe). Linux: extract and run hushavia/Hushavia. macOS: unzip, right-click Hushavia → Open (not signed yet)." && exit 0
             fi
             echo "retry $i"; sleep $((10 + i * 7))
