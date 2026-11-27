@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 /// Poses used by Hushavia's illustrated duck stickers.
 enum TaviPose {
@@ -116,11 +117,82 @@ class _TaviMascotState extends State<TaviMascot> with SingleTickerProviderStateM
               _ => (0.04 * sway, 0.025 * sway.abs()),
             };
             return Transform.translate(offset: Offset(0, -size * lift),
-              child: Transform.rotate(angle: tilt, alignment: Alignment.bottomCenter, child: child));
+              child: Transform.rotate(angle: tilt, alignment: Alignment.bottomCenter,
+                child: _DuckExpression(pose: widget.pose, phase: phase, child: child!)));
           },
         ),
       ),
     );
+  }
+}
+
+
+/// Moves adjacent bands of the same artwork together at their shared edges.
+/// The feet stay planted while the cap, face and jacket can move independently.
+class _DuckExpression extends SingleChildRenderObjectWidget {
+  const _DuckExpression({required this.pose, required this.phase, required super.child});
+  final TaviPose pose;
+  final double phase;
+
+  @override
+  _DuckExpressionBox createRenderObject(BuildContext context) => _DuckExpressionBox(pose, phase);
+
+  @override
+  void updateRenderObject(BuildContext context, _DuckExpressionBox box) {
+    box.pose = pose;
+    box.phase = phase;
+    box.markNeedsPaint();
+  }
+}
+
+class _DuckExpressionBox extends RenderProxyBox {
+  _DuckExpressionBox(this.pose, this.phase);
+  TaviPose pose;
+  double phase;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child == null || phase == 0) {
+      super.paint(context, offset);
+      return;
+    }
+    final beat = math.sin(phase);
+    final pulse = (1 - math.cos(phase)) / 2;
+    final blink = math.pow(math.max(0.0, math.sin(phase)), 18).toDouble();
+    // Vertical displacement at the cap brim, eyes, bill and jacket.
+    final (cap, eyes, bill, body) = switch (pose) {
+      TaviPose.idle => (0.0, .035 * blink, 0.0, .006 * beat),
+      TaviPose.wave => (-.018 * pulse, .013 * beat, .01 * beat, .012 * beat),
+      TaviPose.cool => (.042 * pulse, .012 * pulse, .005 * pulse, 0.0),
+      TaviPose.laugh => (.008 * beat, .012 * blink, .04 * math.sin(phase * 3), .012 * beat),
+      TaviPose.sleep => (0.0, .01 * pulse, .008 * pulse, -.027 * pulse),
+      TaviPose.shocked => (-.035 * pulse, -.016 * pulse, .035 * pulse, .009 * beat),
+      TaviPose.angry => (.026 * pulse, .02 * pulse, -.012 * pulse, -.009 * beat),
+      TaviPose.hideEyes => (.015 * pulse, .023 * pulse, .01 * beat, -.018 * pulse),
+      TaviPose.peek => (-.016 * pulse, -.021 * pulse, .003 * beat, .008 * beat),
+      TaviPose.coffee => (.009 * pulse, .018 * blink, -.022 * pulse, -.009 * pulse),
+      TaviPose.music => (.032 * beat, .015 * beat, .011 * beat, -.013 * beat),
+      TaviPose.celebrate => (-.021 * pulse, -.015 * pulse, .015 * pulse, .027 * beat),
+      TaviPose.search => (-.012 * pulse, .02 * blink, .012 * beat, .009 * beat),
+      TaviPose.mail => (.012 * pulse, .018 * blink, .008 * beat, -.016 * pulse),
+      TaviPose.thumbsUp => (.025 * pulse, .012 * pulse, .009 * pulse, -.014 * pulse),
+      TaviPose.think => (-.012 * beat, .018 * blink, -.011 * pulse, .006 * beat),
+      TaviPose.sad => (.023 * pulse, .022 * pulse, .015 * pulse, .012 * pulse),
+      TaviPose.love => (-.01 * pulse, .016 * blink, .012 * pulse, -.022 * pulse),
+    };
+    const source = [0.0, .22, .33, .46, .72, 1.0];
+    final target = [0.0, .22 + cap, .33 + eyes, .46 + bill, .72 + body, 1.0];
+    for (var i = 0; i < source.length - 1; i++) {
+      final top = target[i] * size.height;
+      final bottom = target[i + 1] * size.height;
+      final scale = (target[i + 1] - target[i]) / (source[i + 1] - source[i]);
+      final matrix = Matrix4.identity()
+        ..setEntry(1, 1, scale)
+        ..setEntry(1, 3, top - source[i] * size.height * scale);
+      context.pushClipRect(needsCompositing, offset, Rect.fromLTRB(0, top, size.width, bottom),
+        (ctx, at) => ctx.pushTransform(needsCompositing, at, matrix,
+          (inner, origin) => inner.paintChild(child!, origin)), clipBehavior: Clip.hardEdge);
+    }
   }
 }
 

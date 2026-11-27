@@ -139,6 +139,7 @@ class ChatStore extends ChangeNotifier {
   void start(int meId) {
     stop();
     myId = meId;
+    _restoration = _restoreOutbox(meId, _session);
     connected = socket.isConnected;
     _eventSub = socket.events.listen(_onEvent);
     _connSub = socket.connectionChanges.listen((c) {
@@ -172,6 +173,11 @@ class ChatStore extends ChangeNotifier {
 
   void stop() {
     _session++;
+    _pending.clear();
+    _pendingTimer?.cancel();
+    _pendingConn?.cancel();
+    _pendingConn = null;
+    _pendingTries = 0;
     bookmarked.clear();
     _eventSub?.cancel();
     _connSub?.cancel();
@@ -263,16 +269,16 @@ class ChatStore extends ChangeNotifier {
 
   Future<void> _showCachedMessages(int chatId) async {
     final me = myId;
-    if (me == null || _messages.containsKey(chatId)) return;
+    if (me == null || (_messages[chatId]?.any((m) => !m.isLocal) ?? false)) return;
     final gen = _session;
     try {
       final f = await _msgCacheFile(me, chatId);
       if (f == null || !await f.exists()) return;
       final data = await _decodeFast(await f.readAsString());
-      if (gen != _session || _messages.containsKey(chatId)) return; // the server answered first
+      if (gen != _session || (_messages[chatId]?.any((m) => !m.isLocal) ?? false)) return; // the server answered first
       final list = data.map((j) => Message.fromJson(Map<String, dynamic>.from(j as Map))).toList();
       _cacheSenders(list);
-      _messages[chatId] = list;
+      _messages[chatId] = [...?_messages[chatId], ...list];
       notifyListeners();
     } catch (_) {}
   }
@@ -487,7 +493,7 @@ class ChatStore extends ChangeNotifier {
   Future<void> openChat(int chatId) async {
     final gen = _session;
     activeChatId = chatId;
-    if (!_messages.containsKey(chatId)) await loadMessages(chatId);
+    if (!(_messages[chatId]?.any((m) => !m.isLocal) ?? false)) await loadMessages(chatId);
     if (gen == _session && activeChatId == chatId) markChatRead(chatId);
   }
 
@@ -528,6 +534,9 @@ class ChatStore extends ChangeNotifier {
     _cacheSenders(list);
     // still-sending messages stay on top — unless the server already has them (no doubles)
     final arrived = {for (final m in list) if (m.clientId != null) m.clientId};
+    for (final m in _messages[chatId] ?? <Message>[]) {
+      if (m.isLocal && arrived.contains(m.clientId)) unawaited(_forgetLocal(m));
+    }
     final locals = (_messages[chatId] ?? []).where((m) => m.isLocal && !arrived.contains(m.clientId)).toList();
     _messages[chatId] = [...locals, ...list];
     _hasMore[chatId] = data['has_more'] == true;
@@ -645,6 +654,123 @@ class ChatStore extends ChangeNotifier {
     return t != null && DateTime.now().millisecondsSinceEpoch - t < 500;
   }
 
+
+  Future<void> _restoreOutbox(int owner, int generation) async {
+    try {
+      final dir = await _outboxDir(owner);
+      if (!await dir.exists()) return;
+      final restored = <Message>[];
+      await for (final entry in dir.list()) {
+        if (generation != _session) return;
+        if (entry is! Directory) continue;
+        final record = File('${entry.path}/message.json');
+        if (!await record.exists()) continue;
+        final data = jsonDecode(await record.readAsString()) as Map<String, dynamic>;
+        final m = Message.fromJson({...data, 'id': _localId--});
+        if (m.senderId != owner || m.clientId == null) continue;
+        m.outbox = data['payload'] as Map<String, dynamic>;
+        m.uploadKind = data['upload_kind'] as String?;
+        m.localFilePath = m.uploadKind == null ? null : '${entry.path}/attachment';
+        m.sendState = SendState.sending;
+        final failed = File('${entry.path}/failed');
+        if (await failed.exists()) {
+          m.sendState = SendState.failed;
+          m.errorText = await failed.readAsString();
+        }
+        restored.add(m);
+      }
+      if (generation != _session) return;
+      restored.sort((a,b) => a.createdAt.compareTo(b.createdAt));
+      for (final m in restored) {
+        final list = _messages.putIfAbsent(m.chatId, () => []);
+        if (list.any((x) => x.clientId == m.clientId)) continue;
+        list.add(m);
+        list.sort(_byNewest);
+        if (m.sendState == SendState.sending) _pending.add(m);
+        _sentHere.add(m.clientId!);
+      }
+      if (restored.isNotEmpty) {
+        notifyListeners();
+        unawaited(_flushPending(soon: true));
+      }
+    } catch (e) {
+      if (_session == generation) notices.add('Could not restore all pending messages');
+    }
+  }
+
+  Future<Directory> _outboxDir(int owner) async {
+    final base = await getApplicationSupportDirectory();
+    return Directory('${base.path}/outbox/$owner');
+  }
+
+  Future<bool> _prepareLocal(Message m) async {
+    final gen = _session;
+    if (m.senderId == null || m.senderId != myId) return false;
+    await _restoration;
+    if (gen != _session) return false;
+    // Time-limited shares and disappearing messages must not be replayed later.
+    final durable = !m.viewOnce && m.meta?['live'] == null &&
+        chatById(m.chatId)?.disappearAfterSec == 0;
+    if (durable) {
+      try {
+        final parent = await _outboxDir(m.senderId!);
+        final dir = Directory('${parent.path}/${m.clientId}');
+        await dir.create(recursive: true);
+        final media = m.media;
+        if (m.localFilePath != null) {
+          final copy = await File(m.localFilePath!).copy('${dir.path}/attachment');
+          m.localFilePath = copy.path;
+        }
+        final r = m.replyTo;
+        final record = {
+          'chat_id': m.chatId, 'client_id': m.clientId, 'sender_id': m.senderId,
+          'created_at': m.createdAt.toUtc().toIso8601String(), 'type': m.type,
+          'text': m.text, 'meta': m.meta, 'album_id': m.albumId,
+          'payload': m.outbox, 'upload_kind': m.uploadKind,
+          if (r != null) 'reply_to': {'id': r.id, 'type': r.type, 'text': r.text,
+            'sender_id': r.senderId, 'sender_name': r.senderName},
+          if (media != null) 'media': {'id': media.id, 'kind': media.kind,
+            'mime': media.mime, 'name': media.name, 'size': media.size, 'url': media.url,
+            'duration': media.duration, 'width': media.width, 'height': media.height},
+        };
+        final tmp = File('${dir.path}/message.tmp');
+        await tmp.writeAsString(jsonEncode(record), flush: true);
+        await tmp.rename('${dir.path}/message.json');
+      } on FileSystemException {
+        if (gen == _session) notices.add('Could not save this message for restart');
+      }
+    }
+    if (gen != _session) return false;
+    _insertLocal(m);
+    return true;
+  }
+
+  Future<void> _forgetLocal(Message m) async {
+    if (m.senderId == null || m.clientId == null) return;
+    try {
+      final parent = await _outboxDir(m.senderId!);
+      final dir = Directory('${parent.path}/${m.clientId}');
+      if (await dir.exists()) await dir.delete(recursive: true);
+    } on FileSystemException { /* An acknowledged retry uses the same client ID. */ }
+  }
+
+  Future<void> _markOutboxFailed(Message m, String? reason) async {
+    if (m.senderId == null || m.clientId == null) return;
+    try {
+      final parent = await _outboxDir(m.senderId!);
+      final dir = Directory('${parent.path}/${m.clientId}');
+      if (!await dir.exists()) return;
+      final file = File('${dir.path}/failed');
+      if (reason != null) {
+        await file.writeAsString(reason, flush: true);
+      } else if (await file.exists()) {
+        await file.delete();
+      }
+    } on FileSystemException { /* The message may already have been discarded. */ }
+  }
+
+  Future<void>? _restoration;
+
   void _insertLocal(Message m) {
     final list = _messages.putIfAbsent(m.chatId, () => []);
     list.insert(0, m);
@@ -694,7 +820,7 @@ class ChatStore extends ChangeNotifier {
         if (asDraft) 'as_draft': true,
       },
     );
-    _insertLocal(local);
+    if (!await _prepareLocal(local)) return;
     await _deliver(local);
   }
 
@@ -716,7 +842,7 @@ class ChatStore extends ChangeNotifier {
         'location': {'lat': lat, 'lng': lng, 'title': title},
       },
     );
-    _insertLocal(local);
+    if (!await _prepareLocal(local)) return;
     await _deliver(local);
   }
 
@@ -734,7 +860,7 @@ class ChatStore extends ChangeNotifier {
       sendState: SendState.sending,
       outbox: {'type': type, if (text.isNotEmpty) 'text': text, if (replyTo != null) 'reply_to_id': replyTo.id, ...payload},
     );
-    _insertLocal(local);
+    if (!await _prepareLocal(local)) return;
     await _deliver(local);
   }
 
@@ -759,7 +885,7 @@ class ChatStore extends ChangeNotifier {
         'location': {'lat': lat, 'lng': lng, 'title': '', 'live_minutes': minutes},
       },
     );
-    _insertLocal(local);
+    if (!await _prepareLocal(local)) return;
     final real = await _deliver(local);
     final until = DateTime.tryParse('${(real?.meta?['live'] as Map?)?['until'] ?? ''}');
     if (real != null && until != null) live.start(real.id, until);
@@ -830,11 +956,13 @@ class ChatStore extends ChangeNotifier {
         if (viewOnce) 'view_once': true,
       },
     );
-    _insertLocal(local);
+    if (!await _prepareLocal(local)) return;
     await _uploadAndDeliver(local);
   }
 
   Future<void> _uploadAndDeliver(Message local) async {
+    final generation = _session;
+    if (local.senderId != myId) return;
     if (local.uploadKind != null) {
       final action = switch (local.type) {
         'image' => 'uploading_photo',
@@ -847,16 +975,23 @@ class ChatStore extends ChangeNotifier {
       final pulse = Timer.periodic(const Duration(seconds: 3), (_) => sendTyping(local.chatId, action: action));
       try {
         final m = local.media!;
+        if (!await File(local.localFilePath!).exists()) {
+          _fail(local, 'Attachment missing from this phone');
+          return;
+        }
+        if (generation != _session) return;
         final media = await api.upload(local.localFilePath!, kind: local.uploadKind!, mime: m.mime, filename: m.name.isEmpty ? null : m.name, fields: {
           if (m.duration != null) 'duration': '${m.duration}',
           if (m.width != null) 'width': '${m.width}',
           if (m.height != null) 'height': '${m.height}',
         });
+        if (generation != _session) return;
         final info = MediaInfo.fromJson(media);
         await services.media.putLocal(info, local.localFilePath!);
         local.outbox!['media_id'] = info.id;
         local.uploadKind = null;
       } on ApiException catch (e) {
+        if (generation != _session) return;
         if (e.status == 0 || e.status >= 500 || e.status == 408 || e.status == 429) {
           _waitForNetwork(local, e.message);
         } else {
@@ -868,10 +1003,10 @@ class ChatStore extends ChangeNotifier {
         return;
       } finally {
         pulse.cancel();
-        sendTyping(local.chatId, action: 'cancel');
+        if (generation == _session) sendTyping(local.chatId, action: 'cancel');
       }
     }
-    await _deliver(local);
+    if (generation == _session) await _deliver(local);
   }
 
   /// Sends a message that waits on this phone. The same client id is used every time, so the server
@@ -880,6 +1015,8 @@ class ChatStore extends ChangeNotifier {
   ///  - no network at all: the message stays "sending" and goes out by itself when the phone is back online.
   /// Only a real refusal from the server (not allowed, too long…) marks it as failed.
   Future<Message?> _deliver(Message local) async {
+    final generation = _session;
+    if (myId != local.senderId) return null;
     final payload = <String, dynamic>{...local.outbox!, 'chat_id': local.chatId, 'client_id': local.clientId};
     Map<String, dynamic>? r;
     ApiException? lastNet;
@@ -887,6 +1024,7 @@ class ChatStore extends ChangeNotifier {
       try {
         r = Map<String, dynamic>.from(await socket.request('message:send', payload, timeout: const Duration(seconds: 8)) as Map);
       } on ApiException catch (e) {
+        if (generation != _session) return null;
         if (e.status == 429) {
           _waitForNetwork(local, e.message);
           return null;
@@ -895,15 +1033,18 @@ class ChatStore extends ChangeNotifier {
         lastNet = e; // the connection is half-dead (a network change): try HTTPS below
       } catch (_) {}
     }
+    if (generation != _session) return null;
     if (r == null) {
       try {
         final j = Map<String, dynamic>.from(await api.post('/chats/${local.chatId}/messages', payload) as Map);
         r = j['queued'] != null ? j : {'message': j};
       } on ApiException catch (e) {
+        if (generation != _session) return null;
         if (e.status != 0 && e.status != 408 && e.status != 429 && e.status < 500) return _refused(local, e);
         lastNet = e;
       } catch (_) {}
     }
+    if (generation != _session) return null;
     if (r == null) {
       _waitForNetwork(local, lastNet?.message);
       return null;
@@ -928,6 +1069,7 @@ class ChatStore extends ChangeNotifier {
   StreamSubscription<bool>? _pendingConn;
 
   void _waitForNetwork(Message local, String? why) {
+    if (local.senderId != myId) return;
     _pending.add(local);
     // still "sending" (a clock), not an error: it will go by itself
     if (local.sendState != SendState.sending) {
@@ -952,7 +1094,7 @@ class ChatStore extends ChangeNotifier {
     if (soon) _pendingTries = 0;
     _pendingTimer?.cancel();
     if (_pending.isEmpty) return;
-    final batch = _pending.toList()..sort((a, b) => b.id.compareTo(a.id)); // oldest (least negative) first
+    final batch = _pending.toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     _pending.clear();
     _pendingTries++;
     for (final m in batch) {
@@ -987,12 +1129,14 @@ class ChatStore extends ChangeNotifier {
   }
 
   void _fail(Message local, String error) {
+    unawaited(_markOutboxFailed(local, error));
     local.sendState = SendState.failed;
     local.errorText = error;
     notifyListeners();
   }
 
   void _confirm(Message local, Message real) {
+    unawaited(_forgetLocal(local));
     final list = _messages[local.chatId];
     if (list != null) {
       final already = list.any((m) => m.id == real.id);
@@ -1018,11 +1162,14 @@ class ChatStore extends ChangeNotifier {
 
   static int _byNewest(Message a, Message b) {
     if (a.isLocal != b.isLocal) return a.isLocal ? -1 : 1;
-    if (a.isLocal) return a.id.compareTo(b.id); // more negative = newer
+    if (a.isLocal) return b.createdAt.compareTo(a.createdAt); // more negative = newer
     return b.id.compareTo(a.id);
   }
 
   Future<void> retry(Message local) async {
+    final generation = _session;
+    await _markOutboxFailed(local, null);
+    if (generation != _session || local.senderId != myId) return;
     _pending.remove(local);
     local.sendState = SendState.sending;
     local.errorText = null;
@@ -1031,6 +1178,7 @@ class ChatStore extends ChangeNotifier {
   }
 
   void discard(Message local) {
+    unawaited(_forgetLocal(local));
     _pending.remove(local);
     _messages[local.chatId]?.remove(local);
     final chat = chatById(local.chatId);
@@ -1950,6 +2098,7 @@ class ChatStore extends ChangeNotifier {
     if (list.any((x) => x.id == m.id)) return false;
     final localIdx = m.clientId == null ? -1 : list.indexWhere((x) => x.isLocal && x.clientId == m.clientId);
     if (localIdx >= 0) {
+      unawaited(_forgetLocal(list[localIdx]));
       list[localIdx] = m;
     } else {
       list.add(m);
