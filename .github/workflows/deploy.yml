@@ -6,6 +6,8 @@ name: Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches: [release/home-e68ba75]
 
 permissions:
   contents: write
@@ -125,6 +127,13 @@ jobs:
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
           echo "outside health: $(curl -fsS --max-time 15 "http://$HOST/health" || echo FAILED)" | tee -a deploy.txt
+
+      - name: Verify public homepage
+        run: |
+          curl -fsS --retry 3 https://hushavia.com/ -o /tmp/home.html
+          grep -Fq 'Get Hushavia for your device' /tmp/home.html
+          grep -Fq 'hushavia-windows-setup.exe' /tmp/home.html
+          curl -fsS https://hushavia.com/web/icon.svg -o /dev/null
 
       - name: Save result to ci-deploy branch
         if: always()
