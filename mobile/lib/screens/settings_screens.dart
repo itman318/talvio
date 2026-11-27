@@ -56,7 +56,10 @@ class _Item {
   final VoidCallback? onTap;
   final String keywords;
 
-  bool matches(String q) => '$title ${subtitle ?? ''} $keywords $section'.toLowerCase().contains(q);
+  bool matches(String q) {
+    final searchable = '$title ${subtitle ?? ''} $keywords $section'.toLowerCase();
+    return q.split(RegExp(r'\s+')).every(searchable.contains);
+  }
   // one-line hints: the list stays short and easy to scan
   Widget tile() => SettingsTile(icon: icon, color: color, title: title, subtitle: subtitle, trailing: trailing, onTap: onTap, maxSubtitleLines: 1);
 }
@@ -203,6 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final items = _settingsItems(context, auth, me, support);
     final q = _q.trim().toLowerCase();
 
+    final scheme = Theme.of(context).colorScheme;
     final searchField = Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: TextField(
@@ -286,18 +290,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Material(
-              color: dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFEEF0F6),
+              color: scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(14),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => setState(() => _searchOpen = true),
-                child: const SizedBox(
+                child: SizedBox(
                   height: 48,
                   child: Row(children: [
                     SizedBox(width: 12),
-                    Icon(Icons.search_rounded, size: 20, color: Brand.muted),
+                    Icon(Icons.search_rounded, size: 20, color: scheme.onSurfaceVariant),
                     SizedBox(width: 8),
-                    Text('Search settings', style: TextStyle(color: Brand.muted, fontSize: 15)),
+                    Text('Search settings', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 15)),
                   ]),
                 ),
               ),
@@ -388,7 +392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Text('Hushavia Plus', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                           Text(plus ? 'Manage your membership' : (auth.plusAvailable ? 'Bigger uploads, more folders, no ads' : 'Coming soon'),
-                              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Brand.muted)),
+                              maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
                         ]),
                       ),
                       const Icon(Icons.chevron_right_rounded, color: Color(0xFFC9A45C)),
@@ -1293,6 +1297,8 @@ class BlockedUsersScreen extends StatefulWidget {
 class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   List<AppUser>? _users;
 
+  bool _loadFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -1300,11 +1306,18 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    if (_loadFailed) setState(() => _loadFailed = false);
     try {
       final data = await context.read<AppServices>().api.get('/blocks') as List;
       if (mounted) setState(() => _users = data.map((j) => AppUser.fromJson(Map<String, dynamic>.from(j as Map))).toList());
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (!mounted) return;
+      if (_users == null) {
+        setState(() => _loadFailed = true);
+      } else {
+        showError(context, e);
+      }
     }
   }
 
@@ -1313,7 +1326,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     final users = _users;
     return Scaffold(
       appBar: AppBar(title: const Text('Blocked users')),
-      body: users == null
+      body: _loadFailed
+          ? Center(child: TextButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Retry loading blocked users')))
+          : users == null
           ? const Center(child: CircularProgressIndicator())
           : users.isEmpty
               ? const EmptyState(pose: TaviPose.cool, title: 'Nobody blocked', subtitle: 'People you block can’t message or call you. They show up here.')
@@ -1351,6 +1366,8 @@ class SessionsScreen extends StatefulWidget {
 class _SessionsScreenState extends State<SessionsScreen> {
   List<DeviceSession>? _sessions;
 
+  bool _loadFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -1358,11 +1375,18 @@ class _SessionsScreenState extends State<SessionsScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    if (_loadFailed) setState(() => _loadFailed = false);
     try {
       final data = await context.read<AppServices>().api.get('/me/sessions') as List;
       if (mounted) setState(() => _sessions = data.map((j) => DeviceSession.fromJson(Map<String, dynamic>.from(j as Map))).toList());
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (!mounted) return;
+      if (_sessions == null) {
+        setState(() => _loadFailed = true);
+      } else {
+        showError(context, e);
+      }
     }
   }
 
@@ -1395,7 +1419,9 @@ class _SessionsScreenState extends State<SessionsScreen> {
     final s = _sessions;
     return Scaffold(
       appBar: AppBar(title: const Text('Devices')),
-      body: s == null
+      body: _loadFailed
+          ? Center(child: TextButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Retry loading devices')))
+          : s == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [

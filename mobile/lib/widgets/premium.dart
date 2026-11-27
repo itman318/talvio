@@ -190,7 +190,7 @@ class SettingsTile extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, letterSpacing: -0.1, color: danger ? const Color(0xFFE5484D) : scheme.onSurface)),
+              Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, letterSpacing: -0.1, color: danger ? scheme.error : scheme.onSurface)),
               if (subtitle != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 1),
@@ -891,7 +891,8 @@ class HeaderChip extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(icon, size: 17, color: fg),
