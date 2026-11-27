@@ -1,0 +1,21 @@
+name: Publish download page
+on:
+  push:
+    branches: [release/downloads-379]
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install homepage
+        env:
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          set -eu
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
+          sudo apt-get install -y -qq sshpass >/dev/null
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@"$HOST" 'set -eu; cd /opt/hushavia/app/public-home; tmp=$(mktemp ./index.XXXXXX); trap "rm -f $tmp" EXIT; cat > "$tmp"; chmod 644 "$tmp"; mv "$tmp" index.html' < backend/public-home/index.html
+          curl -fsSL --retry 3 "https://hushavia.com/?release=379" | grep -q 'desktop-234bd9f/'
