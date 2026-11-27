@@ -102,7 +102,7 @@ function createApp() {
     },
     express.static(adminDir, { index: 'index.html', maxAge: config.isProd ? '1h' : 0, setHeaders: noCacheHtml }),
   );
-  app.get('/', (req, res) => res.redirect('/admin/'));
+  app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public-home', 'index.html')));
   // Public legal pages, e.g. https://chat.example.com/p/privacy (for Play Store / App Store listings)
   app.get('/p/:slug', async (req, res, next) => {
     try {
