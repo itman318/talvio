@@ -1,0 +1,18 @@
+name: Verify Flutter app
+on:
+  push:
+    branches: [verify/settings-45b956c]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test test/audio_reply_test.dart test/ui_polish_test.dart test/wallet_crypto_test.dart
