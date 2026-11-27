@@ -88,9 +88,10 @@ dependencies:
 # ("ClassNotFoundException: android/content/Context") — then no folder for the image cache, so no
 # profile photos and photos never load. Stay on the last versions before the switch
 # (shared_preferences_android moved to JNI in 2.5.0 the same way).
+# Pin older pre-JNI implementations compatible with the Flutter 3.38 Android toolchain.
 dependency_overrides:
-  path_provider_android: 2.2.23
-  shared_preferences_android: 2.4.28
+  path_provider_android: 2.2.17
+  shared_preferences_android: 2.4.10
 
 dev_dependencies:
   flutter_test:
