@@ -6,6 +6,8 @@ name: Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches: [release/buttons-a288175]
 
 permissions:
   contents: write
@@ -125,6 +127,12 @@ jobs:
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
           echo "outside health: $(curl -fsS --max-time 15 "http://$HOST/health" || echo FAILED)" | tee -a deploy.txt
+
+      - name: Verify live download buttons
+        run: |
+          curl -fsS --retry 3 https://hushavia.com/ -o /tmp/home.html
+          test "$(grep -o 'class="action-icon"' /tmp/home.html | wc -l)" -eq 9
+          grep -Fq 'hushavia-windows-setup.exe' /tmp/home.html
 
       - name: Save result to ci-deploy branch
         if: always()
