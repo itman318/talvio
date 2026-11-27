@@ -307,46 +307,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // me: the brand card — photo, name, contact, and quick buttons
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
-            child: BrandHeaderCard(
-              plus: plus,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  GestureDetector(
-                    onTap: () => go(const EditProfileScreen()),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: plus ? Brand.plusGradient : null, color: plus ? null : Colors.white.withValues(alpha: 0.25)),
-                      child: ClipOval(child: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 64)),
-                    ),
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+            child: Material(
+              color: scheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: scheme.outlineVariant),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: Avatar(id: me.id, name: me.name, url: me.avatarAbsolute, size: 48),
+                  title: Row(children: [
+                    Flexible(child: Text(me.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+                    if (me.isVerified) Padding(padding: const EdgeInsets.only(left: 4),
+                      child: Icon(Icons.verified_rounded, size: 17, color: scheme.primary)),
+                    if (me.statusEmoji != null) EmojiStatusBadge(me, size: 17),
+                  ]),
+                  subtitle: Text((me.username ?? '').trim().isNotEmpty ? '@${me.username}' : 'Edit profile',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () => go(const EditProfileScreen()),
+                  trailing: IconButton(
+                    tooltip: 'My QR code',
+                    onPressed: () => go(const MyQrScreen()),
+                    icon: const Icon(Icons.qr_code_rounded),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Flexible(child: Text(me.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4))),
-                        if (me.isVerified) const Padding(padding: EdgeInsets.only(left: 5), child: Icon(Icons.verified_rounded, color: Colors.white, size: 18)),
-                        if (me.statusEmoji != null) EmojiStatusBadge(me, size: 18)
-                        else if (plus) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium_rounded, color: Color(0xFFE6C987), size: 19)),
-                      ]),
-                      const SizedBox(height: 3),
-                      Text(
-                        (me.username ?? '').trim().isNotEmpty ? '@${me.username}' : [me.email, me.phone].whereType<String>().firstWhere((v) => v.trim().isNotEmpty, orElse: () => ''),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13.5),
-                      ),
-                    ]),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: HeaderChip(icon: Icons.edit_rounded, label: 'Edit profile', solid: true, onTap: () => go(const EditProfileScreen()))),
-                  const SizedBox(width: 8),
-                  Expanded(child: HeaderChip(icon: Icons.qr_code_2_rounded, label: 'My QR', onTap: () => go(const MyQrScreen()))),
-                ]),
+                ),
+                const Divider(height: 1),
+                Align(alignment: AlignmentDirectional.centerStart, child: Wrap(children: [
+                  TextButton.icon(icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Edit profile'), onPressed: () => go(const EditProfileScreen())),
+                  TextButton.icon(icon: const Icon(Icons.devices_outlined, size: 18),
+                    label: const Text('Devices'), onPressed: () => go(const SessionsScreen())),
+                ])),
               ]),
             ),
           ),
@@ -404,12 +400,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // every section is one row here and a short page of its own; three small cards instead of one long list
           for (final (heading, part) in const [
             ('Your account', ['Account', 'Coins & wallet']),
-            ('Preferences', ['Notifications', 'Privacy & security', 'Chats', 'Data & connection']),
+            ('Privacy & alerts', ['Privacy & security', 'Notifications']),
+            ('App preferences', ['Chats', 'Data & connection']),
             ('More from Hushavia', ['Extras', 'Help']),
           ])
             if (sections.any(part.contains))
               SettingsGroup(title: heading, children: [
-                for (final sec in sections.where(part.contains))
+                for (final sec in part.where(sections.contains))
                   () {
                     final of = items.where((i) => i.section == sec).toList();
                     final look = _sectionLook[sec] ?? (of.first.icon, of.first.color);

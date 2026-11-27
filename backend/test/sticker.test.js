@@ -118,3 +118,18 @@ test('premium sticker pack: everyone sees it, only Plus members send it', async 
   const mine = await stickers.myPacks(u.id);
   assert.equal(mine.find((p) => p.slug === 'hushi').is_premium, true);
 });
+
+test('animated Plus stickers can be sent after activation and lock again after expiry', async () => {
+  const send = (pose) => messages.sendMessage(A, chat.id, { type: 'sticker', tavi: pose, emoji: '⭐' });
+  await db.query('UPDATE users SET premium_until = NULL WHERE id = $1', [A]);
+  await rejects(send('music'), 'premium_required');
+  await db.query("UPDATE users SET premium_until = now() + interval '1 day' WHERE id = $1", [A]);
+  for (const pose of ['celebrate', 'hideEyes', 'search', 'mail', 'sad', 'cool', 'angry', 'shocked', 'music']) {
+    const result = await send(pose);
+    assert.equal((result.message || result).meta.sticker.tavi, pose);
+  }
+  await db.query("UPDATE users SET premium_until = now() - interval '1 minute' WHERE id = $1", [A]);
+  await rejects(send('music'), 'premium_required');
+  const free = await send('wave');
+  assert.equal((free.message || free).meta.sticker.tavi, 'wave');
+});

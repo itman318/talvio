@@ -23,6 +23,10 @@ import 'mascot.dart';
 import 'pebo_stickers.dart';
 import 'sticker_maker.dart';
 
+bool _canSendPlusStickers(AppUser? me) =>
+    me?.limits?['exclusive_stickers'] == true ||
+    (me?.limits?['exclusive_stickers'] == null && me?.isPremium == true);
+
 String stickerUrl(Message m) {
   final s = m.meta?['sticker'] as Map?;
   if (s?['url'] != null) return AppConfig.absolute('${s!['url']}');
@@ -200,7 +204,7 @@ class _PackSheetState extends State<_PackSheet> {
             _sent();
           });
     } else if (_tavi) {
-      final plus = context.read<AuthState>().me?.limits?['exclusive_stickers'] == true;
+      final plus = context.select<AuthState, bool>((auth) => _canSendPlusStickers(auth.me));
       final list = taviStickers.where((t) => !t.$3 || plus).toList();
       title = 'Hushi — animated';
       body = grid(list.length, (i) => AppMascot(pose: list[i].$1, size: 78), (i) => () {
@@ -545,7 +549,7 @@ class _StickerPanelState extends State<StickerPanel> {
 
   /// Stickers from a Hushavia Plus pack: only Plus members send them (others see what they'd get).
   bool _locked(Map<String, dynamic> sticker) {
-    if (context.read<AuthState>().me?.isPremium == true) return false;
+    if (_canSendPlusStickers(context.read<AuthState>().me)) return false;
     final pid = sticker['pack_id'];
     return (_packs ?? const []).any((p) => p['id'] == pid && p['is_premium'] == true);
   }
@@ -782,7 +786,7 @@ extension on _StickerPanelState {
   }
 
   Widget _taviGrid(BuildContext context) {
-    final plus = context.watch<AuthState>().me?.limits?['exclusive_stickers'] == true;
+    final plus = context.select<AuthState, bool>((auth) => _canSendPlusStickers(auth.me));
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 96, mainAxisSpacing: 6, crossAxisSpacing: 6),
@@ -1320,7 +1324,7 @@ class _EmojiStickerSuggestionsState extends State<EmojiStickerSuggestions> {
   Widget build(BuildContext context) {
     final want = _related(widget.emoji);
     bool hit(String e) => want.any((w) => e.replaceAll('️', '').contains(w));
-    final plus = context.read<AuthState>().me?.isPremium == true;
+    final plus = _canSendPlusStickers(context.read<AuthState>().me);
     final tavi = taviStickers.where((t) => hit(t.$2) && (!t.$3 || plus)).toList();
     final pebo = peboStickers.where((t) => hit(t.$2)).toList();
     final packs = (EmojiStickerSuggestions._cache ?? []).where((s) => hit('${s['emoji'] ?? ''}')).take(12).toList();
