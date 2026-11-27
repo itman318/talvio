@@ -6,6 +6,8 @@ name: Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches: [release/home-stories-32fb460]
 
 permissions:
   contents: write
@@ -125,6 +127,15 @@ jobs:
           HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
           if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
           echo "outside health: $(curl -fsS --max-time 15 "http://$HOST/health" || echo FAILED)" | tee -a deploy.txt
+
+      - name: Verify homepage and mascot assets
+        run: |
+          curl -fsS --retry 3 https://hushavia.com/ -o /tmp/home
+          grep -Fq 'Inside Hushavia' /tmp/home
+          for asset in duck-wave.webp duck-hello-still.webp duck-hello.gif duck-hideEyes.webp duck-music.webp duck-contacts-still.webp; do
+            curl -fsS "https://hushavia.com/home-media/$asset" -o /tmp/asset
+            file /tmp/asset | grep -Ei 'Web/P|GIF image'
+          done
 
       - name: Save result to ci-deploy branch
         if: always()
