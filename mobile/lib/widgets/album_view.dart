@@ -1,3 +1,4 @@
+import 'delivery_receipt.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -109,9 +110,7 @@ class AlbumBubble extends StatelessWidget {
     if (chat.isSavedMessages || chat.isChannel) return const SizedBox.shrink();
     final id = items.last.id;
     final soft = softMineOf(context);
-    if (id <= chat.readUpTo) return Icon(Icons.done_all, size: 15, color: onPhoto || !soft ? const Color(0xFF7DF3DB) : MineInk.accent);
-    if (id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: meta);
-    return Icon(Icons.done, size: 15, color: meta);
+    return deliveryReceipt(messageId: id, deliveredUpTo: chat.deliveredUpTo, readUpTo: chat.readUpTo, onDark: onPhoto || !soft);
   }
 
   @override
@@ -176,7 +175,7 @@ class AlbumBubble extends StatelessWidget {
                 child: IgnorePointer(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(color: Colors.black.withAlpha(110), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: Colors.black.withAlpha(175), borderRadius: BorderRadius.circular(10)),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Text(messageTime(last.createdAt), style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
                       if (isMine) ...[const SizedBox(width: 3), _tick(context, Colors.white.withAlpha(200), onPhoto: true)],

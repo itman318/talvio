@@ -1,3 +1,4 @@
+import '../widgets/delivery_receipt.dart';
 import 'global_search_screen.dart';
 import '../widgets/crypto_card.dart';
 import '../widgets/update_widgets.dart';
@@ -471,8 +472,7 @@ class ChatTile extends StatelessWidget {
       } else if (last.sendState == SendState.failed) {
         tick = const Icon(Icons.error, size: 15, color: Colors.red);
       } else {
-        tick = Icon(last.id <= chat.deliveredUpTo ? Icons.done_all : Icons.done,
-            size: 16, color: last.id <= chat.readUpTo ? Brand.primary : Brand.muted);
+        tick = deliveryReceipt(messageId: last.id, deliveredUpTo: chat.deliveredUpTo, readUpTo: chat.readUpTo, onDark: Theme.of(context).brightness == Brightness.dark);
       }
     }
 
