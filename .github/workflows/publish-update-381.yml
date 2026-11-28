@@ -1,0 +1,46 @@
+name: Publish Android update 381
+on:
+  push:
+    branches: [release/publish-update-381]
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          mkdir dl
+          gh release download android-hushi-new -R "${{ github.repository }}" -p hushavia.apk -p hushavia-arm32.apk -D dl
+          echo 'b66c07a724d1cb3c16abac015b0cdf279d375a089117099c67456b6ef82ab0e5  dl/hushavia.apk' | sha256sum -c
+          echo '4cb29693fc81b1f1bef73e3c0a0cae1cc8d623699b0ac84330d021896d9b7ff6  dl/hushavia-arm32.apk' | sha256sum -c
+          mv dl/hushavia.apk dl/hushavia-381.apk
+          mv dl/hushavia-arm32.apk dl/hushavia-arm32-381.apk
+          python3 - <<'PY'
+          import hashlib, json, os, datetime
+          def info(f):
+              p = os.path.join('dl', f)
+              with open(p, 'rb') as source: digest = hashlib.file_digest(source, 'sha256').hexdigest()
+              return {'file': f, 'size': os.path.getsize(p), 'sha256': digest}
+          data = {'build': 381, 'published_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'files': {'hushavia.apk': info('hushavia-381.apk'), 'hushavia-arm32.apk': info('hushavia-arm32-381.apk')}}
+          with open('dl/latest.json', 'w') as target: json.dump(data, target)
+          PY
+      - env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          API_BASE: ${{ vars.API_BASE }}
+        run: |
+          set -eu
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
+          if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
+          sudo apt-get install -y -qq sshpass >/dev/null
+          O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
+          D=/var/lib/hushavia/downloads
+          sshpass -e ssh $O root@"$HOST" "mkdir -p $D"
+          sshpass -e scp $O dl/*.apk root@"$HOST":$D/
+          sshpass -e scp $O dl/latest.json root@"$HOST":$D/latest.json.new
+          sshpass -e ssh $O root@"$HOST" "cd $D && chmod 644 *.apk latest.json.new && mv latest.json.new latest.json && chown hushavia:hushavia hushavia-381.apk hushavia-arm32-381.apk latest.json"
+          curl -fsS 'https://hushavia.com/api/app/update?build=379&abi=arm64-v8a' | tee update.json
+          python3 -c "import json; d=json.load(open('update.json')); assert d.get('update') == True, d"
