@@ -4,10 +4,9 @@
 name: APK to server
 
 on:
-  workflow_run:
-    workflows: ['Android APK']
-    types: [completed]
-  workflow_dispatch:
+  push:
+    branches: [release/restore-update-384]
+    paths: ['.github/workflows/apk-to-server.yml']
 
 permissions:
   contents: read
@@ -18,22 +17,27 @@ concurrency:
 
 jobs:
   upload:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 48
     steps:
-      - name: Get the newest APKs (android-latest release)
+      - name: Get the newest APKs (android-dfddac8 release)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           R="${{ github.repository }}"
-          TITLE=$(gh release view android-latest -R "$R" --json name -q .name)
+          for attempt in $(seq 1 80); do
+            if gh release view android-dfddac8 -R "$R" --json body -q .body 2>/dev/null | grep -Fq 'signing: release'; then break; fi
+            sleep 30
+          done
+          gh release view android-dfddac8 -R "$R" --json body -q .body | grep -Fq 'signing: release'
+          TITLE=$(gh release view android-dfddac8 -R "$R" --json name -q .name)
           N=$(echo "$TITLE" | grep -oE '#[0-9]+' | tr -d '#')
           [ -n "$N" ] || { echo "no build number in: $TITLE"; exit 1; }
+          [ "$N" = 384 ]
           echo "N=$N" >> "$GITHUB_ENV"
           mkdir dl
-          gh release download android-latest -R "$R" -p hushavia.apk -p hushavia-arm32.apk -D dl
+          gh release download android-dfddac8 -R "$R" -p hushavia.apk -p hushavia-arm32.apk -D dl
           mv dl/hushavia.apk "dl/hushavia-$N.apk"
           mv dl/hushavia-arm32.apk "dl/hushavia-arm32-$N.apk"
           python3 - "$N" <<'PY'
@@ -64,12 +68,23 @@ jobs:
           O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
           D=/var/lib/hushavia/downloads
           sshpass -e ssh $O root@"$HOST" "mkdir -p $D"
+          active=$(sshpass -e ssh $O root@"$HOST" "cat $D/latest.json" | jq -er .build)
+          echo "Server build before repair: $active"
+          (( active <= N ))
           # the APKs first, latest.json last: phones only hear about a build once its files are there
           sshpass -e scp $O dl/*.apk root@"$HOST":$D/
           sshpass -e scp $O dl/latest.json root@"$HOST":$D/latest.json.new
-          sshpass -e ssh $O root@"$HOST" "cd $D && mv latest.json.new latest.json && chmod 755 $D && chmod 644 * \
-            && chown -R hushavia:hushavia $D 2>/dev/null; \
-            ls -1t hushavia-[0-9]*.apk | tail -n +4 | xargs -r rm -f; ls -1t hushavia-arm32-*.apk | tail -n +4 | xargs -r rm -f; ls -la"
-          code=$(curl -s -o /dev/null -w '%{http_code}' "http://$HOST/download/hushavia-$N.apk" -r 0-99 || true)
-          echo "download check: HTTP $code"
-          echo "update check: $(curl -s "http://$HOST/api/app/update?build=1&abi=arm64-v8a" | head -c 300)"
+          sshpass -e ssh $O root@"$HOST" "cd $D && chmod 644 latest.json.new hushavia-$N.apk hushavia-arm32-$N.apk && mv latest.json.new latest.json"
+      - name: Verify public in-app update and downloads
+        run: |
+          set -e
+          for abi in arm64-v8a armeabi-v7a; do
+            data=$(curl -fsS --retry 3 "https://hushavia.com/api/app/update?build=382&abi=$abi&fresh=1")
+            echo "$data" | jq -e '.update == true and .latest_build == 384'
+            url=$(echo "$data" | jq -r .url)
+            [[ "$url" == https://hushavia.com/download/* ]]
+            expected=$(echo "$data" | jq -r .sha256)
+            actual=$(curl -fsS --retry 3 "$url" | sha256sum | cut -d' ' -f1)
+            test "$actual" = "$expected"
+          done
+          curl -fsS 'https://hushavia.com/api/app/update?build=384&abi=arm64-v8a' | jq -e '.update == false and .latest_build == 384'
