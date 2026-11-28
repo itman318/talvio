@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/brand.dart';
+
 /// A read receipt can arrive before the delivery watermark catches up.
 Icon deliveryReceipt({
   required int messageId,
@@ -10,7 +12,7 @@ Icon deliveryReceipt({
   final read = messageId <= readUpTo;
   final delivered = read || messageId <= deliveredUpTo;
   final color = read
-      ? (onDark ? const Color(0xFF92FFDA) : const Color(0xFF006648))
+      ? (onDark ? Brand.primaryLight : Brand.primaryDeep)
       : (onDark ? const Color(0xFFF0EDF4) : const Color(0xFF595465));
   return Icon(
     delivered ? Icons.done_all_rounded : Icons.done_rounded,
