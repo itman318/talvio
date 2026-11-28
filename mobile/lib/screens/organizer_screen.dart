@@ -57,6 +57,9 @@ class _OrganizerScreenState extends State<OrganizerScreen> {
           return;
         }
       }
+      if (!widget.saved && selected != null && result['enabled'] is bool) {
+        enabled = result['enabled'] as bool;
+      }
       if (widget.saved && selected == null) tags = [for(final item in result['tags'] as List) item['title'] as String];
       final items = List<Map>.from(result['rows'] as List);
       setState(() { rows = append ? [...rows,...items] : items; more = selected != null && items.length == 50; busy = false; });
@@ -121,7 +124,10 @@ class _OrganizerScreenState extends State<OrganizerScreen> {
           selected = null; tag = null; title = null; rows = []; draft.clear(); reload();
         })),
         if (busy) const LinearProgressIndicator(),
-        if (error != null) TextButton(onPressed:() => reload(),child:Text('Retry · $error')),
+        if (error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Column(children: [
+          Text(error!, textAlign: TextAlign.center),
+          TextButton(onPressed: busy ? null : () => reload(), child: const Text('Try again')),
+        ])),
         if (!busy && error == null && rows.isEmpty) Expanded(child:Center(child:Text(widget.saved ? 'No saved messages here yet.' : enabled ? 'No messages yet.' : 'The channel inbox is closed.'))),
         if (rows.isNotEmpty || busy || error != null) Expanded(child:ListView.builder(
           itemCount: rows.length + (more ? 1 : 0),

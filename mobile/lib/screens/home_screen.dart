@@ -441,8 +441,9 @@ class ChatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
-    final draft = context.watch<AppPrefs>().draft(chat.id);
-    final typing = store.typingText(chat);
+    final protected = ChatPasscode.has(chat.id);
+    final draft = context.select<AppPrefs, String?>((prefs) => protected ? null : prefs.draft(chat.id));
+    final typing = protected ? null : store.typingText(chat);
     final last = chat.lastMessage;
     final mine = last != null && last.senderId == store.myId && !last.isSystem;
     final unread = chat.unreadCount > 0 || chat.markedUnread;
@@ -450,18 +451,15 @@ class ChatTile extends StatelessWidget {
     String preview = '';
     String prefix = '';
     IconData? kindIcon;
-    if (last != null) {
+    if (protected) {
+      kindIcon = Icons.lock_rounded;
+      preview = 'Protected with a passcode';
+    } else if (last != null) {
       if (last.isSystem) {
         preview = systemText(last, store);
       } else {
         prefix = mine && !chat.isChannel && !chat.isSavedMessages ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
         (kindIcon, preview) = previewParts(last);
-        if (ChatPasscode.has(chat.id)) {
-          // passcode chats don't show their messages in the list
-          prefix = '';
-          kindIcon = Icons.lock_rounded;
-          preview = 'Protected with a passcode';
-        }
       }
     }
 
@@ -563,7 +561,7 @@ class ChatTile extends StatelessWidget {
                               alignment: PlaceholderAlignment.middle,
                               child: Padding(padding: const EdgeInsets.only(right: 4), child: Icon(kindIcon, size: 16, color: Brand.muted)),
                             ),
-                                          if (last == null && chat.historyCleared)
+                          if (!protected && last == null && chat.historyCleared)
                             const TextSpan(text: 'History was cleared', style: TextStyle(color: Brand.primary, fontWeight: FontWeight.w500))
                           else
                             ...taliSpans(preview.replaceAll('\n', ' '), null, scale: 1.15),

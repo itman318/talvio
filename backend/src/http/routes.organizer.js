@@ -24,7 +24,13 @@ router.get('/saved', h(async (req, res) => {
     return res.json({rows});
   }
   if (req.query.source === undefined) {
-    const rows = await db.many(`SELECT coalesce(saved_source_chat,0) AS id, (array_agg(saved_source_title ORDER BY m.id DESC))[1] AS title, count(*) AS count FROM messages m WHERE ${visible} GROUP BY saved_source_chat ORDER BY max(m.id) DESC`, args);
+    const rows = await db.many(`SELECT coalesce(groups.saved_source_chat, 0) AS id,
+        latest.saved_source_title AS title, groups.count
+      FROM (
+        SELECT saved_source_chat, max(m.id) AS latest_id, count(*) AS count
+        FROM messages m WHERE ${visible} GROUP BY saved_source_chat
+      ) groups JOIN messages latest ON latest.id = groups.latest_id
+      ORDER BY groups.latest_id DESC`, args);
     const tags = await db.many(`SELECT DISTINCT saved_tag AS title FROM messages m WHERE ${visible} AND saved_tag IS NOT NULL ORDER BY title`,args);
     return res.json({rows,tags});
   }
@@ -54,7 +60,11 @@ router.post('/inbox/settings', h(async (req,res) => {
   res.json({ok:true});
 }));
 router.get('/inbox', h(async (req,res) => {
-  const rows = req.staff ? await db.many(`SELECT DISTINCT ON (i.subscriber_id) i.subscriber_id AS id, u.first_name AS title, i.text FROM channel_inbox_messages i JOIN users u ON u.id=i.subscriber_id WHERE channel_id=$1 ORDER BY i.subscriber_id,i.id DESC`,[req.room.id]) : [];
+  const rows = req.staff ? await db.many(`SELECT latest.subscriber_id AS id, u.first_name AS title, latest.text
+    FROM (
+      SELECT DISTINCT ON (subscriber_id) subscriber_id, id, text
+      FROM channel_inbox_messages WHERE channel_id=$1 ORDER BY subscriber_id, id DESC
+    ) latest JOIN users u ON u.id=latest.subscriber_id ORDER BY latest.id DESC`,[req.room.id]) : [];
   res.json({user_id:req.userId,enabled:req.room.inbox_enabled, staff:req.staff, owner:req.room.my_role==='owner',rows});
 }));
 router.use('/inbox/:subscriber', (req,res,next) => {
@@ -66,7 +76,7 @@ router.use('/inbox/:subscriber', (req,res,next) => {
 router.get('/inbox/:subscriber', h(async (req,res) => {
   const before=req.query.before ? id(req.query.before,'before') : Number.MAX_SAFE_INTEGER;
   const rows=await db.many('SELECT id,from_channel,text FROM channel_inbox_messages WHERE channel_id=$1 AND subscriber_id=$2 AND id<$3 ORDER BY id DESC LIMIT 50',[req.room.id,req.subscriber,before]);
-  res.json({rows});
+  res.json({rows, enabled:req.room.inbox_enabled});
 }));
 router.post('/inbox/:subscriber', h(async (req,res) => {
   if (!req.room.inbox_enabled) throw forbidden('inbox_closed','Channel inbox is closed');
