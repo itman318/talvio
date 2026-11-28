@@ -1,0 +1,21 @@
+
+::group::✅ Passing tests
+✅ phrase → key → address (BIP-39 / BIP-44 m/44'/195'/0'/0/i)
+✅ receiving key (xpub of m/44'/60'/0'/0) for coin deposits
+✅ new phrases are valid, 12 words, different every time
+✅ keccak, base58 addresses
+✅ signatures verify, low-s, deterministic
+✅ amounts
+✅ a transfer that does not match what was asked is refused
+✅ EVM: phrase → address (m/44'/60'/0'/0/i, EIP-55) — same as MetaMask / Trust Wallet
+✅ EVM: EIP-155 example transaction (from the EIP itself)
+✅ EVM: token transfer data
+✅ Bitcoin family: phrase → addresses (BIP-84 / BIP-44) — same as Trust Wallet
+✅ Bitcoin family: every kind of address someone may give you
+✅ Bitcoin family: BIP-143 signature hash (the example from the BIP itself)
+✅ Bitcoin family: DER signatures verify; a built transaction has the right shape and id
+✅ Solana: phrase → address (SLIP-0010 m/44'/501'/0', like Trust Wallet), signatures verify
+✅ one phrase → every address the wallet shows (the path the app really uses)
+::endgroup::
+
+🎉 16 tests passed.
