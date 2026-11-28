@@ -68,7 +68,9 @@ class AppUpdater extends ChangeNotifier {
       info = UpdateInfo(Map<String, dynamic>.from(r as Map));
       _lastCheck = DateTime.now();
       notifyListeners();
-    } catch (_) {}
+    } catch (_) {
+      return null;
+    }
     return info;
   }
 

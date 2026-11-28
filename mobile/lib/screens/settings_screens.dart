@@ -451,12 +451,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: const Text('Check for updates'),
                 onPressed: () async {
                   final up = AppUpdater.instance;
-                  await up.check(context.read<AppServices>().api, force: true);
+                  final result = await up.check(context.read<AppServices>().api, force: true);
                   if (!context.mounted) return;
-                  if (up.hasUpdate) {
+                  if (result?.available == true) {
                     await showUpdateSheet(context);
                   } else {
-                    showInfo(context, AppUpdater.currentBuild == 0 ? 'Updates work in the release app' : '✅ You have the newest Hushavia');
+                    showInfo(context, AppUpdater.currentBuild == 0 ? 'Updates work in the release app' : result?.build == AppUpdater.currentBuild ? '✅ You have the newest Hushavia' : 'Could not confirm the latest version. Please try again.');
                   }
                 },
               ),
