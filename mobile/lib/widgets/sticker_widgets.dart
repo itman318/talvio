@@ -44,7 +44,7 @@ class StickerView extends StatelessWidget {
   Widget build(BuildContext context) {
     final tavi = taviPoseByName('${(message.meta?['sticker'] as Map?)?['tavi'] ?? ''}');
     // tap → the whole pack, to send more from it (or add it)
-    if (tavi != null) return GestureDetector(onTap: () => showStickerPackSheet(context, message), child: AppMascot(pose: tavi, size: size + 10));
+    if (tavi != null) return GestureDetector(onTap: () => showStickerPackSheet(context, message), child: HushiSticker(pose: tavi, size: size + 10));
     final pebo = peboPoseByName('${(message.meta?['sticker'] as Map?)?['anim'] ?? ''}');
     if (pebo != null) return GestureDetector(onTap: () => showStickerPackSheet(context, message), child: PeboSticker(pose: pebo, size: size + 10));
     final url = stickerUrl(message);
@@ -207,7 +207,7 @@ class _PackSheetState extends State<_PackSheet> {
       final plus = context.select<AuthState, bool>((auth) => _canSendPlusStickers(auth.me));
       final list = taviStickers.where((t) => !t.$3 || plus).toList();
       title = 'Hushi — animated';
-      body = grid(list.length, (i) => AppMascot(pose: list[i].$1, size: 78), (i) => () {
+      body = grid(list.length, (i) => HushiSticker(pose: list[i].$1, size: 78), (i) => () {
             store.sendTavi(chatId, list[i].$1.name, list[i].$2);
             _sent();
           });
@@ -684,7 +684,7 @@ class _StickerPanelState extends State<StickerPanel> {
             selected: _sel == -2,
             tooltip: 'Hushi (animated)',
             onTap: () => setState(() => _sel = -2),
-            child: const AppMascot(pose: TaviPose.wave, size: 36, animate: false),
+            child: const HushiSticker(pose: TaviPose.wave, size: 36, animate: false),
           ),
           if (_favs.isNotEmpty)
             packButton(
@@ -806,7 +806,7 @@ extension on _StickerPanelState {
             context.read<ChatStore>().sendTavi(widget.chatId, pose.name, emoji);
           },
           child: Stack(children: [
-            Center(child: Opacity(opacity: locked ? 0.55 : 1, child: AppMascot(pose: pose, size: 84))),
+            Center(child: Opacity(opacity: locked ? 0.55 : 1, child: HushiSticker(pose: pose, size: 84))),
             if (plusOnly)
               Positioned(
                 right: 4,
@@ -1358,7 +1358,7 @@ class _EmojiStickerSuggestionsState extends State<EmojiStickerSuggestions> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
         children: [
           for (final t in pebo) item(PeboSticker(pose: t.$1, size: 78), () => store.sendPebo(widget.chatId, t.$1.name, t.$2)),
-          for (final t in tavi) item(AppMascot(pose: t.$1, size: 78), () => store.sendTavi(widget.chatId, t.$1.name, t.$2)),
+          for (final t in tavi) item(HushiSticker(pose: t.$1, size: 78), () => store.sendTavi(widget.chatId, t.$1.name, t.$2)),
           for (final s in packs)
             item(
               netImage(AppConfig.absolute('${s['url']}'), fit: BoxFit.contain),

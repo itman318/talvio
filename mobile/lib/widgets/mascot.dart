@@ -259,6 +259,30 @@ class AppMascot extends StatelessWidget {
   }
 }
 
+/// Animated Hushi sticker artwork used in conversations and the sticker picker.
+class HushiSticker extends StatelessWidget {
+  const HushiSticker({super.key, required this.pose, this.size = 150, this.animate = true});
+  final TaviPose pose;
+  final double size;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) {
+    final still = !animate || MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context);
+    if (still || !taviStickers.any((sticker) => sticker.$1 == pose)) {
+      return AppMascot(pose: pose, size: size, animate: false);
+    }
+    return SizedBox.square(
+      dimension: size,
+      child: Image.asset(
+        'assets/mascot/hushi-${pose.name}.webp',
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => AppMascot(pose: pose, size: size),
+      ),
+    );
+  }
+}
+
 /// Groups only secret inputs. Leaving them for a hint, Done, or a dialog
 /// action uncovers the eyes without inspecting or retaining the secret.
 class SecretEntryMascot extends StatelessWidget {
