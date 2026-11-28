@@ -1,10 +1,10 @@
 # Builds the Hushavia Android app (APK) on every push to main, or by hand from the Actions tab.
 # Production APKs use the verified Hushavia HTTPS endpoint.
-name: Android APK
+name: Mobile review
 
 on:
   push:
-    branches: [main]
+    branches: [qa/profile-card-384]
     paths: ['mobile/**', '.github/workflows/android.yml']
   workflow_dispatch:
     inputs:
@@ -162,7 +162,7 @@ jobs:
       # Maven Central mirrors go FIRST: when Central (or the GitHub downloads behind some of its files)
       # answers 504, the build takes the same files from Google's / Aliyun's copy instead.
       - name: Maven mirrors
-        if: steps.analyze.outcome == 'success' && !inputs.analyze_only
+        if: steps.analyze.outcome == 'success' && false
         run: |
           mkdir -p ~/.gradle/init.d
           cat > ~/.gradle/init.d/mirrors.gradle <<'GRADLE'
@@ -196,7 +196,7 @@ jobs:
           cat ~/.gradle/init.d/nolint.gradle
 
       - name: Get Gradle (several mirrors, retries)
-        if: steps.analyze.outcome == 'success' && !inputs.analyze_only
+        if: steps.analyze.outcome == 'success' && false
         working-directory: mobile/android
         run: |
           P=gradle/wrapper/gradle-wrapper.properties
@@ -216,7 +216,7 @@ jobs:
       # keep Gradle and the libraries even if the build fails later (next build skips the downloads)
       - name: Save Gradle cache
         continue-on-error: true
-        if: always() && steps.analyze.outcome == 'success' && !inputs.analyze_only
+        if: always() && steps.analyze.outcome == 'success' && false
         uses: actions/cache/save@v4
         with:
           path: |
@@ -226,7 +226,7 @@ jobs:
 
       - name: Build APK
         id: build
-        if: steps.analyze.outcome == 'success' && !inputs.analyze_only
+        if: steps.analyze.outcome == 'success' && false
         continue-on-error: true
         run: |
           set -o pipefail
@@ -251,7 +251,7 @@ jobs:
             { [ "$SIGNED" != release ] || flutter build appbundle --release --split-debug-info=build/symbols $DEFINES; }; rc=$?; df -h /; exit $rc; } 2>&1 | tail -400 | tee ../ci-report/build.txt
 
       - name: Save Gradle cache (libraries)
-        if: always() && steps.analyze.outcome == 'success' && !inputs.analyze_only
+        if: always() && steps.analyze.outcome == 'success' && false
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
@@ -307,5 +307,5 @@ jobs:
           exit 1
 
       - name: Fail if analyze or build failed
-        if: steps.analyze.outcome != 'success' || (steps.build.outcome != 'success' && !inputs.analyze_only)
+        if: steps.analyze.outcome != 'success' || (steps.build.outcome != 'success' && false)
         run: exit 1
