@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../config.dart';
 import '../core/services.dart';
 import '../core/updater.dart';
 import '../theme/brand.dart';
@@ -116,7 +117,7 @@ Future<void> showUpdateSheet(BuildContext context) {
                 Text(force ? 'Please update Hushavia' : 'New Hushavia is here',
                     textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                Text('Version ${i.version}${i.size > 0 ? ' · ${fileSize(i.size)}' : ''}',
+                Text('Installed: ${AppConfig.appVersion}\nAvailable: ${i.version}${i.size > 0 ? ' · ${fileSize(i.size)}' : ''}',
                     textAlign: TextAlign.center, style: const TextStyle(color: Brand.muted)),
                 if (i.notes.isNotEmpty) ...[
                   const SizedBox(height: 14),
