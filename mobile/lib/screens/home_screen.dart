@@ -314,7 +314,7 @@ extension on _HomeScreenState {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: Material(
-        color: dark ? const Color(0xFF161A2E) : const Color(0xFFEBEDF4),
+        color: dark ? const Color(0xFF302C37) : const Color(0xFFEEEAF0),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),

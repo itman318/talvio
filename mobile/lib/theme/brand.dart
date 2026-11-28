@@ -8,25 +8,25 @@ class Brand {
   static const font = 'Jakarta';
 
   // core palette
-  static const primary = Color(0xFF6D4AFF); // Hush Violet
-  static const primaryDeep = Color(0xFF5232E0);
-  static const primaryLight = Color(0xFF9A82FF);
+  static const primary = Color(0xFF655194); // Hush Violet
+  static const primaryDeep = Color(0xFF503D78);
+  static const primaryLight = Color(0xFFC8B6EF);
   static const rose = Color(0xFFE0417A);
-  static const accent = Color(0xFF12B89C); // Signal Mint: online, read, secure, success
+  static const accent = Color(0xFF369982); // Signal Mint: online, read, secure, success
   static const amber = Color(0xFFF5B544);
-  static const ink = Color(0xFF151A2E); // headers, my bubbles, dark surfaces
-  static const inkSoft = Color(0xFF232945);
+  static const ink = Color(0xFF292634); // headers, my bubbles, dark surfaces
+  static const inkSoft = Color(0xFF383344);
   /// Secondary text/icons readable on both the light and the dark background.
-  static const muted = Color(0xFF656C84);
+  static const muted = Color(0xFF6D6879);
   static const faint = Color(0xFF959AAF);
   static const premium = Color(0xFFC9A45C); // champagne gold (Hushavia Plus)
-  static const violet = Color(0xFF7C5CFF);
+  static const violet = Color(0xFF74599D);
   static const sky = Color(0xFF3C9BEA);
   static const green = Color(0xFF22B573);
 
-  /// Signature "Aurora" gradient: coral → rose → violet. Buttons, badges, story rings, highlights.
+  /// Signature "Aurora" gradient: orchid to plum. Buttons, badges, story rings, highlights.
   static const aurora = LinearGradient(
-    colors: [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF4A2FD8)],
+    colors: [Color(0xFF80689F), Color(0xFF655194), Color(0xFF51416D)],
     stops: [0, 0.5, 1],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -36,15 +36,15 @@ class Brand {
   static LinearGradient auroraSoft(bool dark) => LinearGradient(
         colors: dark
             ? const [Color(0xFF1E1A3E), Color(0xFF16233A)]
-            : const [Color(0xFFF1EDFF), Color(0xFFECE7FF), Color(0xFFE5FAF5)],
+            : const [Color(0xFFF5F0F7), Color(0xFFECE4F2), Color(0xFFE7F1ED)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );
 
   // gradients
-  static const mineGradient = LinearGradient(colors: [Color(0xFF7E62FF), Color(0xFF5B3CEB)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-  static const storyGradient = SweepGradient(colors: [Color(0xFF9A7BFF), Color(0xFF6D4AFF), Color(0xFF3FD8C0), Color(0xFF8F72FF), Color(0xFF9A7BFF)]);
-  static const heroGradient = LinearGradient(colors: [Color(0xFF9A7BFF), primary, Color(0xFF4A2FD8)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const mineGradient = LinearGradient(colors: [Color(0xFF796195), Color(0xFF584573)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const storyGradient = SweepGradient(colors: [Color(0xFF80689F), Color(0xFF655194), Color(0xFF3FD8C0), Color(0xFF8F72FF), Color(0xFF80689F)]);
+  static const heroGradient = LinearGradient(colors: [Color(0xFF80689F), primary, Color(0xFF51416D)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const plusGradient = LinearGradient(colors: [Color(0xFFE6C987), Color(0xFFC9A45C), Color(0xFFA9853F)], begin: Alignment.topLeft, end: Alignment.bottomRight);
 
   /// Avatar gradients (initials avatars get one of these by id) — muted, jewel-toned.
@@ -67,29 +67,29 @@ class Brand {
 
   static ThemeData _theme(Brightness b) {
     final dark = b == Brightness.dark;
-    final bg = dark ? const Color(0xFF090B14) : const Color(0xFFF4F5FA);
-    final surface = dark ? const Color(0xFF12152A) : Colors.white;
+    final bg = dark ? const Color(0xFF191820) : const Color(0xFFF6F4F7);
+    final surface = dark ? const Color(0xFF23212B) : Colors.white;
     final scheme = ColorScheme.fromSeed(seedColor: primary, brightness: b).copyWith(
       primary: dark ? primaryLight : primary,
-      onPrimary: Colors.white,
+      onPrimary: dark ? ink : Colors.white,
       secondary: accent,
       tertiary: rose,
       surface: surface,
-      surfaceContainerHighest: dark ? const Color(0xFF1E2238) : const Color(0xFFEEF0F6),
-      surfaceContainerHigh: dark ? const Color(0xFF191C31) : const Color(0xFFF1F3F8),
-      surfaceContainer: dark ? const Color(0xFF161A2D) : const Color(0xFFF4F5FA),
-      surfaceContainerLow: dark ? const Color(0xFF13162A) : const Color(0xFFF8F9FC),
-      onSurface: dark ? const Color(0xFFECEEF6) : const Color(0xFF12152A),
-      onSurfaceVariant: dark ? const Color(0xFFA3A8BC) : const Color(0xFF5E647A),
+      surfaceContainerHighest: dark ? const Color(0xFF37323F) : const Color(0xFFEEEAF0),
+      surfaceContainerHigh: dark ? const Color(0xFF302C37) : const Color(0xFFF1EEF3),
+      surfaceContainer: dark ? const Color(0xFF2C2932) : const Color(0xFFF6F4F7),
+      surfaceContainerLow: dark ? const Color(0xFF26232D) : const Color(0xFFFAF8FB),
+      onSurface: dark ? const Color(0xFFF3EFF5) : const Color(0xFF23212B),
+      onSurfaceVariant: dark ? const Color(0xFFBDB5C7) : const Color(0xFF625D6C),
       outline: dark ? const Color(0xFF3A4060) : const Color(0xFFD5D9E4),
-      outlineVariant: dark ? const Color(0xFF242842) : const Color(0xFFE6E9F1),
+      outlineVariant: dark ? const Color(0xFF39353F) : const Color(0xFFE6E1E9),
     );
     final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b, fontFamily: font);
     final text = base.textTheme.apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface).copyWith(
           headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6, color: scheme.onSurface),
           titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.3, color: scheme.onSurface),
           titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: scheme.onSurface),
-          bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.35, color: scheme.onSurface),
+          bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.43, color: scheme.onSurface),
         );
     final radius12 = BorderRadius.circular(12);
     return base.copyWith(
@@ -142,7 +142,7 @@ class Brand {
         surfaceTintColor: Colors.transparent,
         backgroundColor: bg,
         foregroundColor: scheme.onSurface,
-        titleTextStyle: TextStyle(fontFamily: font, fontSize: 21, fontWeight: FontWeight.w800, color: scheme.onSurface, letterSpacing: -0.5),
+        titleTextStyle: TextStyle(fontFamily: font, fontSize: 21, fontWeight: FontWeight.w700, color: scheme.onSurface, letterSpacing: -0.5),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: primary,
@@ -153,7 +153,7 @@ class Brand {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: dark ? primary : ink,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
           disabledBackgroundColor: scheme.onSurface.withAlpha(30),
           minimumSize: const Size(64, 48),
@@ -182,7 +182,7 @@ class Brand {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: dark ? const Color(0xFF181C31) : const Color(0xFFEEF0F6),
+        fillColor: scheme.surfaceContainerHighest,
         hintStyle: TextStyle(color: scheme.onSurfaceVariant),
         labelStyle: TextStyle(color: scheme.onSurfaceVariant),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -210,7 +210,7 @@ class Brand {
       chipTheme: base.chipTheme.copyWith(
         shape: RoundedRectangleBorder(borderRadius: radius12),
         side: BorderSide.none,
-        backgroundColor: dark ? const Color(0xFF181C31) : const Color(0xFFEEF0F6),
+        backgroundColor: scheme.surfaceContainerHighest,
         selectedColor: dark ? const Color(0xFF2A3052) : ink,
         labelStyle: TextStyle(fontFamily: font, fontWeight: FontWeight.w600, color: scheme.onSurface),
         secondaryLabelStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w700, color: Colors.white),
@@ -222,7 +222,7 @@ class Brand {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         backgroundColor: surface,
-        indicatorColor: primary.withValues(alpha: dark ? 0.22 : 0.12),
+        indicatorColor: dark ? const Color(0xFF40364F) : const Color(0xFFECE4F2),
         indicatorShape: const StadiumBorder(),
         labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
               fontFamily: font,
@@ -299,7 +299,7 @@ class BrandMark extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFF8F72FF), Color(0xFF4E2FE0)], begin: Alignment(-0.7, -1), end: Alignment(0.7, 1)),
           shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: const Color(0xFF6D4AFF).withAlpha(70), blurRadius: size * 0.3, offset: Offset(0, size * 0.1))],
+          boxShadow: [BoxShadow(color: const Color(0xFF655194).withAlpha(70), blurRadius: size * 0.3, offset: Offset(0, size * 0.1))],
         ),
         child: CustomPaint(painter: _MarkPainter()),
       ),

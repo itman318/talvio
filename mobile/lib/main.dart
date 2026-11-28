@@ -427,7 +427,7 @@ class _HushaviaAppState extends State<HushaviaApp> with WidgetsBindingObserver {
         // system buttons bar at the bottom: same colour as the app (never the splash pink)
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
-            systemNavigationBarColor: dark ? const Color(0xFF151A2E) : Colors.white,
+            systemNavigationBarColor: Theme.of(context).colorScheme.surface,
             systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
             systemNavigationBarDividerColor: Colors.transparent,
           ),
