@@ -1,0 +1,10 @@
+Hushavia API listening on http://localhost:4000  (admin panel: /admin)
+OTP dev mode is ON — codes are returned in the API response
+[OTP dev mode] e2e.user@example.com → 197456
+[OTP dev mode] +923001110001 → 390022
+[OTP dev mode] +923001110002 → 444446
+[OTP dev mode] +923001110003 → 716268
+[OTP dev mode] +923007770001 → 307914
+[OTP dev mode] +923007770002 → 476386
+[OTP dev mode] +923007770003 → 705371
+[OTP dev mode] web.mail@hushavia.test → 219585
