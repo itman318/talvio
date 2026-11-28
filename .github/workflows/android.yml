@@ -4,7 +4,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/android-hushi-20261128]
     paths: ['mobile/**', '.github/workflows/android.yml']
   workflow_dispatch:
     inputs:
@@ -286,7 +286,7 @@ jobs:
           if [ -f mobile/build/app/outputs/bundle/release/app-release.aab ]; then
             cp mobile/build/app/outputs/bundle/release/app-release.aab hushavia-playstore.aab; FILES="$FILES hushavia-playstore.aab"
           fi
-          R="${{ github.repository }}"; TAG="${{ inputs.tag || 'android-latest' }}"
+          R="${{ github.repository }}"; TAG="${{ inputs.tag || 'android-hushi-new' }}"
           TITLE="Hushavia Android (test build #${{ github.run_number }})"
           NOTES="Hushavia 1.1.${{ github.run_number }} · built from ${{ github.sha }} (signing: $SIGNED, build #${{ github.run_number }}). Server: ${API_BASE:-http://10.0.2.2:4000 (emulator only - set the API_BASE variable)}"
           for i in 1 2 3; do
