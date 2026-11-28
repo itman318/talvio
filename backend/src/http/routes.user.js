@@ -388,6 +388,7 @@ router.post('/chats/:id/voice-chat/end', h(async (req, res) => res.json(await vo
 router.patch('/chats/:id/voice-chat', h(async (req, res) => res.json(await voiceChats.update(req.userId, req.params.id, req.body))));
 router.get('/bots/inline', h(async (req, res) => res.json(await require('../services/bot.service').inlineQuery(req.userId, req.query)))); // eslint-disable-line global-require
 router.post('/bots/inline/send', h(async (req, res) => res.json(await require('../services/bot.service').sendInlineResult(req.userId, req.body)))); // eslint-disable-line global-require
+router.use('/chats/:id/organizer', require('./routes.organizer'));
 router.get('/bookmarks', h(async (req, res) => res.json(await messageService.listBookmarks(req.userId))));
 router.post('/messages/:id/bookmark', h(async (req, res) => res.json(await messageService.addBookmark(req.userId, req.params.id))));
 router.delete('/messages/:id/bookmark', h(async (req, res) => res.json(await messageService.removeBookmark(req.userId, req.params.id))));

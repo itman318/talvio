@@ -1568,3 +1568,17 @@ CREATE TABLE IF NOT EXISTS bot_failed_updates (
   reason TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS bot_failed_updates_bot_idx ON bot_failed_updates(bot_id, id);
+
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS inbox_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS channel_inbox_messages (
+  id BIGSERIAL PRIMARY KEY,
+  channel_id BIGINT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  subscriber_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_channel BOOLEAN NOT NULL,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS channel_inbox_thread_idx ON channel_inbox_messages(channel_id,subscriber_id,id);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS saved_source_chat BIGINT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS saved_source_title TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS saved_tag VARCHAR(40);

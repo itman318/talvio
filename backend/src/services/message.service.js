@@ -581,6 +581,8 @@ async function insertMessage({
   replyMarkup = null,
   viaBotId = null,
   albumId = null,
+  savedSourceChat = null,
+  savedSourceTitle = null,
   forwardSourceId = null,
 }) {
   let row;
@@ -589,13 +591,13 @@ async function insertMessage({
       const r = await c.query(
         `INSERT INTO messages (chat_id, sender_id, type, text, media_id, reply_to_id, client_id,
                                forwarded_from_user_id, forwarded_from_name, meta, silent, thread_id, topic_id, reply_markup, via_bot_id, album_id, expires_at,
-                               forward_source_id)
+                               forward_source_id, saved_source_chat, saved_source_title)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
                  CASE WHEN $17 THEN (SELECT CASE WHEN disappear_after_sec > 0 THEN now() + make_interval(secs => disappear_after_sec) END FROM chats WHERE id = $1) END,
-                 $18)
+                 $18, $19, $20)
          RETURNING *`,
         [chatId, senderId, type, text, mediaId, replyToId, clientId, fwdUserId, fwdName, meta ? JSON.stringify(meta) : null, !!silent,
-          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId, type !== 'system', forwardSourceId],
+          threadId, topicId, replyMarkup ? JSON.stringify(replyMarkup) : null, viaBotId, albumId, type !== 'system', forwardSourceId, savedSourceChat, savedSourceTitle],
       );
       const m = r.rows[0];
       if (mentionCandidates && senderId) {
@@ -1037,6 +1039,11 @@ async function forwardMessages(userId, body = {}) {
   const origUsers = await db.many('SELECT id, privacy_forwards FROM users WHERE id = ANY($1::bigint[])', [origIds]);
   const fwdRel = await userService.relations(userId, origIds);
   const fwdLink = new Map(origUsers.map((u) => [u.id, u.id === userId || userService.allowedFor(fwdRel, u.id, 'forwards', u.privacy_forwards || 'everyone')]));
+  let privateSourceTitle = 'My notes';
+  if (from.type === 'private' && targetChats.some(chat => chat.private_key === userId + ':' + userId)) {
+    const peer = await db.one('SELECT u.* FROM chat_members cm JOIN users u ON u.id = cm.user_id WHERE cm.chat_id = $1 AND u.id <> $2 LIMIT 1', [from.id, userId]);
+    if (peer) privateSourceTitle = userService.displayName(peer);
+  }
   let count = 0;
   for (const chat of targetChats) {
     for (const r of rows) {
@@ -1051,6 +1058,8 @@ async function forwardMessages(userId, body = {}) {
         fwdUserId: from.type === 'channel' ? null : fwdLink.get(r.forwarded_from_user_id || r.sender_id) ? r.forwarded_from_user_id || r.sender_id : null,
         fwdName: r.forwarded_from_name || fromName,
         meta: ['location', 'voice', 'sticker'].includes(r.type) ? r.meta : null, // voice keeps its waveform, stickers their pack / Tavi pose
+        savedSourceChat: chat.private_key === userId + ':' + userId ? from.id : null,
+        savedSourceTitle: chat.private_key === userId + ':' + userId ? (from.title || privateSourceTitle) : null,
         forwardSourceId: r.forward_source_id || r.id,
         replyMarkup: linkButtonsOnly(r.reply_markup), // link buttons keep working anywhere (bot buttons don't)
       });
