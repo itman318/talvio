@@ -4,7 +4,7 @@ name: Backend
 
 on:
   push:
-    branches: [main]
+    branches: [qa/mobile-inbox-review-382]
     paths: ['backend/**', '.github/workflows/backend.yml']
   workflow_dispatch:
 
