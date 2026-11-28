@@ -1,3 +1,4 @@
+import 'delivery_receipt.dart';
 import 'dart:math' as math;
 
 
@@ -77,8 +78,8 @@ class MessageBubble extends StatelessWidget {
   bool get _asChannel => chat.isChannel && !commentMode;
 
   /// Clock → one tick → two ticks → read: each step fades and pops in instead of switching abruptly.
-  Widget _ticks(BuildContext context) {
-    final w = _tickIcon(context);
+  Widget _ticks(BuildContext context, {bool onOverlay = false}) {
+    final w = _tickIcon(context, onOverlay: onOverlay);
     if (w is! Icon) return w;
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
@@ -88,16 +89,14 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _tickIcon(BuildContext context) {
+  Widget _tickIcon(BuildContext context, {bool onOverlay = false}) {
     final m = message;
     final soft = isMine && softMineOf(context);
-    final meta = soft ? const Color(0xFF8A85AD) : isMine ? Colors.white.withAlpha(150) : ChatColors.of(context).meta;
+    final meta = onOverlay ? Colors.white : soft ? const Color(0xFF8A85AD) : isMine ? Colors.white.withAlpha(150) : ChatColors.of(context).meta;
     if (m.sendState == SendState.sending) return Icon(Icons.schedule, size: 14, color: meta);
     if (m.sendState == SendState.failed) return Icon(Icons.error, size: 15, color: Theme.of(context).colorScheme.error);
     if (chat.isSavedMessages || _asChannel) return const SizedBox.shrink();
-    if (m.id <= chat.readUpTo) return Icon(Icons.done_all, size: 15, color: soft ? MineInk.accent : isMine ? const Color(0xFF7DF3DB) : Brand.accent);
-    if (m.id <= chat.deliveredUpTo) return Icon(Icons.done_all, size: 15, color: meta);
-    return Icon(Icons.done, size: 15, color: meta);
+    return deliveryReceipt(messageId: m.id, deliveredUpTo: chat.deliveredUpTo, readUpTo: chat.readUpTo, onDark: onOverlay || (isMine ? !soft : Theme.of(context).brightness == Brightness.dark));
   }
 
   Widget _body(BuildContext context, Color accent) {
@@ -199,10 +198,10 @@ class MessageBubble extends StatelessWidget {
                 StickerView(message: m),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(color: Colors.black.withAlpha(dark ? 90 : 40), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: Colors.black.withAlpha(175), borderRadius: BorderRadius.circular(10)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(messageTime(m.createdAt), style: const TextStyle(fontSize: 11, color: Colors.white)),
-                  if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
+                  if (isMine) ...[const SizedBox(width: 3), _ticks(context, onOverlay: true)],
                 ]),
               ),
               ReactionChips(message: m),
@@ -319,11 +318,11 @@ class MessageBubble extends StatelessWidget {
             child: IgnorePointer(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(color: Colors.black.withAlpha(110), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: Colors.black.withAlpha(175), borderRadius: BorderRadius.circular(10)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   if (m.editedAt != null) const Text('edited · ', style: TextStyle(fontSize: 11, color: Colors.white)),
                   Text(messageTime(m.createdAt), style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
-                  if (isMine) ...[const SizedBox(width: 3), _ticks(context)],
+                  if (isMine) ...[const SizedBox(width: 3), _ticks(context, onOverlay: true)],
                 ]),
               ),
             ),

@@ -354,7 +354,33 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       const r = await call('POST', `/api/chats/${ch.id}/messages`, { token: B.access_token, body: { text: 'hi' }, raw: true });
       assert(r.status === 403, `subscriber post got ${r.status}`);
     });
+    await step('channel inbox orders threads by most recent reply and reflects closure', async () => {
+      const inbox = `/api/chats/${ch.id}/organizer/inbox`;
+      await api.post(`/api/chats/${ch.id}/join`, {}, C.access_token);
+      await api.post(inbox + '/settings', { enabled:true }, A.access_token);
+      for (const subscriber of [B,C,B]) {
+        await api.post(inbox + '/' + subscriber.me.id, { text:'Question' }, subscriber.access_token);
+      }
+      const overview = await api.get(inbox, A.access_token);
+      assert(overview.rows.length === 2 && overview.rows[0].id === B.me.id, 'latest thread should appear first');
+      await api.post(inbox + '/' + B.me.id, {text:'Channel reply'}, A.access_token);
+      await api.post(inbox + '/settings', {enabled:false}, A.access_token);
+      const thread = await api.get(inbox + '/' + B.me.id, B.access_token);
+      assert(thread.enabled === false && thread.rows[0].from_channel, 'closed thread should show reply and current setting');
+    });
     if (post && post.id) {
+      await step('saved source and tag filter resolve the same message', async () => {
+        const notes = await api.post('/api/chats/private', {user_id:B.me.id}, B.access_token);
+        await api.post('/api/messages/forward', {from_chat_id:ch.id, to_chat_ids:[notes.id], message_ids:[post.id]}, B.access_token);
+        const saved = `/api/chats/${notes.id}/organizer/saved`;
+        const overview = await api.get(saved,B.access_token);
+        assert(overview.rows.some(row => row.id === ch.id && row.title === ch.title), 'missing channel source');
+        const page = await api.get(saved + '?source=' + ch.id,B.access_token);
+        const message = page.rows[0];
+        await api.post(saved + '/' + message.id + '/tag',{tag:'Follow up'},B.access_token);
+        const tagged = await api.get(saved + '?tag=Follow%20up',B.access_token);
+        assert(tagged.rows.some(row => row.id === message.id),'missing tagged message');
+      });
       await step('channel views', () => api.post(`/api/chats/${ch.id}/views`, { message_ids: [post.id] }, B.access_token));
       await step('channel comments on + comment (thread)', async () => {
         await api.patch(`/api/chats/${ch.id}`, { comments_enabled: true }, A.access_token);

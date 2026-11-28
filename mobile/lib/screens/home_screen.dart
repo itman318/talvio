@@ -1,3 +1,4 @@
+import '../widgets/delivery_receipt.dart';
 import 'global_search_screen.dart';
 import '../widgets/crypto_card.dart';
 import '../widgets/update_widgets.dart';
@@ -314,7 +315,7 @@ extension on _HomeScreenState {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: Material(
-        color: dark ? const Color(0xFF161A2E) : const Color(0xFFEBEDF4),
+        color: dark ? const Color(0xFF302C37) : const Color(0xFFEEEAF0),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -440,8 +441,9 @@ class ChatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ChatStore>();
-    final draft = context.watch<AppPrefs>().draft(chat.id);
-    final typing = store.typingText(chat);
+    final protected = ChatPasscode.has(chat.id);
+    final draft = context.select<AppPrefs, String?>((prefs) => protected ? null : prefs.draft(chat.id));
+    final typing = protected ? null : store.typingText(chat);
     final last = chat.lastMessage;
     final mine = last != null && last.senderId == store.myId && !last.isSystem;
     final unread = chat.unreadCount > 0 || chat.markedUnread;
@@ -449,18 +451,15 @@ class ChatTile extends StatelessWidget {
     String preview = '';
     String prefix = '';
     IconData? kindIcon;
-    if (last != null) {
+    if (protected) {
+      kindIcon = Icons.lock_rounded;
+      preview = 'Protected with a passcode';
+    } else if (last != null) {
       if (last.isSystem) {
         preview = systemText(last, store);
       } else {
         prefix = mine && !chat.isChannel && !chat.isSavedMessages ? 'You: ' : (chat.isGroup ? '${last.sender?.firstName ?? ''}: ' : '');
         (kindIcon, preview) = previewParts(last);
-        if (ChatPasscode.has(chat.id)) {
-          // passcode chats don't show their messages in the list
-          prefix = '';
-          kindIcon = Icons.lock_rounded;
-          preview = 'Protected with a passcode';
-        }
       }
     }
 
@@ -471,8 +470,7 @@ class ChatTile extends StatelessWidget {
       } else if (last.sendState == SendState.failed) {
         tick = const Icon(Icons.error, size: 15, color: Colors.red);
       } else {
-        tick = Icon(last.id <= chat.deliveredUpTo ? Icons.done_all : Icons.done,
-            size: 16, color: last.id <= chat.readUpTo ? Brand.primary : Brand.muted);
+        tick = deliveryReceipt(messageId: last.id, deliveredUpTo: chat.deliveredUpTo, readUpTo: chat.readUpTo, onDark: Theme.of(context).brightness == Brightness.dark);
       }
     }
 
@@ -563,7 +561,7 @@ class ChatTile extends StatelessWidget {
                               alignment: PlaceholderAlignment.middle,
                               child: Padding(padding: const EdgeInsets.only(right: 4), child: Icon(kindIcon, size: 16, color: Brand.muted)),
                             ),
-                                          if (last == null && chat.historyCleared)
+                          if (!protected && last == null && chat.historyCleared)
                             const TextSpan(text: 'History was cleared', style: TextStyle(color: Brand.primary, fontWeight: FontWeight.w500))
                           else
                             ...taliSpans(preview.replaceAll('\n', ' '), null, scale: 1.15),

@@ -69,6 +69,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'secret_screens.dart';
 import 'channel_screens.dart';
 import 'forward_screen.dart';
+import 'organizer_screen.dart';
 import 'group_info_screen.dart';
 import 'group_admin_screens.dart';
 import 'user_profile_screen.dart';
@@ -1718,6 +1719,10 @@ class _ChatScreenState extends State<ChatScreen> {
         case 'video':
           if (chat.peer != null) startCall(context, chat.peer!, video: true);
           break;
+        case 'organizer':
+          final message = await Navigator.push<int>(context, MaterialPageRoute(builder: (_) => OrganizerScreen(chatId: chat.id, saved: chat.isSavedMessages)));
+          if (message != null && mounted) await _jumpToMessage(message);
+          break;
         case 'search':
           final found = await Navigator.push<int>(context, MaterialPageRoute(builder: (_) => GlobalSearchScreen(chatId: chat.id)));
           if (found != null && mounted) await _jumpToMessage(found, missing: 'That message is no longer in this chat');
@@ -2053,6 +2058,8 @@ class _ChatScreenState extends State<ChatScreen> {
             itemBuilder: (_) => [
               if (chat.peer != null && !chat.isSavedMessages && !chat.peer!.deleted && !chat.isBot && auth.feature('calls') && auth.feature('video_calls'))
                 _mi('video', Icons.videocam_outlined, 'Video call'),
+              if (chat.isChannel || chat.isSavedMessages)
+                _mi('organizer', Icons.inbox_outlined, chat.isChannel ? (chat.isAdmin ? 'Channel inbox' : 'Message channel') : 'Browse by source'),
               _mi('search', Icons.search_rounded, 'Search messages'),
               if (chat.isMulti && (chat.voiceChat != null || chat.can('manage_voice_chats')))
                 _mi('voice_chat', Icons.graphic_eq_rounded, chat.isGroup ? (chat.voiceChat != null ? 'Join group call' : 'Start group call') : (chat.voiceChat != null ? 'Join voice chat' : 'Start voice chat')),

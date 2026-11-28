@@ -22,8 +22,8 @@ class ChatThemeDef {
 const chatThemes = <ChatThemeDef>[
   // Default: Hushavia — my messages on soft lilac with dark text (light mode) / brand violet (dark mode),
   // a calm lilac-to-mist wallpaper, white cards for others.
-  ChatThemeDef('hush', 'Hushavia', [Color(0xFFF4F3FA), Color(0xFFEDF1F7)], [Color(0xFF0B0A1C), Color(0xFF0E1226)], Color(0xFFE6E5EF),
-      Color(0xFF191735), [Color(0xFFEFEBFF), Color(0xFFE4DDFF)], [Color(0xFF5841C8), Color(0xFF47329F)]),
+  ChatThemeDef('hush', 'Hushavia', [Color(0xFFF7F4F6), Color(0xFFE9EFEC)], [Color(0xFF201E27), Color(0xFF232A2C)], Color(0xFFE6E2E7),
+      Color(0xFF302D36), [Color(0xFFEEE6F4), Color(0xFFE3D7ED)], [Color(0xFF5E4C73), Color(0xFF503F65)]),
   // Sapphire — a clear indigo gradient for my messages, calm white cards for others.
   ChatThemeDef('classic', 'Sapphire', [Color(0xFFEEF1F8), Color(0xFFE7EBF5)], [Color(0xFF0A0D18), Color(0xFF0D1122)], Color(0xFFDDE3EF),
       Color(0xFF161B30), [Color(0xFF3442B8), Color(0xFF5A5CE6)], [Color(0xFF2F3CA6), Color(0xFF4D52D0)]),
