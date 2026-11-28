@@ -1,0 +1,52 @@
+name: Publish organizer API
+on:
+  push:
+    branches: [release/organizer-api-384]
+    paths: ['.github/workflows/publish-organizer-api.yml']
+permissions:
+  contents: read
+concurrency: deploy
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Prepare tested organizer changes
+        run: |
+          git diff b018b985dc09b616a334ff0f83feacff6f1369ee dfddac82c7116c8407203ce09a0a2febf5000036 -- backend/src/db/schema.sql backend/src/services/message.service.js backend/src/http/routes.user.js backend/src/http/routes.organizer.js > organizer.patch
+          sed -n '/^ALTER TABLE chats ADD COLUMN IF NOT EXISTS inbox_enabled/,$p' backend/src/db/schema.sql > organizer.sql
+          test -s organizer.sql
+          grep -q 'saved_tag VARCHAR' organizer.sql
+      - name: Deploy organizer routes and schema
+        env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+          API_BASE: ${{ vars.API_BASE }}
+        run: |
+          set -e
+          HOST=$(echo "$HOST" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g')
+          if ! echo "$HOST" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then HOST=$(echo "$API_BASE" | sed -E 's#^https?://##; s#[/:].*$##; s/[[:space:]]//g'); fi
+          sudo apt-get install -y -qq sshpass >/dev/null
+          O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
+          tmp=$(sshpass -e ssh $O root@"$HOST" 'mktemp -d')
+          sshpass -e scp $O organizer.patch organizer.sql root@"$HOST":"$tmp/"
+          sshpass -e ssh $O root@"$HOST" bash -s -- "$tmp" <<'REMOTE'
+          set -eu
+          tmp=$1
+          cd /opt/hushavia/app
+          if ! git apply -p2 --reverse --check "$tmp/organizer.patch" 2>/dev/null; then
+            git apply -p2 --check "$tmp/organizer.patch"
+            set -a; . /etc/hushavia/hushavia.env; set +a
+            psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -1 -f "$tmp/organizer.sql"
+            git apply -p2 "$tmp/organizer.patch"
+            if ! (node --check src/http/routes.organizer.js && node --check src/services/message.service.js && systemctl restart hushavia && curl --retry 8 --retry-connrefused --retry-delay 2 -fsS http://127.0.0.1:4000/health >/dev/null); then
+              git apply -p2 --reverse "$tmp/organizer.patch"
+              systemctl restart hushavia
+              exit 1
+            fi
+          fi
+          REMOTE
+          curl -fsS --retry 3 https://hushavia.com/health >/dev/null
