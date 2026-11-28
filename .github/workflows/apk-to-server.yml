@@ -64,6 +64,11 @@ jobs:
           O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o LogLevel=ERROR"
           D=/var/lib/hushavia/downloads
           sshpass -e ssh $O root@"$HOST" "mkdir -p $D"
+          active=$(sshpass -e ssh $O root@"$HOST" "if test -f $D/latest.json; then cat $D/latest.json; else echo '{}'; fi" | jq -er '.build // 0')
+          if (( N < active )); then
+            echo "Keeping newer published build $active (candidate $N)"
+            exit 0
+          fi
           # the APKs first, latest.json last: phones only hear about a build once its files are there
           sshpass -e scp $O dl/*.apk root@"$HOST":$D/
           sshpass -e scp $O dl/latest.json root@"$HOST":$D/latest.json.new
