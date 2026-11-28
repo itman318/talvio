@@ -128,34 +128,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final chat = u == null ? null : store.chats.where((c) => c.peer?.id == u.id).firstOrNull;
     final other = u != null && !u.deleted && u.id != myId;
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: u == null ? Theme.of(context).colorScheme.surface : Colors.transparent,
-        foregroundColor: u == null ? Theme.of(context).colorScheme.onSurface : Colors.white,
-        systemOverlayStyle: u == null ? null : SystemUiOverlayStyle.light,
-      ),
-      extendBodyBehindAppBar: true,
+      appBar: AppBar(title: const Text('Profile')),
       body: u == null
           ? Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator())
           : Stack(children: [
               ListView(
               padding: EdgeInsets.zero,
               children: [
-                ProfileHero(
-                  id: u.id,
-                  name: u.name,
-                  avatarUrl: u.avatarAbsolute,
-                  online: u.online,
-                  glow: u.isPremium,
-                  topPadding: MediaQuery.of(context).padding.top + 44,
-                  status: u.isBot ? 'bot' : (u.blockedMe ? 'has blocked you' : lastSeenText(u)),
-                  statusColor: u.online ? Brand.accent : null,
-                  badges: [
-                    if (u.isVerified) const Icon(Icons.verified_rounded, color: Brand.sky, size: 22),
-                    if (u.statusEmoji != null)
-                      EmojiStatusBadge(u, size: 21, padLeft: 0)
-                    else if (u.isPremium)
-                      const Icon(Icons.workspace_premium_rounded, color: Brand.premium, size: 22),
-                  ],
+                _ContactHeader(
+                  user: u,
+                  status: u.isBot ? 'Bot' : (u.blockedMe ? 'Has blocked you' : lastSeenText(u)),
                   actions: [
                     if (other) ...[
                       ProfileAction(icon: Icons.chat_bubble_rounded, label: 'Message', highlight: true, onTap: () => _message(u)),
@@ -186,7 +168,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             }
                           },
                         ),
-                      if (!u.isBot && auth.feature('secret_chats')) ProfileAction(icon: Icons.lock_rounded, label: 'Vault', onTap: () => startSecretChat(context, u)),
+
                     ],
                   ],
                 ),
@@ -266,8 +248,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                 ]),
                 if (!u.deleted && !u.isBot) _CatalogEntry(userId: u.id, name: u.name),
-                if (chat != null)
+                if (chat != null || (other && !u.isBot && auth.feature('secret_chats')))
                   SettingsGroup(children: [
+                    if (other && !u.isBot && auth.feature('secret_chats'))
+                      SettingsTile(icon: Icons.lock_outline_rounded, color: Theme.of(context).colorScheme.primary,
+                        title: 'Vault chat', onTap: () => startSecretChat(context, u)),
+                    if (chat != null)
                     SettingsTile(
                       icon: Icons.perm_media_rounded,
                       color: Brand.primary,
@@ -312,7 +298,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       },
                     ),
                   ]),
-                const SizedBox(height: 24),
+                SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
               ],
             ),
               // birthday today: fireworks and balloons for everyone who opens the profile
@@ -391,5 +377,73 @@ class _TagsRowState extends State<_TagsRow> {
   Widget build(BuildContext context) {
     if (TagLook.sorted(_tags).isEmpty) return const SizedBox.shrink();
     return Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: ProfileTags(_tags, center: true));
+  }
+}
+
+class _ContactHeader extends StatelessWidget {
+  const _ContactHeader({required this.user, required this.status, required this.actions});
+
+  final AppUser user;
+  final String status;
+  final List<ProfileAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color.alphaBlend(scheme.primary.withValues(alpha: .12), scheme.surface), scheme.surface],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: user.isPremium ? Brand.premium : scheme.outlineVariant, width: 2),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Padding(padding: const EdgeInsets.all(3),
+                  child: Avatar(id: user.id, name: user.name, url: user.avatarAbsolute, size: 64)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Wrap(spacing: 5, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Text(user.name, style: theme.textTheme.titleLarge),
+                  if (user.isVerified) const Icon(Icons.verified_rounded, size: 20, color: Brand.sky),
+                  if (user.statusEmoji != null) EmojiStatusBadge(user, size: 20, padLeft: 0)
+                  else if (user.isPremium) const Icon(Icons.workspace_premium_rounded, size: 20, color: Brand.premium),
+                ]),
+                const SizedBox(height: 4),
+                Text(status, style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+              ])),
+            ]),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              FilledButton.icon(onPressed: actions.first.onTap, icon: Icon(actions.first.icon, size: 19),
+                label: Text(actions.first.label)),
+              if (actions.length > 1) ...[
+                const SizedBox(height: 8),
+                Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 6, children: [
+                  for (final action in actions.skip(1))
+                    OutlinedButton.icon(onPressed: action.onTap, icon: Icon(action.icon, size: 17),
+                      label: Text(action.label), style: OutlinedButton.styleFrom(
+                        foregroundColor: scheme.primary, minimumSize: const Size(48, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 12))),
+                ]),
+              ],
+            ],
+          ]),
+        ),
+      ),
+    );
   }
 }
